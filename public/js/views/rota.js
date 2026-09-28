@@ -31,7 +31,17 @@ export async function render(ctx) {
       const working = new Set(data.shifts.filter((x) => x.location_id === site.id).map((x) => x.user_id));
       const people = data.staff.filter((u) => u.location_id === site.id || working.has(u.id));
       if (!people.length) continue;
-      rows.push({ header: site.name });
+      const siteShifts = data.shifts.filter((x) => x.location_id === site.id);
+      const rate = new Map(data.staff.map((u) => [u.id, u.hourly_rate]));
+      rows.push({
+        header: site.name,
+        summary: {
+          people: people.length,
+          hours: Math.round(siteShifts.reduce((t, x) => t + x.hours, 0) * 10) / 10,
+          // Pay rates are only sent to managers and admins.
+          cost: canEdit ? siteShifts.reduce((t, x) => t + x.hours * (rate.get(x.user_id) ?? 0), 0) : null,
+        },
+      });
       // The site's own staff first, then people covering from elsewhere.
       for (const u of [...people.filter((p) => p.location_id === site.id), ...people.filter((p) => p.location_id !== site.id)]) {
         rows.push({ u, site: site.id });
@@ -69,7 +79,10 @@ export async function render(ctx) {
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}">${fmtDate(d)}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
-          ${rows.map(({ header, u, site }) => (header ? `<tr class="rota-group"><th colspan="${data.days.length + 2}">${esc(header)}</th></tr>` : `
+          ${rows.map(({ header, summary, u, site }) => (header ? `<tr class="rota-group"><th colspan="${data.days.length + 2}">
+            <span class="rota-group-name">${esc(header)}</span>
+            <span class="rota-group-meta">${summary.people} ${summary.people === 1 ? 'person' : 'people'} · ${summary.hours} h${summary.cost === null ? '' : ` · ${money(summary.cost)} labour`}</span>
+          </th></tr>` : `
             <tr class="${u.location_id !== site ? 'rota-cover' : ''}">
               <th><strong>${esc(u.name)}</strong><small>${esc(u.position ?? '')}${u.location_id !== site ? ` · cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}` : ''}</small></th>
               ${data.days.map((d) => {
