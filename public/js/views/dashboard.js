@@ -1,5 +1,5 @@
 import { attachTip } from '../charts.js';
-import { addDays, api, esc, fmtDate, fmtDateTime, money, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, fmtDateTime, money, toast, todayISO } from '../lib.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
 function progress(done, due) {
@@ -97,6 +97,24 @@ function card(loc, state, data) {
     </section>`;
 }
 
+// "Download PDF": the browser's print window, set up for a landscape A4 page, with the file named after the
+// dashboard and date. Choosing "Save as PDF" as the printer saves it.
+function downloadPdf(state, date) {
+  const title = document.title;
+  const page = document.createElement('style');
+  page.textContent = '@page { size: A4 landscape; margin: 10mm; }';
+  document.head.append(page);
+  document.title = `Cafe Ops dashboard - ${state.multiSite ? 'All sites' : state.location?.name ?? ''} - ${date}`;
+  const restore = () => {
+    document.title = title;
+    page.remove();
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  toast('Choose “Save as PDF” as the printer, then Save');
+  setTimeout(() => window.print(), 50);
+}
+
 // Sales and labour % for each site, today or over the last 7 days (the same figures as the Trading page).
 const PERIOD_KEY = 'cafe-ops:dashboard-period';
 const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`;
@@ -116,7 +134,7 @@ function bySite(t, period) {
   return `
     <section class="card dash-sites">
       <header class="card-head">
-        <h2>Sales &amp; labour by site</h2>
+        <h2>Sales &amp; labour by site<span class="print-only"> · ${period === 'week' ? 'last 7 days' : 'today'}</span></h2>
         <div class="seg" role="group" aria-label="Period">
           <button class="${period === 'today' ? 'is-on' : ''}" data-period="today">Today</button>
           <button class="${period === 'week' ? 'is-on' : ''}" data-period="week">Last 7 days</button>
@@ -171,8 +189,12 @@ export async function render({ el, state, navigate, stale, rerender }) {
   el.innerHTML = `
     <div class="page-head">
       <h1>${state.multiSite ? 'All sites' : esc(state.location?.name ?? 'Dashboard')}</h1>
-      <span class="muted">${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+      <div class="actions">
+        <span class="muted">${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+        <button class="btn" id="dash-pdf">Download PDF</button>
+      </div>
     </div>
+    <p class="print-only print-meta">Cafe Ops dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     <div class="kpis">
       ${hasSales ? `<div class="kpi"><span>Sales today (ex VAT)</span><strong>${money(todayTotals.net_sales)}</strong></div>
@@ -191,6 +213,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
     </section>` : ''}
     <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div>`;
 
+  el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
   el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
     try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }
     rerender();
