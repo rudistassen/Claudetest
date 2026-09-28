@@ -45,7 +45,7 @@ function openSquareImport(ctx) {
     wide: true,
     submitLabel: 'Import',
     body: `
-      <p class="muted">Everyone in your Square team is added here, or updated if they're already here (matched by email, then name). Their home site comes from the locations they're assigned to in Square, and their position and hourly rate from their job and pay in Square.</p>
+      <p class="muted">Everyone in your Square team is added here, or updated if they're already here (matched by email, then name). Their position and hourly rate come from their job and pay in Square. New people’s home site comes from the locations they’re assigned to in Square; people already here keep the home site set on this page.</p>
       <label class="check-row"><input type="checkbox" name="deactivate_others">
         <span><strong>Deactivate staff who aren’t in Square</strong>
         <small>For example the made-up demo staff. They keep their history but can no longer sign in or be put on the rota. You stay active.</small></span></label>
@@ -87,7 +87,8 @@ function openSquareImport(ctx) {
 
 export async function renderStaff(ctx) {
   const { state } = ctx;
-  const scope = state.isAdmin ? (ctx.query.scope ?? 'site') : 'site';
+  // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
+  const scope = state.isAdmin ? (ctx.query.scope ?? 'all') : 'site';
   const [rows, square] = await Promise.all([
     api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
     state.isAdmin ? api('/square/status') : null,
@@ -100,7 +101,7 @@ export async function renderStaff(ctx) {
     addLabel: 'Add staff member',
     extraActions: state.isAdmin
       ? `${square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
-         <a class="btn" href="#/admin/staff${scope === 'all' ? '' : '?scope=all'}">${scope === 'all' ? 'This site only' : 'Show all sites'}</a>`
+         <a class="btn" href="#/admin/staff${scope === 'all' ? '?scope=site' : ''}">${scope === 'all' ? 'This site only' : 'Show all sites'}</a>`
       : '',
     columns: [
       { label: 'Name', key: 'name' },
@@ -123,9 +124,14 @@ export async function renderStaff(ctx) {
       </div>
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password', input('password', '', `type="password" minlength="8" autocomplete="new-password" ${u.id ? '' : 'required'}`), { hint: 'At least 8 characters' })}
       ${activeBox(u.active)}`,
-    save: (v, row) => (row
-      ? api(`/users/${row.id}`, { method: 'PUT', body: v })
-      : api('/users', { method: 'POST', body: v })),
+    save: async (v, row) => {
+      const saved = row ? await api(`/users/${row.id}`, { method: 'PUT', body: v }) : await api('/users', { method: 'POST', body: v });
+      // On a single site's list, say where someone went if their home site changed.
+      if (scope !== 'all' && saved.location_id && saved.location_id !== state.locationId) {
+        const site = state.locations.find((l) => l.id === saved.location_id)?.name ?? 'another site';
+        setTimeout(() => toast(`${saved.name} now works from ${site}, so they're listed there. Use “Show all sites” to see everyone.`), 2600);
+      }
+    },
   });
   ctx.el.querySelector('#import-square')?.addEventListener('click', () => openSquareImport(ctx));
 }

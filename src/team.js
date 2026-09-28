@@ -40,6 +40,7 @@ function addWage(wages, memberId, title, rate) {
 export function planTeamImport(db, { members, wages }, { deactivateOthers = false, currentUserId } = {}) {
   const sites = db.prepare('SELECT id, name, square_location_id FROM locations WHERE square_location_id IS NOT NULL AND active = 1 ORDER BY name').all();
   const siteBySquare = new Map(sites.map((s) => [s.square_location_id, s]));
+  const activeSites = new Set(db.prepare('SELECT id FROM locations WHERE active = 1').all().map((l) => l.id));
   const linked = new Map(db.prepare('SELECT id, user_id FROM square_team_members WHERE user_id IS NOT NULL').all().map((r) => [r.id, r.user_id]));
   const userById = db.prepare('SELECT * FROM users WHERE id = ?');
   const userByEmail = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE');
@@ -80,11 +81,12 @@ export function planTeamImport(db, { members, wages }, { deactivateOthers = fals
       ? (m.assigned_locations.location_ids ?? []).map((id) => siteBySquare.get(id)).filter(Boolean)
       : [];
     const role = user?.role ?? (m.is_owner ? 'admin' : 'staff');
+    // Someone already here keeps the home site set in Cafe Ops (it can be changed on the Staff page); only new
+    // people take theirs from Square.
     let locationId = null;
     if (role !== 'admin') {
-      locationId = explicit.find((s) => s.id === user?.location_id)?.id
+      locationId = (activeSites.has(user?.location_id) ? user.location_id : null)
         ?? explicit[0]?.id
-        ?? user?.location_id
         ?? usualSite.get(m.id)
         ?? sites[0]?.id
         ?? null;

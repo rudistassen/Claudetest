@@ -408,8 +408,16 @@ describe('staff from Square', () => {
     assert.equal((await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'staff1@cafe.local', password: DEMO_PASSWORD }) })).status, 401);
     assert.equal((await admin('/auth/me')).status, 200, 'the admin who ran it stays signed in');
 
+    // A home site changed in Cafe Ops is kept when importing again, even though Square assigns them elsewhere.
+    const kiosk = db.prepare(`SELECT id FROM locations WHERE square_location_id = 'SQ_NEW'`).get().id;
+    const moved = await admin(`/users/${priya.id}`, { method: 'PUT', body: { name: 'Priya Shah', email: 'priya@example.com', role: 'staff', location_id: kiosk, position: 'Barista', hourly_rate: 12.21 } });
+    assert.equal(moved.data.location_id, kiosk);
+    const preview2 = (await admin('/square/team')).data;
+    assert.equal(preview2.find((x) => x.name === 'Priya Shah').site, 'Airport Kiosk');
     const again = (await admin('/square/import-staff', { method: 'POST', body: { deactivate_others: true } })).data;
     assert.deepEqual([again.created, again.updated, again.deactivated], [0, 5, 0], 'running it again adds nobody twice');
+    assert.equal(db.prepare('SELECT location_id FROM users WHERE id = ?').get(priya.id).location_id, kiosk, 'home site kept');
+    assert.equal(db.prepare('SELECT hourly_rate FROM users WHERE id = ?').get(priya.id).hourly_rate, 12.21, 'details still come from Square');
 
     const clash = await admin(`/users/${priya.id}`, { method: 'PUT', body: { name: 'Priya Shah', email: 'MANAGER1@cafe.local', role: 'staff', location_id: priya.location_id } });
     assert.equal(clash.status, 400);
