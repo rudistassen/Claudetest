@@ -4,8 +4,8 @@ import { after, before, describe, test } from 'node:test';
 import { openDb } from '../src/db.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { createApp } from '../src/server.js';
-import { SquareClient, summariseOrder, syncSales } from '../src/square.js';
-import { addDays, today } from '../src/util.js';
+import { SquareClient, summariseOrder, summariseTimecard, syncSales } from '../src/square.js';
+import { addDays, today, zonedMidnightUTC } from '../src/util.js';
 
 const TOKEN = 'test-token';
 const SQ_LOCATIONS = [
@@ -21,7 +21,13 @@ const line = (name, qty, totalPence, taxPence, extra = {}) => ({
 });
 
 let orders = [];
+let timecards = [];
+let labourForbidden = false;
 const requests = [];
+const TEAM = [
+  { id: 'TM_1', given_name: 'Someone', family_name: 'Else', email_address: 'MANAGER1@cafe.local', status: 'ACTIVE' },
+  { id: 'TM_2', given_name: 'Casual', family_name: 'Carl', status: 'INACTIVE' },
+];
 
 // Minimal stand-in for Square's Locations and Orders APIs, paging 2 orders at a time.
 const mock = http.createServer((req, res) => {
@@ -39,6 +45,17 @@ const mock = http.createServer((req, res) => {
       const offset = Number(q.cursor ?? 0);
       const page = matching.slice(offset, offset + 2);
       return send(200, { orders: page, ...(offset + 2 < matching.length ? { cursor: String(offset + 2) } : {}) });
+    }
+    if (req.method === 'POST' && (req.url === '/v2/team-members/search' || req.url === '/v2/labor/shifts/search') && labourForbidden) {
+      return send(403, { errors: [{ category: 'AUTHENTICATION_ERROR', code: 'INSUFFICIENT_SCOPES', detail: 'The merchant has not given your application sufficient permissions.' }] });
+    }
+    if (req.method === 'POST' && req.url === '/v2/team-members/search') return send(200, { team_members: TEAM });
+    if (req.method === 'POST' && req.url === '/v2/labor/shifts/search') {
+      const q = JSON.parse(body);
+      const { start_at: start, end_at: end } = q.query.filter.start;
+      const matching = timecards.filter((t) => q.query.filter.location_ids.includes(t.location_id) && t.start_at >= start && t.start_at < end);
+      const offset = Number(q.cursor ?? 0);
+      return send(200, { shifts: matching.slice(offset, offset + 2), ...(offset + 2 < matching.length ? { cursor: String(offset + 2) } : {}) });
     }
     send(404, { errors: [{ code: 'NOT_FOUND', detail: 'Not found' }] });
   });
@@ -89,6 +106,32 @@ describe('order summaries', () => {
     assert.equal(s.tips, 1);
     const net = s.lines.reduce((t, l) => t + l.net, 0);
     assert.equal(Math.round(net * 100), 700 - 117);
+  });
+});
+
+describe('timecard summaries', () => {
+  test('unpaid breaks are deducted, paid ones are not, and open timecards count up to now', () => {
+    const t = summariseTimecard({
+      id: 'tc', location_id: 'L', team_member_id: 'TM', start_at: '2026-07-01T06:00:00Z', end_at: '2026-07-01T14:30:00Z',
+      wage: { title: 'Barista', hourly_rate: money(1250) },
+      breaks: [
+        { start_at: '2026-07-01T10:00:00Z', end_at: '2026-07-01T10:30:00Z', is_paid: false },
+        { start_at: '2026-07-01T12:00:00Z', end_at: '2026-07-01T12:15:00Z', is_paid: true },
+      ],
+    }, 'Europe/London');
+    assert.equal(t.date, '2026-07-01');
+    assert.equal(t.unpaid_break_minutes, 30);
+    assert.equal(t.hourly_rate, 12.5);
+    assert.equal(t.status, 'CLOSED');
+
+    const open = summariseTimecard({
+      id: 'tc2', location_id: 'L', start_at: '2026-07-01T06:00:00Z',
+      breaks: [{ start_at: '2026-07-01T09:00:00Z', is_paid: false }],
+    }, 'Europe/London', Date.parse('2026-07-01T09:20:00Z'));
+    assert.equal(open.end_at, null);
+    assert.equal(open.status, 'OPEN');
+    assert.equal(open.unpaid_break_minutes, 20, 'a break still running counts up to now');
+    assert.equal(open.hourly_rate, null);
   });
 });
 
@@ -171,9 +214,81 @@ describe('Square integration', () => {
     assert.equal(waste.sales.net_sales, 23.17);
   });
 
+  test('syncs clock-ins and the trading dashboard compares them with sales and the rota', async () => {
+    const d = today();
+    const y = addDays(d, -1);
+    const at = (day, hh, mm = 0) => new Date(Date.parse(zonedMidnightUTC(day)) + (hh * 60 + mm) * 60000).toISOString();
+    timecards = [
+      // manager1 (matched by email, case-insensitively): 07:00–15:30 with a 30 minute unpaid break = 8 paid hours at £13.50
+      { id: 'tc1', location_id: 'SQ_HIGH', team_member_id: 'TM_1', start_at: at(y, 7), end_at: at(y, 15, 30), status: 'CLOSED',
+        wage: { title: 'Manager', hourly_rate: money(1350) }, breaks: [{ start_at: at(y, 11), end_at: at(y, 11, 30), is_paid: false }] },
+      // Not an app user, and not on the rota: 2 hours with no wage
+      { id: 'tc2', location_id: 'SQ_HIGH', team_member_id: 'TM_2', start_at: at(y, 10), end_at: at(y, 12), status: 'CLOSED' },
+      { id: 'tc3', location_id: 'SQ_OTHER', team_member_id: 'TM_2', start_at: at(y, 10), end_at: at(y, 12), status: 'CLOSED' },
+    ];
+    requests.length = 0;
+    const r = await syncSales(db, square.client, { from: y, to: d });
+    assert.equal(r.timecards, 2);
+    assert.equal(r.warning, null);
+    const labourSearch = requests.filter((q) => q.url === '/v2/labor/shifts/search');
+    assert.equal(labourSearch.length, 1);
+    assert.equal(labourSearch[0].body.query.filter.start.start_at, zonedMidnightUTC(y));
+
+    const manager1 = db.prepare(`SELECT id FROM users WHERE email = 'manager1@cafe.local'`).get().id;
+    assert.equal(db.prepare(`SELECT user_id FROM square_team_members WHERE id = 'TM_1'`).get().user_id, manager1);
+    assert.equal(db.prepare(`SELECT user_id FROM square_team_members WHERE id = 'TM_2'`).get().user_id, null);
+
+    await syncSales(db, square.client, { from: y, to: d });
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM timecards').get().n, 2, 're-syncing replaces rather than duplicates');
+
+    const manager = await login('manager1@cafe.local');
+    const report = (await manager(`/trading?from=${y}&to=${d}`)).data;
+    assert.equal(report.labour_synced, true);
+    assert.equal(report.totals.clocked_hours, 10);
+    assert.equal(report.totals.clocked_cost, 108);
+    const yesterday = report.days.find((x) => x.date === y);
+    assert.equal(yesterday.labour_pct, Math.round((108 / yesterday.net_sales) * 10000) / 100);
+    assert.equal(yesterday.sales_per_labour_hour, Math.round((yesterday.net_sales / 10) * 100) / 100);
+
+    // Hour-of-day sales add back up to the total, and the 07:00–15:30 + 10:00–12:00 clock-ins fill the right hours.
+    assert.equal(report.trading_days, 2);
+    const hourTotal = report.hours.reduce((t, h) => t + h.avg_net_sales * report.trading_days, 0);
+    assert.ok(Math.abs(hourTotal - report.totals.net_sales) < 0.05);
+    const staffAt = (h) => report.hours.find((x) => x.hour === h)?.avg_staff ?? 0;
+    assert.equal(staffAt(6), 0);
+    // 8 paid of 8.5 clocked hours, so each hour of manager1's timecard counts 0.94 of a person.
+    assert.equal(staffAt(10), 1, '1.94 people for one of the 2 trading days');
+    assert.equal(staffAt(14), 0.5);
+    assert.equal(staffAt(15), 0.2, 'half an hour to 15:30');
+    assert.equal(staffAt(16), 0);
+
+    const carl = report.staff.find((p) => p.name === 'Casual Carl');
+    assert.deepEqual([carl.clocked_hours, carl.clock_ins, carl.unrostered, carl.rostered_hours], [2, 1, 1, 0]);
+    const myName = (await manager('/auth/me')).data.user.name;
+    const me = report.staff.find((p) => p.name === myName);
+    assert.equal(me.clocked_hours, 8);
+  });
+
+  test('sales still sync when the token cannot read clock-ins', async () => {
+    labourForbidden = true;
+    try {
+      const r = await syncSales(db, square.client, { from: addDays(today(), -1), to: today() });
+      assert.equal(r.orders, 3);
+      assert.equal(r.timecards, null);
+      assert.match(r.warning, /clock-ins were not.*sufficient permissions/);
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM timecards').get().n, 2, 'keeps the clock-ins already stored');
+      const log = db.prepare('SELECT * FROM square_sync_log ORDER BY id DESC LIMIT 1').get();
+      assert.equal(log.status, 'ok');
+      assert.match(log.message, /clock-ins were not/);
+    } finally {
+      labourForbidden = false;
+    }
+  });
+
   test('staff cannot see sales and bad tokens give a clear error', async () => {
     const staff = await login('staff1@cafe.local');
     assert.equal((await staff('/sales')).status, 403);
+    assert.equal((await staff('/trading')).status, 403);
     assert.equal((await staff('/rota')).data.daily_money, undefined);
     assert.equal((await staff('/wastage/report')).data.sales, null);
 

@@ -134,4 +134,12 @@ export function localDate(timestamp, tz = TZ) {
   return dateFormats.get(tz).format(new Date(timestamp));
 }
 
+const hourFormats = new Map();
+
+// Local hour of the day (0–23) in tz of a UTC timestamp.
+export function localHour(timestamp, tz = TZ) {
+  if (!hourFormats.has(tz)) hourFormats.set(tz, new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }));
+  return Number(hourFormats.get(tz).format(new Date(timestamp)));
+}
+
 export const BUSINESS_TZ = TZ;

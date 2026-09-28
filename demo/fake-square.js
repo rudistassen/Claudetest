@@ -1,5 +1,7 @@
 // A pretend Square account for the demo: the same locations as the demo sites plus one extra, with
-// deterministic orders (same day + site always gives the same sales) answered in Square's API format.
+// deterministic orders (same day + site always gives the same sales) and clock-ins that follow the demo rota,
+// answered in Square's API format.
+import { zonedMidnightUTC } from '../src/util.js';
 
 export const SQUARE_LOCATIONS = [
   ['SQ_HARBOUR', 'Harbour'], ['SQ_HIGH', 'High Street'], ['SQ_MARKET', 'Market Square'], ['SQ_OLDTOWN', 'Old Town'],
@@ -70,11 +72,71 @@ function generate(locIndex, isoDate) {
   return out;
 }
 
+// --- Team members and clock-ins, generated from the demo rota ---
+
+let team = [];
+let rotaShifts = [];
+
+/** users: [{ id, name, email, hourly_rate }]; shifts: [{ id, user_id, square_location_id, date, start_time, end_time, break_minutes }] */
+export function setFakeRota(users, shifts) {
+  team = users;
+  rotaShifts = shifts;
+}
+
+const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+const at = (date, minutes) => new Date(Date.parse(zonedMidnightUTC(date)) + minutes * 60000).toISOString();
+
+// Mostly on time; now and then late, and very occasionally a no-show. Same shift always gives the same timecard.
+function timecardFor(shift, now) {
+  const r = rng(hash(`tc|${shift.id}|${shift.date}`));
+  const start = toMin(shift.start_time);
+  let end = toMin(shift.end_time);
+  if (end <= start) end += 24 * 60;
+  const inAt = start + (r() < 0.1 ? 6 + Math.floor(r() * 20) : -8 + Math.floor(r() * 12));
+  const outAt = end + (r() < 0.25 ? 10 + Math.floor(r() * 30) : -10 + Math.floor(r() * 16));
+  const noShow = r() < 0.03;
+  const startAt = at(shift.date, inAt);
+  if (noShow || startAt > now) return null;
+  const endAt = at(shift.date, outAt);
+  const breakStart = at(shift.date, start + Math.floor((end - start) / 2));
+  const breakEnd = at(shift.date, start + Math.floor((end - start) / 2) + (shift.break_minutes || 0));
+  const user = team.find((u) => u.id === shift.user_id);
+  return {
+    id: `TC_${shift.id}_${shift.date}`, location_id: shift.square_location_id, team_member_id: `TM_${shift.user_id}`,
+    start_at: startAt, end_at: endAt <= now ? endAt : undefined, status: endAt <= now ? 'CLOSED' : 'OPEN',
+    wage: { title: 'Team member', hourly_rate: { amount: Math.round((user?.hourly_rate ?? 0) * 100), currency: 'GBP' } },
+    breaks: shift.break_minutes && breakStart <= now ? [{ start_at: breakStart, ...(breakEnd <= now ? { end_at: breakEnd } : {}), is_paid: false }] : [],
+  };
+}
+
+function page(items, q, key, size) {
+  const offset = Number(q.cursor ?? 0);
+  return { [key]: items.slice(offset, offset + size), ...(offset + size < items.length ? { cursor: String(offset + size) } : {}) };
+}
+
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
 export async function fakeSquareFetch(url, init = {}) {
   const path = new URL(url).pathname;
   if (path === '/v2/locations') return json(200, { locations: SQUARE_LOCATIONS });
+  if (path === '/v2/team-members/search') {
+    const members = team.map((u) => {
+      const [given, ...rest] = u.name.split(' ');
+      return { id: `TM_${u.id}`, given_name: given, family_name: rest.join(' '), email_address: u.email, status: 'ACTIVE' };
+    });
+    return json(200, page(members, JSON.parse(init.body), 'team_members', 200));
+  }
+  if (path === '/v2/labor/shifts/search' || path === '/v2/labor/timecards/search') {
+    const q = JSON.parse(init.body);
+    const { start_at: start, end_at: end } = q.query.filter.start;
+    const now = new Date().toISOString();
+    const cards = rotaShifts
+      .filter((s) => q.query.filter.location_ids.includes(s.square_location_id))
+      .map((s) => timecardFor(s, now))
+      .filter((t) => t && t.start_at >= start && t.start_at < end)
+      .sort((a, b) => a.start_at.localeCompare(b.start_at));
+    return json(200, page(cards, q, path.endsWith('timecards/search') ? 'timecards' : 'shifts', 200));
+  }
   if (path !== '/v2/orders/search') return json(404, { errors: [{ code: 'NOT_FOUND', detail: 'Not found' }] });
   const q = JSON.parse(init.body);
   const { start_at: start, end_at: end } = q.query.filter.date_time_filter.closed_at;

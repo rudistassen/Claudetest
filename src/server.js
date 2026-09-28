@@ -9,6 +9,7 @@ import { registerRotaRoutes } from './routes/rota.js';
 import { registerSalesRoutes } from './routes/sales.js';
 import { registerSafetyRoutes } from './routes/safety.js';
 import { registerStockRoutes } from './routes/stock.js';
+import { registerTradingRoutes } from './routes/trading.js';
 import { HttpError } from './util.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -35,6 +36,7 @@ export function createApp(db, { square = null } = {}) {
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);
+  registerTradingRoutes(api, db, square);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 

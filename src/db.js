@@ -218,6 +218,41 @@ CREATE TABLE IF NOT EXISTS recipe_ingredients (
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);
 
+-- Square sales per site per business day and local hour, for the trading dashboard's hour-of-day view.
+CREATE TABLE IF NOT EXISTS sales_hourly (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  hour INTEGER NOT NULL,
+  net_sales REAL NOT NULL DEFAULT 0,
+  orders INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (location_id, date, hour)
+);
+
+-- Square Team members, matched to app users by email (or name) so clock-ins line up with the rota.
+CREATE TABLE IF NOT EXISTS square_team_members (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Square Labor clock-ins (timecards). date is the business day the timecard started on; an open timecard
+-- (still clocked in) has no end_at. paid_hours excludes unpaid breaks.
+CREATE TABLE IF NOT EXISTS timecards (
+  id TEXT PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  team_member_id TEXT,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  date TEXT NOT NULL,
+  start_at TEXT NOT NULL,
+  end_at TEXT,
+  unpaid_break_minutes REAL NOT NULL DEFAULT 0,
+  hourly_rate REAL,
+  status TEXT NOT NULL,
+  synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
+
 CREATE TABLE IF NOT EXISTS square_sync_log (
   id INTEGER PRIMARY KEY,
   started_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -238,6 +273,7 @@ const MIGRATIONS = [
   ['products', 'recipe_unit', 'ALTER TABLE products ADD COLUMN recipe_unit TEXT'],
   ['products', 'units_per_pack', 'ALTER TABLE products ADD COLUMN units_per_pack REAL NOT NULL DEFAULT 1'],
   ['products', 'allergens', 'ALTER TABLE products ADD COLUMN allergens TEXT'],
+  ['square_sync_log', 'timecards', 'ALTER TABLE square_sync_log ADD COLUMN timecards INTEGER'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
 ];
 

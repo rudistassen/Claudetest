@@ -289,7 +289,7 @@ export async function renderSquare(ctx) {
     <section class="card">
       <h2>Connection</h2>
       ${status.configured
-        ? `<p><span class="badge badge-completed">Connected</span> ${esc(status.environment)} · sales sync automatically every ${status.sync_minutes} minutes</p>
+        ? `<p><span class="badge badge-completed">Connected</span> ${esc(status.environment)} · sales and clock-ins sync automatically every ${status.sync_minutes} minutes</p>
            ${squareError ? `<p class="alert-text">${esc(squareError)}</p>` : ''}`
         : `<p><span class="badge badge-draft">Not connected</span></p>
            <ol class="steps">
@@ -315,8 +315,8 @@ export async function renderSquare(ctx) {
           <button class="btn btn-small" data-import="${esc(l.id)}">Add as new site</button></li>`).join('')}</ul>` : ''}
     </section>
     <section class="card">
-      <h2>Import sales</h2>
-      <p class="muted">Re-importing a period replaces what was stored for it, so it’s safe to run again (e.g. after refunds).</p>
+      <h2>Import sales and clock-ins</h2>
+      <p class="muted">Imports completed orders and Square Team clock-ins (timecards). Re-importing a period replaces what was stored for it, so it’s safe to run again (e.g. after refunds or edited timecards).</p>
       <form class="filters" id="sync">
         <input type="date" name="from" value="${monthAgo}" max="${today}"> <span>to</span> <input type="date" name="to" value="${today}" max="${today}">
         <button class="btn btn-primary" type="submit">Import sales</button>
@@ -326,10 +326,10 @@ export async function renderSquare(ctx) {
     <section class="card">
       <h2>Recent syncs</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>Started</th><th>Period</th><th>Status</th><th class="num">Orders</th><th>By</th><th>Message</th></tr></thead>
+        <thead><tr><th>Started</th><th>Period</th><th>Status</th><th class="num">Orders</th><th class="num">Clock-ins</th><th>By</th><th>Message</th></tr></thead>
         <tbody>${status.history.map((h) => `<tr><td>${fmtDateTime(h.started_at)}</td><td>${esc(h.date_from)} – ${esc(h.date_to)}</td>
           <td>${statusBadge(h.status === 'ok' ? 'completed' : h.status === 'error' ? 'fail' : 'in_progress')}</td>
-          <td class="num">${h.orders ?? '–'}</td><td>${esc(h.triggered_by ?? '')}</td><td class="small">${esc(h.message ?? '')}</td></tr>`).join('')}</tbody>
+          <td class="num">${h.orders ?? '–'}</td><td class="num">${h.timecards ?? '–'}</td><td>${esc(h.triggered_by ?? '')}</td><td class="small">${esc(h.message ?? '')}</td></tr>`).join('')}</tbody>
       </table></div>
     </section>` : ''}`;
 

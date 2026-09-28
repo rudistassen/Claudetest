@@ -8,6 +8,7 @@ import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
 import * as sales from './views/sales.js';
 import * as stock from './views/stock.js';
+import * as trading from './views/trading.js';
 import * as wastage from './views/wastage.js';
 
 const LOCATION_KEY = 'cafe-ops:location';
@@ -38,6 +39,7 @@ const ROUTES = [
   [/^recipes\/(\d+)\/edit$/, recipes.renderEdit, 'admin'],
   [/^recipes\/(\d+)$/, recipes.renderRecipe],
   [/^sales$/, sales.render, 'manager'],
+  [/^trading$/, trading.render, 'manager'],
   [/^orders$/, orders.renderList, 'manager'],
   [/^orders\/new$/, orders.renderNew, 'manager'],
   [/^orders\/(\d+)$/, orders.renderOrder, 'manager'],
@@ -59,7 +61,7 @@ function navItems() {
     ['stock', 'Stock takes', '☰'],
     ['recipes', 'Recipes', '✎'],
   ];
-  if (state.isManager) items.push(['sales', 'Sales', '£'], ['orders', 'Orders', '⇄']);
+  if (state.isManager) items.push(['trading', 'Trading', '◔'], ['sales', 'Sales', '£'], ['orders', 'Orders', '⇄']);
   return items;
 }
 

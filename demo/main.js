@@ -10,11 +10,12 @@ import { registerRotaRoutes } from '../src/routes/rota.js';
 import { registerSafetyRoutes } from '../src/routes/safety.js';
 import { registerSalesRoutes } from '../src/routes/sales.js';
 import { registerStockRoutes } from '../src/routes/stock.js';
+import { registerTradingRoutes } from '../src/routes/trading.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { SquareClient, syncSales } from '../src/square.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
-import { SQUARE_LOCATIONS, fakeSquareFetch } from './fake-square.js';
+import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
 
 // --- A tiny Express-compatible router ---
 
@@ -81,6 +82,11 @@ async function boot() {
   for (const l of SQUARE_LOCATIONS.slice(0, 7)) {
     db.prepare('UPDATE locations SET square_location_id = ? WHERE name = ?').run(l.id, l.name);
   }
+  setFakeRota(
+    db.prepare('SELECT id, name, email, hourly_rate FROM users').all(),
+    db.prepare(`SELECT s.id, s.user_id, l.square_location_id, s.date, s.start_time, s.end_time, s.break_minutes
+      FROM shifts s JOIN locations l ON l.id = s.location_id WHERE l.square_location_id IS NOT NULL`).all(),
+  );
   await syncSales(db, square.client, { from: addDays(today(), -20), to: today(), triggeredBy: 'auto' });
 
   const api = new Router();
@@ -96,6 +102,7 @@ async function boot() {
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);
+  registerTradingRoutes(api, db, square);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
 
   const realFetch = window.fetch.bind(window);
