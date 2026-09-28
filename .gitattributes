@@ -1,0 +1,2 @@
+# Keep Windows line endings in the repo itself so downloaded ZIPs work too.
+*.bat -text
