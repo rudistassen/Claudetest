@@ -27,6 +27,8 @@ One web app for running a multi-site cafe business. It works on desktops, tablet
 
 **On Windows, the easy way:** install [Node.js](https://nodejs.org) (the LTS version), then double-click `start-windows.bat` in this folder. The first time, it sets the app up and asks for your Square access token (it's saved in `square-token.txt` next to it, which is never committed; delete that file to change the token). It then opens the app in your browser. Keep the black window open while you use the app.
 
+To update to the latest version, close the app and double-click `update-windows.bat`. It backs up `data/cafe.db` to `data/cafe-backup.db`, downloads the latest code and installs it, keeping your data and Square token.
+
 **From a terminal:**
 
 Requires **Node.js 22.13 or newer**. It uses the SQLite built into Node, so no database server is needed.
