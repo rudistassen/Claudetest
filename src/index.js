@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDb } from './db.js';
-import { DEMO_PASSWORD, isEmpty, seedAdmin, seedDemo, seedSafetyTasks } from './seed.js';
+import { cleanEnv, DEMO_PASSWORD, ensureAdmin, isEmpty, lockDemoAccounts, seedAdmin, seedDemo, seedSafetyTasks } from './seed.js';
 import { createApp } from './server.js';
 import { SquareClient, squareConfig, startAutoSync } from './square.js';
 
@@ -14,9 +14,12 @@ if (args.has('--reset') && fs.existsSync(dbPath)) {
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = openDb(dbPath);
 
+const adminEmail = cleanEnv(process.env.ADMIN_EMAIL);
+const adminPassword = cleanEnv(process.env.ADMIN_PASSWORD);
+
 if (isEmpty(db)) {
-  const email = process.env.ADMIN_EMAIL || 'admin@cafe.local';
-  const password = process.env.ADMIN_PASSWORD || DEMO_PASSWORD;
+  const email = adminEmail || 'admin@cafe.local';
+  const password = adminPassword || DEMO_PASSWORD;
   seedAdmin(db, { email, password });
   if (process.env.SEED_DEMO === 'false') {
     seedSafetyTasks(db);
@@ -28,6 +31,16 @@ if (isEmpty(db)) {
     console.log(`  Manager: manager1@cafe.local / ${DEMO_PASSWORD}   (manager1..manager7)`);
     console.log(`  Staff:   staff1@cafe.local / ${DEMO_PASSWORD}     (staff1..staff7)`);
   }
+} else {
+  // The database already existed, e.g. a hosting platform started the app before ADMIN_EMAIL was set.
+  const admin = ensureAdmin(db, { email: adminEmail, password: adminPassword });
+  if (admin) console.log(`Admin account ${adminEmail} ${admin}.`);
+}
+
+// Running for real (no demo): nobody may keep signing in with the published demo password.
+if (process.env.SEED_DEMO === 'false') {
+  const locked = lockDemoAccounts(db, { keepEmail: adminEmail });
+  if (locked) console.log(`Switched off ${locked} account(s) still using the demo password.`);
 }
 
 if (args.has('--seed-only')) process.exit(0);

@@ -1,4 +1,4 @@
-import { hashPassword } from './auth.js';
+import { hashPassword, verifyPassword } from './auth.js';
 import { tx } from './db.js';
 import { addDays, today, weekStart } from './util.js';
 
@@ -152,6 +152,40 @@ export function seedSafetyTasks(db) {
 
 export function seedAdmin(db, { email, password, name = 'Owner' }) {
   db.prepare(`INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')`).run(name, email, hashPassword(password));
+}
+
+// Environment values pasted with surrounding quotes or spaces (easy to do in a hosting dashboard) are cleaned up.
+export const cleanEnv = (v) => (v ?? '').trim().replace(/^(["'])(.*)\1$/, '$2').trim() || null;
+
+/**
+ * Makes sure the ADMIN_EMAIL account exists and can sign in, even if the database was first created before
+ * ADMIN_EMAIL was set (e.g. a hosting platform started the app before its settings were added). An existing
+ * active account is left alone; a missing one is created and a deactivated one is switched back on.
+ */
+export function ensureAdmin(db, { email, password }) {
+  if (!email || !password) return null;
+  const existing = db.prepare('SELECT id, active FROM users WHERE email = ?').get(email);
+  if (existing?.active) return null;
+  if (existing) {
+    db.prepare(`UPDATE users SET active = 1, role = 'admin', location_id = NULL, password_hash = ? WHERE id = ?`).run(hashPassword(password), existing.id);
+    return 'reactivated';
+  }
+  seedAdmin(db, { email, password });
+  return 'created';
+}
+
+/** Switches off every account still using the demo password, apart from keepEmail. Returns how many. */
+export function lockDemoAccounts(db, { keepEmail } = {}) {
+  const users = db.prepare('SELECT id, email, password_hash FROM users WHERE active = 1').all();
+  let n = 0;
+  for (const u of users) {
+    if (keepEmail && u.email.toLowerCase() === keepEmail.toLowerCase()) continue;
+    if (!verifyPassword(DEMO_PASSWORD, u.password_hash)) continue;
+    db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(u.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+    n++;
+  }
+  return n;
 }
 
 // Seven sites with staff, suppliers, products and this week's rota so every screen has something in it.

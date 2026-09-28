@@ -112,7 +112,7 @@ The app is one Node process plus one SQLite file, so it runs on any platform wit
 3. Add these **Variables**: `DB_PATH=/data/cafe.db`, `SEED_DEMO=false`, `ADMIN_EMAIL=you@yourcafe.co.uk`, `ADMIN_PASSWORD=<a strong password>`, `SQUARE_ACCESS_TOKEN=<your token>`.
 4. Under **Settings → Networking**, click **Generate Domain** to get a web address (HTTPS is included).
 
-The first start creates your admin account from `ADMIN_EMAIL`/`ADMIN_PASSWORD` (only when the database is empty). `PORT` is set by the platform. On Railway, Render and Fly.io the app trusts the platform's proxy automatically, so the session cookie is marked `Secure`; elsewhere set `TRUST_PROXY=1` when running behind a reverse proxy. Failed sign-ins are limited to 10 per account and 20 per address every 15 minutes. Back up the database file regularly.
+On start-up the app creates your admin account from `ADMIN_EMAIL`/`ADMIN_PASSWORD` if it doesn't exist yet (also when the platform started the app once before these were set; an existing account is left alone). With `SEED_DEMO=false`, any account still using the demo password is switched off on start-up. `PORT` is set by the platform. On Railway, Render and Fly.io the app trusts the platform's proxy automatically, so the session cookie is marked `Secure`; elsewhere set `TRUST_PROXY=1` when running behind a reverse proxy. Failed sign-ins are limited to 10 per account and 20 per address every 15 minutes. Back up the database file regularly.
 
 ## Project layout
 
