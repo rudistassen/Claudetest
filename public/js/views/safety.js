@@ -144,7 +144,7 @@ export async function renderReport(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -13);
-  const scope = state.isAdmin ? (query.scope ?? 'all') : 'site';
+  const scope = state.multiSite ? (query.scope ?? 'all') : 'site';
   const data = await api(`/safety/report${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`);
   if (stale()) return;
 
@@ -158,7 +158,7 @@ export async function renderReport(ctx) {
     <div class="page-head">
       <h1>Food safety compliance</h1>
       <form class="actions" id="range">
-        ${state.isAdmin ? `<select name="scope"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+        ${state.multiSite ? `<select name="scope"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
         <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
         <button class="btn" type="submit">Update</button>
         <button class="btn" type="button" id="print">Print</button>

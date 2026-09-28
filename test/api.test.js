@@ -155,7 +155,9 @@ describe('rota across sites', () => {
   test('managers only run their own site', async () => {
     const manager = await login('manager1@cafe.local');
     const me = (await manager('/auth/me')).data.user;
-    assert.equal((await manager('/rota?location_id=all')).status, 400);
+    const all = (await manager('/rota?location_id=all')).data;
+    assert.ok(all.staff.every((u) => u.location_id === me.location_id || all.shifts.some((x) => x.user_id === u.id)), '"all sites" is just the sites they can access');
+    assert.ok(all.shifts.every((x) => x.location_id === me.location_id));
     const staff = (await manager('/rota')).data.staff.find((u) => u.role === 'staff');
     const other = me.location_id === 1 ? 2 : 1;
     const r = await manager('/shifts', { method: 'POST', body: { location_id: other, user_id: staff.id, date: '2030-02-04', start_time: '09:00', end_time: '12:00' } });

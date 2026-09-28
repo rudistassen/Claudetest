@@ -1,4 +1,4 @@
-import { assertLocation, can, requirePerm, resolveLocation } from '../auth.js';
+import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { dayKey, labourByDay, pct, salesByDay } from '../metrics.js';
 import { addDays, badRequest, date, id, notFound, num, round2, shiftHours, str, time, today, weekStart } from '../util.js';
@@ -55,12 +55,9 @@ export function registerRotaRoutes(router, db) {
     }
   }
 
-  // location_id=all (admins only) shows every site at once.
+  // location_id=all shows every site the user can access at once.
   function rotaSites(req, raw) {
-    if (raw === 'all') {
-      if (req.user.role !== 'admin') throw badRequest('Only admins can see every site at once');
-      return db.prepare('SELECT id FROM locations WHERE active = 1 ORDER BY name').all().map((l) => l.id);
-    }
+    if (raw === 'all') return reportLocations(req).map((l) => l.id);
     return [resolveLocation(req, raw)];
   }
 

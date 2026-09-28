@@ -23,8 +23,8 @@ function listPage(ctx, { title, rows, columns, canEdit = true, addLabel, form, s
     title: row ? `Edit ${row.name ?? row.title}` : addLabel,
     body: form(row ?? {}),
     wide: true,
-    onSubmit: async (v) => {
-      await save(v, row);
+    onSubmit: async (v, form) => {
+      await save(v, row, form);
       toast('Saved');
       ctx.rerender();
     },
@@ -88,7 +88,7 @@ function openSquareImport(ctx) {
 export async function renderStaff(ctx) {
   const { state } = ctx;
   // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
-  const scope = state.isAdmin ? (ctx.query.scope ?? 'all') : 'site';
+  const scope = state.multiSite ? (ctx.query.scope ?? 'all') : 'site';
   const [rows, square, perms] = await Promise.all([
     api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
     state.isAdmin ? api('/square/status') : null,
@@ -103,18 +103,38 @@ export async function renderStaff(ctx) {
     return state.isAdmin ? [['admin', 'Admin – everything, every site'], ...opts] : opts;
   };
   const accessValue = (u) => (u.role === 'admin' ? 'admin' : u.access_set_id ?? staffSet?.id ?? '');
+  // Sites: every site (the default), or their home site plus the ones ticked. People who only have some sites
+  // themselves can only give out those.
+  const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
+  const sitesLabel = (u) => {
+    if (u.role === 'admin' || u.all_sites) return 'All sites';
+    const ids = [...new Set([u.location_id, ...(u.site_ids ?? [])].filter(Boolean))];
+    return ids.length === 1 ? siteName(ids[0]) : `${ids.length} sites`;
+  };
+  const canGiveAll = state.isAdmin || !!state.user.all_sites;
+  const sitesField = (u) => {
+    const isNew = !u.id;
+    const all = u.role === 'admin' || (isNew ? canGiveAll : !!u.all_sites);
+    const ticked = new Set([u.location_id, ...(u.site_ids ?? [])]);
+    return `<div class="field"><span>Sites they can work with</span>
+      ${select('all_sites', [...(canGiveAll || all ? [['1', 'All sites']] : []), ['0', 'Only the sites ticked below']], all ? '1' : '0',
+        `onchange="this.closest('form').querySelector('.site-picks').hidden = this.value === '1'"`)}
+      <div class="site-picks" ${all ? 'hidden' : ''}>
+        ${state.locations.filter((l) => l.active).map((l) => `<label class="check-row"><input type="checkbox" name="site_pick" value="${l.id}" ${ticked.has(l.id) ? 'checked' : ''}><span>${esc(l.name)}</span></label>`).join('')}
+        <small>Their home site is always included.</small>
+      </div></div>`;
+  };
   listPage(ctx, {
     title: `Staff · ${scope === 'all' ? 'All sites' : state.location?.name ?? ''}`,
     rows,
     addLabel: 'Add staff member',
-    extraActions: state.isAdmin
-      ? `${square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
-         <a class="btn" href="#/admin/staff${scope === 'all' ? '?scope=site' : ''}">${scope === 'all' ? 'This site only' : 'Show all sites'}</a>`
-      : '',
+    extraActions: `${state.isAdmin && square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
+      ${state.multiSite ? `<a class="btn" href="#/admin/staff${scope === 'all' ? '?scope=site' : ''}">${scope === 'all' ? 'This site only' : 'Show all sites'}</a>` : ''}`,
     columns: [
       { label: 'Name', key: 'name' },
       { label: 'Email', key: 'email' },
       { label: 'Access', value: (r) => r.access_name ?? '' },
+      { label: 'Sites', value: sitesLabel },
       { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
       { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
       { label: 'Active', value: (r) => yesNo(r.active) },
@@ -123,15 +143,19 @@ export async function renderStaff(ctx) {
       <div class="row">${field('Name', input('name', u.name, 'required'))}${field('Email (used to sign in)', input('email', u.email, 'type="email" required'))}</div>
       <div class="row">
         ${field('Access', select('permission_set_id', accessOptions(u), accessValue(u)), { hint: state.isAdmin ? 'Set up what each option allows under Setup → Permissions' : '' })}
-        ${field('Home site', select('location_id', state.isAdmin ? [['', '—'], ...locOptions] : locOptions.filter(([id]) => id === state.user.location_id), u.location_id ?? state.locationId))}
+        ${field('Home site', select('location_id', state.isAdmin ? [['', '—'], ...locOptions] : locOptions, u.location_id ?? state.locationId))}
       </div>
+      ${u.role === 'admin' ? '<p class="small muted">Admins can work with every site.</p>' : sitesField(u)}
       <div class="row">
         <input type="hidden" name="position" value="${esc(u.position ?? '')}">
         ${field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"'))}
       </div>
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password', input('password', '', `type="password" minlength="8" autocomplete="new-password" ${u.id ? '' : 'required'}`), { hint: 'At least 8 characters' })}
       ${activeBox(u.active)}`,
-    save: async (v, row) => {
+    save: async (v, row, form) => {
+      v.site_ids = [...form.querySelectorAll('input[name=site_pick]:checked')].map((i) => Number(i.value));
+      delete v.site_pick;
+      if (v.all_sites === undefined) delete v.site_ids;
       const saved = row ? await api(`/users/${row.id}`, { method: 'PUT', body: v }) : await api('/users', { method: 'POST', body: v });
       // On a single site's list, say where someone went if their home site changed.
       if (scope !== 'all' && saved.location_id && saved.location_id !== state.locationId) {
@@ -245,7 +269,8 @@ export async function renderProducts(ctx) {
   ctx.el.querySelectorAll('[data-pars]').forEach((b) => b.addEventListener('click', async (e) => {
     e.stopPropagation();
     const { product, pars } = await api(`/products/${b.dataset.pars}/pars`);
-    const editable = state.isAdmin ? pars : pars.filter((p) => p.location_id === state.user.location_id);
+    const mine = new Set(state.locations.map((l) => l.id));
+    const editable = state.isAdmin ? pars : pars.filter((p) => mine.has(p.location_id));
     openModal({
       title: `Par levels · ${product.name}`,
       body: `<p class="muted">Leave blank to use the default par of ${product.par_level}.</p>
@@ -272,7 +297,7 @@ export async function renderSafetyTasks(ctx) {
   };
   const locOptions = state.isAdmin
     ? [['', 'All locations'], ...state.locations.map((l) => [l.id, l.name])]
-    : state.locations.filter((l) => l.id === state.user.location_id).map((l) => [l.id, l.name]);
+    : state.locations.filter((l) => l.active).map((l) => [l.id, l.name]);
   listPage(ctx, {
     title: 'Food safety checks',
     rows,
@@ -294,7 +319,7 @@ export async function renderSafetyTasks(ctx) {
       <div class="row">
         ${field('Category', input('category', t.category ?? 'General', 'list="task-cats"'))}
         ${field('Frequency', select('frequency', [['daily', 'Daily'], ['weekly', 'Weekly']], t.frequency ?? 'daily'))}
-        ${field('Applies to', select('location_id', locOptions, t.location_id ?? (state.isAdmin ? '' : state.user.location_id)))}
+        ${field('Applies to', select('location_id', locOptions, t.location_id ?? (state.isAdmin ? '' : state.locationId)))}
       </div>
       <datalist id="task-cats">${[...new Set(rows.map((r) => r.category))].map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
       ${field('Requires a reading (e.g. temperature)', `<input type="checkbox" name="requires_reading" ${t.requires_reading ? 'checked' : ''}>`, { className: 'field-inline' })}

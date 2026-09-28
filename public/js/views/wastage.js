@@ -12,7 +12,7 @@ export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -6);
-  const scope = state.isAdmin ? (query.scope ?? 'site') : 'site';
+  const scope = state.multiSite ? (query.scope ?? 'site') : 'site';
   const params = { from, to, location_id: scope === 'all' ? undefined : state.locationId };
   const canRecord = state.can('wastage.record');
   const [report, entries, [products, reasons, recipes]] = await Promise.all([
@@ -32,7 +32,7 @@ export async function render(ctx) {
       </div>
     </div>
     <form class="filters" id="range">
-      ${state.isAdmin ? `<select name="scope"><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option></select>` : ''}
+      ${state.multiSite ? `<select name="scope"><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option></select>` : ''}
       <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
       <button class="btn" type="submit">Update</button>
     </form>

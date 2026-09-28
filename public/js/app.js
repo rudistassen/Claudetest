@@ -18,6 +18,8 @@ export const state = {
   locations: [],
   locationId: null,
   get isAdmin() { return this.user?.role === 'admin'; },
+  // Whether this person can work with more than one site (site picker, "All sites" views).
+  get multiSite() { return this.locations.filter((l) => l.active).length > 1; },
   // Admins can do everything; everyone else has the permissions of their permission set.
   can(...perms) { return this.user?.role === 'admin' || perms.some((p) => this.user?.permissions?.includes(p)); },
   get location() { return this.locations.find((l) => l.id === this.locationId); },
@@ -110,7 +112,7 @@ function renderShell() {
       <button class="icon-btn menu-toggle" aria-label="Menu">☰</button>
       <a class="brand" href="#/dashboard">Cafe Ops${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <div class="loc-picker">
-        ${state.isAdmin
+        ${state.multiSite
           ? `<select id="location-select" aria-label="Location">${locOptions}</select>`
           : `<span class="loc-name">${esc(state.location?.name ?? '')}</span>`}
       </div>
@@ -183,8 +185,9 @@ export async function loadLocations() {
   let saved = null;
   try { saved = Number(localStorage.getItem(LOCATION_KEY)); } catch { /* storage unavailable */ }
   const active = state.locations.filter((l) => l.active);
-  state.locationId = state.user.location_id
-    ?? (active.some((l) => l.id === saved) ? saved : active[0]?.id ?? null);
+  // The site picked last time, else their home site, else the first site they can access.
+  const pick = (id) => active.some((l) => l.id === id);
+  state.locationId = (pick(saved) ? saved : null) ?? (pick(state.user.location_id) ? state.user.location_id : active[0]?.id ?? null);
 }
 
 async function start() {

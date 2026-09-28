@@ -241,4 +241,6 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
     });
   });
   publishAllShifts(db); // the demo rota is already published
+  // Each demo manager and member of staff works at one site (real staff get every site unless you limit them).
+  db.exec(`UPDATE users SET all_sites = 0 WHERE role != 'admin'`);
 }

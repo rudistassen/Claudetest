@@ -1,4 +1,4 @@
-import { can, requirePerm, resolveLocation } from '../auth.js';
+import { can, reportLocations, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
 import { ALLERGENS, SALES_MATCH, TARGET_GP, cleanAllergens, enrich, ingredientRows, loadRecipes, unitCost } from '../recipes.js';
 import { addDays, badRequest, bool, date, id, notFound, num, round2, str, today } from '../util.js';
@@ -42,9 +42,9 @@ export function registerRecipeRoutes(router, db) {
     const from = date(req.query.from, 'from') ?? addDays(to, -6);
     if (from > to) throw badRequest('from must be before to');
     if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_REPORT_DAYS) throw badRequest(`Reports are limited to ${MAX_REPORT_DAYS} days`);
-    const locationId = req.user.role === 'admin' && !req.query.location_id ? null : resolveLocation(req, req.query.location_id);
-    const locFilter = locationId ? 'AND si.location_id = ?' : '';
-    const params = locationId ? [from, to, locationId] : [from, to];
+    const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
+    const locFilter = `AND si.location_id IN (${ids.map(() => '?').join(', ')})`;
+    const params = [from, to, ...ids];
 
     const recipes = new Map(loadRecipes(db, { activeOnly: true }).map((r) => [r.id, r]));
     const sold = db.prepare(`SELECT r.id AS recipe_id, SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net_sales

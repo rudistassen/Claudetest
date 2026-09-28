@@ -5,7 +5,7 @@ export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const week = weekStart(query.week || todayISO());
   // Admins can see every site's rota at once.
-  const all = state.isAdmin && query.scope === 'all';
+  const all = state.multiSite && query.scope === 'all';
   const scopeQs = (extra = {}) => qs({ ...extra, scope: all ? 'all' : undefined });
   const data = await api(`/rota${qs({ location_id: all ? 'all' : state.locationId, week })}`);
   if (stale()) return;
@@ -68,7 +68,7 @@ export async function render(ctx) {
     <div class="page-head">
       <h1>Rota · ${all ? 'All sites' : esc(state.location?.name ?? '')}</h1>
       <div class="actions">
-        ${state.isAdmin ? `<a class="btn" href="#/rota${all ? qs({ week }) : qs({ week, scope: 'all' })}">${all ? 'This site only' : 'All sites'}</a>` : ''}
+        ${state.multiSite ? `<a class="btn" href="#/rota${all ? qs({ week }) : qs({ week, scope: 'all' })}">${all ? 'This site only' : 'All sites'}</a>` : ''}
         <button class="btn" data-week="-7">‹ Prev</button>
         <button class="btn" data-week="0">This week</button>
         <button class="btn" data-week="7">Next ›</button>
@@ -132,9 +132,8 @@ export async function render(ctx) {
 
   const staffOptions = data.staff.map((u) => [u.id, all && u.location_name ? `${u.name} (${u.location_name})` : u.name]);
   // Admins can put anyone on at any site; managers only run their own site.
-  const siteOptions = state.isAdmin
-    ? state.locations.filter((l) => l.active).map((l) => [l.id, l.name])
-    : [[state.user.location_id, siteName(state.user.location_id)]];
+  // Any site this person can access (admins: every site).
+  const siteOptions = state.locations.filter((l) => l.active).map((l) => [l.id, l.name]);
   const shiftModal = (shift, defaults = {}) => {
     const s = shift ?? { start_time: '07:00', end_time: '15:00', break_minutes: 30, ...defaults };
     const person = data.staff.find((u) => u.id === s.user_id);
@@ -190,7 +189,7 @@ export async function render(ctx) {
   // Shifts at another site are edited from that site's rota (or All sites).
   el.querySelectorAll('.shift-away').forEach((a) => a.addEventListener('click', (e) => {
     e.stopPropagation();
-    toast(`${a.title}. Edit it from that site’s rota${state.isAdmin ? ' or All sites' : ''}.`);
+    toast(`${a.title}. Edit it from that site’s rota${state.multiSite ? ' or All sites' : ''}.`);
   }));
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
     shiftModal(null, { user_id: Number(td.dataset.user), date: td.dataset.date, location_id: Number(td.dataset.site) });

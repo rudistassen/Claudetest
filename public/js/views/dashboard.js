@@ -14,7 +14,7 @@ function card(loc, state) {
     <section class="card site-card">
       <header class="card-head">
         <h2>${esc(loc.name)}</h2>
-        ${state.isAdmin ? `<button class="btn btn-small" data-open="${loc.id}">Open site</button>` : ''}
+        ${state.multiSite ? `<button class="btn btn-small" data-open="${loc.id}">Open site</button>` : ''}
       </header>
       <div class="site-grid">
         <div>
@@ -82,10 +82,10 @@ export async function render({ el, state, navigate, stale }) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>${state.isAdmin ? 'All sites' : esc(state.location?.name ?? 'Dashboard')}</h1>
+      <h1>${state.multiSite ? 'All sites' : esc(state.location?.name ?? 'Dashboard')}</h1>
       <span class="muted">${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
     </div>
-    ${state.isAdmin ? `
+    ${state.multiSite ? `
     <div class="kpis">
       ${hasSales ? `<div class="kpi"><span>Sales today (ex VAT)</span><strong>${money(totals.sales)}</strong></div>
       <div class="kpi kpi-${labourTone(labourPct)}"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
@@ -103,7 +103,7 @@ export async function render({ el, state, navigate, stale }) {
 
   el.querySelectorAll('[data-open], [data-site]').forEach((b) => b.addEventListener('click', (e) => {
     const id = Number(b.dataset.open ?? b.dataset.site);
-    if (state.isAdmin) {
+    if (state.multiSite) {
       state.locationId = id;
       try { localStorage.setItem('cafe-ops:location', String(id)); } catch { /* storage unavailable */ }
     }

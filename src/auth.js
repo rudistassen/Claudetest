@@ -25,7 +25,7 @@ export function validatePassword(password) {
   return p;
 }
 
-export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id';
+export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites';
 
 // Joins a user's permission set, or the built-in set for their role when they don't have one.
 export const ACCESS_JOIN = `LEFT JOIN permission_sets ps ON ps.id = u.permission_set_id
@@ -56,6 +56,7 @@ export function loadUser(db) {
   return (req, _res, next) => {
     const token = parseCookies(req.headers.cookie)[COOKIE];
     req.user = token ? withPermissions(stmt.get(token)) ?? null : null;
+    if (req.user) req.user.site_ids = siteIdsFor(db, req.user);
     req.sessionToken = req.user ? token : null;
     next();
   };
@@ -78,20 +79,45 @@ export const can = (user, permission) => !!user && (user.role === 'admin' || use
 export const requirePerm = (...permissions) => (req, _res, next) =>
   (permissions.some((p) => can(req.user, p)) ? next() : next(forbidden()));
 
+/**
+ * The sites someone can work with: every site for admins and people with all-site access (the default),
+ * otherwise their home site plus the sites they've been given.
+ */
+export function siteIdsFor(db, user) {
+  if (user.role === 'admin' || user.all_sites) return db.prepare('SELECT id FROM locations ORDER BY name').all().map((l) => l.id);
+  const ids = db.prepare(`SELECT location_id AS id FROM user_sites WHERE user_id = ?`).all(user.id).map((r) => r.id);
+  if (user.location_id && !ids.includes(user.location_id)) ids.unshift(user.location_id);
+  return ids;
+}
+
 export function assertLocation(req, locationId) {
   const loc = req.db.prepare('SELECT id FROM locations WHERE id = ?').get(locationId);
   if (!loc) throw notFound('Location');
-  if (req.user.role !== 'admin' && req.user.location_id !== locationId) {
-    throw forbidden('You do not have access to this location');
-  }
+  if (!req.user.site_ids.includes(locationId)) throw forbidden('You do not have access to this location');
 }
 
-// Location from the request, defaulting to the user's own site.
+// Location from the request, defaulting to the user's home site (or the first site they can access).
 export function resolveLocation(req, raw) {
-  const locationId = raw !== undefined && raw !== null && raw !== '' ? Number(raw) : req.user.location_id;
+  const home = req.user.site_ids.includes(req.user.location_id) ? req.user.location_id : req.user.site_ids[0];
+  const locationId = raw !== undefined && raw !== null && raw !== '' ? Number(raw) : home;
   if (!Number.isInteger(locationId) || locationId < 1) throw badRequest('location_id is required');
   assertLocation(req, locationId);
   return locationId;
+}
+
+/**
+ * The active sites a report covers: the one asked for, or with no location_id every active site the user can
+ * access. Returns [{ id, name, square_location_id }].
+ */
+export function reportLocations(req, raw) {
+  const db = req.db;
+  if (raw !== undefined && raw !== null && raw !== '') {
+    return [db.prepare('SELECT id, name, square_location_id FROM locations WHERE id = ?').get(resolveLocation(req, raw))];
+  }
+  const ids = new Set(req.user.site_ids);
+  const rows = db.prepare('SELECT id, name, square_location_id FROM locations WHERE active = 1 ORDER BY name').all().filter((l) => ids.has(l.id));
+  if (!rows.length) throw forbidden('You do not have access to any sites');
+  return rows;
 }
 
 // Failed sign-ins are limited per address and per email, so passwords can't be guessed by trying many.

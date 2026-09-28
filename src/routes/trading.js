@@ -1,4 +1,4 @@
-import { requirePerm, resolveLocation } from '../auth.js';
+import { reportLocations, requirePerm } from '../auth.js';
 import { clockedByDay, clockedByHour, clockedByWeekHour, dayKey, dayOfWeek, hoursWorkedBy, nowMinutes, pct, rotaByDay, rotaByWeekHour, salesByDay, timecardsFor } from '../metrics.js';
 import { addDays, badRequest, BUSINESS_TZ, date, oneOf, round2, shiftHours, today } from '../util.js';
 
@@ -21,9 +21,7 @@ function reportScope(db, req, defaultDays) {
   const from = date(req.query.from, 'from') ?? addDays(to, -(defaultDays - 1));
   if (from > to) throw badRequest('from must be before to');
   if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_REPORT_DAYS) throw badRequest(`Reports are limited to ${MAX_REPORT_DAYS} days`);
-  const locations = req.user.role === 'admin' && !req.query.location_id
-    ? db.prepare('SELECT id, name, square_location_id FROM locations WHERE active = 1 ORDER BY name').all()
-    : [db.prepare('SELECT id, name, square_location_id FROM locations WHERE id = ?').get(resolveLocation(req, req.query.location_id))];
+  const locations = reportLocations(req, req.query.location_id);
   return { from, to, locations, ids: locations.map((l) => l.id) };
 }
 

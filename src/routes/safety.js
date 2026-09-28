@@ -1,4 +1,4 @@
-import { assertLocation, can, requirePerm, resolveLocation } from '../auth.js';
+import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { labourByDay, pct } from '../metrics.js';
 import { addDays, badRequest, bool, date, forbidden, id, notFound, num, oneOf, round2, str, today, weekStart } from '../util.js';
 
@@ -11,12 +11,11 @@ export function registerSafetyRoutes(router, db) {
   // --- Task templates ---
 
   router.get('/safety/tasks', requirePerm('safety.manage', 'safety.complete'), (req, res) => {
-    const rows = req.user.role === 'admin'
-      ? db.prepare(`SELECT t.*, l.name AS location_name FROM safety_tasks t LEFT JOIN locations l ON l.id = t.location_id
+    // Checks for every site, plus those set up for the sites this person can access.
+    const ids = new Set(req.user.site_ids);
+    const rows = db.prepare(`SELECT t.*, l.name AS location_name FROM safety_tasks t LEFT JOIN locations l ON l.id = t.location_id
           ORDER BY t.active DESC, t.frequency, t.sort_order, t.title`).all()
-      : db.prepare(`SELECT t.*, l.name AS location_name FROM safety_tasks t LEFT JOIN locations l ON l.id = t.location_id
-          WHERE t.location_id IS NULL OR t.location_id = ? ORDER BY t.active DESC, t.frequency, t.sort_order, t.title`)
-        .all(req.user.location_id);
+      .filter((t) => t.location_id === null || ids.has(t.location_id));
     res.json(rows);
   });
 
@@ -127,9 +126,7 @@ export function registerSafetyRoutes(router, db) {
     if (from > to) throw badRequest('from must be before to');
     if ((Date.parse(to) - Date.parse(from)) / 86400000 > MAX_REPORT_DAYS) throw badRequest(`Reports are limited to ${MAX_REPORT_DAYS} days`);
 
-    const locations = req.user.role === 'admin' && !req.query.location_id
-      ? db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY name').all()
-      : [db.prepare('SELECT id, name FROM locations WHERE id = ?').get(resolveLocation(req, req.query.location_id))];
+    const locations = reportLocations(req, req.query.location_id);
 
     const days = [];
     for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
@@ -169,9 +166,7 @@ export function registerSafetyRoutes(router, db) {
     const ws = weekStart(d);
     const seeSales = can(req.user, 'sales.view');
     const seeOrders = can(req.user, 'orders.manage');
-    const locations = req.user.role === 'admin'
-      ? db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY name').all()
-      : db.prepare('SELECT id, name FROM locations WHERE id = ?').all(req.user.location_id);
+    const locations = reportLocations(req);
 
     // Sales figures are only as fresh as the last Square sync.
     const salesSummary = (locationId) => {

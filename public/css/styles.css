@@ -466,3 +466,10 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .rota .shift-removed .shift-time { text-decoration: line-through; }
 .rota .shift-removed .shift-tag { background: var(--bad); color: var(--surface); }
 @media print { .publish-bar, .publish-ok { display: none; } }
+
+/* Staff form: sites someone can work with */
+.site-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0 1rem; margin-top: 0.4rem; }
+.site-picks .check-row { margin: 0.25rem 0; align-items: center; }
+.site-picks .check-row input { width: auto; margin: 0; }
+.site-picks .check-row span { font-size: 0.95rem; font-weight: 400; }
+.site-picks small { grid-column: 1 / -1; }

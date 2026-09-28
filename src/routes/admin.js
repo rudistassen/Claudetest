@@ -1,4 +1,5 @@
-import { ACCESS_FIELDS, ACCESS_JOIN, PUBLIC_USER_FIELDS, hashPassword, requireAdmin, requirePerm, validatePassword, withPermissions } from '../auth.js';
+import { ACCESS_FIELDS, ACCESS_JOIN, PUBLIC_USER_FIELDS, assertLocation, hashPassword, requireAdmin, requirePerm, validatePassword, withPermissions } from '../auth.js';
+import { tx } from '../db.js';
 import { ALL_PERMISSIONS, cleanPermissions, parsePermissions, PERMISSION_AREAS, roleForPermissions } from '../permissions.js';
 import { badRequest, bool, forbidden, id, notFound, num, oneOf, str } from '../util.js';
 
@@ -8,9 +9,10 @@ export function registerAdminRoutes(router, db) {
   // --- Locations ---
 
   router.get('/locations', (req, res) => {
-    const rows = req.user.role === 'admin'
-      ? db.prepare('SELECT * FROM locations ORDER BY active DESC, name').all()
-      : db.prepare('SELECT * FROM locations WHERE id = ?').all(req.user.location_id);
+    // Admins see every site (including inactive ones); everyone else the sites they can access.
+    const ids = new Set(req.user.site_ids);
+    const rows = db.prepare('SELECT * FROM locations ORDER BY active DESC, name').all()
+      .filter((l) => req.user.role === 'admin' || ids.has(l.id));
     res.json(rows);
   });
 
@@ -45,14 +47,28 @@ export function registerAdminRoutes(router, db) {
   // A non-admin can hand out access they have themselves, except managing staff (so managers can't create managers).
   const covers = (mine, theirs) => theirs.every((p) => mine.includes(p)) && !theirs.includes('staff.manage');
 
+  // Each person's extra sites (used when they don't have access to every site).
+  const extraSites = () => {
+    const m = new Map();
+    for (const r of db.prepare('SELECT user_id, location_id FROM user_sites').all()) m.set(r.user_id, [...(m.get(r.user_id) ?? []), r.location_id]);
+    return m;
+  };
+
   router.get('/users', requirePerm('staff.manage'), (req, res) => {
-    const locationId = req.user.role === 'admin' ? id(req.query.location_id, 'location_id') : req.user.location_id;
+    const locationId = id(req.query.location_id, 'location_id');
+    if (locationId) assertLocation(req, locationId);
     const sql = `SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, l.name AS location_name FROM users u ${ACCESS_JOIN}
       LEFT JOIN locations l ON l.id = u.location_id`;
-    const rows = locationId
+    let rows = locationId
       ? db.prepare(`${sql} WHERE u.location_id = ? ORDER BY u.active DESC, u.name`).all(locationId)
       : db.prepare(`${sql} ORDER BY u.active DESC, l.name, u.name`).all();
-    res.json(rows.map(withPermissions));
+    // People who aren't admins see staff based at the sites they can access.
+    if (req.user.role !== 'admin') {
+      const mine = new Set(req.user.site_ids);
+      rows = rows.filter((u) => u.role !== 'admin' && mine.has(u.location_id));
+    }
+    const extra = extraSites();
+    res.json(rows.map((u) => ({ ...withPermissions(u), site_ids: extra.get(u.id) ?? [] })));
   });
 
   // Access is 'admin' or a permission set id (permission_set_id). The older role field (admin/manager/staff) still
@@ -90,6 +106,16 @@ export function registerAdminRoutes(router, db) {
       u.permission_set_id = null;
     }
 
+    // Sites: every site (the default), or their home site plus the ones ticked.
+    // New people get every site, unless whoever adds them only has some sites themselves.
+    const defaultAll = req.user.role === 'admin' || req.user.all_sites ? 1 : 0;
+    u.all_sites = u.role === 'admin' ? 1 : b.all_sites === undefined ? (existing?.all_sites ?? defaultAll) : bool(b.all_sites);
+    const rawSites = b.site_ids === undefined ? null : Array.isArray(b.site_ids) ? b.site_ids : String(b.site_ids ?? '').split(',').filter(Boolean);
+    u.site_ids = u.all_sites ? [] : rawSites
+      ? [...new Set(rawSites.map((x) => id(x, 'site_ids')))]
+      : existing ? db.prepare('SELECT location_id FROM user_sites WHERE user_id = ?').all(existing.id).map((r) => r.location_id) : [];
+    for (const siteId of u.site_ids) if (!db.prepare('SELECT 1 FROM locations WHERE id = ?').get(siteId)) throw notFound('Location');
+
     if (!/^[^\s@]+@[^\s@]+$/.test(u.email)) throw badRequest('email is not valid');
     const clash = db.prepare('SELECT id, name, active FROM users WHERE email = ? COLLATE NOCASE').get(u.email);
     if (clash && clash.id !== existing?.id) {
@@ -104,24 +130,39 @@ export function registerAdminRoutes(router, db) {
       if (u.role === 'admin') throw forbidden('Only admins can make someone an admin');
       if (permsOf(set).includes('staff.manage')) throw forbidden('Only admins can give someone access to manage staff');
       if (!covers(mine, permsOf(set))) throw forbidden('You can only give people access you have yourself');
-      if (u.location_id !== req.user.location_id) throw forbidden('You can only manage staff at your own site');
-      if (existing && (existing.role === 'admin' || existing.location_id !== req.user.location_id || !covers(mine, currentPerms(existing)))) {
+      const mySites = new Set(req.user.site_ids);
+      if (!mySites.has(u.location_id)) throw forbidden('You can only manage staff at sites you have access to');
+      if (existing && (existing.role === 'admin' || !mySites.has(existing.location_id) || !covers(mine, currentPerms(existing)))) {
         throw forbidden('You can’t change this person');
       }
+      if (u.all_sites && !req.user.all_sites) throw forbidden('You can only give people access to sites you have yourself');
+      if (u.site_ids.some((s) => !mySites.has(s))) throw forbidden('You can only give people access to sites you have yourself');
     }
     if (u.location_id && !db.prepare('SELECT 1 FROM locations WHERE id = ?').get(u.location_id)) throw notFound('Location');
     return u;
   }
 
-  const userOut = (userId) => withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(userId));
+  const userOut = (userId) => ({
+    ...withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(userId)),
+    site_ids: db.prepare('SELECT location_id FROM user_sites WHERE user_id = ?').all(userId).map((r) => r.location_id),
+  });
+  const saveSites = (userId, u) => {
+    db.prepare('DELETE FROM user_sites WHERE user_id = ?').run(userId);
+    const ins = db.prepare('INSERT INTO user_sites (user_id, location_id) VALUES (?, ?)');
+    for (const siteId of u.site_ids) if (siteId !== u.location_id) ins.run(userId, siteId);
+  };
 
   router.post('/users', requirePerm('staff.manage'), (req, res) => {
     const u = userBody(req);
     const password = validatePassword(req.body.password);
-    const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, hourly_rate, active, permission_set_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id);
-    res.status(201).json(userOut(r.lastInsertRowid));
+    const userId = tx(db, () => {
+      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, hourly_rate, active, permission_set_id, all_sites)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites);
+      saveSites(r.lastInsertRowid, u);
+      return r.lastInsertRowid;
+    });
+    res.status(201).json(userOut(userId));
   });
 
   router.put('/users/:id', requirePerm('staff.manage'), (req, res) => {
@@ -132,8 +173,11 @@ export function registerAdminRoutes(router, db) {
     if (userId === req.user.id && (u.role !== existing.role || u.permission_set_id !== existing.permission_set_id || !u.active)) {
       throw badRequest('You cannot change your own access or deactivate yourself');
     }
-    db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, hourly_rate = ?, active = ?, permission_set_id = ? WHERE id = ?`)
-      .run(u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, userId);
+    tx(db, () => {
+      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, hourly_rate = ?, active = ?, permission_set_id = ?, all_sites = ? WHERE id = ?`)
+        .run(u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, userId);
+      saveSites(userId, u);
+    });
     if (req.body.password) {
       db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(validatePassword(req.body.password)), userId);
     }

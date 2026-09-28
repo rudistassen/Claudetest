@@ -19,8 +19,9 @@ One web app for running a multi-site cafe business. It works on desktops, tablet
 
 ## Roles and permissions
 
-- **Admin** (owner/ops): everything at all sites, can switch site from the top bar. Admins aren't limited by a permission set, so you can't lock yourself out.
-- **Everyone else** works at their home site and can do what their **permission set** allows. Sets are managed by admins under **Setup → Permissions**: tick what each set allows, area by area (food safety, rota, wastage, stock takes, orders, recipes, sales & trading, staff, suppliers & products). Give each person a set with the **Access** box on the Staff page.
+- **Admin** (owner/ops): everything at every site. Admins aren't limited by a permission set, so you can't lock yourself out.
+- **Sites:** everyone can work with **every site** by default. On the Staff page you can limit someone to **only the sites you tick** (their home site is always included). Anyone with more than one site gets the site picker in the top bar and the "All sites" views (dashboard, rota, sales, trading, wastage, compliance report). People who manage staff can only give others sites they have themselves.
+- **Everyone else** (not admins) can do what their **permission set** allows, at the sites they can work with. Sets are managed by admins under **Setup → Permissions**: tick what each set allows, area by area (food safety, rota, wastage, stock takes, orders, recipes, sales & trading, staff, suppliers & products). Give each person a set with the **Access** box on the Staff page.
 - Two sets are built in and match the old roles: **Manager** (runs their site: rota, orders, stock, staff and sales) and **Staff** (food-safety checks, wastage, stock counts, the rota and recipes). People without a set get the one for their role. Built-in sets can be changed but not deleted, and a set can't be deleted while anyone uses it.
 - People who can manage staff can only give others access they have themselves, and only admins can give someone access to manage staff.
 

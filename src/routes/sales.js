@@ -1,4 +1,4 @@
-import { requireAdmin, requirePerm, resolveLocation } from '../auth.js';
+import { reportLocations, requireAdmin, requirePerm } from '../auth.js';
 import { dayKey, labourByDay, pct, salesByDay, wastageByDay } from '../metrics.js';
 import { syncSales } from '../square.js';
 import { applyTeamImport, fetchTeam, planTeamImport } from '../team.js';
@@ -123,9 +123,7 @@ export function registerSalesRoutes(router, db, square) {
     if (from > to) throw badRequest('from must be before to');
     if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_REPORT_DAYS) throw badRequest(`Reports are limited to ${MAX_REPORT_DAYS} days`);
 
-    const locations = req.user.role === 'admin' && !req.query.location_id
-      ? db.prepare('SELECT id, name, square_location_id FROM locations WHERE active = 1 ORDER BY name').all()
-      : [db.prepare('SELECT id, name, square_location_id FROM locations WHERE id = ?').get(resolveLocation(req, req.query.location_id))];
+    const locations = reportLocations(req, req.query.location_id);
     const ids = locations.map((l) => l.id);
     const sales = salesByDay(db, ids, from, to);
     const labour = labourByDay(db, ids, from, to, { toDate: true });

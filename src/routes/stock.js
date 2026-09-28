@@ -1,4 +1,4 @@
-import { assertLocation, can, requirePerm, resolveLocation } from '../auth.js';
+import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { loadRecipes } from '../recipes.js';
 import { addDays, badRequest, csv, date, forbidden, id, notFound, num, oneOf, round2, str, today } from '../util.js';
@@ -125,21 +125,15 @@ export function registerStockRoutes(router, db) {
     return { from, to };
   }
 
-  // Admins may omit location_id to see every site.
-  function wastageLocations(req) {
-    if (req.user.role === 'admin' && !req.query.location_id) return null;
-    return resolveLocation(req, req.query.location_id);
-  }
-
+  // One site, or with no location_id every site the user can access.
   function wastageRows(req) {
     const { from, to } = wastageRange(req.query);
-    const locationId = wastageLocations(req);
+    const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
     const sql = `SELECT w.*, l.name AS location_name, u.name AS recorded_by_name FROM wastage w
       JOIN locations l ON l.id = w.location_id LEFT JOIN users u ON u.id = w.recorded_by
-      WHERE w.date BETWEEN ? AND ? ${locationId ? 'AND w.location_id = ?' : ''}
+      WHERE w.date BETWEEN ? AND ? AND w.location_id IN (${ids.map(() => '?').join(', ')})
       ORDER BY w.date DESC, w.id DESC`;
-    const rows = locationId ? db.prepare(sql).all(from, to, locationId) : db.prepare(sql).all(from, to);
-    return { from, to, locationId, rows };
+    return { from, to, ids, rows: db.prepare(sql).all(from, to, ...ids) };
   }
 
   router.get('/wastage', requirePerm('wastage.record', 'wastage.reports', 'wastage.manage'), (req, res) => {
@@ -182,7 +176,7 @@ export function registerStockRoutes(router, db) {
   });
 
   router.get('/wastage/report', requirePerm('wastage.reports'), (req, res) => {
-    const { from, to, locationId, rows } = wastageRows(req);
+    const { from, to, ids, rows } = wastageRows(req);
     const group = (keyFn) => {
       const m = new Map();
       for (const r of rows) {
@@ -199,8 +193,8 @@ export function registerStockRoutes(router, db) {
     const totalCost = round2(rows.reduce((s, r) => s + r.total_cost, 0));
     let sales = null;
     if (can(req.user, 'sales.view')) {
-      const sql = `SELECT COALESCE(SUM(net_sales), 0) AS net, COUNT(*) AS n FROM sales_daily WHERE date BETWEEN ? AND ?${locationId ? ' AND location_id = ?' : ''}`;
-      const r = locationId ? db.prepare(sql).get(from, to, locationId) : db.prepare(sql).get(from, to);
+      const r = db.prepare(`SELECT COALESCE(SUM(net_sales), 0) AS net, COUNT(*) AS n FROM sales_daily
+        WHERE date BETWEEN ? AND ? AND location_id IN (${ids.map(() => '?').join(', ')})`).get(from, to, ...ids);
       if (r.n) sales = { net_sales: round2(r.net), wastage_pct: r.net > 0 ? round2((totalCost / r.net) * 100) : null };
     }
     res.json({

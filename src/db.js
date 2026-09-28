@@ -254,6 +254,13 @@ CREATE TABLE IF NOT EXISTS timecards (
 );
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
+-- Extra sites someone can work with when they don't have access to every site (users.all_sites = 0).
+CREATE TABLE IF NOT EXISTS user_sites (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, location_id)
+);
+
 -- Named groups of permissions staff are assigned to. built_in marks the default Manager and Staff sets
 -- ('manager' / 'staff'), which people without a set fall back to by role.
 CREATE TABLE IF NOT EXISTS permission_sets (
@@ -287,6 +294,8 @@ const MIGRATIONS = [
   ['users', 'permission_set_id', 'ALTER TABLE users ADD COLUMN permission_set_id INTEGER REFERENCES permission_sets(id) ON DELETE SET NULL'],
   ['square_sync_log', 'timecards', 'ALTER TABLE square_sync_log ADD COLUMN timecards INTEGER'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
+  // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
+  ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],
   // Rota publishing: the pub_* columns hold what staff can see (null = never published); the other columns are the
   // draft editors work on, and removed marks a published shift deleted in the draft. Shifts that existed before
   // publishing was added count as published, and whoever could edit the rota can now also publish it.

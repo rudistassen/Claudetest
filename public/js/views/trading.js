@@ -21,7 +21,7 @@ export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -6);
-  const scope = state.isAdmin ? (query.scope ?? 'all') : 'site';
+  const scope = state.multiSite ? (query.scope ?? 'all') : 'site';
   const data = await api(`/trading${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`);
   if (stale()) return;
   const t = data.totals;
@@ -39,7 +39,7 @@ export async function render(ctx) {
         ${data.square_connected && state.can('sales.sync') ? '<button class="btn" id="sync">Sync now</button>' : ''}
       </div>
     </div>
-    ${tabs('trading', state.isAdmin ? scope : undefined)}
+    ${tabs('trading', state.multiSite ? scope : undefined)}
     ${!data.square_connected ? `<p class="notice">Square isn’t connected yet. ${state.isAdmin ? 'See <a href="#/admin/square">Setup → Square</a>.' : 'Ask an admin to connect it.'}</p>` : ''}
     ${data.square_connected && data.unlinked.length ? `<p class="notice">Not linked to Square: ${esc(data.unlinked.join(', '))}.</p>` : ''}
     ${data.square_connected && !hasLabour ? `<p class="notice">No clock-ins from Square yet, so labour below is from the rota only. Clock-ins come from Square Team (Timecards); the access token needs the <code>TIMECARDS_READ</code> and <code>EMPLOYEES_READ</code> permissions.${data.last_sync?.message ? ` Last sync: ${esc(data.last_sync.message)}` : ''}</p>` : ''}
@@ -49,7 +49,7 @@ export async function render(ctx) {
         <option value="" ${PRESETS.some(([n]) => to === todayISO() && span === n) ? '' : 'selected'}>Custom</option>
       </select>
       <input type="date" name="from" value="${from}" aria-label="From"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}" aria-label="To">
-      ${state.isAdmin ? `<select name="scope" aria-label="Sites"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      ${state.multiSite ? `<select name="scope" aria-label="Sites"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
       <button class="btn" type="submit">Update</button>
     </form>
 
@@ -247,7 +247,7 @@ export async function renderHeatmap(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -27);
-  const scope = state.isAdmin ? (query.scope ?? 'all') : 'site';
+  const scope = state.multiSite ? (query.scope ?? 'all') : 'site';
   const data = await api(`/trading/heatmap${qs({ from, to, basis: query.basis, location_id: scope === 'all' ? undefined : state.locationId })}`);
   if (stale()) return;
   const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
@@ -265,7 +265,7 @@ export async function renderHeatmap(ctx) {
       <h1>Trading</h1>
       <div class="actions"><button class="btn" id="print">Print</button></div>
     </div>
-    ${tabs('trading/heatmap', state.isAdmin ? scope : undefined)}
+    ${tabs('trading/heatmap', state.multiSite ? scope : undefined)}
     ${!data.square_connected ? `<p class="notice">Square isn’t connected yet, so there are no sales to compare labour with.</p>` : ''}
     ${data.square_connected && data.unlinked.length ? `<p class="notice">Not linked to Square: ${esc(data.unlinked.join(', '))}.</p>` : ''}
     <form class="filters" id="range">
@@ -274,7 +274,7 @@ export async function renderHeatmap(ctx) {
         <option value="" ${HEAT_PRESETS.some(([n]) => to === todayISO() && span === n) ? '' : 'selected'}>Custom</option>
       </select>
       <input type="date" name="from" value="${from}" aria-label="From"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}" aria-label="To">
-      ${state.isAdmin ? `<select name="scope" aria-label="Sites"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      ${state.multiSite ? `<select name="scope" aria-label="Sites"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
       <select name="basis" aria-label="Labour">
         <option value="clocked" ${data.basis === 'clocked' ? 'selected' : ''} ${data.labour_synced ? '' : 'disabled'}>Clocked labour</option>
         <option value="rostered" ${data.basis === 'rostered' ? 'selected' : ''}>Rostered labour</option>
