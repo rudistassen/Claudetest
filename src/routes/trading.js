@@ -1,6 +1,6 @@
 import { requireManager, resolveLocation } from '../auth.js';
-import { clockedByDay, clockedByHour, dayKey, hoursWorkedBy, nowMinutes, pct, rotaByDay, salesByDay, timecardsFor } from '../metrics.js';
-import { addDays, badRequest, BUSINESS_TZ, date, round2, shiftHours, today } from '../util.js';
+import { clockedByDay, clockedByHour, clockedByWeekHour, dayKey, dayOfWeek, hoursWorkedBy, nowMinutes, pct, rotaByDay, rotaByWeekHour, salesByDay, timecardsFor } from '../metrics.js';
+import { addDays, badRequest, BUSINESS_TZ, date, oneOf, round2, shiftHours, today } from '../util.js';
 
 const MAX_REPORT_DAYS = 366;
 // A clock-in more than this many minutes after the rostered start counts as late.
@@ -15,17 +15,97 @@ const round1 = (n) => Math.round(n * 10) / 10;
  * Trading dashboard: Square sales next to rostered labour and actual labour from Square clock-ins, by day, by
  * hour of the day, by site and by person.
  */
-export function registerTradingRoutes(router, db, square) {
-  router.get('/trading', requireManager, (req, res) => {
-    const to = date(req.query.to, 'to') ?? today();
-    const from = date(req.query.from, 'from') ?? addDays(to, -6);
-    if (from > to) throw badRequest('from must be before to');
-    if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_REPORT_DAYS) throw badRequest(`Reports are limited to ${MAX_REPORT_DAYS} days`);
+// Date range and sites for a report: admins see every site unless they pick one.
+function reportScope(db, req, defaultDays) {
+  const to = date(req.query.to, 'to') ?? today();
+  const from = date(req.query.from, 'from') ?? addDays(to, -(defaultDays - 1));
+  if (from > to) throw badRequest('from must be before to');
+  if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_REPORT_DAYS) throw badRequest(`Reports are limited to ${MAX_REPORT_DAYS} days`);
+  const locations = req.user.role === 'admin' && !req.query.location_id
+    ? db.prepare('SELECT id, name, square_location_id FROM locations WHERE active = 1 ORDER BY name').all()
+    : [db.prepare('SELECT id, name, square_location_id FROM locations WHERE id = ?').get(resolveLocation(req, req.query.location_id))];
+  return { from, to, locations, ids: locations.map((l) => l.id) };
+}
 
-    const locations = req.user.role === 'admin' && !req.query.location_id
-      ? db.prepare('SELECT id, name, square_location_id FROM locations WHERE active = 1 ORDER BY name').all()
-      : [db.prepare('SELECT id, name, square_location_id FROM locations WHERE id = ?').get(resolveLocation(req, req.query.location_id))];
-    const ids = locations.map((l) => l.id);
+export function registerTradingRoutes(router, db, square) {
+  /**
+   * Labour % by day of the week and hour of the day: labour cost ÷ net sales in each slot, added up over the
+   * period. Only site-days with Square sales count, so closed or unsynced days don't skew it.
+   */
+  router.get('/trading/heatmap', requireManager, (req, res) => {
+    const { from, to, locations, ids } = reportScope(db, req, 28);
+    const labourSynced = !!db.prepare('SELECT 1 FROM timecards LIMIT 1').get();
+    const basis = oneOf(req.query.basis, 'basis', ['clocked', 'rostered']) ?? (labourSynced ? 'clocked' : 'rostered');
+    const inList = ids.map(() => '?').join(', ');
+
+    const salesDays = db.prepare(`SELECT DISTINCT location_id, date FROM sales_daily WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`)
+      .all(from, to, ...ids);
+    const hasSales = new Set(salesDays.map((r) => dayKey(r.location_id, r.date)));
+    const daysPerWeekday = Array(7).fill(0);
+    for (const d of new Set(salesDays.map((r) => r.date))) daysPerWeekday[dayOfWeek(d)]++;
+
+    const sales = new Map();
+    for (const r of db.prepare(`SELECT date, hour, SUM(net_sales) AS net, SUM(orders) AS orders FROM sales_hourly
+      WHERE date BETWEEN ? AND ? AND location_id IN (${inList}) GROUP BY date, hour`).all(from, to, ...ids)) {
+      const k = `${dayOfWeek(r.date)}|${r.hour}`;
+      const v = sales.get(k) ?? { net: 0, orders: 0 };
+      v.net += r.net;
+      v.orders += r.orders;
+      sales.set(k, v);
+    }
+    const labour = basis === 'clocked'
+      ? clockedByWeekHour(timecardsFor(db, ids, from, to).filter((c) => hasSales.has(dayKey(c.location_id, c.date))))
+      : rotaByWeekHour(db, ids, from, to, (l, d) => hasSales.has(dayKey(l, d)));
+
+    const cell = (net, cost, hours, orders) => ({
+      net_sales: round2(net),
+      orders,
+      labour_cost: round2(cost),
+      labour_hours: round1(hours),
+      labour_pct: pct(cost, net),
+    });
+    const hourSet = new Set();
+    for (const [k, v] of sales) if (v.net || v.orders) hourSet.add(Number(k.split('|')[1]));
+    for (const [k, v] of labour) if (v.hours >= 0.05) hourSet.add(Number(k.split('|')[1]));
+    const hours = [...hourSet].sort((a, b) => a - b);
+
+    const cells = [];
+    const rowT = Array.from({ length: 7 }, () => ({ net: 0, cost: 0, hours: 0, orders: 0 }));
+    const colT = new Map(hours.map((h) => [h, { net: 0, cost: 0, hours: 0, orders: 0 }]));
+    for (let dow = 0; dow < 7; dow++) {
+      for (const h of hours) {
+        const sv = sales.get(`${dow}|${h}`) ?? { net: 0, orders: 0 };
+        const lv = labour.get(`${dow}|${h}`) ?? { hours: 0, cost: 0 };
+        if (!sv.net && !sv.orders && lv.hours < 0.05) continue;
+        cells.push({ dow, hour: h, ...cell(sv.net, lv.cost, lv.hours, sv.orders) });
+        for (const t of [rowT[dow], colT.get(h)]) {
+          t.net += sv.net;
+          t.cost += lv.cost;
+          t.hours += lv.hours;
+          t.orders += sv.orders;
+        }
+      }
+    }
+    const all = rowT.reduce((a, t) => ({ net: a.net + t.net, cost: a.cost + t.cost, hours: a.hours + t.hours, orders: a.orders + t.orders }), { net: 0, cost: 0, hours: 0, orders: 0 });
+
+    res.json({
+      from,
+      to,
+      basis,
+      labour_synced: labourSynced,
+      square_connected: !!square,
+      unlinked: locations.filter((l) => !l.square_location_id).map((l) => l.name),
+      days_per_weekday: daysPerWeekday,
+      hours,
+      cells,
+      weekdays: rowT.map((t, dow) => ({ dow, ...cell(t.net, t.cost, t.hours, t.orders) })),
+      hour_totals: hours.map((h) => { const t = colT.get(h); return { hour: h, ...cell(t.net, t.cost, t.hours, t.orders) }; }),
+      totals: cell(all.net, all.cost, all.hours, all.orders),
+    });
+  });
+
+  router.get('/trading', requireManager, (req, res) => {
+    const { from, to, locations, ids } = reportScope(db, req, 7);
     const days = [];
     for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
 

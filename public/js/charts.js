@@ -236,6 +236,18 @@ export function lineChart(container, opts) {
   });
 }
 
+/** Shows the shared tooltip on hover and keyboard focus of el. title() and rows() are called when it opens. */
+export function attachTip(el, title, rows) {
+  const on = (e) => {
+    const r = el.getBoundingClientRect();
+    showTip(title(), rows(), e.clientX ?? r.left + r.width / 2, e.clientY ?? r.top);
+  };
+  el.addEventListener('pointermove', on);
+  el.addEventListener('focus', on);
+  el.addEventListener('pointerleave', hideTip);
+  el.addEventListener('blur', hideTip);
+}
+
 export function legend(items) {
   return `<div class="chart-legend">${items.map((i) => `<span><i class="chart-legend-${i.kind ?? 'line'}" style="background:${i.color}"></i>${i.label}</span>`).join('')}</div>`;
 }

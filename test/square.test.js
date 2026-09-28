@@ -5,7 +5,7 @@ import { openDb } from '../src/db.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { createApp } from '../src/server.js';
 import { SquareClient, summariseOrder, summariseTimecard, syncSales } from '../src/square.js';
-import { addDays, today, zonedMidnightUTC } from '../src/util.js';
+import { addDays, localHour, today, zonedMidnightUTC } from '../src/util.js';
 
 const TOKEN = 'test-token';
 const SQ_LOCATIONS = [
@@ -293,10 +293,43 @@ describe('Square integration', () => {
     }
   });
 
+  test('labour heatmap splits labour % by day of the week and hour', async () => {
+    const d = today();
+    const y = addDays(d, -1);
+    const dowY = (new Date(`${y}T00:00:00Z`).getUTCDay() + 6) % 7;
+    const manager = await login('manager1@cafe.local');
+    const r = (await manager(`/trading/heatmap?from=${y}&to=${d}`)).data;
+    assert.equal(r.basis, 'clocked');
+    assert.equal(r.totals.net_sales, 23.17);
+    assert.equal(r.totals.labour_cost, 108, "manager1's 8 paid hours at £13.50; Carl has no wage");
+    assert.equal(r.weekdays[dowY].labour_cost, 108);
+    assert.equal(r.weekdays[dowY].net_sales, 14.17);
+
+    // The 09:00Z sale (£5.83 net) sits in its local hour, next to the labour clocked in that hour.
+    const saleHour = localHour(`${y}T09:00:00Z`);
+    const cell = r.cells.find((c) => c.dow === dowY && c.hour === saleHour);
+    assert.equal(cell.net_sales, 5.83);
+    assert.ok(Math.abs(cell.labour_pct - (cell.labour_cost / 5.83) * 100) < 0.2, 'labour cost ÷ sales (cost is rounded to the penny)');
+    assert.ok(cell.labour_cost > 0);
+    // 07:00–08:00 local: on the clock but no sales yet.
+    const early = r.cells.find((c) => c.dow === dowY && c.hour === 7);
+    assert.equal(early.net_sales, 0);
+    assert.equal(early.labour_pct, null);
+    assert.ok(Math.abs(early.labour_cost - 13.5 * (8 / 8.5)) < 0.01);
+    const cellTotal = r.cells.reduce((t, c) => t + c.labour_cost, 0);
+    assert.ok(Math.abs(cellTotal - 108) < 0.05, 'the cells add up to the total');
+
+    const rostered = (await manager(`/trading/heatmap?from=${y}&to=${d}&basis=rostered`)).data;
+    assert.equal(rostered.basis, 'rostered');
+    assert.equal(rostered.totals.net_sales, 23.17);
+    assert.equal((await manager('/trading/heatmap?basis=guess')).status, 400);
+  });
+
   test('staff cannot see sales and bad tokens give a clear error', async () => {
     const staff = await login('staff1@cafe.local');
     assert.equal((await staff('/sales')).status, 403);
     assert.equal((await staff('/trading')).status, 403);
+    assert.equal((await staff('/trading/heatmap')).status, 403);
     assert.equal((await staff('/rota')).data.daily_money, undefined);
     assert.equal((await staff('/wastage/report')).data.sales, null);
 

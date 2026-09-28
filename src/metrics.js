@@ -1,4 +1,4 @@
-import { BUSINESS_TZ, localHour, round2, shiftHours, today } from './util.js';
+import { BUSINESS_TZ, localDate, localHour, round2, shiftHours, today } from './util.js';
 
 const key = (locationId, date) => `${locationId}|${date}`;
 
@@ -93,6 +93,65 @@ export function clockedByHour(cards, tz = BUSINESS_TZ) {
       const next = Math.min(t.end, (Math.floor(at / 3600000) + 1) * 3600000);
       out[localHour(at, tz)] += ((next - at) / 3600000) * paidShare;
       at = next;
+    }
+  }
+  return out;
+}
+
+/** Day of the week of an ISO date, Monday = 0 … Sunday = 6. */
+export const dayOfWeek = (iso) => (new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7;
+
+const addTo = (map, k, hours, cost) => {
+  const v = map.get(k) ?? { hours: 0, cost: 0 };
+  v.hours += hours;
+  v.cost += cost;
+  map.set(k, v);
+};
+
+/**
+ * Clocked hours and cost by day of the week and local hour, keyed "dow|hour". Each part of a timecard counts
+ * in the day and hour it was worked; unpaid breaks are spread evenly over the timecard.
+ */
+export function clockedByWeekHour(cards, tz = BUSINESS_TZ) {
+  const out = new Map();
+  for (const t of cards) {
+    if (t.span <= 0) continue;
+    const paidShare = t.hours / t.span;
+    for (let at = t.start; at < t.end;) {
+      const next = Math.min(t.end, (Math.floor(at / 3600000) + 1) * 3600000);
+      const hours = ((next - at) / 3600000) * paidShare;
+      addTo(out, `${dayOfWeek(localDate(at, tz))}|${localHour(at, tz)}`, hours, hours * t.rate);
+      at = next;
+    }
+  }
+  return out;
+}
+
+/**
+ * Rostered hours and cost by day of the week and hour, keyed "dow|hour", for shifts whose site-day passes
+ * include(locationId, date). Breaks are spread evenly over the shift; today only counts up to now.
+ */
+export function rotaByWeekHour(db, locationIds, from, to, include = () => true, asOf) {
+  const current = asOf ?? { date: today(), minutes: nowMinutes() };
+  const rows = db.prepare(`SELECT s.location_id, s.date, s.start_time, s.end_time, s.break_minutes, u.hourly_rate
+    FROM shifts s JOIN users u ON u.id = s.user_id
+    WHERE s.date BETWEEN ? AND ? AND s.date <= ? AND s.location_id IN (${locationIds.map(() => '?').join(', ')})`)
+    .all(from, to, current.date, ...locationIds);
+  const out = new Map();
+  for (const r of rows) {
+    if (!include(r.location_id, r.date)) continue;
+    const start = toMin(r.start_time);
+    let end = toMin(r.end_time);
+    if (end <= start) end += 24 * 60;
+    const paidShare = Math.max(0, 1 - (r.break_minutes || 0) / (end - start));
+    const stop = r.date === current.date ? Math.min(end, current.minutes) : end;
+    const dow = dayOfWeek(r.date);
+    for (let m = start; m < stop;) {
+      const next = Math.min(stop, (Math.floor(m / 60) + 1) * 60);
+      const hours = ((next - m) / 60) * paidShare;
+      // A shift running past midnight counts its late hours on the next day.
+      addTo(out, `${(dow + Math.floor(m / 1440)) % 7}|${Math.floor(m / 60) % 24}`, hours, hours * r.hourly_rate);
+      m = next;
     }
   }
   return out;

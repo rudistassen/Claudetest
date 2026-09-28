@@ -1,4 +1,4 @@
-import { barChart, legend, lineChart } from '../charts.js';
+import { attachTip, barChart, legend, lineChart } from '../charts.js';
 import { addDays, api, esc, fmtDate, fmtDateTime, money, qs, showError, toast, todayISO } from '../lib.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
@@ -7,6 +7,9 @@ const signed = (h) => (h > 0 ? `+${hrs(h)}` : h < 0 ? `−${hrs(-h)}` : hrs(0));
 const hourLabel = (h) => `${String(h).padStart(2, '0')}:00`;
 const moneyShort = (v) => (v >= 1000 ? `£${(v / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })}k` : `£${Math.round(v)}`);
 const PRESETS = [[7, 'Last 7 days'], [14, 'Last 14 days'], [28, 'Last 28 days'], [90, 'Last 90 days']];
+
+const tabs = (active, scope) => `<div class="tabs">${[['trading', 'Overview'], ['trading/heatmap', 'Labour heatmap']]
+  .map(([p, l]) => `<a href="#/${p}${scope ? qs({ scope }) : ''}" class="${active === p ? 'active' : ''}">${l}</a>`).join('')}</div>`;
 
 // Clocked minus rostered hours: small differences are normal, big ones are worth a look.
 function varianceTone(v, rostered) {
@@ -36,6 +39,7 @@ export async function render(ctx) {
         ${data.square_connected ? '<button class="btn" id="sync">Sync now</button>' : ''}
       </div>
     </div>
+    ${tabs('trading', state.isAdmin ? scope : undefined)}
     ${!data.square_connected ? `<p class="notice">Square isn’t connected yet. ${state.isAdmin ? 'See <a href="#/admin/square">Setup → Square</a>.' : 'Ask an admin to connect it.'}</p>` : ''}
     ${data.square_connected && data.unlinked.length ? `<p class="notice">Not linked to Square: ${esc(data.unlinked.join(', '))}.</p>` : ''}
     ${data.square_connected && !hasLabour ? `<p class="notice">No clock-ins from Square yet, so labour below is from the rota only. Clock-ins come from Square Team (Timecards); the access token needs the <code>TIMECARDS_READ</code> and <code>EMPLOYEES_READ</code> permissions.${data.last_sync?.message ? ` Last sync: ${esc(data.last_sync.message)}` : ''}</p>` : ''}
@@ -207,4 +211,150 @@ export async function render(ctx) {
       e.target.textContent = 'Sync now';
     }
   });
+}
+
+// --- Labour heatmap: labour % by day of the week and hour of the day ---
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const HEAT_PRESETS = [[28, 'Last 4 weeks'], [56, 'Last 8 weeks'], [91, 'Last 13 weeks']];
+// The colour scale runs from fully blue at FLOOR% (well under target), through grey at the target, to fully red at CEIL%.
+const FLOOR = 10;
+const CEIL = 60;
+
+// Diverging scale around the target: -1 (far under) … 0 (on target) … 1 (far over).
+function heat(p) {
+  if (p === null || p === undefined) return null;
+  return p <= LABOUR_TARGET ? -Math.min(1, (LABOUR_TARGET - p) / (LABOUR_TARGET - FLOOR)) : Math.min(1, (p - LABOUR_TARGET) / (CEIL - LABOUR_TARGET));
+}
+
+function heatStyle(p) {
+  const t = heat(p);
+  if (t === null) return '';
+  const pole = t < 0 ? 'var(--div-neg)' : 'var(--div-pos)';
+  const strong = Math.abs(t) > 0.62;
+  return `background: color-mix(in oklab, ${pole} ${Math.round(Math.abs(t) * 100)}%, var(--div-mid)); color: ${strong ? 'var(--div-ink-strong)' : 'var(--text)'}`;
+}
+
+const pctShort = (p) => (p === null || p === undefined ? '' : `${Math.round(p)}%`);
+
+function heatCell(c, attrs = '') {
+  if (!c) return `<td class="hm-empty"></td>`;
+  if (!c.net_sales) return `<td class="hm-cell hm-nosales" tabindex="0" ${attrs}>${c.labour_hours ? '–' : ''}</td>`;
+  return `<td class="hm-cell" tabindex="0" style="${heatStyle(c.labour_pct)}" ${attrs}>${pctShort(c.labour_pct)}</td>`;
+}
+
+export async function renderHeatmap(ctx) {
+  const { el, state, query, stale } = ctx;
+  const to = query.to || todayISO();
+  const from = query.from || addDays(to, -27);
+  const scope = state.isAdmin ? (query.scope ?? 'all') : 'site';
+  const data = await api(`/trading/heatmap${qs({ from, to, basis: query.basis, location_id: scope === 'all' ? undefined : state.locationId })}`);
+  if (stale()) return;
+  const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
+  const byKey = new Map(data.cells.map((c) => [`${c.dow}|${c.hour}`, c]));
+  const hourTotal = new Map(data.hour_totals.map((c) => [c.hour, c]));
+  const basisLabel = data.basis === 'clocked' ? 'clocked (actual)' : 'rostered';
+  // Slots with the most labour for their sales – where a change to the rota would save the most.
+  const worst = data.cells.filter((c) => c.net_sales > 0 && c.labour_pct > LABOUR_TARGET)
+    .map((c) => ({ ...c, excess: c.labour_cost - (c.net_sales * LABOUR_TARGET) / 100 }))
+    .sort((a, b) => b.excess - a.excess).slice(0, 6);
+  const noSales = data.cells.filter((c) => !c.net_sales && c.labour_cost > 0).reduce((t, c) => t + c.labour_cost, 0);
+
+  el.innerHTML = `
+    <div class="page-head">
+      <h1>Trading</h1>
+      <div class="actions"><button class="btn" id="print">Print</button></div>
+    </div>
+    ${tabs('trading/heatmap', state.isAdmin ? scope : undefined)}
+    ${!data.square_connected ? `<p class="notice">Square isn’t connected yet, so there are no sales to compare labour with.</p>` : ''}
+    ${data.square_connected && data.unlinked.length ? `<p class="notice">Not linked to Square: ${esc(data.unlinked.join(', '))}.</p>` : ''}
+    <form class="filters" id="range">
+      <select name="preset" aria-label="Date range">
+        ${HEAT_PRESETS.map(([n, label]) => `<option value="${n}" ${to === todayISO() && span === n ? 'selected' : ''}>${label}</option>`).join('')}
+        <option value="" ${HEAT_PRESETS.some(([n]) => to === todayISO() && span === n) ? '' : 'selected'}>Custom</option>
+      </select>
+      <input type="date" name="from" value="${from}" aria-label="From"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}" aria-label="To">
+      ${state.isAdmin ? `<select name="scope" aria-label="Sites"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      <select name="basis" aria-label="Labour">
+        <option value="clocked" ${data.basis === 'clocked' ? 'selected' : ''} ${data.labour_synced ? '' : 'disabled'}>Clocked labour</option>
+        <option value="rostered" ${data.basis === 'rostered' ? 'selected' : ''}>Rostered labour</option>
+      </select>
+      <button class="btn" type="submit">Update</button>
+    </form>
+
+    <section class="card">
+      <h2>Labour % by day and hour</h2>
+      <p class="muted small">${basisLabel[0].toUpperCase() + basisLabel.slice(1)} labour cost as a % of net sales in each hour, added up over ${fmtDate(from, { day: 'numeric', month: 'short' })} – ${fmtDate(to, { day: 'numeric', month: 'short', year: 'numeric' })}. Overall: <strong class="tone-${labourTone(data.totals.labour_pct)}">${fmtPct(data.totals.labour_pct)}</strong> of ${money(data.totals.net_sales)}.</p>
+      <div class="hm-legend" aria-hidden="true">
+        <span>≤${FLOOR}%</span>
+        <div class="hm-legend-bar"><i style="left:${((LABOUR_TARGET - FLOOR) / (CEIL - FLOOR)) * 100}%"></i></div>
+        <span>≥${CEIL}%</span>
+        <span class="hm-legend-note">Blue is under your ${LABOUR_TARGET}% target, grey is on target, red is over. <span class="hm-swatch hm-nosales"></span> labour but no sales.</span>
+      </div>
+      ${data.cells.length ? `
+      <div class="table-wrap hm-wrap"><table class="hm">
+        <thead><tr><th></th>${data.hours.map((h) => `<th>${String(h).padStart(2, '0')}</th>`).join('')}<th class="hm-total-col">Day</th></tr></thead>
+        <tbody>
+          ${WEEKDAYS.map((name, dow) => `<tr>
+            <th scope="row">${name.slice(0, 3)}<small>${data.days_per_weekday[dow]} day${data.days_per_weekday[dow] === 1 ? '' : 's'}</small></th>
+            ${data.hours.map((h) => heatCell(byKey.get(`${dow}|${h}`), `data-k="${dow}|${h}"`)).join('')}
+            ${heatCell(data.weekdays[dow].net_sales || data.weekdays[dow].labour_hours ? data.weekdays[dow] : null, `data-day="${dow}"`).replace('hm-cell', 'hm-cell hm-total-col')}
+          </tr>`).join('')}
+          <tr class="hm-total-row"><th scope="row">All week</th>
+            ${data.hours.map((h) => heatCell(hourTotal.get(h), `data-hour="${h}"`)).join('')}
+            ${heatCell(data.totals, 'data-all').replace('hm-cell', 'hm-cell hm-total-col')}
+          </tr>
+        </tbody>
+      </table></div>
+      <p class="muted small">Hours are when the sale was taken and when people were on the clock. Only days with Square sales are counted, so closed days don’t show as 0% or 100%+. Hover or tap a square for the figures.</p>`
+      : '<p class="muted">No sales or labour in this period.</p>'}
+    </section>
+
+    ${worst.length || noSales ? `
+    <section class="card">
+      <h2>Where labour runs highest</h2>
+      ${worst.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>When</th><th class="num">Labour %</th><th class="num">Labour</th><th class="num">Net sales</th><th class="num">Over target by</th></tr></thead>
+        <tbody>${worst.map((c) => `<tr><td>${WEEKDAYS[c.dow]}s ${hourLabel(c.hour)}–${hourLabel((c.hour + 1) % 24)}</td>
+          <td class="num"><span class="tone-${labourTone(c.labour_pct)}">${fmtPct(c.labour_pct)}</span></td>
+          <td class="num">${money(c.labour_cost)} <small class="muted inline">${hrs(c.labour_hours)}</small></td><td class="num">${money(c.net_sales)}</td>
+          <td class="num">${money(c.excess)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <p class="muted small">“Over target by” is how much less labour would have brought that hour to ${LABOUR_TARGET}% over the whole period, the biggest savings first.</p>` : ''}
+      ${noSales ? `<p>${money(noSales)} of labour was in hours with no sales at all, such as opening and closing. That’s often setting up and cleaning down, but worth a look.</p>` : ''}
+    </section>` : ''}`;
+
+  const tipRows = (c) => [
+    { value: c.net_sales ? fmtPct(c.labour_pct) : 'no sales', label: 'labour %' },
+    { value: money(c.labour_cost), label: `${basisLabel} labour · ${hrs(c.labour_hours)}` },
+    { value: money(c.net_sales), label: `net sales · ${c.orders} orders` },
+  ];
+  el.querySelectorAll('[data-k]').forEach((td) => {
+    const c = byKey.get(td.dataset.k);
+    if (!c) return;
+    attachTip(td, () => `${WEEKDAYS[c.dow]}s ${hourLabel(c.hour)}–${hourLabel((c.hour + 1) % 24)} · ${data.days_per_weekday[c.dow]} day(s)`, () => tipRows(c));
+  });
+  el.querySelectorAll('[data-day]').forEach((td) => {
+    const c = data.weekdays[Number(td.dataset.day)];
+    attachTip(td, () => `${WEEKDAYS[c.dow]}s, all day`, () => tipRows(c));
+  });
+  el.querySelectorAll('[data-hour]').forEach((td) => {
+    const c = hourTotal.get(Number(td.dataset.hour));
+    attachTip(td, () => `${hourLabel(c.hour)}–${hourLabel((c.hour + 1) % 24)}, every day`, () => tipRows(c));
+  });
+  const all = el.querySelector('[data-all]');
+  if (all) attachTip(all, () => 'Whole period', () => tipRows(data.totals));
+
+  const form = el.querySelector('#range');
+  const go = () => ctx.navigate(`trading/heatmap${qs({ from: form.from.value, to: form.to.value, scope: form.scope?.value, basis: form.basis.value })}`);
+  form.preset.addEventListener('change', () => {
+    const n = Number(form.preset.value);
+    if (!n) return;
+    form.to.value = todayISO();
+    form.from.value = addDays(todayISO(), -(n - 1));
+    go();
+  });
+  form.basis.addEventListener('change', go);
+  form.addEventListener('submit', (e) => { e.preventDefault(); go(); });
+  el.querySelector('#print').addEventListener('click', () => window.print());
 }

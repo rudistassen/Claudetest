@@ -40,6 +40,7 @@ const ROUTES = [
   [/^recipes\/(\d+)$/, recipes.renderRecipe],
   [/^sales$/, sales.render, 'manager'],
   [/^trading$/, trading.render, 'manager'],
+  [/^trading\/heatmap$/, trading.renderHeatmap, 'manager'],
   [/^orders$/, orders.renderList, 'manager'],
   [/^orders\/new$/, orders.renderNew, 'manager'],
   [/^orders\/(\d+)$/, orders.renderOrder, 'manager'],

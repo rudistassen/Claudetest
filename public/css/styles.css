@@ -18,6 +18,10 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
   --series-1: #2a78d6;
   --series-2: #eb6834;
+  --div-neg: #1c5cab;
+  --div-pos: #c23b3a;
+  --div-mid: #f0efec;
+  --div-ink-strong: #ffffff;
   color-scheme: light;
 }
 
@@ -41,6 +45,10 @@
     --shadow: none;
     --series-1: #3987e5;
     --series-2: #d95926;
+    --div-neg: #5598e7;
+    --div-pos: #e66767;
+    --div-mid: #383835;
+    --div-ink-strong: #111111;
     color-scheme: dark;
   }
 }
@@ -64,6 +72,10 @@
   --shadow: none;
   --series-1: #3987e5;
   --series-2: #d95926;
+  --div-neg: #5598e7;
+  --div-pos: #e66767;
+  --div-mid: #383835;
+  --div-ink-strong: #111111;
   color-scheme: dark;
 }
 
@@ -385,3 +397,26 @@ h2 .muted.small { font-weight: 400; margin-left: 0.4rem; }
 
 .check-row { display: flex; gap: 0.6rem; align-items: flex-start; margin: 0.75rem 0; cursor: pointer; }
 .check-row input { margin-top: 0.25rem; }
+
+/* Labour heatmap */
+.hm-wrap { margin-top: 0.5rem; }
+table.hm { border-collapse: separate; border-spacing: 2px; width: auto; min-width: 100%; }
+table.hm th, table.hm td { padding: 0; border: 0; text-align: center; vertical-align: middle; }
+table.hm thead th { font-size: 0.75rem; color: var(--muted); font-weight: 500; padding-bottom: 0.2rem; font-variant-numeric: tabular-nums; }
+table.hm tbody th { text-align: left; font-size: 0.85rem; padding-right: 0.5rem; white-space: nowrap; position: sticky; left: 0; background: var(--surface); z-index: 1; }
+table.hm tbody th small { display: block; font-weight: 400; font-size: 0.7rem; }
+.hm-cell { min-width: 2.6rem; height: 2.4rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; font-variant-numeric: tabular-nums; cursor: default; outline: none; }
+.hm-cell:hover, .hm-cell:focus-visible { box-shadow: 0 0 0 2px var(--text) inset; }
+.hm-empty { min-width: 2.6rem; }
+.hm-nosales { background: repeating-linear-gradient(135deg, var(--div-mid) 0 4px, transparent 4px 8px); color: var(--muted); font-weight: 400; }
+.hm-total-col { border-left: 6px solid var(--surface); }
+table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
+.hm-total-row th, .hm-total-row td { border-top: 6px solid var(--surface); }
+.hm-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; font-size: 0.78rem; color: var(--muted); margin: 0.25rem 0 0.5rem; }
+.hm-legend-bar { position: relative; width: 180px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, var(--div-neg), var(--div-mid) 40%, var(--div-pos)); }
+.hm-legend-bar i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); }
+.hm-legend-note { flex-basis: 100%; }
+.hm-swatch { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: middle; border: 1px solid var(--border); }
+@media print {
+  .hm-cell, .hm-nosales, .hm-legend-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
