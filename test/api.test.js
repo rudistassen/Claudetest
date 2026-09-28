@@ -218,6 +218,24 @@ describe('rota publishing', () => {
     assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.some((x) => x.id === shift.id), false);
   });
 
+  test('"My shifts" shows only your own published shifts for the week, with who else is on', async () => {
+    const admin = await login('admin@cafe.local');
+    const staff = await login('staff3@cafe.local');
+    const me = (await staff('/auth/me')).data.user;
+    const thisWeek = (await staff(`/my-shifts?week=${today()}`)).data;
+    assert.ok(thisWeek.length > 0);
+    assert.ok(thisWeek.every((x) => x.user_id === me.id && x.hours > 0 && x.location_name));
+    assert.ok(thisWeek.every((x) => Array.isArray(x.colleagues) && x.colleagues.every((c) => c.name !== me.name)));
+    assert.ok(thisWeek.some((x) => x.colleagues.length > 0), 'others are on with them');
+
+    const later = addDays(weekStart(today()), 35);
+    await admin('/shifts', { method: 'POST', body: { location_id: me.location_id, user_id: me.id, date: later, start_time: '08:00', end_time: '12:00' } });
+    assert.deepEqual((await staff(`/my-shifts?week=${later}`)).data, [], 'drafts are not shown');
+    await admin('/rota/publish', { method: 'POST', body: { location_id: me.location_id, week: later } });
+    const published = (await staff(`/my-shifts?week=${later}`)).data;
+    assert.deepEqual(published.map((x) => [x.date, x.start_time, x.hours, x.colleagues.length]), [[later, '08:00', 4, 0]]);
+  });
+
   test('editing and publishing are separate permissions', async () => {
     const admin = await login('admin@cafe.local');
     const manager = await login('manager1@cafe.local');

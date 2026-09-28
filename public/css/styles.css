@@ -486,3 +486,20 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .site-picks .check-row input { width: auto; margin: 0; }
 .site-picks .check-row span { font-size: 0.95rem; font-weight: 400; }
 .site-picks small { grid-column: 1 / -1; }
+
+/* Rota: My shifts */
+.my-shifts { padding: 0; overflow: hidden; }
+.my-day { display: grid; grid-template-columns: 150px 1fr; gap: 1rem; padding: 0.8rem 1.1rem; border-bottom: 1px solid var(--border); }
+.my-day:last-child { border-bottom: 0; }
+.my-day.is-today { background: var(--brand-soft); }
+.my-day.is-off .my-date { opacity: 0.6; }
+.my-date span { display: block; color: var(--muted); font-size: 0.85rem; }
+.my-list { display: flex; flex-direction: column; gap: 0.6rem; justify-content: center; }
+.my-shift { display: grid; grid-template-columns: auto 1fr; gap: 0.1rem 1rem; align-items: baseline; }
+.my-time { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; border-left: 3px solid var(--brand); padding-left: 0.5rem; }
+.my-where { font-weight: 600; }
+.my-with { grid-column: 1 / -1; padding-left: calc(0.5rem + 3px); }
+.nowrap { white-space: nowrap; }
+@media (max-width: 600px) {
+  .my-day { grid-template-columns: 1fr; gap: 0.4rem; }
+}

@@ -4,7 +4,8 @@ import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openMod
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const week = weekStart(query.week || todayISO());
-  // Admins can see every site's rota at once.
+  if (query.view === 'mine') return renderMine(ctx, week);
+  // People with more than one site can see every site's rota at once.
   const all = state.multiSite && query.scope === 'all';
   const scopeQs = (extra = {}) => qs({ ...extra, scope: all ? 'all' : undefined });
   const data = await api(`/rota${qs({ location_id: all ? 'all' : state.locationId, week })}`);
@@ -69,6 +70,7 @@ export async function render(ctx) {
       <h1>Rota · ${all ? 'All sites' : esc(state.location?.name ?? '')}</h1>
       <div class="actions">
         ${state.multiSite ? `<a class="btn" href="#/rota${all ? qs({ week }) : qs({ week, scope: 'all' })}">${all ? 'This site only' : 'All sites'}</a>` : ''}
+        <a class="btn" href="#/rota${qs({ view: 'mine', week })}">My shifts</a>
         <button class="btn" data-week="-7">‹ Prev</button>
         <button class="btn" data-week="0">This week</button>
         <button class="btn" data-week="7">Next ›</button>
@@ -225,4 +227,50 @@ export async function render(ctx) {
       ctx.rerender();
     } catch (err) { showError(err); }
   });
+}
+
+// Just your own shifts for a week, at every site, as published. Easier to read on a phone than the full rota.
+async function renderMine(ctx, week) {
+  const { el, stale } = ctx;
+  const shifts = await api(`/my-shifts${qs({ week })}`);
+  if (stale()) return;
+  const today = todayISO();
+  const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
+  const total = Math.round(shifts.reduce((t, s) => t + s.hours, 0) * 100) / 100;
+  const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 2 })} h`;
+
+  el.innerHTML = `
+    <div class="page-head">
+      <h1>My shifts</h1>
+      <div class="actions">
+        <a class="btn" href="#/rota${qs({ week })}">Whole rota</a>
+        <button class="btn" data-week="-7">‹ Prev</button>
+        <button class="btn" data-week="0">This week</button>
+        <button class="btn" data-week="7">Next ›</button>
+        <button class="btn" id="print">Print</button>
+      </div>
+    </div>
+    <p class="muted">Week commencing ${fmtDate(week, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      · ${shifts.length ? `<strong>${shifts.length} shift${shifts.length === 1 ? '' : 's'}, ${hrs(total)}</strong>` : 'no shifts'}</p>
+    <section class="card my-shifts">
+      ${days.map((d) => {
+        const mine = shifts.filter((s) => s.date === d);
+        return `<div class="my-day ${d === today ? 'is-today' : ''} ${mine.length ? '' : 'is-off'}">
+          <div class="my-date"><strong>${fmtDate(d, { weekday: 'long' })}</strong><span>${fmtDate(d, { day: 'numeric', month: 'short' })}${d === today ? ' · today' : ''}</span></div>
+          <div class="my-list">${mine.length ? mine.map((s) => `
+            <div class="my-shift">
+              <div class="my-time">${s.start_time}–${s.end_time}</div>
+              <div class="my-where">${esc(s.location_name)}<small>${hrs(s.hours)}${s.break_minutes ? ` · ${s.break_minutes} min break` : ''}${s.notes ? ` · ${esc(s.notes)}` : ''}</small></div>
+              ${s.colleagues ? `<div class="my-with small muted">${s.colleagues.length ? `With ${s.colleagues.map((c) => `${esc(c.name)} <span class="nowrap">${c.start_time}–${c.end_time}</span>`).join(', ')}` : 'Nobody else on'}</div>` : ''}
+            </div>`).join('') : '<span class="muted">Day off</span>'}</div>
+        </div>`;
+      }).join('')}
+    </section>
+    <p class="muted small">These are your published shifts. If something looks wrong, speak to your manager.</p>`;
+
+  el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
+    const offset = Number(b.dataset.week);
+    ctx.navigate(`rota${qs({ view: 'mine', week: offset ? addDays(week, offset) : undefined })}`);
+  }));
+  el.querySelector('#print').addEventListener('click', () => window.print());
 }

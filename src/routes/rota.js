@@ -185,10 +185,22 @@ export function registerRotaRoutes(router, db) {
   });
 
   // Your own upcoming shifts, as published.
+  // Your own published shifts: the next two weeks, or with ?week= that week at every site. People who can see the
+  // rota also get who else is on at the same site that day.
   router.get('/my-shifts', (req, res) => {
-    const from = today();
-    res.json(db.prepare(`${select('published_shifts')} WHERE s.user_id = ? AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`)
-      .all(req.user.id, from, addDays(from, 13)));
+    const week = req.query.week ? weekStart(date(req.query.week, 'week')) : null;
+    const from = week ?? today();
+    const to = week ? addDays(week, 6) : addDays(from, 13);
+    const mine = db.prepare(`${select('published_shifts')} WHERE s.user_id = ? AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`)
+      .all(req.user.id, from, to);
+    const withOthers = week && can(req.user, 'rota.view');
+    const others = db.prepare(`SELECT s.start_time, s.end_time, u.name FROM published_shifts s JOIN users u ON u.id = s.user_id
+      WHERE s.location_id = ? AND s.date = ? AND s.user_id != ? ORDER BY s.start_time, u.name`);
+    for (const s of mine) {
+      s.hours = round2(shiftHours(s.start_time, s.end_time, s.break_minutes));
+      if (withOthers) s.colleagues = others.all(s.location_id, s.date, req.user.id);
+    }
+    res.json(mine);
   });
 
   router.post('/shifts', requirePerm('rota.edit'), (req, res) => {
