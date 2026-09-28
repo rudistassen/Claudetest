@@ -1,0 +1,19 @@
+{
+  "name": "cafe-ops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-site cafe operations: rota, supplier ordering, stock takes, wastage and food safety checks",
+  "type": "module",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
+    "seed": "node --disable-warning=ExperimentalWarning src/index.js --reset --seed-only",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
