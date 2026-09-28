@@ -1,4 +1,5 @@
 import { api, esc, isDemo } from '../lib.js';
+import { logo } from '../logo.js';
 
 const DEMO_ACCOUNTS = [
   ['admin@cafe.local', 'Owner', 'All 7 sites, sales, setup'],
@@ -10,7 +11,7 @@ export function render(root, onLogin) {
   root.innerHTML = `
     <div class="login-wrap">
       <form class="login card">
-        <h1>BrewView</h1>
+        <h1 class="login-logo" aria-label="BrewView">${logo(40)}</h1>
         <p class="muted">Sign in to manage your site.</p>
         <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required></label>
         <label class="field"><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label>

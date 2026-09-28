@@ -29,7 +29,9 @@ const band = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
   .match(/<header class="brand-band"[\s\S]*?<\/header>/)[0]
   .replace(/src="\/img\/([\w-]+\.png)"/g, (_, f) => `src="data:image/png;base64,${fs.readFileSync(path.join(root, 'public/img', f)).toString('base64')}"`);
 
+const favicon = `data:image/svg+xml;base64,${fs.readFileSync(path.join(root, 'public/img/brewview.svg')).toString('base64')}`;
 const html = `<title>BrewView</title>
+<link rel="icon" href="${favicon}" type="image/svg+xml">
 <meta name="theme-color" content="#1f5f4a">
 <style>
 ${css}

@@ -15,8 +15,13 @@ export async function render(ctx) {
     // Keep the site in the top bar in step with the one picked here.
     state.locationId = siteId;
     try { localStorage.setItem('cafe-ops:location', String(siteId)); } catch { /* storage unavailable */ }
-    const picker = document.getElementById('location-select');
-    if (picker) picker.value = String(siteId);
+    const name = document.querySelector('.site-btn-name');
+    if (name) name.textContent = active.find((l) => l.id === siteId)?.name ?? '';
+    document.querySelectorAll('#site-menu li').forEach((li) => {
+      const on = Number(li.dataset.siteId) === siteId;
+      li.setAttribute('aria-selected', String(on));
+      li.querySelector('.site-tick').textContent = on ? '✓' : '';
+    });
   }
   const siteParam = all ? 'all' : String(siteId);
   const scopeQs = (extra = {}) => qs({ ...extra, site: state.multiSite ? siteParam : undefined });

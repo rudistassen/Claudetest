@@ -1,4 +1,5 @@
 import { api, esc, isDemo, showError } from './lib.js';
+import { logo } from './logo.js';
 import * as admin from './views/admin.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -128,21 +129,86 @@ function parseHash() {
   return { path, query: Object.fromEntries(new URLSearchParams(query)) };
 }
 
+const PIN = '<svg class="pin" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>';
+
+// The site picker in the top bar: a compact button that opens a searchable list of sites.
+function sitePicker() {
+  const sites = state.locations.filter((l) => l.active);
+  return `<div class="site-picker">
+    <button type="button" class="site-btn" id="site-btn" aria-haspopup="listbox" aria-expanded="false" title="Change site">
+      ${PIN}<span class="site-btn-name">${esc(state.location?.name ?? 'Choose a site')}</span><span class="site-caret" aria-hidden="true">▾</span>
+    </button>
+    <div class="site-menu" id="site-menu" hidden>
+      ${sites.length > 5 ? '<input type="search" class="site-search" placeholder="Find a site…" aria-label="Find a site" autocomplete="off">' : ''}
+      <ul role="listbox" aria-label="Sites">
+        ${sites.map((l) => `<li role="option" tabindex="-1" data-site-id="${l.id}" aria-selected="${l.id === state.locationId}">
+          <span class="site-tick" aria-hidden="true">${l.id === state.locationId ? '✓' : ''}</span>
+          <span class="site-opt-name">${esc(l.name)}</span>
+          ${l.id === state.user.location_id ? '<span class="site-home">Your site</span>' : ''}</li>`).join('')}
+      </ul>
+      <p class="site-none" hidden>No site matches</p>
+    </div>
+  </div>`;
+}
+
+function wireSitePicker(onPick) {
+  const btn = document.getElementById('site-btn');
+  if (!btn) return;
+  const menu = document.getElementById('site-menu');
+  const search = menu.querySelector('.site-search');
+  const items = () => [...menu.querySelectorAll('li')].filter((li) => !li.hidden);
+  const close = (focusButton = false) => {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', outside);
+    if (focusButton) btn.focus();
+  };
+  const outside = (e) => { if (!e.target.closest('.site-picker')) close(); };
+  const open = () => {
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', outside);
+    if (search) { search.value = ''; filter(); search.focus(); } else (menu.querySelector('[aria-selected="true"]') ?? items()[0])?.focus();
+  };
+  const filter = () => {
+    const q = search.value.trim().toLowerCase();
+    menu.querySelectorAll('li').forEach((li) => { li.hidden = !!q && !li.textContent.toLowerCase().includes(q); });
+    menu.querySelector('.site-none').hidden = items().length > 0;
+  };
+  const pick = (li) => {
+    close(true);
+    const id = Number(li.dataset.siteId);
+    if (id !== state.locationId) onPick(id);
+  };
+  btn.addEventListener('click', () => (menu.hidden ? open() : close()));
+  btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); open(); } });
+  search?.addEventListener('input', filter);
+  menu.addEventListener('click', (e) => { const li = e.target.closest('li'); if (li) pick(li); });
+  menu.addEventListener('keydown', (e) => {
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); close(true); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); list[Math.min(list.length - 1, i + 1)]?.focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (i <= 0) (search ?? list[0])?.focus(); else list[i - 1].focus(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const target = i >= 0 ? list[i] : list[0];
+      if (target) pick(target);
+    }
+  });
+}
+
 function renderShell() {
   const { path } = parseHash();
   const groups = navGroups();
   const active = activeItem(path, groups.flatMap(([, items]) => items));
   const folded = foldedGroups();
-  const locOptions = state.locations.filter((l) => l.active)
-    .map((l) => `<option value="${l.id}" ${l.id === state.locationId ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
   document.getElementById('app').innerHTML = `
     <header class="topbar">
       <button class="icon-btn menu-toggle" aria-label="Menu">☰</button>
-      <a class="brand" href="#/dashboard">BrewView${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
+      <a class="brand" href="#/dashboard" aria-label="BrewView – dashboard">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <div class="loc-picker">
-        ${state.multiSite
-          ? `<select id="location-select" aria-label="Location">${locOptions}</select>`
-          : `<span class="loc-name">${esc(state.location?.name ?? '')}</span>`}
+        ${state.multiSite ? sitePicker() : `<span class="loc-name">${PIN}${esc(state.location?.name ?? '')}</span>`}
       </div>
       <a class="user-link" href="#/account">${esc(state.user.name)}</a>
     </header>
@@ -163,8 +229,8 @@ function renderShell() {
       </nav>
       <main id="view"></main>
     </div>`;
-  document.getElementById('location-select')?.addEventListener('change', (e) => {
-    state.locationId = Number(e.target.value);
+  wireSitePicker((id) => {
+    state.locationId = id;
     try { localStorage.setItem(LOCATION_KEY, String(state.locationId)); } catch { /* storage unavailable */ }
     // A page that picks its own site (the rota) follows the site chosen here.
     const { path, query } = parseHash();
