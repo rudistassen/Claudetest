@@ -58,7 +58,7 @@ export async function render(ctx) {
           <td class="num"><span class="tone-${labourTone(d.labour_pct)}">${fmtPct(d.labour_pct)}</span></td>
           <td class="num">${fmtPct(d.wastage_pct)}</td></tr>`).join('')}</tbody>
       </table></div>
-      <p class="muted small">Labour is rostered hours × hourly rate, counted up to now for today, and only on days with Square sales. Target: ${LABOUR_TARGET}% of net sales or less.</p>
+      <p class="muted small">Labour is rostered hours × hourly rate, counted up to now for today. Labour % only includes days that have both Square sales and a rota. Target: ${LABOUR_TARGET}% of net sales or less.</p>
     </section>
     <div class="two-col">
       ${data.locations.length > 1 ? `

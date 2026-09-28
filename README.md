@@ -74,6 +74,14 @@ How the numbers are worked out:
 - **Labour %** = rostered hours × each person's hourly rate ÷ net sales. For today it only counts hours worked up to now, and days with no Square sales are left out. The colours are green at 30% or below and amber up to 35%. Change `LABOUR_TARGET` in `public/js/views/sales.js` if your target differs.
 - Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
 
+## Standalone demo
+
+```bash
+npm run build:demo   # writes dist/cafe-ops-demo.html
+```
+
+This produces one self-contained HTML file (about 1.4 MB) that runs the whole app in the browser. The real server routes run against an in-page SQLite database (sql.js), with demo data for 7 sites and a pretend Square account. Open it straight from disk, or host it anywhere as a static file, to show people the app. Nothing is saved, and it resets when reloaded.
+
 ## Tests
 
 ```bash

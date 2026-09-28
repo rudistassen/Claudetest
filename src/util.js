@@ -127,8 +127,11 @@ export function zonedMidnightUTC(iso, tz = TZ) {
 }
 
 // Local calendar date (YYYY-MM-DD) in tz of a UTC timestamp.
+const dateFormats = new Map();
+
 export function localDate(timestamp, tz = TZ) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(timestamp));
+  if (!dateFormats.has(tz)) dateFormats.set(tz, new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }));
+  return dateFormats.get(tz).format(new Date(timestamp));
 }
 
 export const BUSINESS_TZ = TZ;

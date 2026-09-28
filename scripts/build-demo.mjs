@@ -1,0 +1,42 @@
+// Builds dist/cafe-ops-demo.html: the whole app (front end + server routes + SQLite) in one self-contained page.
+import { build } from 'esbuild';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const result = await build({
+  entryPoints: [path.join(root, 'demo/main.js')],
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2022',
+  minify: true,
+  write: false,
+  legalComments: 'none',
+  alias: {
+    'node:sqlite': path.join(root, 'demo/shim-sqlite.js'),
+    'node:crypto': path.join(root, 'demo/shim-crypto.js'),
+  },
+  external: ['fs', 'path', 'crypto', 'node:fs', 'node:path'],
+  define: { 'process.env': '{}' },
+  logLevel: 'warning',
+});
+const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
+const css = fs.readFileSync(path.join(root, 'public/css/styles.css'), 'utf8');
+
+const html = `<title>Cafe Ops</title>
+<meta name="theme-color" content="#1f5f4a">
+<style>
+${css}
+</style>
+<div id="app"><div class="loading">Loading Cafe Ops demo…</div></div>
+<div id="modal-root"></div>
+<div id="toasts" aria-live="polite"></div>
+<script>window.CAFE_OPS_DEMO = true; document.body.classList.add('demo');</script>
+<script>${js}</script>
+`;
+fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+const out = path.join(root, 'dist/cafe-ops-demo.html');
+fs.writeFileSync(out, html);
+console.log(`Wrote ${path.relative(root, out)} (${(html.length / 1024 / 1024).toFixed(2)} MB)`);

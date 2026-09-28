@@ -183,7 +183,7 @@ export function registerSafetyRoutes(router, db) {
         orders_today: todaySales?.orders ?? 0,
         sales_7d: round2(week),
         labour_cost_today: round2(labourToday),
-        labour_pct_today: todaySales ? pct(labourToday, todaySales.net_sales) : null,
+        labour_pct_today: todaySales && labourToday ? pct(labourToday, todaySales.net_sales) : null,
       };
     };
 

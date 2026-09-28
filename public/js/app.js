@@ -1,4 +1,4 @@
-import { api, esc, showError } from './lib.js';
+import { api, esc, isDemo, showError } from './lib.js';
 import * as admin from './views/admin.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -82,7 +82,7 @@ function renderShell() {
   document.getElementById('app').innerHTML = `
     <header class="topbar">
       <button class="icon-btn menu-toggle" aria-label="Menu">☰</button>
-      <a class="brand" href="#/dashboard">Cafe Ops</a>
+      <a class="brand" href="#/dashboard">Cafe Ops${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <div class="loc-picker">
         ${state.isAdmin
           ? `<select id="location-select" aria-label="Location">${locOptions}</select>`

@@ -90,11 +90,11 @@ export function registerRotaRoutes(router, db) {
           net_sales: net,
           labour_cost: round2(planned.get(dayKey(locationId, d)) ?? 0),
           worked_cost: workedCost,
-          labour_pct: net === null ? null : pct(workedCost, net),
+          labour_pct: net === null || !workedCost ? null : pct(workedCost, net),
         };
       });
     }
-    const salesDays = money?.filter((m) => m.net_sales !== null) ?? [];
+    const salesDays = money?.filter((m) => m.net_sales !== null && m.worked_cost > 0) ?? [];
     const weekSales = salesDays.reduce((s, m) => s + m.net_sales, 0);
     const weekWorked = salesDays.reduce((s, m) => s + m.worked_cost, 0);
     for (const m of money ?? []) delete m.worked_cost;

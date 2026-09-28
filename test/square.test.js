@@ -154,12 +154,15 @@ describe('Square integration', () => {
     assert.equal(report.totals.orders, 3);
     assert.equal(report.totals.wastage_pct, 11.31);
     assert.ok(report.totals.labour_cost > 0);
-    assert.ok(Math.abs(report.totals.labour_pct - (report.totals.labour_cost / 23.17) * 100) < 0.05);
+    const both = report.days.filter((d) => d.net_sales > 0 && d.labour_cost > 0);
+    const expected = both.length ? (both.reduce((t, d) => t + d.labour_cost, 0) / both.reduce((t, d) => t + d.net_sales, 0)) * 100 : null;
+    if (expected === null) assert.equal(report.totals.labour_pct, null);
+    else assert.ok(Math.abs(report.totals.labour_pct - expected) < 0.05);
     assert.deepEqual(report.top_items.slice(0, 2).map((i) => [i.name, i.net_sales]), [['Croissant', 9], ['Flat white', 8.75]]);
 
     const dash = (await manager('/dashboard')).data.locations[0];
     assert.equal(dash.sales_today, 9);
-    assert.equal(typeof dash.labour_pct_today, 'number');
+    assert.ok(dash.labour_pct_today === null || typeof dash.labour_pct_today === 'number');
 
     const rota = (await manager('/rota')).data;
     assert.equal(rota.daily_money.find((m) => m.date === today()).net_sales, 9);
@@ -194,5 +197,18 @@ describe('labour to date', () => {
     assert.equal(planned.get('1|2026-05-05'), 96);
     assert.equal(Math.round(worked.get('1|2026-05-04') * 100) / 100, 48);
     assert.equal(worked.get('1|2026-05-05'), 0);
+  });
+});
+
+describe('labour % without a rota', () => {
+  test('days with sales but no shifts are left out rather than shown as 0%', async () => {
+    const admin = await login('admin@cafe.local');
+    const highId = db.prepare(`SELECT id FROM locations WHERE square_location_id = 'SQ_HIGH'`).get().id;
+    const lastYear = addDays(today(), -365);
+    db.prepare('INSERT INTO sales_daily (location_id, date, net_sales, orders) VALUES (?, ?, 500, 60)').run(highId, lastYear);
+    const r = (await admin(`/sales?location_id=${highId}&from=${lastYear}&to=${lastYear}`)).data;
+    assert.equal(r.totals.net_sales, 500);
+    assert.equal(r.totals.labour_cost, 0);
+    assert.equal(r.totals.labour_pct, null);
   });
 });

@@ -98,16 +98,26 @@ export function registerSalesRoutes(router, db, square) {
       const orders = sum(sales, locIds, dates, (r) => r.orders);
       const labourCost = sum(labour, locIds, dates);
       const waste = sum(wastage, locIds, dates);
-      // Only compare labour with sales on days Square actually has sales for (closed days, unsynced days are skipped).
-      let labourOnSalesDays = 0;
-      for (const l of locIds) for (const d of dates) if (sales.has(dayKey(l, d))) labourOnSalesDays += labour.get(dayKey(l, d)) ?? 0;
+      // Compare labour with sales only on days that have both Square sales and a rota, so a missing rota
+      // or an unsynced/closed day doesn't show up as 0% or 100%+ labour.
+      let labourBoth = 0;
+      let salesBoth = 0;
+      for (const l of locIds) {
+        for (const d of dates) {
+          const k = dayKey(l, d);
+          if (sales.has(k) && (labour.get(k) ?? 0) > 0) {
+            labourBoth += labour.get(k);
+            salesBoth += sales.get(k).net_sales;
+          }
+        }
+      }
       return {
         net_sales: round2(net),
         gross_sales: round2(sum(sales, locIds, dates, (r) => r.gross_sales)),
         orders,
         avg_spend: orders ? round2(net / orders) : null,
         labour_cost: round2(labourCost),
-        labour_pct: pct(labourOnSalesDays, net),
+        labour_pct: pct(labourBoth, salesBoth),
         wastage: round2(waste),
         wastage_pct: pct(waste, net),
       };

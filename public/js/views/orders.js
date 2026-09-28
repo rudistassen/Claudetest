@@ -1,4 +1,4 @@
-import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, qs, qty, select, showError, statusBadge, textarea, toast, todayISO } from '../lib.js';
+import { addDays, api, isDemo, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, qs, qty, select, showError, statusBadge, textarea, toast, todayISO } from '../lib.js';
 
 const STATUSES = [['', 'All'], ['draft', 'Draft'], ['sent', 'Sent'], ['received', 'Received'], ['cancelled', 'Cancelled']];
 
@@ -174,6 +174,16 @@ export async function renderOrder(ctx) {
     </section>`}`;
 
   const mailto = () => {
+    if (isDemo) {
+      openModal({
+        title: `Email to ${o.supplier_name}`,
+        wide: true,
+        body: `<p>To: <strong>${esc(o.supplier_email ?? 'no email saved')}</strong> · Subject: Order PO-${o.id} – ${esc(o.location_name)}</p>
+          <p class="muted">In the installed app this opens a ready-written email. Here is the text:</p>
+          <textarea rows="14" readonly>${esc(orderText(o))}</textarea>`,
+      });
+      return;
+    }
     const url = `mailto:${encodeURIComponent(o.supplier_email ?? '')}?subject=${encodeURIComponent(`Order PO-${o.id} – ${o.location_name}`)}&body=${encodeURIComponent(orderText(o))}`;
     window.location.href = url;
   };

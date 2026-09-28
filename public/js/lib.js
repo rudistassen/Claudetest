@@ -1,5 +1,8 @@
 // Shared helpers: API calls, escaping, formatting, modals and toasts.
 
+// True in the self-contained browser demo (no server; downloads, printing and email links unavailable).
+export const isDemo = !!globalThis.CAFE_OPS_DEMO;
+
 export class ApiError extends Error {
   constructor(status, message) {
     super(message);
