@@ -19,12 +19,12 @@ function card(loc, state) {
       </header>
       <div class="site-grid">
         <div>
-          <h3>Daily safety checks</h3>
+          <h3>Daily Trail checks</h3>
           ${progress(loc.daily.done, loc.daily.due)}
           ${loc.daily.fails ? `<p class="alert-text">⚠ ${loc.daily.fails} failed check(s) today</p>` : ''}
         </div>
         <div>
-          <h3>Weekly safety checks</h3>
+          <h3>Weekly Trail checks</h3>
           ${progress(loc.weekly.done, loc.weekly.due)}
           ${loc.weekly.fails ? `<p class="alert-text">⚠ ${loc.weekly.fails} failed this week</p>` : ''}
         </div>

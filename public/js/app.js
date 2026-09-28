@@ -102,6 +102,12 @@ function navGroups() {
   ].map(([heading, items]) => [heading, items.filter(([, , , who]) => allowed(who))]).filter(([, items]) => items.length);
 }
 
+// Menu sections someone has folded away, remembered in this browser.
+const NAV_FOLD_KEY = 'cafe-ops:nav-folded';
+function foldedGroups() {
+  try { return new Set(JSON.parse(localStorage.getItem(NAV_FOLD_KEY) ?? '[]')); } catch { return new Set(); }
+}
+
 // The menu item for a page: the longest item path that is the page or a parent of it (recipes/12 → Recipes).
 function activeItem(path, items) {
   const p = path || 'dashboard';
@@ -123,6 +129,7 @@ function renderShell() {
   const { path } = parseHash();
   const groups = navGroups();
   const active = activeItem(path, groups.flatMap(([, items]) => items));
+  const folded = foldedGroups();
   const locOptions = state.locations.filter((l) => l.active)
     .map((l) => `<option value="${l.id}" ${l.id === state.locationId ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
   document.getElementById('app').innerHTML = `
@@ -138,8 +145,16 @@ function renderShell() {
     </header>
     <div class="layout">
       <nav class="sidebar">
-        ${groups.map(([heading, items]) => `${heading ? `<div class="nav-heading">${heading}</div>` : ''}
-          ${items.map(([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${icon ? `<span class="nav-icon">${icon}</span>` : ''}${label}</a>`).join('')}`).join('')}
+        ${groups.map(([heading, items]) => {
+          const links = items.map(([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${icon ? `<span class="nav-icon">${icon}</span>` : ''}${label}</a>`).join('');
+          if (!heading) return links;
+          // The section holding the current page always stays open.
+          const open = !folded.has(heading) || items.some(([p]) => p === active);
+          return `<div class="nav-group ${open ? '' : 'is-folded'}">
+            <button type="button" class="nav-heading nav-toggle" data-group="${esc(heading)}" aria-expanded="${open}">${esc(heading)}<span class="nav-caret" aria-hidden="true">${open ? '▾' : '▸'}</span></button>
+            <div class="nav-links">${links}</div>
+          </div>`;
+        }).join('')}
         <div class="nav-heading"></div>
         <a href="#" id="logout">Sign out</a>
       </nav>
@@ -168,6 +183,15 @@ function renderShell() {
     document.body.classList.toggle('nav-open');
   });
   document.querySelector('.sidebar').addEventListener('click', (e) => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
+  document.querySelectorAll('.nav-toggle').forEach((b) => b.addEventListener('click', () => {
+    const group = b.closest('.nav-group');
+    const open = group.classList.toggle('is-folded') === false;
+    b.setAttribute('aria-expanded', String(open));
+    b.querySelector('.nav-caret').textContent = open ? '▾' : '▸';
+    const folded = foldedGroups();
+    if (open) folded.delete(b.dataset.group); else folded.add(b.dataset.group);
+    try { localStorage.setItem(NAV_FOLD_KEY, JSON.stringify([...folded])); } catch { /* storage unavailable */ }
+  }));
 }
 
 let routeSeq = 0;
