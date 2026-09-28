@@ -22,6 +22,8 @@ export async function render(ctx) {
     byCell.set(k, [...(byCell.get(k) ?? []), s]);
   }
   for (const list of byCell.values()) list.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
+  const counted = data.shifts.filter((x) => x.state !== 'removed');
   const rows = [];
   if (all) {
     const sites = state.locations.filter((l) => l.active).sort((a, b) => a.name.localeCompare(b.name));
@@ -48,8 +50,6 @@ export async function render(ctx) {
   } else {
     for (const u of data.staff) rows.push({ u, site: state.locationId });
   }
-  // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
-  const counted = data.shifts.filter((x) => x.state !== 'removed');
   const rowHours = (u, site) => Math.round(counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
   // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
   const TAGS = { new: 'New', changed: 'Changed', removed: 'Removed' };
