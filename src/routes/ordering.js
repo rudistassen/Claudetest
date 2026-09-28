@@ -1,6 +1,7 @@
 import { cleanAllergens } from '../recipes.js';
 import { assertLocation, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
+import { applyImport, planImport } from '../product-import.js';
 import { badRequest, bool, date, id, notFound, num, round2, str } from '../util.js';
 
 export function registerOrderingRoutes(router, db) {
@@ -78,6 +79,15 @@ export function registerOrderingRoutes(router, db) {
       .run(...productCols.map((c) => p[c]), Number(req.params.id));
     if (!r.changes) throw notFound('Product');
     res.json(db.prepare('SELECT * FROM products WHERE id = ?').get(Number(req.params.id)));
+  });
+
+  // Import from a spreadsheet: { headers, rows } previews what would happen; with apply: true it's done.
+  router.post('/products/import', requirePerm('setup.products'), (req, res) => {
+    const plan = planImport(db, req.body);
+    if (!req.body.apply) {
+      return res.json({ ...plan, rows: plan.rows.map(({ set, key, id: _id, ...r }) => r) });
+    }
+    res.json(applyImport(db, plan));
   });
 
   // Per-location par levels override the product default.

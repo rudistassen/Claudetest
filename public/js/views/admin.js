@@ -1,4 +1,5 @@
 import { loadLocations } from '../app.js';
+import { exportProducts, openProductImport } from './product-import.js';
 import { api, confirmDialog, esc, isDemo, field, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast } from '../lib.js';
 
 const yesNo = (v) => (v ? 'Yes' : 'No');
@@ -230,6 +231,7 @@ export async function renderProducts(ctx) {
     rows,
     canEdit: state.can('setup.products'),
     addLabel: 'Add product',
+    extraActions: `${rows.length ? '<button class="btn" id="export-products">Export</button>' : ''}${state.can('setup.products') ? '<button class="btn" id="import-products">Import</button>' : ''}`,
     columns: [
       { label: 'Name', key: 'name' },
       { label: 'Category', key: 'category' },
@@ -266,6 +268,8 @@ export async function renderProducts(ctx) {
     },
   });
 
+  ctx.el.querySelector('#import-products')?.addEventListener('click', () => openProductImport(ctx));
+  ctx.el.querySelector('#export-products')?.addEventListener('click', () => exportProducts(rows, ALLERGEN_LIST));
   ctx.el.querySelectorAll('[data-pars]').forEach((b) => b.addEventListener('click', async (e) => {
     e.stopPropagation();
     const { product, pars } = await api(`/products/${b.dataset.pars}/pars`);
