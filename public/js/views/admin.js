@@ -1,5 +1,5 @@
 import { loadLocations } from '../app.js';
-import { api, esc, field, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast } from '../lib.js';
+import { api, confirmDialog, esc, isDemo, field, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast } from '../lib.js';
 
 const yesNo = (v) => (v ? 'Yes' : 'No');
 const activeBox = (v) => field('Active', `<input type="checkbox" name="active" ${v === undefined || v ? 'checked' : ''}>`, { className: 'field-inline' });
@@ -324,9 +324,63 @@ export async function renderAccount(ctx) {
   });
 }
 
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// "Remove what isn't in Square": deletes sites not linked to Square and staff not in the Square team.
+function cleanupSection(c) {
+  if (!c.locations.length && !c.staff.length) return '';
+  const siteLine = (l) => `<li><strong>${esc(l.name)}</strong> <span class="muted small">${[
+    l.shifts && plural(l.shifts, 'rota shift'), l.checks && plural(l.checks, 'safety check'), l.wastage && plural(l.wastage, 'wastage record'), l.orders && plural(l.orders, 'order'),
+  ].filter(Boolean).join(', ') || 'no records'}</span></li>`;
+  return `
+    <section class="card" id="cleanup">
+      <h2>Remove what isn’t in Square</h2>
+      ${!c.ready ? `<p class="notice">${!c.linked_sites.length ? 'Link your sites to Square locations above first.' : 'Import your staff from Square first (Setup → Staff → Import from Square), so Cafe Ops knows who to keep.'}</p>` : ''}
+      <p class="muted">Deletes sites that aren’t linked to a Square location and staff who aren’t in your Square team, such as the made-up demo data, along with their rotas and records. Sites linked to Square (${esc(c.linked_sites.join(', ') || 'none yet')}) and you are always kept. A backup copy of your data is saved first.</p>
+      ${c.locations.length ? `
+        <label class="check-row"><input type="checkbox" name="remove_locations" ${c.linked_sites.length ? '' : 'disabled'}>
+          <span><strong>Remove ${plural(c.locations.length, 'site')} not linked to Square</strong>
+          <small>Their rota, food-safety checks, wastage, stock takes, orders and site-specific settings are deleted too.</small></span></label>
+        <ul class="plain-list cleanup-list">${c.locations.map(siteLine).join('')}</ul>` : ''}
+      ${c.staff.length ? `
+        <label class="check-row"><input type="checkbox" name="remove_staff" ${c.team_linked ? '' : 'disabled'}>
+          <span><strong>Remove ${plural(c.staff.length, 'staff member')} not in Square</strong>
+          <small>Their shifts go too. Records they entered at the sites you keep stay, without their name.</small></span></label>
+        <details><summary class="small">Show who</summary><ul class="plain-list cleanup-list">${c.staff.map((u) => `<li>${esc(u.name)} <span class="muted small">${esc(u.email)} · ${esc(u.location ?? 'all sites')}${u.active ? '' : ' · deactivated'}</span></li>`).join('')}</ul></details>` : ''}
+      ${c.moves.length ? `<p class="small">Moving to a site you’re keeping: ${c.moves.map((m) => `${esc(m.name)} → ${esc(m.to_location)}`).join(', ')}.</p>` : ''}
+      <button class="btn btn-danger" id="run-cleanup" disabled>Remove selected</button>
+    </section>`;
+}
+
+function wireCleanup(ctx, c) {
+  const box = ctx.el.querySelector('#cleanup');
+  if (!box) return;
+  const sites = box.querySelector('[name=remove_locations]');
+  const staff = box.querySelector('[name=remove_staff]');
+  const btn = box.querySelector('#run-cleanup');
+  const update = () => { btn.disabled = !(sites?.checked || staff?.checked); };
+  sites?.addEventListener('change', update);
+  staff?.addEventListener('change', update);
+  btn.addEventListener('click', async () => {
+    const parts = [sites?.checked && plural(c.locations.length, 'site'), staff?.checked && plural(c.staff.length, 'staff member')].filter(Boolean);
+    const ok = await confirmDialog(`This permanently deletes ${parts.join(' and ')} and their records. A backup copy of your data is saved first.`, { confirmLabel: 'Delete', title: 'Remove from Cafe Ops?' });
+    if (!ok) return;
+    btn.disabled = true;
+    try {
+      const r = await api('/square/cleanup', { method: 'POST', body: { remove_locations: !!sites?.checked, remove_staff: !!staff?.checked } });
+      await loadLocations();
+      toast(`Removed ${plural(r.locations_removed, 'site')} and ${plural(r.staff_removed, 'staff member')}${r.backup && !isDemo ? `. Backup saved as data\\${r.backup}` : ''}`);
+      ctx.rerender();
+    } catch (err) {
+      toast(err.message, 'error');
+      update();
+    }
+  });
+}
+
 export async function renderSquare(ctx) {
   const { el, state } = ctx;
-  const status = await api('/square/status');
+  const [status, cleanup] = await Promise.all([api('/square/status'), api('/square/cleanup')]);
   let squareLocations = [];
   let squareError = null;
   if (status.configured) {
@@ -385,8 +439,10 @@ export async function renderSquare(ctx) {
           <td>${statusBadge(h.status === 'ok' ? 'completed' : h.status === 'error' ? 'fail' : 'in_progress')}</td>
           <td class="num">${h.orders ?? '–'}</td><td class="num">${h.timecards ?? '–'}</td><td>${esc(h.triggered_by ?? '')}</td><td class="small">${esc(h.message ?? '')}</td></tr>`).join('')}</tbody>
       </table></div>
-    </section>` : ''}`;
+    </section>` : ''}
+    ${cleanupSection(cleanup)}`;
 
+  wireCleanup(ctx, cleanup);
   el.querySelectorAll('[data-link]').forEach((sel) => sel.addEventListener('change', async () => {
     try {
       await api(`/locations/${sel.dataset.link}/square`, { method: 'PUT', body: { square_location_id: sel.value || null } });

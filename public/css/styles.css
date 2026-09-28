@@ -420,3 +420,6 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 @media print {
   .hm-cell, .hm-nosales, .hm-legend-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.cleanup-list { margin: 0 0 0.75rem 1.9rem; }
+.cleanup-list li { padding: 0.25rem 0; }
+#cleanup details { margin: -0.4rem 0 0.75rem 1.9rem; }

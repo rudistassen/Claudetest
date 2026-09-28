@@ -2,6 +2,7 @@ import { requireAdmin, requireManager, resolveLocation } from '../auth.js';
 import { dayKey, labourByDay, pct, salesByDay, wastageByDay } from '../metrics.js';
 import { syncSales } from '../square.js';
 import { applyTeamImport, fetchTeam, planTeamImport } from '../team.js';
+import { applyCleanup, planCleanup } from '../cleanup.js';
 import { addDays, badRequest, date, HttpError, notFound, round2, str, today } from '../util.js';
 
 const MAX_SYNC_DAYS = 92;
@@ -89,6 +90,19 @@ export function registerSalesRoutes(router, db, square) {
     const plan = await teamPlan(req);
     const counts = applyTeamImport(db, plan, { currentUserId: req.user.id });
     res.json({ ...counts, need_password: plan.filter((r) => r.action === 'create').map((r) => r.name) });
+  });
+
+  // --- Removing sites not linked to Square and staff not in the Square team (admin): preview, then delete ---
+
+  router.get('/square/cleanup', requireAdmin, (req, res) => {
+    res.json(planCleanup(db, { currentUserId: req.user.id }));
+  });
+
+  router.post('/square/cleanup', requireAdmin, (req, res) => {
+    const removeLocations = req.body.remove_locations === true;
+    const removeStaff = req.body.remove_staff === true;
+    if (!removeLocations && !removeStaff) throw badRequest('Choose sites, staff or both to remove');
+    res.json(applyCleanup(db, { currentUserId: req.user.id, removeLocations, removeStaff }));
   });
 
   router.post('/square/sync', requireManager, requireSquare, async (req, res) => {
