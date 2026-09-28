@@ -565,3 +565,14 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
   .dash-bar { display: block; width: 100%; max-width: none; margin: 0.25rem 0 0.2rem; }
   .dash-table tfoot tr { border-top: 2px solid var(--border); border-bottom: 0; }
 }
+
+/* Trail set up */
+.setup-list li { justify-content: space-between; align-items: flex-start; flex-wrap: nowrap; gap: 1rem; padding: 0.6rem 0; }
+.setup-list li > div { flex: 1; }
+.setup-task.is-off > div { opacity: 0.55; }
+.setup-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: flex-end; flex-shrink: 0; max-width: 55%; }
+#setup-site { width: auto; min-width: 170px; }
+@media (max-width: 700px) {
+  .setup-list li { flex-wrap: wrap; }
+  .setup-actions { max-width: none; flex: 1 1 100%; justify-content: flex-start; }
+}

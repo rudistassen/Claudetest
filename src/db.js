@@ -254,6 +254,13 @@ CREATE TABLE IF NOT EXISTS timecards (
 );
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
+-- Shared food-safety checks switched off at one site (the site may have its own version instead).
+CREATE TABLE IF NOT EXISTS safety_task_exclusions (
+  task_id INTEGER NOT NULL REFERENCES safety_tasks(id) ON DELETE CASCADE,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  PRIMARY KEY (task_id, location_id)
+);
+
 -- Extra sites someone can work with when they don't have access to every site (users.all_sites = 0).
 CREATE TABLE IF NOT EXISTS user_sites (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -321,6 +328,8 @@ const MIGRATIONS = [
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],
+  // A site's own version of a shared check points at the check it replaces there.
+  ['safety_tasks', 'replaces_task_id', 'ALTER TABLE safety_tasks ADD COLUMN replaces_task_id INTEGER REFERENCES safety_tasks(id) ON DELETE SET NULL'],
   ['users', 'availability_note', 'ALTER TABLE users ADD COLUMN availability_note TEXT'],
   // Rota publishing: the pub_* columns hold what staff can see (null = never published); the other columns are the
   // draft editors work on, and removed marks a published shift deleted in the draft. Shifts that existed before

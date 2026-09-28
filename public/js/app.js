@@ -38,6 +38,7 @@ const ROUTES = [
   [/^dashboard$/, dashboard.render],
   [/^safety$/, safety.renderChecklist, SAFETY],
   [/^safety\/report$/, safety.renderReport, ['safety.report']],
+  [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
   [/^rota$/, rota.render, ROTA],
   [/^timeoff$/, timeoff.render],
   [/^wastage$/, wastage.render, WASTAGE],
@@ -60,7 +61,7 @@ const ROUTES = [
   [/^admin\/locations$/, admin.renderLocations, 'admin'],
   [/^admin\/suppliers$/, admin.renderSuppliers, SUPPLIERS],
   [/^admin\/products$/, admin.renderProducts, SUPPLIERS],
-  [/^admin\/safety-tasks$/, admin.renderSafetyTasks, ['safety.manage']],
+  [/^admin\/safety-tasks$/, safety.renderSetup, ['safety.manage']],
   [/^admin\/square$/, admin.renderSquare, 'admin'],
   [/^account$/, admin.renderAccount],
 ];
@@ -70,7 +71,7 @@ const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(..
 function navItems() {
   return [
     ['dashboard', 'Dashboard', '▦'],
-    ['safety', 'Food safety', '✓', SAFETY],
+    ['safety', 'Trail', '✓', SAFETY],
     ['rota', 'Rota', '◷', ROTA],
     ['timeoff', 'Time off', '☀'],
     ['wastage', 'Wastage', '⌫', WASTAGE],
@@ -90,7 +91,7 @@ function adminItems() {
     ['admin/square', 'Square', 'admin'],
     ['admin/suppliers', 'Suppliers', SUPPLIERS],
     ['admin/products', 'Products', SUPPLIERS],
-    ['admin/safety-tasks', 'Safety checks', ['safety.manage']],
+    ['safety/setup', 'Trail checks', ['safety.manage']],
   ].filter(([, , who]) => allowed(who));
 }
 

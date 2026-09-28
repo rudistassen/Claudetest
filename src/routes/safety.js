@@ -1,12 +1,16 @@
 import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
+import { tx } from '../db.js';
 import { labourByDay, pct } from '../metrics.js';
 import { addDays, badRequest, bool, date, forbidden, id, notFound, num, oneOf, round2, str, today, weekStart } from '../util.js';
 
 const MAX_REPORT_DAYS = 92;
 
 export function registerSafetyRoutes(router, db) {
-  const tasksFor = db.prepare(`SELECT * FROM safety_tasks WHERE active = 1 AND (location_id IS NULL OR location_id = ?)
+  // The checks a site does: shared checks (unless switched off there) plus the site's own.
+  const tasksStmt = db.prepare(`SELECT * FROM safety_tasks WHERE active = 1 AND (location_id = ? OR (location_id IS NULL
+      AND id NOT IN (SELECT task_id FROM safety_task_exclusions WHERE location_id = ?)))
     ORDER BY frequency, sort_order, title`);
+  const tasksFor = (locationId) => tasksStmt.all(locationId, locationId);
 
   // --- Task templates ---
 
@@ -41,6 +45,79 @@ export function registerSafetyRoutes(router, db) {
     return t;
   }
   const taskCols = ['title', 'description', 'category', 'frequency', 'location_id', 'requires_reading', 'reading_unit', 'min_value', 'max_value', 'sort_order', 'active'];
+  const loadTask = (req) => {
+    const t = db.prepare('SELECT * FROM safety_tasks WHERE id = ?').get(Number(req.params.id));
+    if (!t) throw notFound('Check');
+    return t;
+  };
+
+  // --- Set up, one site at a time ---
+
+  // Every check at a site: shared ones (marked off if switched off there) and the site's own, including inactive ones.
+  router.get('/safety/setup', requirePerm('safety.manage'), (req, res) => {
+    const locationId = resolveLocation(req, req.query.location_id);
+    const off = new Set(db.prepare('SELECT task_id FROM safety_task_exclusions WHERE location_id = ?').all(locationId).map((r) => r.task_id));
+    const shared = db.prepare('SELECT * FROM safety_tasks WHERE location_id IS NULL AND active = 1').all();
+    const own = db.prepare('SELECT * FROM safety_tasks WHERE location_id = ?').all(locationId);
+    const title = new Map(shared.map((t) => [t.id, t.title]));
+    const history = db.prepare('SELECT COUNT(*) AS n FROM safety_checks WHERE task_id = ?');
+    const tasks = [
+      ...shared.map((t) => ({ ...t, scope: 'shared', on_here: !off.has(t.id), replaced_by: own.find((o) => o.replaces_task_id === t.id && o.active)?.id ?? null })),
+      ...own.map((t) => ({ ...t, scope: 'site', on_here: !!t.active, replaces_title: t.replaces_task_id ? title.get(t.replaces_task_id) ?? null : null, has_history: history.get(t.id).n > 0 })),
+    ].sort((a, b) => a.frequency.localeCompare(b.frequency) || a.category.localeCompare(b.category) || a.sort_order - b.sort_order || a.title.localeCompare(b.title));
+    res.json({ location_id: locationId, tasks });
+  });
+
+  // Switches a shared check off (or back on) at one site.
+  router.post('/safety/tasks/:id/at-site', requirePerm('safety.manage'), (req, res) => {
+    const task = loadTask(req);
+    if (task.location_id !== null) throw badRequest('Only checks shared by every site can be switched on or off per site');
+    const locationId = resolveLocation(req, req.body.location_id);
+    if (bool(req.body.on)) db.prepare('DELETE FROM safety_task_exclusions WHERE task_id = ? AND location_id = ?').run(task.id, locationId);
+    else db.prepare('INSERT OR IGNORE INTO safety_task_exclusions (task_id, location_id) VALUES (?, ?)').run(task.id, locationId);
+    res.json({ ok: true });
+  });
+
+  // Changes a shared check for one site: the site gets its own copy and the shared one is switched off there.
+  router.post('/safety/tasks/:id/customise', requirePerm('safety.manage'), (req, res) => {
+    const shared = loadTask(req);
+    if (shared.location_id !== null) throw badRequest('This check already belongs to one site; edit it instead');
+    const locationId = resolveLocation(req, req.body.location_id);
+    const t = taskBody({ ...req, body: { ...req.body, location_id: locationId } });
+    const newId = tx(db, () => {
+      const r = db.prepare(`INSERT INTO safety_tasks (${taskCols.join(', ')}, replaces_task_id) VALUES (${taskCols.map(() => '?').join(', ')}, ?)`)
+        .run(...taskCols.map((c) => t[c]), shared.id);
+      db.prepare('INSERT OR IGNORE INTO safety_task_exclusions (task_id, location_id) VALUES (?, ?)').run(shared.id, locationId);
+      return r.lastInsertRowid;
+    });
+    res.status(201).json(db.prepare('SELECT * FROM safety_tasks WHERE id = ?').get(newId));
+  });
+
+  // Goes back to the shared version at a site: its own copy goes (or is switched off if checks were recorded).
+  router.post('/safety/tasks/:id/revert', requirePerm('safety.manage'), (req, res) => {
+    const own = loadTask(req);
+    if (!own.location_id || !own.replaces_task_id) throw badRequest('This check isn’t a site’s version of a shared check');
+    assertLocation(req, own.location_id);
+    tx(db, () => {
+      retire(own);
+      db.prepare('DELETE FROM safety_task_exclusions WHERE task_id = ? AND location_id = ?').run(own.replaces_task_id, own.location_id);
+    });
+    res.json({ ok: true });
+  });
+
+  // Deletes a site's own check, or switches it off if checks have been recorded against it (keeping the records).
+  const retire = (t) => {
+    if (db.prepare('SELECT 1 FROM safety_checks WHERE task_id = ?').get(t.id)) db.prepare('UPDATE safety_tasks SET active = 0 WHERE id = ?').run(t.id);
+    else db.prepare('DELETE FROM safety_tasks WHERE id = ?').run(t.id);
+  };
+  router.delete('/safety/tasks/:id', requirePerm('safety.manage'), (req, res) => {
+    const t = loadTask(req);
+    if (t.location_id) assertLocation(req, t.location_id);
+    else if (req.user.role !== 'admin') throw forbidden('Only admins can remove checks shared by every site');
+    const kept = !!db.prepare('SELECT 1 FROM safety_checks WHERE task_id = ?').get(t.id);
+    retire(t);
+    res.json({ deleted: !kept, switched_off: kept });
+  });
 
   router.post('/safety/tasks', requirePerm('safety.manage'), (req, res) => {
     const t = taskBody(req);
@@ -68,7 +145,7 @@ export function registerSafetyRoutes(router, db) {
     const ws = weekStart(d);
     const checks = db.prepare(`SELECT c.*, u.name AS completed_by_name FROM safety_checks c LEFT JOIN users u ON u.id = c.completed_by
       WHERE c.location_id = ? AND c.period IN (?, ?)`).all(locationId, d, ws);
-    const tasks = tasksFor.all(locationId).map((t) => {
+    const tasks = tasksFor(locationId).map((t) => {
       const period = t.frequency === 'daily' ? d : ws;
       return { ...t, check: checks.find((c) => c.task_id === t.id && c.period === period) ?? null };
     });
@@ -133,7 +210,7 @@ export function registerSafetyRoutes(router, db) {
     const weeks = [...new Set(days.map(weekStart))];
 
     const out = locations.map((loc) => {
-      const tasks = tasksFor.all(loc.id);
+      const tasks = tasksFor(loc.id);
       const dailyIds = new Set(tasks.filter((t) => t.frequency === 'daily').map((t) => t.id));
       const weeklyIds = new Set(tasks.filter((t) => t.frequency === 'weekly').map((t) => t.id));
       const checks = db.prepare('SELECT task_id, period, status FROM safety_checks WHERE location_id = ? AND period BETWEEN ? AND ?')
@@ -184,7 +261,7 @@ export function registerSafetyRoutes(router, db) {
     };
 
     const cards = locations.map((loc) => {
-      const tasks = tasksFor.all(loc.id);
+      const tasks = tasksFor(loc.id);
       const checks = db.prepare('SELECT task_id, period, status FROM safety_checks WHERE location_id = ? AND period IN (?, ?)').all(loc.id, d, ws);
       const count = (freq, period) => {
         const ids = new Set(tasks.filter((t) => t.frequency === freq).map((t) => t.id));

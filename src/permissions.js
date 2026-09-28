@@ -3,8 +3,8 @@
 // permissions of their set. Users without a set get the built-in set for their role (Manager or Staff).
 
 export const PERMISSION_AREAS = [
-  ['Food safety', [
-    ['safety.complete', 'Complete food-safety checks'],
+  ['Trail', [
+    ['safety.complete', 'Complete Trail checks'],
     ['safety.manage', 'Set up their site’s checks and clear completed ones'],
     ['safety.report', 'See the compliance report'],
   ]],

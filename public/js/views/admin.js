@@ -286,55 +286,6 @@ export async function renderProducts(ctx) {
   }));
 }
 
-export async function renderSafetyTasks(ctx) {
-  const { state } = ctx;
-  const rows = await api('/safety/tasks');
-  if (ctx.stale()) return;
-  const range = (t) => {
-    if (!t.requires_reading) return '';
-    const u = t.reading_unit ?? '';
-    return [t.min_value !== null ? `≥ ${t.min_value}${u}` : '', t.max_value !== null ? `≤ ${t.max_value}${u}` : ''].filter(Boolean).join(', ');
-  };
-  const locOptions = state.isAdmin
-    ? [['', 'All locations'], ...state.locations.map((l) => [l.id, l.name])]
-    : state.locations.filter((l) => l.active).map((l) => [l.id, l.name]);
-  listPage(ctx, {
-    title: 'Food safety checks',
-    rows,
-    addLabel: 'Add check',
-    columns: [
-      { label: 'Check', key: 'title' },
-      { label: 'Category', key: 'category' },
-      { label: 'Frequency', value: (r) => (r.frequency === 'daily' ? 'Daily' : 'Weekly') },
-      { label: 'Applies to', value: (r) => r.location_name ?? 'All locations' },
-      { label: 'Safe range', value: range },
-      { label: 'Active', value: (r) => yesNo(r.active) },
-    ],
-    form: (t) => {
-      const locked = t.id && !t.location_id && !state.isAdmin;
-      return `
-      ${locked ? '<p class="notice">This check is shared by every location and can only be changed by an admin.</p>' : ''}
-      ${field('Check', input('title', t.title, 'required'))}
-      ${field('Instructions', textarea('description', t.description))}
-      <div class="row">
-        ${field('Category', input('category', t.category ?? 'General', 'list="task-cats"'))}
-        ${field('Frequency', select('frequency', [['daily', 'Daily'], ['weekly', 'Weekly']], t.frequency ?? 'daily'))}
-        ${field('Applies to', select('location_id', locOptions, t.location_id ?? (state.isAdmin ? '' : state.locationId)))}
-      </div>
-      <datalist id="task-cats">${[...new Set(rows.map((r) => r.category))].map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
-      ${field('Requires a reading (e.g. temperature)', `<input type="checkbox" name="requires_reading" ${t.requires_reading ? 'checked' : ''}>`, { className: 'field-inline' })}
-      <div class="row">
-        ${field('Unit', input('reading_unit', t.reading_unit ?? '°C'))}
-        ${field('Minimum safe value', input('min_value', t.min_value, 'type="number" step="any"'))}
-        ${field('Maximum safe value', input('max_value', t.max_value, 'type="number" step="any"'))}
-      </div>
-      ${field('Sort order', input('sort_order', t.sort_order ?? 0, 'type="number"'))}
-      ${activeBox(t.active)}`;
-    },
-    save: (v, row) => (row ? api(`/safety/tasks/${row.id}`, { method: 'PUT', body: v }) : api('/safety/tasks', { method: 'POST', body: v })),
-  });
-}
-
 export async function renderAccount(ctx) {
   const { el, state } = ctx;
   el.innerHTML = `
