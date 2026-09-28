@@ -68,31 +68,44 @@ const ROUTES = [
 
 const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(...who));
 
-function navItems() {
+// The side menu: Dashboard, then headed groups. Items someone can't use are hidden, and so is a group left empty.
+function navGroups() {
   return [
-    ['dashboard', 'Dashboard', '▦'],
-    ['safety', 'Trail', '✓', SAFETY],
-    ['rota', 'Rota', '◷', ROTA],
-    ['timeoff', 'Time off', '☀'],
-    ['wastage', 'Wastage', '⌫', WASTAGE],
-    ['stock', 'Stock takes', '☰', STOCK],
-    ['recipes', 'Recipes', '✎', RECIPES],
-    ['trading', 'Trading', '◔', ['sales.view']],
-    ['sales', 'Sales', '£', ['sales.view']],
-    ['orders', 'Orders', '⇄', ['orders.manage']],
-  ].filter(([, , , who]) => allowed(who));
+    [null, [['dashboard', 'Dashboard', '▦']]],
+    ['Team', [
+      ['rota', 'Rota', '◷', ROTA],
+      ['timeoff', 'Time off', '☀'],
+    ]],
+    ['Trail', [
+      ['safety', 'Checklist', '✓', SAFETY],
+      ['safety/report', 'Compliance', '▤', ['safety.report']],
+    ]],
+    ['Stock and Ordering', [
+      ['stock', 'Stock takes', '☰', STOCK],
+      ['wastage', 'Wastage', '⌫', WASTAGE],
+      ['orders', 'Ordering', '⇄', ['orders.manage']],
+    ]],
+    ['Reporting', [
+      ['trading', 'Trading', '◔', ['sales.view']],
+      ['sales', 'Sales', '£', ['sales.view']],
+    ]],
+    ['Setup', [
+      ['recipes', 'Recipes', '', RECIPES],
+      ['admin/staff', 'Staff', '', ['staff.manage']],
+      ['admin/permissions', 'Permissions', '', 'admin'],
+      ['admin/locations', 'Locations', '', 'admin'],
+      ['admin/square', 'Square', '', 'admin'],
+      ['admin/suppliers', 'Suppliers', '', SUPPLIERS],
+      ['admin/products', 'Products', '', SUPPLIERS],
+      ['safety/setup', 'Trail checks', '', ['safety.manage']],
+    ]],
+  ].map(([heading, items]) => [heading, items.filter(([, , , who]) => allowed(who))]).filter(([, items]) => items.length);
 }
 
-function adminItems() {
-  return [
-    ['admin/staff', 'Staff', ['staff.manage']],
-    ['admin/permissions', 'Permissions', 'admin'],
-    ['admin/locations', 'Locations', 'admin'],
-    ['admin/square', 'Square', 'admin'],
-    ['admin/suppliers', 'Suppliers', SUPPLIERS],
-    ['admin/products', 'Products', SUPPLIERS],
-    ['safety/setup', 'Trail checks', ['safety.manage']],
-  ].filter(([, , who]) => allowed(who));
+// The menu item for a page: the longest item path that is the page or a parent of it (recipes/12 → Recipes).
+function activeItem(path, items) {
+  const p = path || 'dashboard';
+  return items.map(([i]) => i).filter((i) => p === i || p.startsWith(`${i}/`)).sort((x, y) => y.length - x.length)[0];
 }
 
 export function navigate(path) {
@@ -108,7 +121,8 @@ function parseHash() {
 
 function renderShell() {
   const { path } = parseHash();
-  const top = path.split('/')[0] || 'dashboard';
+  const groups = navGroups();
+  const active = activeItem(path, groups.flatMap(([, items]) => items));
   const locOptions = state.locations.filter((l) => l.active)
     .map((l) => `<option value="${l.id}" ${l.id === state.locationId ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
   document.getElementById('app').innerHTML = `
@@ -124,9 +138,8 @@ function renderShell() {
     </header>
     <div class="layout">
       <nav class="sidebar">
-        ${navItems().map(([p, label, icon]) => `<a href="#/${p}" class="${top === p ? 'active' : ''}"><span class="nav-icon">${icon}</span>${label}</a>`).join('')}
-        ${adminItems().length ? `<div class="nav-heading">Setup</div>` : ''}
-        ${adminItems().map(([p, label]) => `<a href="#/${p}" class="${path === p ? 'active' : ''}">${label}</a>`).join('')}
+        ${groups.map(([heading, items]) => `${heading ? `<div class="nav-heading">${heading}</div>` : ''}
+          ${items.map(([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${icon ? `<span class="nav-icon">${icon}</span>` : ''}${label}</a>`).join('')}`).join('')}
         <div class="nav-heading"></div>
         <a href="#" id="logout">Sign out</a>
       </nav>
