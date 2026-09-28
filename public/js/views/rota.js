@@ -6,22 +6,43 @@ const POSITIONS = ['Manager', 'Supervisor', 'Barista', 'Kitchen', 'Front of hous
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const week = weekStart(query.week || todayISO());
-  const data = await api(`/rota${qs({ location_id: state.locationId, week })}`);
+  // Admins can see every site's rota at once.
+  const all = state.isAdmin && query.scope === 'all';
+  const scopeQs = (extra = {}) => qs({ ...extra, scope: all ? 'all' : undefined });
+  const data = await api(`/rota${qs({ location_id: all ? 'all' : state.locationId, week })}`);
   if (stale()) return;
   const canEdit = state.isManager;
   const today = todayISO();
+  const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
 
   const byCell = new Map();
-  for (const s of data.shifts) {
+  for (const s of [...data.shifts, ...data.away_shifts.map((a) => ({ ...a, away: true }))]) {
     const k = `${s.user_id}|${s.date}`;
     byCell.set(k, [...(byCell.get(k) ?? []), s]);
   }
+  for (const list of byCell.values()) list.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  // A shift away from the person's home site is labelled with where it is.
+  const shiftLabel = (s, u) => {
+    const where = s.location_id !== (all ? u.location_id : state.locationId) ? `@ ${s.location_name}` : '';
+    const role = s.position && s.position !== u.position ? s.position : '';
+    const sub = [where, role].filter(Boolean).join(' · ');
+    return `${s.start_time}–${s.end_time}${sub ? `<small>${esc(sub)}</small>` : ''}`;
+  };
+  let group = null;
+  const groupRow = (u) => {
+    if (!all) return '';
+    const name = u.location_name ?? 'No home site';
+    if (name === group) return '';
+    group = name;
+    return `<tr class="rota-group"><th colspan="${data.days.length + 2}">${esc(name)}</th></tr>`;
+  };
   const dayHours = data.days.map((d) => data.shifts.filter((s) => s.date === d).reduce((t, s) => t + s.hours, 0));
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Rota · ${esc(state.location?.name ?? '')}</h1>
+      <h1>Rota · ${all ? 'All sites' : esc(state.location?.name ?? '')}</h1>
       <div class="actions">
+        ${state.isAdmin ? `<a class="btn" href="#/rota${all ? qs({ week }) : qs({ week, scope: 'all' })}">${all ? 'This site only' : 'All sites'}</a>` : ''}
         <button class="btn" data-week="-7">‹ Prev</button>
         <button class="btn" data-week="0">This week</button>
         <button class="btn" data-week="7">Next ›</button>
@@ -36,14 +57,15 @@ export async function render(ctx) {
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}">${fmtDate(d)}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
-          ${data.staff.map((u) => `
+          ${data.staff.map((u) => `${groupRow(u)}
             <tr>
-              <th><strong>${esc(u.name)}</strong><small>${esc(u.position ?? '')}${u.location_id !== state.locationId ? ' · cover' : ''}</small></th>
+              <th><strong>${esc(u.name)}</strong><small>${esc(u.position ?? '')}${!all && u.location_id !== state.locationId ? ` · cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}` : ''}</small></th>
               ${data.days.map((d) => {
                 const shifts = byCell.get(`${u.id}|${d}`) ?? [];
                 return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''}" data-user="${u.id}" data-date="${d}">
-                  ${shifts.map((s) => `<button class="shift" data-shift="${s.id}" ${canEdit ? '' : 'disabled'}>
-                    ${s.start_time}–${s.end_time}${s.position && s.position !== u.position ? `<small>${esc(s.position)}</small>` : ''}</button>`).join('')}
+                  ${shifts.map((s) => (s.away
+                    ? `<span class="shift shift-away" title="Working at ${esc(s.location_name)}">${shiftLabel(s, u)}</span>`
+                    : `<button class="shift ${all && s.location_id !== u.location_id ? 'shift-elsewhere' : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'}>${shiftLabel(s, u)}</button>`)).join('')}
                   ${canEdit && !shifts.length ? '<span class="add-hint">+</span>' : ''}
                 </td>`;
               }).join('')}
@@ -59,23 +81,32 @@ export async function render(ctx) {
         </tfoot>
       </table>
     </div>
-    ${!data.staff.length ? '<div class="empty">No staff at this location yet. Add them under Setup → Staff.</div>' : ''}`;
+    ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under Setup → Staff.</div>` : ''}
+    ${data.away_shifts.length ? '<p class="muted small">Greyed-out shifts are at another site.</p>' : ''}`;
 
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
     const offset = Number(b.dataset.week);
-    ctx.navigate(`rota${offset ? `?week=${addDays(week, offset)}` : ''}`);
+    ctx.navigate(`rota${scopeQs({ week: offset ? addDays(week, offset) : undefined })}`);
   }));
   el.querySelector('#print').addEventListener('click', () => window.print());
   if (!canEdit) return;
 
-  const staffOptions = data.staff.map((u) => [u.id, u.name]);
+  const staffOptions = data.staff.map((u) => [u.id, all && u.location_name ? `${u.name} (${u.location_name})` : u.name]);
+  // Admins can put anyone on at any site; managers only run their own site.
+  const siteOptions = state.isAdmin
+    ? state.locations.filter((l) => l.active).map((l) => [l.id, l.name])
+    : [[state.user.location_id, siteName(state.user.location_id)]];
   const shiftModal = (shift, defaults = {}) => {
     const s = shift ?? { start_time: '07:00', end_time: '15:00', break_minutes: 30, ...defaults };
     const person = data.staff.find((u) => u.id === s.user_id);
+    const site = s.location_id ?? (all ? person?.location_id : state.locationId) ?? state.locationId;
     openModal({
       title: shift ? 'Edit shift' : 'Add shift',
       body: `
-        ${field('Staff member', select('user_id', staffOptions, s.user_id, 'required'))}
+        <div class="row">
+          ${field('Staff member', select('user_id', staffOptions, s.user_id, 'required'))}
+          ${field('Site', select('location_id', siteOptions, site, `required ${siteOptions.length > 1 ? '' : 'disabled'}`))}
+        </div>
         ${field('Date', input('date', s.date, 'type="date" required'))}
         <div class="row">
           ${field('Start', input('start_time', s.start_time, 'type="time" required'))}
@@ -91,7 +122,7 @@ export async function render(ctx) {
         ctx.rerender();
       },
       onSubmit: async (v) => {
-        const body = { ...v, location_id: state.locationId };
+        const body = { ...v, location_id: Number(v.location_id ?? site) };
         if (shift) await api(`/shifts/${shift.id}`, { method: 'PUT', body });
         else await api('/shifts', { method: 'POST', body });
         toast('Shift saved');
@@ -104,6 +135,11 @@ export async function render(ctx) {
     e.stopPropagation();
     shiftModal(data.shifts.find((s) => s.id === Number(b.dataset.shift)));
   }));
+  // Shifts at another site are edited from that site's rota (or All sites).
+  el.querySelectorAll('.shift-away').forEach((a) => a.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toast(`${a.title}. Edit it from that site’s rota${state.isAdmin ? ' or All sites' : ''}.`);
+  }));
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
     shiftModal(null, { user_id: Number(td.dataset.user), date: td.dataset.date });
   }));
@@ -111,12 +147,12 @@ export async function render(ctx) {
     const hasShifts = data.shifts.length > 0;
     if (!(await confirmDialog(
       hasShifts
-        ? 'Copy last week’s shifts into this week? Existing shifts stay; anything that would double-book someone is skipped.'
-        : 'Copy last week’s shifts into this week?',
+        ? `Copy last week’s shifts${all ? ' at every site' : ''} into this week? Existing shifts stay; anything that would double-book someone is skipped.`
+        : `Copy last week’s shifts${all ? ' at every site' : ''} into this week?`,
       { confirmLabel: 'Copy shifts', title: 'Copy previous week' },
     ))) return;
     try {
-      const r = await api('/rota/copy-week', { method: 'POST', body: { location_id: state.locationId, from_week: addDays(week, -7), to_week: week } });
+      const r = await api('/rota/copy-week', { method: 'POST', body: { location_id: all ? 'all' : state.locationId, from_week: addDays(week, -7), to_week: week } });
       toast(`Copied ${r.copied} shift(s)${r.skipped ? `, skipped ${r.skipped} clash(es)` : ''}`);
       ctx.rerender();
     } catch (err) { showError(err); }

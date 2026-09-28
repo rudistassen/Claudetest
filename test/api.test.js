@@ -114,6 +114,55 @@ describe('rota', () => {
   });
 });
 
+describe('rota across sites', () => {
+  test('admins see every site at once and can put someone on at another site', async () => {
+    const admin = await login('admin@cafe.local');
+    const all = (await admin('/rota?location_id=all&week=2030-01-07')).data;
+    assert.equal(all.location_id, 'all');
+    const sites = new Set(all.staff.map((u) => u.location_name));
+    assert.ok(sites.size >= 7, 'staff from every site, with their home site');
+    const names = all.staff.map((u) => u.location_name);
+    assert.deepEqual(names, [...names].sort((a, b) => (a ?? '~').localeCompare(b ?? '~')), 'grouped by home site');
+
+    // Someone based at site 1 covers a shift at site 2.
+    const person = all.staff.find((u) => u.location_id === 1 && u.role === 'staff');
+    const cover = await admin('/shifts', { method: 'POST', body: { location_id: 2, user_id: person.id, date: '2030-01-08', start_time: '09:00', end_time: '13:00' } });
+    assert.equal(cover.status, 201);
+    assert.equal(cover.data.location_name, all.staff.find((u) => u.location_id === 2).location_name);
+
+    const home = (await admin('/rota?location_id=1&week=2030-01-07')).data;
+    assert.deepEqual(home.away_shifts.map((a) => [a.user_id, a.location_id, a.date]), [[person.id, 2, '2030-01-08']], 'shown greyed on their home rota');
+    assert.ok(!home.shifts.some((x) => x.id === cover.data.id));
+    const there = (await admin('/rota?location_id=2&week=2030-01-07')).data;
+    assert.ok(there.staff.some((u) => u.id === person.id), 'listed as cover at site 2');
+    const everyone = (await admin('/rota?location_id=all&week=2030-01-07')).data;
+    assert.ok(everyone.shifts.some((x) => x.id === cover.data.id));
+    assert.equal(everyone.away_shifts.length, 0);
+
+    // Moving the shift to site 3 by editing it.
+    const moved = await admin(`/shifts/${cover.data.id}`, { method: 'PUT', body: { location_id: 3, user_id: person.id, date: '2030-01-08', start_time: '09:00', end_time: '13:00' } });
+    assert.equal(moved.data.location_id, 3);
+    const clash = await admin('/shifts', { method: 'POST', body: { location_id: 1, user_id: person.id, date: '2030-01-08', start_time: '12:00', end_time: '16:00' } });
+    assert.equal(clash.status, 400, 'still no double-booking across sites');
+
+    // Copying a week at every site keeps each shift at its own site.
+    const copy = await admin('/rota/copy-week', { method: 'POST', body: { location_id: 'all', from_week: '2030-01-07', to_week: '2030-01-14' } });
+    assert.equal(copy.data.copied, 1);
+    const nextWeek = (await admin('/rota?location_id=all&week=2030-01-14')).data;
+    assert.deepEqual(nextWeek.shifts.map((x) => [x.user_id, x.location_id, x.date]), [[person.id, 3, '2030-01-15']]);
+  });
+
+  test('managers only run their own site', async () => {
+    const manager = await login('manager1@cafe.local');
+    const me = (await manager('/auth/me')).data.user;
+    assert.equal((await manager('/rota?location_id=all')).status, 400);
+    const staff = (await manager('/rota')).data.staff.find((u) => u.role === 'staff');
+    const other = me.location_id === 1 ? 2 : 1;
+    const r = await manager('/shifts', { method: 'POST', body: { location_id: other, user_id: staff.id, date: '2030-02-04', start_time: '09:00', end_time: '12:00' } });
+    assert.equal(r.status, 403);
+  });
+});
+
 describe('stock takes and ordering', () => {
   test('suggested order quantities come from par minus last count', async () => {
     const manager = await login('manager3@cafe.local');
