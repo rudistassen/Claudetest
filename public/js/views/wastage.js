@@ -14,10 +14,10 @@ export async function render(ctx) {
   const from = query.from || addDays(to, -6);
   const scope = state.isAdmin ? (query.scope ?? 'site') : 'site';
   const params = { from, to, location_id: scope === 'all' ? undefined : state.locationId };
-  const [report, entries, [products, reasons]] = await Promise.all([
+  const [report, entries, [products, reasons, recipes]] = await Promise.all([
     api(`/wastage/report${qs(params)}`),
     api(`/wastage${qs(params)}`),
-    Promise.all([api('/products'), api('/wastage/reasons')]),
+    Promise.all([api('/products'), api('/wastage/reasons'), api('/recipes')]),
   ]);
   if (stale()) return;
   const active = products.filter((p) => p.active);
@@ -68,14 +68,16 @@ export async function render(ctx) {
   el.querySelector('#log').addEventListener('click', () => {
     const byCat = new Map();
     for (const p of active) byCat.set(p.category ?? 'Other', [...(byCat.get(p.category ?? 'Other') ?? []), p]);
-    const productSelect = `<select name="product_id">
+    const made = recipes.filter((r) => r.active);
+    const productSelect = `<select name="item">
       <option value="">— Other item (type below) —</option>
-      ${[...byCat].map(([cat, list]) => `<optgroup label="${esc(cat)}">${list.map((p) => `<option value="${p.id}">${esc(p.name)} (${esc(p.unit)}, ${money(p.unit_cost)})</option>`).join('')}</optgroup>`).join('')}
+      ${made.length ? `<optgroup label="Made items (costed from recipe)">${made.map((r) => `<option value="r:${r.id}">${esc(r.name)}${r.cost_per_portion !== undefined ? ` (${money(r.cost_per_portion)} each)` : ''}</option>`).join('')}</optgroup>` : ''}
+      ${[...byCat].map(([cat, list]) => `<optgroup label="${esc(cat)}">${list.map((p) => `<option value="p:${p.id}">${esc(p.name)} (${esc(p.unit)}, ${money(p.unit_cost)})</option>`).join('')}</optgroup>`).join('')}
     </select>`;
     const { form } = openModal({
       title: `Log wastage · ${state.location?.name ?? ''}`,
       body: `
-        ${field('Product', productSelect)}
+        ${field('Item', productSelect)}
         <div class="other-item">
           ${field('Item name', input('item_name', '', 'placeholder="e.g. Ham & cheese toastie"'))}
           <div class="row">${field('Unit', input('unit', 'each'))}${field('Cost per unit (£)', input('unit_cost', '', 'type="number" min="0" step="0.01"'))}</div>
@@ -88,16 +90,20 @@ export async function render(ctx) {
         ${field('Notes', textarea('notes', ''))}`,
       submitLabel: 'Save',
       onSubmit: async (v) => {
-        const body = { ...v, location_id: state.locationId };
-        if (body.product_id) { delete body.item_name; delete body.unit_cost; delete body.unit; }
+        const { item, ...rest } = v;
+        const body = { ...rest, location_id: state.locationId };
+        if (item) {
+          body[item.startsWith('r:') ? 'recipe_id' : 'product_id'] = Number(item.slice(2));
+          delete body.item_name; delete body.unit_cost; delete body.unit;
+        }
         await api('/wastage', { method: 'POST', body });
         toast('Wastage logged');
         ctx.rerender();
       },
     });
     const other = form.querySelector('.other-item');
-    const sync = () => { other.hidden = !!form.product_id.value; };
-    form.product_id.addEventListener('change', sync);
+    const sync = () => { other.hidden = !!form.item.value; };
+    form.item.addEventListener('change', sync);
     sync();
   });
 

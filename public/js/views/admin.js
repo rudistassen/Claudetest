@@ -131,7 +131,8 @@ export async function renderSuppliers(ctx) {
 
 export async function renderProducts(ctx) {
   const { state } = ctx;
-  const [rows, suppliers] = await Promise.all([api('/products'), api('/suppliers')]);
+  const [rows, suppliers, meta] = await Promise.all([api('/products'), api('/suppliers'), api('/recipes/meta')]);
+  const ALLERGEN_LIST = meta.allergens;
   if (ctx.stale()) return;
   listPage(ctx, {
     title: 'Products',
@@ -145,6 +146,7 @@ export async function renderProducts(ctx) {
       { label: 'Supplier', key: 'supplier_name' },
       { label: 'Unit cost', num: true, value: (r) => money(r.unit_cost) },
       { label: 'Default par', num: true, key: 'par_level' },
+      { label: 'Recipe unit', value: (r) => (r.units_per_pack && r.units_per_pack !== 1 ? `${r.units_per_pack} ${r.recipe_unit ?? ''} / ${r.unit}` : r.recipe_unit ?? r.unit) },
       { label: '', html: (r) => `<button class="btn btn-small" data-pars="${r.id}">Site pars</button>` },
     ],
     form: (p) => `
@@ -159,8 +161,18 @@ export async function renderProducts(ctx) {
         ${field('Unit cost (£)', input('unit_cost', p.unit_cost ?? 0, 'type="number" min="0" step="0.01"'))}
         ${field('Default par level', input('par_level', p.par_level ?? 0, 'type="number" min="0" step="any"'), { hint: 'Target stock to hold at each site' })}
       </div>
+      <div class="row">
+        ${field('Recipe unit', input('recipe_unit', p.recipe_unit ?? p.unit ?? '', 'placeholder="ml, g, slice, each"'), { hint: 'How recipes measure it' })}
+        ${field('Recipe units per pack', input('units_per_pack', p.units_per_pack ?? 1, 'type="number" min="0.0001" step="any"'), { hint: 'e.g. 4L milk = 4000 (ml)' })}
+      </div>
+      <div class="field"><span>Allergens</span><div class="allergen-grid">${ALLERGEN_LIST.map(([k, label]) => `
+        <label class="check"><input type="checkbox" name="allergen_${k}" ${(p.allergens ?? '').split(',').includes(k) ? 'checked' : ''}> ${esc(label)}</label>`).join('')}</div></div>
       ${activeBox(p.active)}`,
-    save: (v, row) => (row ? api(`/products/${row.id}`, { method: 'PUT', body: v }) : api('/products', { method: 'POST', body: v })),
+    save: (v, row) => {
+      const body = { ...v, allergens: ALLERGEN_LIST.map(([k]) => k).filter((k) => v[`allergen_${k}`]) };
+      for (const [k] of ALLERGEN_LIST) delete body[`allergen_${k}`];
+      return row ? api(`/products/${row.id}`, { method: 'PUT', body }) : api('/products', { method: 'POST', body });
+    },
   });
 
   ctx.el.querySelectorAll('[data-pars]').forEach((b) => b.addEventListener('click', async (e) => {

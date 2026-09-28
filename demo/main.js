@@ -5,6 +5,7 @@ import { loadUser, registerAuthRoutes, requireAuth } from '../src/auth.js';
 import { openDb } from '../src/db.js';
 import { registerAdminRoutes } from '../src/routes/admin.js';
 import { registerOrderingRoutes } from '../src/routes/ordering.js';
+import { registerRecipeRoutes } from '../src/routes/recipes.js';
 import { registerRotaRoutes } from '../src/routes/rota.js';
 import { registerSafetyRoutes } from '../src/routes/safety.js';
 import { registerSalesRoutes } from '../src/routes/sales.js';
@@ -94,6 +95,7 @@ async function boot() {
   registerStockRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
+  registerRecipeRoutes(api, db);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
 
   const realFetch = window.fetch.bind(window);

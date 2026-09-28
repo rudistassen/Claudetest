@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { loadUser, registerAuthRoutes, requireAuth } from './auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerOrderingRoutes } from './routes/ordering.js';
+import { registerRecipeRoutes } from './routes/recipes.js';
 import { registerRotaRoutes } from './routes/rota.js';
 import { registerSalesRoutes } from './routes/sales.js';
 import { registerSafetyRoutes } from './routes/safety.js';
@@ -33,6 +34,7 @@ export function createApp(db, { square = null } = {}) {
   registerStockRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
+  registerRecipeRoutes(api, db);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 

@@ -1,3 +1,4 @@
+import { cleanAllergens } from '../recipes.js';
 import { assertLocation, requireAdmin, requireManager, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { badRequest, bool, date, id, notFound, num, round2, str } from '../util.js';
@@ -54,12 +55,15 @@ export function registerOrderingRoutes(router, db) {
       supplier_id: id(b.supplier_id, 'supplier_id'),
       unit_cost: num(b.unit_cost, 'unit_cost', { min: 0 }) ?? 0,
       par_level: num(b.par_level, 'par_level', { min: 0 }) ?? 0,
+      recipe_unit: str(b.recipe_unit, 'recipe_unit', { max: 30 }),
+      units_per_pack: num(b.units_per_pack, 'units_per_pack', { min: 0.0001 }) ?? 1,
+      allergens: cleanAllergens(b.allergens ?? []),
       active: b.active === undefined ? 1 : bool(b.active),
     };
     if (p.supplier_id && !db.prepare('SELECT 1 FROM suppliers WHERE id = ?').get(p.supplier_id)) throw notFound('Supplier');
     return p;
   };
-  const productCols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'active'];
+  const productCols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'active'];
 
   router.post('/products', requireAdmin, (req, res) => {
     const p = productBody(req.body);

@@ -1,0 +1,406 @@
+import { addDays, api, esc, field, fmtDate, input, money, qs, qty, textarea, toast, todayISO } from '../lib.js';
+
+let metaCache = null;
+const meta = async () => (metaCache ??= await api('/recipes/meta'));
+
+const allergenName = (m, key) => m.allergens.find(([k]) => k === key)?.[1] ?? key;
+
+// Short labels for chips and matrix headings; recipe cards use the full legal names.
+const SHORT = { gluten: 'Gluten', nuts: 'Tree nuts', sulphites: 'Sulphites' };
+const shortName = (m, key) => SHORT[key] ?? allergenName(m, key);
+
+function gpTone(pct, target) {
+  if (pct === null || pct === undefined) return '';
+  return pct >= target ? 'good' : pct >= target - 5 ? 'warn' : 'bad';
+}
+
+const fmtPct = (p) => (p === null || p === undefined ? '–' : `${p.toFixed(1)}%`);
+
+function chips(keys, m, kind = '') {
+  if (!keys.length) return '<span class="muted small">None</span>';
+  return `<span class="chips">${keys.map((k) => `<span class="chip ${kind}" title="${esc(allergenName(m, k))}">${esc(shortName(m, k))}</span>`).join('')}</span>`;
+}
+
+function tabs(state, active) {
+  const items = [['recipes', 'Recipes'], ['recipes/allergens', 'Allergen matrix']];
+  if (state.isManager) items.push(['recipes/performance', 'Menu performance']);
+  return `<div class="tabs">${items.map(([p, l]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${l}</a>`).join('')}</div>`;
+}
+
+// --- List ---
+
+export async function renderList(ctx) {
+  const { el, state, stale, query } = ctx;
+  const [recipes, m] = await Promise.all([api('/recipes'), meta()]);
+  if (stale()) return;
+  const categories = [...new Set(recipes.map((r) => r.category).filter(Boolean))];
+  const cat = query.category ?? '';
+
+  el.innerHTML = `
+    <div class="page-head">
+      <h1>Recipes</h1>
+      <div class="actions">${state.isAdmin ? '<a class="btn btn-primary" href="#/recipes/new">+ New recipe</a>' : ''}</div>
+    </div>
+    ${tabs(state, 'recipes')}
+    <div class="filters">
+      <input type="search" id="search" placeholder="Search recipes or ingredients…" aria-label="Search recipes">
+      <select id="category" aria-label="Category"><option value="">All categories</option>${categories.map((c) => `<option ${c === cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+    </div>
+    <section class="card">
+      ${recipes.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>Recipe</th><th>Category</th><th class="num">Price</th>
+          ${state.isManager ? `<th class="num">Cost / portion</th><th class="num">GP %</th>` : ''}
+          <th>Allergens</th>${state.isManager ? '<th>Square</th>' : ''}</tr></thead>
+        <tbody>${recipes.map((r) => `
+          <tr class="clickable ${r.active ? '' : 'inactive'}" data-id="${r.id}" data-cat="${esc(r.category ?? '')}" data-search="${esc(r.name.toLowerCase())}">
+            <td><a href="#/recipes/${r.id}"><strong>${esc(r.name)}</strong></a>${r.missing_costs?.length ? ' <small class="tone-warn">some ingredients have no cost</small>' : ''}</td>
+            <td>${esc(r.category ?? '')}</td>
+            <td class="num">${money(r.selling_price)}</td>
+            ${state.isManager ? `<td class="num">${money(r.cost_per_portion)}</td><td class="num"><span class="tone-${gpTone(r.gp_pct, m.target_gp)}">${fmtPct(r.gp_pct)}</span></td>` : ''}
+            <td>${chips(r.allergens, m)}</td>
+            ${state.isManager ? `<td>${r.square_catalog_object_id || r.square_item_name ? '<span class="badge badge-completed">Linked</span>' : '<span class="muted small">Not linked</span>'}</td>` : ''}
+          </tr>`).join('')}</tbody>
+      </table></div>` : `<div class="empty">No recipes yet.${state.isAdmin ? ' Add your first one to get costings and an allergen matrix.' : ''}</div>`}
+      ${state.isManager ? `<p class="muted small">GP is after VAT. Target: ${m.target_gp}% or more.</p>` : ''}
+    </section>`;
+
+  const search = el.querySelector('#search');
+  const category = el.querySelector('#category');
+  const apply = () => {
+    const term = search.value.trim().toLowerCase();
+    el.querySelectorAll('tr[data-id]').forEach((tr) => {
+      tr.hidden = (term && !tr.dataset.search.includes(term)) || (category.value && tr.dataset.cat !== category.value);
+    });
+  };
+  search.addEventListener('input', apply);
+  category.addEventListener('change', apply);
+  apply();
+  el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => ctx.navigate(`recipes/${tr.dataset.id}`)));
+}
+
+// --- Recipe card ---
+
+export async function renderRecipe(ctx) {
+  const { el, state, params, stale } = ctx;
+  const [r, m] = await Promise.all([api(`/recipes/${params[0]}`), meta()]);
+  if (stale()) return;
+  const perPortion = (q) => q / (r.portions || 1);
+
+  el.innerHTML = `
+    <div class="page-head">
+      <h1>${esc(r.name)}${r.active ? '' : ' <span class="badge">Inactive</span>'}</h1>
+      <div class="actions">
+        <a class="btn" href="#/recipes">‹ Recipes</a>
+        ${state.isAdmin ? `<a class="btn btn-primary" href="#/recipes/${r.id}/edit">Edit</a>` : ''}
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span>Selling price${r.vat_rated ? ' (inc VAT)' : ' (zero-rated)'}</span><strong>${money(r.selling_price)}</strong></div>
+      <div class="kpi"><span>Makes</span><strong>${qty(r.portions)} portion${r.portions === 1 ? '' : 's'}</strong></div>
+      ${state.isManager ? `
+      <div class="kpi"><span>Cost per portion</span><strong>${money(r.cost_per_portion)}</strong></div>
+      <div class="kpi kpi-${gpTone(r.gp_pct, m.target_gp)}"><span>GP (after VAT) · ${money(r.gp)}</span><strong>${fmtPct(r.gp_pct)}</strong></div>` : ''}
+    </div>
+    <section class="card allergen-card">
+      <h2>Allergens</h2>
+      <p><strong>Contains:</strong> ${chips(r.allergens, m, 'chip-strong')}</p>
+      ${r.may_contain_list.length ? `<p><strong>May contain:</strong> ${chips(r.may_contain_list, m)}</p>` : ''}
+      ${r.allergens.length ? `<ul class="plain-list small">${r.allergens.map((a) => `<li><strong>${esc(allergenName(m, a))}</strong> <span class="muted">from ${esc((r.allergen_sources[a] ?? ['added by hand']).join(', '))}</span></li>`).join('')}</ul>` : ''}
+      <p class="muted small">Worked out from each ingredient’s allergens. Always check supplier labels when a product changes.</p>
+    </section>
+    <div class="two-col">
+      <section class="card">
+        <h2>Ingredients</h2>
+        ${r.ingredients.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>Ingredient</th><th class="num">Batch</th>${r.portions !== 1 ? '<th class="num">Per portion</th>' : ''}${state.isManager ? '<th class="num">Cost</th>' : ''}</tr></thead>
+          <tbody>${r.ingredients.map((i) => `<tr>
+            <td>${esc(i.product_name)}${i.notes ? ` <small class="muted">${esc(i.notes)}</small>` : ''}</td>
+            <td class="num">${qty(i.quantity)} ${esc(i.recipe_unit)}</td>
+            ${r.portions !== 1 ? `<td class="num">${qty(perPortion(i.quantity))} ${esc(i.recipe_unit)}</td>` : ''}
+            ${state.isManager ? `<td class="num">${money(i.line_cost)}</td>` : ''}</tr>`).join('')}</tbody>
+          ${state.isManager ? `<tfoot><tr><th colspan="${r.portions !== 1 ? 3 : 2}">Batch cost</th><td class="num">${money(r.batch_cost)}</td></tr></tfoot>` : ''}
+        </table></div>` : '<p class="muted">No ingredients added.</p>'}
+      </section>
+      <section class="card">
+        <h2>Method</h2>
+        ${r.method ? `<div class="method">${esc(r.method)}</div>` : '<p class="muted">No method written yet.</p>'}
+        ${r.shelf_life ? `<p><strong>Shelf life / storage:</strong> ${esc(r.shelf_life)}</p>` : ''}
+        ${r.description ? `<p class="muted">${esc(r.description)}</p>` : ''}
+        ${state.isManager ? `<p class="small muted">Square: ${r.square_catalog_object_id || r.square_item_name ? `linked${r.square_item_name ? ` to “${esc(r.square_item_name)}”` : ''}` : 'not linked – sales won’t count towards menu performance'}</p>` : ''}
+      </section>
+    </div>`;
+}
+
+// --- Editor (admin) ---
+
+export async function renderEdit(ctx) {
+  const { el, params, stale } = ctx;
+  const editing = params[0] ? Number(params[0]) : null;
+  const [recipe, products, m, squareItems, all] = await Promise.all([
+    editing ? api(`/recipes/${editing}`) : null,
+    api('/products'),
+    meta(),
+    api('/recipes/square-items'),
+    api('/recipes'),
+  ]);
+  if (stale()) return;
+  const r = recipe ?? { portions: 1, vat_rated: 1, active: 1, ingredients: [], allergens: [], may_contain_list: [] };
+  const extra = r.extra_allergens ? r.extra_allergens.split(',') : [];
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const categories = [...new Set(all.map((x) => x.category).filter(Boolean))];
+
+  const currentSquare = r.square_catalog_object_id ? `id:${r.square_catalog_object_id}` : r.square_item_name ? `name:${r.square_item_name}` : '';
+  const squareOptions = squareItems.map((i) => {
+    const value = i.catalog_object_id ? `id:${i.catalog_object_id}` : `name:${i.name}`;
+    const taken = i.recipe && i.recipe.id !== editing ? ` – linked to ${i.recipe.name}` : '';
+    return [value, `${i.name}${i.variation_name && i.variation_name !== 'Regular' ? ` (${i.variation_name})` : ''} · ${qty(i.quantity)} sold in 90 days${taken}`];
+  });
+  if (currentSquare && !squareOptions.some(([v]) => v === currentSquare)) squareOptions.unshift([currentSquare, r.square_item_name ?? r.square_catalog_object_id]);
+
+  const productOptions = (selected) => {
+    const groups = new Map();
+    for (const p of products.filter((x) => x.active || x.id === selected)) groups.set(p.category ?? 'Other', [...(groups.get(p.category ?? 'Other') ?? []), p]);
+    return `<option value="">Choose…</option>${[...groups].map(([c, list]) => `<optgroup label="${esc(c)}">${list.map((p) => `<option value="${p.id}" ${p.id === selected ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>`).join('')}`;
+  };
+  const row = (i = {}) => `
+    <tr class="ing-row">
+      <td><select class="ing-product" aria-label="Ingredient">${productOptions(i.product_id)}</select></td>
+      <td class="num"><input class="ing-qty qty-input" type="number" min="0" step="any" value="${i.quantity ?? ''}" aria-label="Quantity"> <span class="ing-unit muted">${esc(i.recipe_unit ?? '')}</span></td>
+      <td><input class="ing-notes" value="${esc(i.notes ?? '')}" placeholder="e.g. grated" aria-label="Notes"></td>
+      <td class="num ing-cost"></td>
+      <td><button type="button" class="icon-btn ing-remove" aria-label="Remove ingredient">×</button></td>
+    </tr>`;
+  const allergenBoxes = (name, selected) => `<div class="allergen-grid">${m.allergens.map(([k, label]) => `
+    <label class="check"><input type="checkbox" name="${name}" value="${k}" ${selected.includes(k) ? 'checked' : ''}> ${esc(label)}</label>`).join('')}</div>`;
+
+  el.innerHTML = `
+    <div class="page-head">
+      <h1>${editing ? `Edit ${esc(r.name)}` : 'New recipe'}</h1>
+      <div class="actions"><a class="btn" href="#/recipes${editing ? `/${editing}` : ''}">Cancel</a></div>
+    </div>
+    <form id="recipe-form">
+      <div class="kpis sticky-kpis">
+        <div class="kpi"><span>Batch cost</span><strong id="k-batch">–</strong></div>
+        <div class="kpi"><span>Cost per portion</span><strong id="k-portion">–</strong></div>
+        <div class="kpi" id="k-gp-box"><span>GP after VAT</span><strong id="k-gp">–</strong></div>
+        <div class="kpi"><span>Allergens (from ingredients)</span><strong id="k-allergens" class="small">–</strong></div>
+      </div>
+      <section class="card">
+        <div class="row">${field('Name', input('name', r.name, 'required id="recipe-name"'))}${field('Category', input('category', r.category, 'list="recipe-cats" id="recipe-category"'))}</div>
+        <datalist id="recipe-cats">${categories.map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
+        <div class="row">
+          ${field('Selling price (£)', input('selling_price', r.selling_price, 'type="number" min="0" step="0.01" id="recipe-price"'))}
+          ${field('Portions this recipe makes', input('portions', r.portions, 'type="number" min="0.01" step="any" id="recipe-portions"'))}
+          ${field('VAT', `<select name="vat_rated" id="recipe-vat"><option value="1" ${r.vat_rated ? 'selected' : ''}>Standard rated (20%)</option><option value="0" ${r.vat_rated ? '' : 'selected'}>Zero-rated</option></select>`, { hint: 'Hot food and drinks are standard rated; most cold takeaway food is zero-rated' })}
+        </div>
+      </section>
+      <section class="card">
+        <h2>Ingredients</h2>
+        <p class="muted small">Quantities are for the whole recipe, in each product’s recipe unit (set on the product, e.g. 4L milk = 4000 ml).</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Product</th><th class="num">Quantity</th><th>Notes</th><th class="num">Cost</th><th></th></tr></thead>
+          <tbody id="ing-body">${(r.ingredients.length ? r.ingredients : [{}]).map(row).join('')}</tbody>
+        </table></div>
+        <button type="button" class="btn btn-small" id="add-ing">+ Add ingredient</button>
+      </section>
+      <section class="card">
+        <h2>Method and storage</h2>
+        ${field('Method', textarea('method', r.method, 'rows="8" id="recipe-method" placeholder="Step by step, including cooking temperatures"'))}
+        ${field('Shelf life / storage', input('shelf_life', r.shelf_life, 'id="recipe-shelf" placeholder="e.g. Use by end of next day, keep below 5°C"'))}
+        ${field('Menu description', textarea('description', r.description, 'rows="2" id="recipe-desc"'))}
+      </section>
+      <section class="card">
+        <h2>Allergens</h2>
+        <p class="muted small">Allergens from the ingredients are added automatically. Tick any others the recipe contains (e.g. from a garnish you don’t stock as a product).</p>
+        <h3 class="group-title">Also contains</h3>${allergenBoxes('extra_allergens', extra)}
+        <h3 class="group-title">May contain (cross-contamination warning)</h3>${allergenBoxes('may_contain', r.may_contain_list)}
+      </section>
+      <section class="card">
+        <h2>Square</h2>
+        ${field('Square menu item', `<select name="square" id="recipe-square"><option value="">Not linked</option>${squareOptions.map(([v, l]) => `<option value="${esc(v)}" ${v === currentSquare ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`,
+          { hint: squareItems.length ? 'Linking counts this item’s Square sales towards menu performance and ingredient usage' : 'Import Square sales first (Setup → Square) to choose an item' })}
+        ${field('Active', `<input type="checkbox" name="active" ${r.active ? 'checked' : ''}>`, { className: 'field-inline' })}
+      </section>
+      <p class="form-error" hidden></p>
+      <div class="actions"><button class="btn btn-primary" type="submit">Save recipe</button></div>
+    </form>`;
+
+  const form = el.querySelector('#recipe-form');
+  const body = el.querySelector('#ing-body');
+  const update = () => {
+    let batch = 0;
+    const allergens = new Set();
+    body.querySelectorAll('.ing-row').forEach((tr) => {
+      const p = byId.get(Number(tr.querySelector('.ing-product').value));
+      const q = Number(tr.querySelector('.ing-qty').value) || 0;
+      tr.querySelector('.ing-unit').textContent = p ? (p.recipe_unit || p.unit) : '';
+      const cost = p ? q * (p.unit_cost / (p.units_per_pack || 1)) : 0;
+      batch += cost;
+      tr.querySelector('.ing-cost').textContent = p ? money(cost) : '';
+      for (const a of (p?.allergens ?? '').split(',').filter(Boolean)) allergens.add(a);
+    });
+    const portions = Number(form.portions.value) || 1;
+    const perPortion = batch / portions;
+    const price = Number(form.selling_price.value) || 0;
+    const net = form.vat_rated.value === '1' ? price / 1.2 : price;
+    const gp = net > 0 ? ((net - perPortion) / net) * 100 : null;
+    el.querySelector('#k-batch').textContent = money(batch);
+    el.querySelector('#k-portion').textContent = money(perPortion);
+    el.querySelector('#k-gp').textContent = gp === null ? '–' : `${gp.toFixed(1)}% · ${money(net - perPortion)}`;
+    el.querySelector('#k-gp-box').className = `kpi kpi-${gpTone(gp, m.target_gp)}`;
+    el.querySelector('#k-allergens').textContent = [...allergens].map((a) => allergenName(m, a)).join(', ') || 'None';
+  };
+  const bindRow = (tr) => {
+    tr.querySelector('.ing-product').addEventListener('change', update);
+    tr.querySelector('.ing-qty').addEventListener('input', update);
+    tr.querySelector('.ing-remove').addEventListener('click', () => { tr.remove(); update(); });
+  };
+  body.querySelectorAll('.ing-row').forEach(bindRow);
+  el.querySelector('#add-ing').addEventListener('click', () => {
+    body.insertAdjacentHTML('beforeend', row());
+    bindRow(body.lastElementChild);
+    body.lastElementChild.querySelector('select').focus();
+  });
+  ['portions', 'selling_price'].forEach((n) => form[n].addEventListener('input', update));
+  form.vat_rated.addEventListener('change', update);
+  update();
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = form.querySelector('.form-error');
+    err.hidden = true;
+    const checked = (name) => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map((c) => c.value);
+    const square = form.square.value;
+    const payload = {
+      name: form.name.value,
+      category: form.category.value || null,
+      selling_price: form.selling_price.value || 0,
+      portions: form.portions.value || 1,
+      vat_rated: form.vat_rated.value === '1',
+      method: form.method.value || null,
+      shelf_life: form.shelf_life.value || null,
+      description: form.description.value || null,
+      extra_allergens: checked('extra_allergens'),
+      may_contain: checked('may_contain'),
+      square_catalog_object_id: square.startsWith('id:') ? square.slice(3) : null,
+      square_item_name: square.startsWith('name:') ? square.slice(5) : square ? squareItems.find((i) => `id:${i.catalog_object_id}` === square)?.name ?? r.square_item_name ?? null : null,
+      active: form.active.checked,
+      ingredients: [...body.querySelectorAll('.ing-row')]
+        .map((tr) => ({ product_id: tr.querySelector('.ing-product').value, quantity: tr.querySelector('.ing-qty').value, notes: tr.querySelector('.ing-notes').value || null }))
+        .filter((i) => i.product_id),
+    };
+    if (payload.ingredients.some((i) => i.quantity === '')) {
+      err.textContent = 'Enter a quantity for every ingredient';
+      err.hidden = false;
+      return;
+    }
+    try {
+      const saved = await api(editing ? `/recipes/${editing}` : '/recipes', { method: editing ? 'PUT' : 'POST', body: payload });
+      toast('Recipe saved');
+      ctx.navigate(`recipes/${saved.id}`);
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.hidden = false;
+    }
+  });
+}
+
+// --- Allergen matrix ---
+
+export async function renderAllergens(ctx) {
+  const { el, state, stale } = ctx;
+  const [recipes, m] = await Promise.all([api('/recipes'), meta()]);
+  if (stale()) return;
+  const active = recipes.filter((r) => r.active);
+
+  el.innerHTML = `
+    <div class="page-head"><h1>Allergen matrix</h1></div>
+    ${tabs(state, 'recipes/allergens')}
+    <div class="filters">
+      <label for="free-from">Show dishes free from</label>
+      <select id="free-from"><option value="">— everything —</option>${m.allergens.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+    </div>
+    <section class="card">
+      <div class="table-wrap"><table class="matrix">
+        <thead><tr><th>Dish</th>${m.allergens.map(([k, l]) => `<th class="rot" title="${esc(l)}"><span>${esc(shortName(m, k))}</span></th>`).join('')}</tr></thead>
+        <tbody>${active.map((r) => `<tr data-allergens="${r.allergens.join(',')}">
+          <th><a href="#/recipes/${r.id}">${esc(r.name)}</a></th>
+          ${m.allergens.map(([k, l]) => (r.allergens.includes(k)
+            ? `<td class="has" title="${esc(r.name)} contains ${esc(l)}">●</td>`
+            : r.may_contain_list.includes(k) ? `<td class="may" title="May contain ${esc(l)}">○</td>` : '<td></td>')).join('')}
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <p class="muted small">● contains · ○ may contain. Built from recipe ingredients; update products when a supplier changes a recipe. Customers with severe allergies should always be told about cross-contamination risk.</p>
+    </section>`;
+
+  el.querySelector('#free-from').addEventListener('change', (e) => {
+    const k = e.target.value;
+    el.querySelectorAll('tr[data-allergens]').forEach((tr) => { tr.hidden = !!k && tr.dataset.allergens.split(',').includes(k); });
+  });
+}
+
+// --- Menu performance (managers) ---
+
+export async function renderPerformance(ctx) {
+  const { el, state, query, stale } = ctx;
+  const to = query.to || todayISO();
+  const from = query.from || addDays(to, -6);
+  const scope = state.isAdmin ? (query.scope ?? 'all') : 'site';
+  const [data, m] = await Promise.all([
+    api(`/recipes/performance${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`),
+    meta(),
+  ]);
+  if (stale()) return;
+  const t = data.totals;
+
+  el.innerHTML = `
+    <div class="page-head"><h1>Menu performance</h1></div>
+    ${tabs(state, 'recipes/performance')}
+    <form class="filters" id="range">
+      ${state.isAdmin ? `<select name="scope"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
+      <button class="btn" type="submit">Update</button>
+    </form>
+    <div class="kpis">
+      <div class="kpi"><span>Sales of costed items (ex VAT)</span><strong>${money(t.net_sales)}</strong></div>
+      <div class="kpi"><span>Theoretical food & packaging cost</span><strong>${money(t.food_cost)}</strong></div>
+      <div class="kpi kpi-${gpTone(t.gp_pct, m.target_gp)}"><span>GP · ${money(t.gp)}</span><strong>${fmtPct(t.gp_pct)}</strong></div>
+    </div>
+    <section class="card">
+      <h2>By menu item · ${fmtDate(from)} – ${fmtDate(to)}</h2>
+      ${data.items.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>Item</th><th class="num">Sold</th><th class="num">Net sales</th><th class="num">Cost each</th><th class="num">Food cost</th><th class="num">GP</th><th class="num">GP %</th></tr></thead>
+        <tbody>${data.items.map((i) => `<tr>
+          <td><a href="#/recipes/${i.recipe_id}">${esc(i.name)}</a></td><td class="num">${qty(i.quantity)}</td><td class="num">${money(i.net_sales)}</td>
+          <td class="num">${money(i.cost_per_portion)}</td><td class="num">${money(i.food_cost)}</td><td class="num">${money(i.gp)}</td>
+          <td class="num"><span class="tone-${gpTone(i.gp_pct, m.target_gp)}">${fmtPct(i.gp_pct)}</span></td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="muted">No sales of recipe-linked items in this period. Link recipes to Square items to see them here.</p>'}
+      <p class="muted small">Uses today’s ingredient prices. Actual GP will be lower by wastage and over-portioning.</p>
+    </section>
+    <div class="two-col">
+      <section class="card">
+        <h2>Ingredients these sales should have used</h2>
+        ${data.usage.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>Product</th><th class="num">Used</th><th class="num">Packs</th><th class="num">Cost</th></tr></thead>
+          <tbody>${data.usage.map((u) => `<tr><td>${esc(u.name)}</td><td class="num">${qty(u.used)} ${esc(u.recipe_unit)}</td>
+            <td class="num">${qty(u.packs)} ${esc(u.unit)}</td><td class="num">${money(u.cost)}</td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="muted">Nothing yet.</p>'}
+      </section>
+      <section class="card">
+        <h2>Square items without a recipe</h2>
+        ${data.unlinked.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>Item</th><th class="num">Sold</th><th class="num">Net sales</th></tr></thead>
+          <tbody>${data.unlinked.map((u) => `<tr><td>${esc(u.name)}${u.variation_name && u.variation_name !== 'Regular' ? ` <small class="muted">${esc(u.variation_name)}</small>` : ''}</td>
+            <td class="num">${qty(u.quantity)}</td><td class="num">${money(u.net_sales)}</td></tr>`).join('')}</tbody>
+        </table></div>
+        ${state.isAdmin ? '<p class="small"><a href="#/recipes/new">Add a recipe</a> and link it to the Square item to include it.</p>' : ''}` : '<p class="muted">Every item sold has a recipe.</p>'}
+      </section>
+    </div>`;
+
+  el.querySelector('#range').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target;
+    ctx.navigate(`recipes/performance${qs({ from: f.from.value, to: f.to.value, scope: f.scope?.value })}`);
+  });
+}
+

@@ -3,6 +3,7 @@ import * as admin from './views/admin.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
 import * as orders from './views/orders.js';
+import * as recipes from './views/recipes.js';
 import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
 import * as sales from './views/sales.js';
@@ -30,6 +31,12 @@ const ROUTES = [
   [/^wastage$/, wastage.render],
   [/^stock$/, stock.renderList],
   [/^stock\/(\d+)$/, stock.renderTake],
+  [/^recipes$/, recipes.renderList],
+  [/^recipes\/allergens$/, recipes.renderAllergens],
+  [/^recipes\/performance$/, recipes.renderPerformance, 'manager'],
+  [/^recipes\/new$/, recipes.renderEdit, 'admin'],
+  [/^recipes\/(\d+)\/edit$/, recipes.renderEdit, 'admin'],
+  [/^recipes\/(\d+)$/, recipes.renderRecipe],
   [/^sales$/, sales.render, 'manager'],
   [/^orders$/, orders.renderList, 'manager'],
   [/^orders\/new$/, orders.renderNew, 'manager'],
@@ -50,6 +57,7 @@ function navItems() {
     ['rota', 'Rota', '◷'],
     ['wastage', 'Wastage', '⌫'],
     ['stock', 'Stock takes', '☰'],
+    ['recipes', 'Recipes', '✎'],
   ];
   if (state.isManager) items.push(['sales', 'Sales', '£'], ['orders', 'Orders', '⇄']);
   return items;

@@ -81,6 +81,59 @@ const PRODUCTS = [
   ['Napkins (5000)', 'Packaging', 'case', 5, 29, 1],
 ];
 
+// How each demo product is used in recipes: [recipe unit, units per pack, allergens].
+const PRODUCT_RECIPE_INFO = {
+  'Whole milk 4L': ['ml', 4000, 'milk'],
+  'Semi-skimmed milk 4L': ['ml', 4000, 'milk'],
+  'Oat milk 1L (barista)': ['ml', 1000, 'gluten'],
+  'Soya milk 1L (barista)': ['ml', 1000, 'soya'],
+  'Double cream 1L': ['ml', 1000, 'milk'],
+  'Salted butter 2kg': ['g', 2000, 'milk'],
+  'Mature cheddar 5kg': ['g', 5000, 'milk'],
+  'Sourdough loaf': ['slice', 14, 'gluten'],
+  'Croissant': ['each', 1, 'gluten,eggs,milk'],
+  'Pain au chocolat': ['each', 1, 'gluten,eggs,milk,soya'],
+  'Brownie tray (24)': ['slice', 24, 'gluten,eggs,milk,soya'],
+  'Sandwich bloomer': ['slice', 16, 'gluten,sesame'],
+  'Espresso blend 1kg': ['g', 1000, null],
+  'Decaf blend 1kg': ['g', 1000, null],
+  'English breakfast tea (100)': ['bag', 100, null],
+  'Hot chocolate powder 1kg': ['g', 1000, 'milk,soya'],
+  'Avocado': ['each', 1, null],
+  'Tomatoes 6kg': ['g', 6000, null],
+  'Mixed salad leaves 1kg': ['g', 1000, null],
+  'Lemons': ['each', 1, null],
+  'Free-range eggs (180)': ['each', 180, 'eggs'],
+  'Smoked back bacon 2kg': ['g', 2000, null],
+  'Cooked ham 1kg': ['g', 1000, null],
+  'Vanilla syrup 1L': ['ml', 1000, null],
+  'Caramel syrup 1L': ['ml', 1000, 'milk'],
+  'Orange juice 1L': ['ml', 1000, null],
+  '8oz compostable cups (1000)': ['each', 1000, null],
+  '12oz compostable cups (1000)': ['each', 1000, null],
+  'Cup lids (1000)': ['each', 1000, null],
+  'Kraft takeaway bags (500)': ['each', 500, null],
+  'Napkins (5000)': ['each', 5000, null],
+};
+
+// Demo menu. Ingredient quantities are per batch in recipe units; names match the demo Square items.
+const RECIPES = [
+  { name: 'Flat white', category: 'Hot drinks', price: 3.6, method: 'Double ristretto (18g in, 36g out, 25–30s).\nSteam 150ml whole milk to 60–65°C with a thin, glossy microfoam.\nPour into 8oz cup, finish with a small heart.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 150], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
+  { name: 'Latte', category: 'Hot drinks', price: 3.7, method: 'Double espresso (18g in, 36g out).\nSteam 220ml whole milk to 60–65°C, pour into 12oz cup with a thicker foam top.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 220], ['12oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
+  { name: 'Cappuccino', category: 'Hot drinks', price: 3.6, method: 'Double espresso. Steam 160ml whole milk with plenty of foam (about 1.5cm). Dust with chocolate if requested.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 160], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
+  { name: 'Americano', category: 'Hot drinks', price: 3.0, method: 'Fill 12oz cup two-thirds with hot water, pull double espresso over the top.', ing: [['Espresso blend 1kg', 18], ['12oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
+  { name: 'Oat latte', category: 'Hot drinks', price: 4.1, method: 'As latte, using barista oat milk. Steam to 55–60°C – oat milk scorches above 65°C.', ing: [['Espresso blend 1kg', 18], ['Oat milk 1L (barista)', 220], ['12oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
+  { name: 'Hot chocolate', category: 'Hot drinks', price: 3.8, method: 'Whisk 28g powder into a splash of hot milk to a paste, then steam 250ml milk and combine.', ing: [['Hot chocolate powder 1kg', 28], ['Whole milk 4L', 250], ['12oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
+  { name: 'Croissant', category: 'Bakery', price: 2.9, vat: false, method: 'Warm for 2 minutes at 160°C if requested. Serve on a plate or in a takeaway bag.', ing: [['Croissant', 1], ['Kraft takeaway bags (500)', 1]], shelf: 'Sell on day of delivery' },
+  { name: 'Pain au chocolat', category: 'Bakery', price: 3.1, vat: false, method: 'Warm for 2 minutes at 160°C if requested.', ing: [['Pain au chocolat', 1], ['Kraft takeaway bags (500)', 1]], shelf: 'Sell on day of delivery' },
+  { name: 'Brownie', category: 'Bakery', price: 3.25, vat: false, method: 'Cut tray into 24. Display under cover.', ing: [['Brownie tray (24)', 1], ['Kraft takeaway bags (500)', 1]], mayContain: 'nuts,peanuts', shelf: '3 days once cut' },
+  { name: 'Bacon roll', category: 'Hot food', price: 5.5, method: 'Grill 3 rashers (90g) until core temperature reaches 75°C.\nButter 2 slices of bloomer, fill and serve hot.', ing: [['Smoked back bacon 2kg', 90], ['Sandwich bloomer', 2], ['Salted butter 2kg', 10]] },
+  { name: 'Avocado sourdough', category: 'Hot food', price: 8.95, method: 'Toast 2 slices of sourdough. Smash 1 avocado with lemon juice and salt.\nSpread, top with salad leaves.', ing: [['Sourdough loaf', 2], ['Avocado', 1], ['Lemons', 0.25], ['Mixed salad leaves 1kg', 15], ['Salted butter 2kg', 10]] },
+  { name: 'Ham & cheese toastie', category: 'Hot food', price: 6.75, method: 'Butter the outside of 2 bloomer slices. Fill with 60g ham and 50g grated cheddar.\nPress in the grill for 4 minutes until core reaches 75°C.', ing: [['Sandwich bloomer', 2], ['Cooked ham 1kg', 60], ['Mature cheddar 5kg', 50], ['Salted butter 2kg', 10]] },
+  { name: 'Egg & cress sandwich', category: 'Sandwiches', price: 4.95, vat: false, portions: 4, method: 'Hard boil 6 eggs (10 min), cool in iced water, peel and mash with butter and seasoning.\nMakes 4 rounds: fill 8 slices of bloomer, top with leaves, cut into triangles, label with date and allergens.', ing: [['Free-range eggs (180)', 6], ['Sandwich bloomer', 8], ['Salted butter 2kg', 40], ['Mixed salad leaves 1kg', 40]], mayContain: 'mustard', shelf: 'Use by end of next day, keep below 5°C' },
+  { name: 'Orange juice', category: 'Cold drinks', price: 2.8, method: 'Pour 250ml chilled juice into an 8oz cup.', ing: [['Orange juice 1L', 250], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
+];
+
 const POSITIONS = ['Barista', 'Barista', 'Kitchen', 'Front of house'];
 const FIRST_NAMES = ['Alex', 'Jordan', 'Sam', 'Charlie', 'Riley', 'Jamie', 'Morgan', 'Taylor', 'Casey', 'Robin', 'Avery', 'Quinn', 'Rowan', 'Sky', 'Drew', 'Frankie', 'Harper', 'Jesse', 'Kai', 'Logan', 'Max', 'Nico', 'Parker', 'Reese', 'Sasha', 'Toni', 'Eden', 'Ellis', 'Finley', 'Hayden', 'Indy', 'Jude', 'Lee', 'Marley', 'Noel'];
 
@@ -114,9 +167,19 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
 
     const supplierIds = SUPPLIERS.map((s) => Number(db.prepare(`INSERT INTO suppliers (name, contact_name, email, phone, order_days, lead_time_days, min_order)
       VALUES (?, ?, ?, ?, ?, ?, ?)`).run(s.name, s.contact_name, s.email, s.phone, s.order_days, s.lead_time_days, s.min_order).lastInsertRowid));
+    const productIds = {};
     for (const [name, category, unit, sup, cost, par] of PRODUCTS) {
-      db.prepare('INSERT INTO products (name, category, unit, supplier_id, unit_cost, par_level) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(name, category, unit, supplierIds[sup], cost, par);
+      const [recipeUnit, perPack, allergens] = PRODUCT_RECIPE_INFO[name] ?? [unit, 1, null];
+      productIds[name] = Number(db.prepare(`INSERT INTO products (name, category, unit, supplier_id, unit_cost, par_level, recipe_unit, units_per_pack, allergens)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, category, unit, supplierIds[sup], cost, par, recipeUnit, perPack, allergens).lastInsertRowid);
+    }
+    for (const r of RECIPES) {
+      const recipeId = db.prepare(`INSERT INTO recipes (name, category, method, portions, selling_price, vat_rated, may_contain, shelf_life, square_catalog_object_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(r.name, r.category, r.method, r.portions ?? 1, r.price, r.vat === false ? 0 : 1,
+        r.mayContain ?? null, r.shelf ?? null, `CAT_${r.name.replace(/\W/g, '').toUpperCase()}`).lastInsertRowid;
+      r.ing.forEach(([product, qty], i) => {
+        db.prepare('INSERT INTO recipe_ingredients (recipe_id, product_id, quantity, sort_order) VALUES (?, ?, ?, ?)').run(recipeId, productIds[product], qty, i);
+      });
     }
 
     seedSafetyTasks(db);

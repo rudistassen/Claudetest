@@ -191,7 +191,7 @@ textarea { width: 100%; resize: vertical; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 thead th { font-size: 0.8rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td { background: var(--surface-2); }
 tr.inactive td { opacity: 0.5; }
@@ -322,3 +322,25 @@ code { background: var(--surface-2); border: 1px solid var(--border); border-rad
 .demo-account { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; text-align: left; }
 .demo-account small { font-weight: 400; }
 body.demo #print { display: none; }
+
+/* Recipes */
+.chips { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; }
+.chip { font-size: 0.75rem; padding: 0.05rem 0.5rem; border-radius: 99px; background: var(--warn-soft); color: var(--warn); font-weight: 600; white-space: nowrap; }
+.chip-strong { background: var(--bad-soft); color: var(--bad); font-size: 0.85rem; }
+.allergen-card p { margin: 0.4rem 0; }
+.method { white-space: pre-wrap; line-height: 1.6; max-width: 65ch; }
+.allergen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.3rem 1rem; margin-bottom: 0.8rem; }
+.allergen-grid .check { font-weight: 400; font-size: 0.9rem; }
+.ing-row select { max-width: 280px; width: 100%; }
+.ing-notes { width: 100%; min-width: 120px; }
+.sticky-kpis { position: sticky; top: calc(52px + env(safe-area-inset-top, 0px)); z-index: 5; background: var(--bg); padding-block: 0.5rem; margin-top: -0.5rem; }
+.matrix th, .matrix td { text-align: center; padding: 0.35rem 0.4rem; }
+.matrix tbody th { text-align: left; white-space: nowrap; }
+.matrix th.rot { height: 150px; vertical-align: bottom; white-space: nowrap; font-size: 0.75rem; }
+.matrix th.rot span { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg); }
+.matrix td.has { color: var(--bad); font-weight: 700; background: var(--bad-soft); }
+.matrix td.may { color: var(--warn); }
+.matrix tbody tr:hover td, .matrix tbody tr:hover th { outline: 1px solid var(--border); }
+@media (max-width: 800px) { .sticky-kpis { position: static; } }
+
+.kpi strong.small { font-size: 0.95rem; }

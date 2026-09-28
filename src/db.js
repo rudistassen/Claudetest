@@ -189,6 +189,35 @@ CREATE TABLE IF NOT EXISTS sales_items (
   PRIMARY KEY (location_id, date, item_key)
 );
 
+-- Recipes are shared by every site. Ingredient quantities are for the whole batch, in each product's recipe unit.
+CREATE TABLE IF NOT EXISTS recipes (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT,
+  description TEXT,
+  method TEXT,
+  portions REAL NOT NULL DEFAULT 1,
+  selling_price REAL NOT NULL DEFAULT 0,
+  vat_rated INTEGER NOT NULL DEFAULT 1,
+  extra_allergens TEXT,
+  may_contain TEXT,
+  shelf_life TEXT,
+  square_catalog_object_id TEXT,
+  square_item_name TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+  id INTEGER PRIMARY KEY,
+  recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  quantity REAL NOT NULL,
+  notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);
+
 CREATE TABLE IF NOT EXISTS square_sync_log (
   id INTEGER PRIMARY KEY,
   started_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -205,6 +234,11 @@ CREATE TABLE IF NOT EXISTS square_sync_log (
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
   ['locations', 'square_location_id', 'ALTER TABLE locations ADD COLUMN square_location_id TEXT'],
+  // How a product is measured in recipes, e.g. a 4L bottle of milk = 4000 ml.
+  ['products', 'recipe_unit', 'ALTER TABLE products ADD COLUMN recipe_unit TEXT'],
+  ['products', 'units_per_pack', 'ALTER TABLE products ADD COLUMN units_per_pack REAL NOT NULL DEFAULT 1'],
+  ['products', 'allergens', 'ALTER TABLE products ADD COLUMN allergens TEXT'],
+  ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
 ];
 
 export function openDb(file = ':memory:') {
