@@ -382,3 +382,6 @@ small.inline { display: inline; }
 .chart-tip-row span { color: var(--muted); }
 .chart-tip-key { display: inline-block; width: 10px; height: 2px; border-radius: 1px; }
 h2 .muted.small { font-weight: 400; margin-left: 0.4rem; }
+
+.check-row { display: flex; gap: 0.6rem; align-items: flex-start; margin: 0.75rem 0; cursor: pointer; }
+.check-row input { margin-top: 0.25rem; }

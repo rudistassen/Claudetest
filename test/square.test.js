@@ -27,6 +27,10 @@ const requests = [];
 const TEAM = [
   { id: 'TM_1', given_name: 'Someone', family_name: 'Else', email_address: 'MANAGER1@cafe.local', status: 'ACTIVE' },
   { id: 'TM_2', given_name: 'Casual', family_name: 'Carl', status: 'INACTIVE' },
+  { id: 'TM_3', given_name: 'Priya', family_name: 'Shah', email_address: 'priya@example.com', status: 'ACTIVE',
+    assigned_locations: { assignment_type: 'EXPLICIT_LOCATIONS', location_ids: ['SQ_ELSEWHERE', 'SQ_HIGH'] },
+    wage_setting: { job_assignments: [{ job_title: 'Barista', pay_type: 'HOURLY', hourly_rate: { amount: 1221, currency: 'GBP' } }] } },
+  { id: 'TM_4', given_name: 'Sam', family_name: 'Noemail', status: 'ACTIVE', assigned_locations: { assignment_type: 'ALL_CURRENT_AND_FUTURE_LOCATIONS' } },
 ];
 
 // Minimal stand-in for Square's Locations and Orders APIs, paging 2 orders at a time.
@@ -200,7 +204,8 @@ describe('Square integration', () => {
     const both = report.days.filter((d) => d.net_sales > 0 && d.labour_cost > 0);
     const expected = both.length ? (both.reduce((t, d) => t + d.labour_cost, 0) / both.reduce((t, d) => t + d.net_sales, 0)) * 100 : null;
     if (expected === null) assert.equal(report.totals.labour_pct, null);
-    else assert.ok(Math.abs(report.totals.labour_pct - expected) < 0.05);
+    // Day figures are rounded to the penny, so allow for that relative to the (often large) percentage.
+    else assert.ok(Math.abs(report.totals.labour_pct - expected) < Math.max(0.05, expected * 0.001));
     assert.deepEqual(report.top_items.slice(0, 2).map((i) => [i.name, i.net_sales]), [['Croissant', 9], ['Flat white', 8.75]]);
 
     const dash = (await manager('/dashboard')).data.locations[0];
@@ -325,5 +330,45 @@ describe('labour % without a rota', () => {
     assert.equal(r.totals.net_sales, 500);
     assert.equal(r.totals.labour_cost, 0);
     assert.equal(r.totals.labour_pct, null);
+  });
+});
+
+// Runs last: importing with "deactivate others" switches off the demo staff the other tests sign in as.
+describe('staff from Square', () => {
+  test('previews, then imports the Square team as the staff list', async () => {
+    const admin = await login('admin@cafe.local');
+    const preview = (await admin('/square/team?deactivate_others=true')).data;
+    const row = (name) => preview.find((r) => r.name === name);
+    assert.equal(row('Someone Else').action, 'update', 'matched to manager1 by email');
+    assert.equal(row('Someone Else').existing.email, 'manager1@cafe.local');
+    assert.equal(row('Someone Else').role, 'manager', 'keeps their role');
+    assert.equal(row('Casual Carl').action, 'skip');
+    assert.deepEqual([row('Priya Shah').action, row('Priya Shah').site, row('Priya Shah').position, row('Priya Shah').hourly_rate],
+      ['create', 'High Street', 'Barista', 12.21]);
+    assert.equal(row('Sam Noemail').email, 'square-tm4@staff.local');
+    assert.equal(row('Sam Noemail').no_email, true);
+    assert.ok(preview.some((r) => r.action === 'deactivate' && r.existing.email === 'staff1@cafe.local'));
+    assert.ok(!preview.some((r) => r.existing?.email === 'admin@cafe.local'), 'never deactivates you');
+    const before = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users').get().n, before, 'the preview changes nothing');
+
+    const r = (await admin('/square/import-staff', { method: 'POST', body: { deactivate_others: true } })).data;
+    assert.equal(r.created, 2);
+    assert.equal(r.updated, 1);
+    assert.ok(r.deactivated > 10);
+    assert.deepEqual(r.need_password.sort(), ['Priya Shah', 'Sam Noemail']);
+
+    const manager1 = db.prepare(`SELECT * FROM users WHERE email = 'MANAGER1@cafe.local'`).get();
+    assert.equal(manager1.name, 'Someone Else');
+    assert.equal(manager1.active, 1);
+    const priya = db.prepare(`SELECT u.*, l.name AS site FROM users u JOIN locations l ON l.id = u.location_id WHERE email = 'priya@example.com'`).get();
+    assert.deepEqual([priya.role, priya.site, priya.position, priya.hourly_rate, priya.active], ['staff', 'High Street', 'Barista', 12.21, 1]);
+    assert.equal(db.prepare(`SELECT user_id FROM square_team_members WHERE id = 'TM_3'`).get().user_id, priya.id);
+    assert.equal((await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'staff1@cafe.local', password: DEMO_PASSWORD }) })).status, 401);
+    assert.equal((await admin('/auth/me')).status, 200, 'the admin who ran it stays signed in');
+
+    const again = (await admin('/square/import-staff', { method: 'POST', body: { deactivate_others: true } })).data;
+    assert.deepEqual([again.created, again.updated, again.deactivated], [0, 3, 0], 'running it again adds nobody twice');
+    assert.equal((await login('staff1@cafe.local').catch(() => null)), null);
   });
 });

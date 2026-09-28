@@ -76,7 +76,8 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 3. Start Cafe Ops with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
 4. In Cafe Ops go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
 5. Click **Import sales** to backfill history (up to 92 days per run). After that, sales and clock-ins refresh automatically every 30 minutes. The first automatic run backfills the last 28 days.
-6. Staff clock in and out on Square (Square Team / Timecards). Each Square team member is matched to a Cafe Ops user by **email address**, then by name, so use the same email in both. If the token can't read timecards, sales still sync and the reason is shown on the Trading page and in the sync history.
+6. To use your Square team as your staff list, go to **Setup → Staff → Import from Square**. It shows what will change before anything is saved. Everyone in Square Team is added, or updated if already here (matched by email, then name). Their home site comes from their assigned Square locations (or where they usually clock in), and their position and hourly rate come from their job and pay in Square. Tick **Deactivate staff who aren't in Square** to switch off everyone else, such as the demo staff; they keep their history, and the admin running the import stays active. New people get a random password, so set one (click their name) if they need to sign in. Run it again any time to pick up changes.
+7. Staff clock in and out on Square (Square Team / Timecards). Each Square team member is matched to a Cafe Ops user by **email address**, then by name, so use the same email in both. If the token can't read timecards, sales still sync and the reason is shown on the Trading page and in the sync history.
 
 How the numbers are worked out:
 - **Net sales** = line-item totals after discounts, minus VAT (UK Square prices include VAT), minus itemised returns. Tips and service charges are excluded. Only `COMPLETED` orders are counted, and each is assigned to a business day by its close time in UK time.
@@ -115,6 +116,7 @@ src/
   auth.js           passwords, sessions, role/location checks
   seed.js           demo data and default food-safety checks
   square.js         Square API client, order and timecard summarising, sales + clock-in sync
+  team.js           importing Square Team members as staff
   metrics.js        sales / rostered and clocked labour / wastage per site per day and hour
   routes/           admin, rota, ordering, stock (stock takes + wastage), safety (+ dashboard), sales (+ Square setup), trading
 public/

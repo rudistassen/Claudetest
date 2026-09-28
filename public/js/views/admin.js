@@ -36,10 +36,62 @@ function listPage(ctx, { title, rows, columns, canEdit = true, addLabel, form, s
   }));
 }
 
+const ACTION_LABELS = { create: 'Add', update: 'Update', deactivate: 'Deactivate', skip: 'Skip' };
+
+// Preview of importing Square Team members as the staff list, then the import itself.
+function openSquareImport(ctx) {
+  const { form } = openModal({
+    title: 'Import staff from Square',
+    wide: true,
+    submitLabel: 'Import',
+    body: `
+      <p class="muted">Everyone in your Square team is added here, or updated if they're already here (matched by email, then name). Their home site comes from the locations they're assigned to in Square, and their position and hourly rate from their job and pay in Square.</p>
+      <label class="check-row"><input type="checkbox" name="deactivate_others">
+        <span><strong>Deactivate staff who aren’t in Square</strong>
+        <small>For example the made-up demo staff. They keep their history but can no longer sign in or be put on the rota. You stay active.</small></span></label>
+      <div id="team-preview"><div class="loading">Loading your Square team…</div></div>`,
+    onSubmit: async (v) => {
+      const r = await api('/square/import-staff', { method: 'POST', body: { deactivate_others: !!v.deactivate_others } });
+      toast(`Staff imported: ${r.created} added, ${r.updated} updated, ${r.deactivated} deactivated`);
+      if (r.need_password.length) {
+        setTimeout(() => toast(`New staff need a password before they can sign in: click their name to set one.`), 2700);
+      }
+      ctx.rerender();
+    },
+  });
+  const preview = form.querySelector('#team-preview');
+  const load = async () => {
+    preview.innerHTML = '<div class="loading">Loading your Square team…</div>';
+    try {
+      const rows = await api(`/square/team${qs({ deactivate_others: form.deactivate_others.checked ? 'true' : undefined })}`);
+      const order = { create: 0, update: 1, deactivate: 2, skip: 3 };
+      rows.sort((a, b) => order[a.action] - order[b.action] || a.name.localeCompare(b.name));
+      const n = (a) => rows.filter((r) => r.action === a).length;
+      const summary = [[n('create'), 'to add'], [n('update'), 'to update'], [n('deactivate'), 'to deactivate'], [n('skip'), 'skipped']]
+        .filter(([c]) => c).map(([c, l]) => `<strong>${c}</strong> ${l}`).join(' · ');
+      preview.innerHTML = rows.length ? `<p>${summary}</p><div class="table-wrap"><table>
+        <thead><tr><th>Person</th><th>Change</th><th>Site</th><th>Position</th><th class="num">Hourly rate</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr class="${r.action === 'skip' || r.action === 'deactivate' ? 'inactive' : ''}">
+          <td>${esc(r.name)}${r.email ? `<small>${esc(r.email)}${r.no_email ? ' · no email in Square' : ''}</small>` : ''}</td>
+          <td>${ACTION_LABELS[r.action]}${r.action === 'update' && r.existing && r.existing.name !== r.name ? ` <small>was ${esc(r.existing.name)}</small>` : ''}${r.reason ? ` <small>${esc(r.reason)}</small>` : ''}</td>
+          <td>${esc(r.site ?? '')}</td><td>${esc(r.position ?? '')}</td>
+          <td class="num">${r.hourly_rate === null ? '' : money(r.hourly_rate)}</td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="muted">Your Square team is empty.</p>';
+    } catch (err) {
+      preview.innerHTML = `<p class="alert-text">${esc(err.message)}</p>`;
+    }
+  };
+  form.deactivate_others.addEventListener('change', load);
+  load();
+}
+
 export async function renderStaff(ctx) {
   const { state } = ctx;
   const scope = state.isAdmin ? (ctx.query.scope ?? 'site') : 'site';
-  const rows = await api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`);
+  const [rows, square] = await Promise.all([
+    api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
+    state.isAdmin ? api('/square/status') : null,
+  ]);
   if (ctx.stale()) return;
   const locOptions = state.locations.map((l) => [l.id, l.name]);
   listPage(ctx, {
@@ -47,7 +99,8 @@ export async function renderStaff(ctx) {
     rows,
     addLabel: 'Add staff member',
     extraActions: state.isAdmin
-      ? `<a class="btn" href="#/admin/staff${scope === 'all' ? '' : '?scope=all'}">${scope === 'all' ? 'This site only' : 'Show all sites'}</a>`
+      ? `${square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
+         <a class="btn" href="#/admin/staff${scope === 'all' ? '' : '?scope=all'}">${scope === 'all' ? 'This site only' : 'Show all sites'}</a>`
       : '',
     columns: [
       { label: 'Name', key: 'name' },
@@ -74,6 +127,7 @@ export async function renderStaff(ctx) {
       ? api(`/users/${row.id}`, { method: 'PUT', body: v })
       : api('/users', { method: 'POST', body: v })),
   });
+  ctx.el.querySelector('#import-square')?.addEventListener('click', () => openSquareImport(ctx));
 }
 
 export async function renderLocations(ctx) {

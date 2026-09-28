@@ -83,7 +83,7 @@ async function boot() {
     db.prepare('UPDATE locations SET square_location_id = ? WHERE name = ?').run(l.id, l.name);
   }
   setFakeRota(
-    db.prepare('SELECT id, name, email, hourly_rate FROM users').all(),
+    db.prepare('SELECT u.id, u.name, u.email, u.role, u.position, u.hourly_rate, l.square_location_id FROM users u LEFT JOIN locations l ON l.id = u.location_id').all(),
     db.prepare(`SELECT s.id, s.user_id, l.square_location_id, s.date, s.start_time, s.end_time, s.break_minutes
       FROM shifts s JOIN locations l ON l.id = s.location_id WHERE l.square_location_id IS NOT NULL`).all(),
   );

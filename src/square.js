@@ -96,6 +96,16 @@ export class SquareClient {
     } while (cursor);
   }
 
+  // Yields each team member's pay for each job (older accounts without wage settings on the team member).
+  async *listTeamMemberWages() {
+    let cursor;
+    do {
+      const page = await this.request('GET', `/v2/labor/team-member-wages?limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+      for (const w of page.team_member_wages ?? []) yield w;
+      cursor = page.cursor;
+    } while (cursor);
+  }
+
   // Yields every clock-in (timecard) that started in [startAt, endAt) at the given Square locations.
   async *searchTimecards({ locationIds, startAt, endAt }) {
     const [path, key] = this.config.version >= TIMECARDS_VERSION

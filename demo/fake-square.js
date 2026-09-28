@@ -77,7 +77,7 @@ function generate(locIndex, isoDate) {
 let team = [];
 let rotaShifts = [];
 
-/** users: [{ id, name, email, hourly_rate }]; shifts: [{ id, user_id, square_location_id, date, start_time, end_time, break_minutes }] */
+/** users: [{ id, name, email, role, position, hourly_rate, square_location_id }]; shifts: [{ id, user_id, square_location_id, date, start_time, end_time, break_minutes }] */
 export function setFakeRota(users, shifts) {
   team = users;
   rotaShifts = shifts;
@@ -122,7 +122,13 @@ export async function fakeSquareFetch(url, init = {}) {
   if (path === '/v2/team-members/search') {
     const members = team.map((u) => {
       const [given, ...rest] = u.name.split(' ');
-      return { id: `TM_${u.id}`, given_name: given, family_name: rest.join(' '), email_address: u.email, status: 'ACTIVE' };
+      return {
+        id: `TM_${u.id}`, given_name: given, family_name: rest.join(' '), email_address: u.email, status: 'ACTIVE', is_owner: u.role === 'admin',
+        assigned_locations: u.square_location_id
+          ? { assignment_type: 'EXPLICIT_LOCATIONS', location_ids: [u.square_location_id] }
+          : { assignment_type: 'ALL_CURRENT_AND_FUTURE_LOCATIONS' },
+        wage_setting: { job_assignments: [{ job_title: u.position || 'Team member', pay_type: 'HOURLY', hourly_rate: { amount: Math.round(u.hourly_rate * 100), currency: 'GBP' } }] },
+      };
     });
     return json(200, page(members, JSON.parse(init.body), 'team_members', 200));
   }

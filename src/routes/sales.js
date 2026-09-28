@@ -1,6 +1,7 @@
 import { requireAdmin, requireManager, resolveLocation } from '../auth.js';
 import { dayKey, labourByDay, pct, salesByDay, wastageByDay } from '../metrics.js';
 import { syncSales } from '../square.js';
+import { applyTeamImport, fetchTeam, planTeamImport } from '../team.js';
 import { addDays, badRequest, date, HttpError, notFound, round2, str, today } from '../util.js';
 
 const MAX_SYNC_DAYS = 92;
@@ -58,6 +59,36 @@ export function registerSalesRoutes(router, db, square) {
     const r = db.prepare('INSERT INTO locations (name, address, phone, square_location_id) VALUES (?, ?, ?, ?)')
       .run(loc.name, address, loc.phone_number ?? null, squareId);
     res.status(201).json(db.prepare('SELECT * FROM locations WHERE id = ?').get(r.lastInsertRowid));
+  });
+
+  // --- Staff from Square Team (admin): preview, then import ---
+
+  const teamPlan = async (req) => {
+    const team = await fetchTeam(square.client);
+    return planTeamImport(db, team, { deactivateOthers: req.body?.deactivate_others === true || req.query.deactivate_others === 'true', currentUserId: req.user.id });
+  };
+  const siteNames = () => new Map(db.prepare('SELECT id, name FROM locations').all().map((l) => [l.id, l.name]));
+
+  router.get('/square/team', requireAdmin, requireSquare, async (req, res) => {
+    const names = siteNames();
+    res.json((await teamPlan(req)).map((r) => ({
+      name: r.name,
+      action: r.action,
+      reason: r.reason ?? null,
+      existing: r.user ? { id: r.user.id, name: r.user.name, email: r.user.email } : null,
+      email: r.values?.email ?? r.user?.email ?? null,
+      no_email: !!r.no_email,
+      role: r.values?.role ?? r.user?.role ?? null,
+      site: r.values ? (r.values.location_id ? names.get(r.values.location_id) : 'All (admin)') : null,
+      position: r.values?.position ?? null,
+      hourly_rate: r.values?.hourly_rate ?? null,
+    })));
+  });
+
+  router.post('/square/import-staff', requireAdmin, requireSquare, async (req, res) => {
+    const plan = await teamPlan(req);
+    const counts = applyTeamImport(db, plan, { currentUserId: req.user.id });
+    res.json({ ...counts, need_password: plan.filter((r) => r.action === 'create').map((r) => r.name) });
   });
 
   router.post('/square/sync', requireManager, requireSquare, async (req, res) => {
