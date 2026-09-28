@@ -64,7 +64,7 @@ function card(loc, state) {
 }
 
 export async function render({ el, state, navigate, stale }) {
-  const [data, myShifts] = await Promise.all([api('/dashboard'), api('/my-shifts')]);
+  const [data, myShifts, leave] = await Promise.all([api('/dashboard'), api('/my-shifts'), state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 }]);
   if (stale()) return;
 
   const locs = data.locations;
@@ -94,6 +94,7 @@ export async function render({ el, state, navigate, stale }) {
       <div class="kpi"><span>Wastage, last 7 days</span><strong>${money(totals.wastage)}</strong></div>
       <div class="kpi"><span>Staff on shift today</span><strong>${totals.staff}</strong></div>
     </div>` : ''}
+    ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
     ${myShifts.length ? `
     <section class="card">
       <h2>Your upcoming shifts</h2>

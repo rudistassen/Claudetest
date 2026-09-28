@@ -503,3 +503,25 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 @media (max-width: 600px) {
   .my-day { grid-template-columns: 1fr; gap: 0.4rem; }
 }
+
+/* Time off: holiday and availability */
+.leave-list li { justify-content: space-between; align-items: flex-start; flex-wrap: nowrap; padding: 0.7rem 0; }
+.leave-list li > div { flex: 1; }
+.leave-actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
+.avail-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+.avail-row strong { width: 110px; }
+.avail-row select { width: auto; }
+.avail-times { display: inline-flex; align-items: center; gap: 0.4rem; }
+.avail-times input { width: auto; }
+#avail .field { margin-top: 1rem; }
+.avail-table td, .avail-table th { white-space: nowrap; }
+.avail-table tbody th small { white-space: normal; max-width: 220px; }
+.avail-table .avail-any { color: var(--muted); }
+.avail-table .avail-none { color: var(--bad); font-weight: 600; }
+.avail-table .avail-some { color: var(--warn); font-weight: 600; }
+.avail-table tr.avail-group th { background: var(--surface-2); text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+/* On the rota */
+.rota .cell-note { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 0.2rem; }
+.rota .cell-holiday { color: var(--brand); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.rota .cell-pending { color: var(--warn); font-weight: 600; }
+.rota td.is-holiday { background: repeating-linear-gradient(135deg, var(--brand-soft) 0 6px, transparent 6px 12px); }

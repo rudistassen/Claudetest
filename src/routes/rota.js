@@ -1,5 +1,6 @@
 import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { publishShifts, tx, UNPUBLISHED } from '../db.js';
+import { availabilityFor, leaveFor, onHoliday } from './leave.js';
 import { dayKey, labourByDay, pct, salesByDay } from '../metrics.js';
 import { addDays, badRequest, date, id, notFound, num, round2, shiftHours, str, time, today, weekStart } from '../util.js';
 
@@ -44,7 +45,10 @@ export function registerRotaRoutes(router, db) {
       notes: str(b.notes, 'notes'),
     };
     if (s.start_time === s.end_time) throw badRequest('Shift start and end cannot be the same');
-    if (!db.prepare('SELECT 1 FROM users WHERE id = ? AND active = 1').get(s.user_id)) throw notFound('Staff member');
+    const person = db.prepare('SELECT name FROM users WHERE id = ? AND active = 1').get(s.user_id);
+    if (!person) throw notFound('Staff member');
+    const holiday = onHoliday(db, s.user_id, s.date);
+    if (holiday) throw badRequest(`${person.name} is on holiday from ${holiday.start_date} to ${holiday.end_date}`);
     return s;
   }
 
@@ -157,6 +161,9 @@ export function registerRotaRoutes(router, db) {
       hours_by_user: byUser,
       total_hours: round2(totalHours),
       labour_cost: manager ? round2(totalCost) : undefined,
+      // For people who plan the rota: holiday (approved and requested) and usual availability for the people shown.
+      leave: editor || can(req.user, 'leave.manage') ? leaveFor(db, staffIds, ws, we) : undefined,
+      availability: editor || can(req.user, 'leave.manage') ? availabilityFor(db, staffIds) : undefined,
       // For editors: how many changes staff can't see yet, and whether this person may publish them.
       unpublished: editor ? db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`).get(...ids, ws, we).n : undefined,
       can_publish: editor ? can(req.user, 'rota.publish') : undefined,
@@ -239,6 +246,7 @@ export function registerRotaRoutes(router, db) {
   router.post('/shifts/:id/restore', requirePerm('rota.edit'), (req, res) => {
     const shift = loadShift(req);
     assertNoClash(shift, shift.id);
+    if (onHoliday(db, shift.user_id, shift.date)) throw badRequest('They are on holiday that day');
     db.prepare('UPDATE shifts SET removed = 0 WHERE id = ?').run(shift.id);
     res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(shift.id));
   });
@@ -266,7 +274,7 @@ export function registerRotaRoutes(router, db) {
       let skipped = 0;
       for (const s of source) {
         const next = { ...s, date: addDays(s.date, offset) };
-        if (findClash(next, 0)) { skipped++; continue; }
+        if (findClash(next, 0) || onHoliday(db, s.user_id, next.date)) { skipped++; continue; }
         insert.run(s.location_id, s.user_id, next.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes);
         copied++;
       }

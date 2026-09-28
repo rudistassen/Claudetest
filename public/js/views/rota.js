@@ -17,6 +17,20 @@ export async function render(ctx) {
   // Cells are keyed by person, site and day. On All sites each site has its own group of rows: everyone rostered
   // there that week, plus that site's own staff so they can be added. Someone working at two sites is in both.
   const cellKey = (userId, siteId, d) => `${userId}|${all ? siteId : ''}|${d}`;
+  // Holiday and usual availability (sent to people who plan the rota).
+  const WEEKDAY_NAMES = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
+  const weekdayOf = (d) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const holidayOn = (userId, d, status) => (data.leave ?? []).find((l) => l.user_id === userId && l.status === status && l.start_date <= d && l.end_date >= d);
+  const availOn = (userId, d) => data.availability?.[userId]?.days?.[weekdayOf(d)] ?? null;
+  const cellNotes = (userId, d) => {
+    if (holidayOn(userId, d, 'approved')) return '<span class="cell-note cell-holiday">Holiday</span>';
+    const notes = [];
+    if (holidayOn(userId, d, 'pending')) notes.push('<span class="cell-note cell-pending">Holiday requested</span>');
+    const a = availOn(userId, d);
+    if (a?.status === 'none') notes.push('<span class="cell-note">Not available</span>');
+    else if (a?.status === 'some') notes.push(`<span class="cell-note">${a.from_time}–${a.to_time} only</span>`);
+    return notes.join('');
+  };
   const byCell = new Map();
   for (const s of [...data.shifts, ...data.away_shifts.map((a) => ({ ...a, away: true }))]) {
     const k = cellKey(s.user_id, s.location_id, s.date);
@@ -102,11 +116,13 @@ export async function render(ctx) {
               <th><strong>${esc(u.name)}</strong>${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${data.days.map((d) => {
                 const shifts = byCell.get(cellKey(u.id, site, d)) ?? [];
-                return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''}" data-user="${u.id}" data-date="${d}" data-site="${site}">
+                const off = !!holidayOn(u.id, d, 'approved');
+                return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''}" data-user="${u.id}" data-date="${d}" data-site="${site}">
+                  ${cellNotes(u.id, d)}
                   ${shifts.map((s) => (s.away
                     ? `<span class="shift shift-away" title="Working at ${esc(s.location_name)}">${shiftLabel(s, u, site)}</span>`
                     : `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`)).join('')}
-                  ${canEdit && !shifts.length ? '<span class="add-hint">+</span>' : ''}
+                  ${canEdit && !shifts.length && !off ? '<span class="add-hint">+</span>' : ''}
                 </td>`;
               }).join('')}
               <td class="num">${rowHours(u, site)}</td>
@@ -140,7 +156,7 @@ export async function render(ctx) {
     const s = shift ?? { start_time: '07:00', end_time: '15:00', break_minutes: 30, ...defaults };
     const person = data.staff.find((u) => u.id === s.user_id);
     const site = s.location_id ?? (all ? person?.location_id : state.locationId) ?? state.locationId;
-    openModal({
+    const { form } = openModal({
       title: shift ? 'Edit shift' : 'Add shift',
       body: `
         <div class="row">
@@ -148,6 +164,7 @@ export async function render(ctx) {
           ${field('Site', select('location_id', siteOptions, site, `required ${siteOptions.length > 1 ? '' : 'disabled'}`))}
         </div>
         ${field('Date', input('date', s.date, 'type="date" required'))}
+        <p class="notice" id="avail-warn" hidden></p>
         <div class="row">
           ${field('Start', input('start_time', s.start_time, 'type="time" required'))}
           ${field('End', input('end_time', s.end_time, 'type="time" required'))}
@@ -169,6 +186,25 @@ export async function render(ctx) {
         ctx.rerender();
       },
     });
+    // Warn (without blocking) when the shift is outside someone's usual availability or on a day they've asked off.
+    const warn = form.querySelector('#avail-warn');
+    const check = () => {
+      const userId = Number(form.user_id.value);
+      const d = form.date.value;
+      const name = data.staff.find((u) => u.id === userId)?.name ?? 'They';
+      const a = d ? availOn(userId, d) : null;
+      let msg = '';
+      if (d && holidayOn(userId, d, 'approved')) msg = `${name} is on holiday that day, so this shift can’t be saved.`;
+      else if (d && holidayOn(userId, d, 'pending')) msg = `${name} has asked for holiday that day.`;
+      else if (a?.status === 'none') msg = `${name} isn’t usually available on ${WEEKDAY_NAMES[weekdayOf(d)]}.`;
+      else if (a?.status === 'some' && (form.start_time.value < a.from_time || form.end_time.value > a.to_time)) {
+        msg = `${name} is usually only available ${a.from_time}–${a.to_time} on ${WEEKDAY_NAMES[weekdayOf(d)]}.`;
+      }
+      warn.textContent = msg;
+      warn.hidden = !msg;
+    };
+    ['user_id', 'date', 'start_time', 'end_time'].forEach((n) => form[n].addEventListener('change', check));
+    check();
   };
 
   el.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', (e) => {
@@ -223,7 +259,7 @@ export async function render(ctx) {
     ))) return;
     try {
       const r = await api('/rota/copy-week', { method: 'POST', body: { location_id: all ? 'all' : state.locationId, from_week: addDays(week, -7), to_week: week } });
-      toast(`Copied ${r.copied} shift(s)${r.skipped ? `, skipped ${r.skipped} clash(es)` : ''}`);
+      toast(`Copied ${r.copied} shift(s)${r.skipped ? `, skipped ${r.skipped} (double-booked or on holiday)` : ''}`);
       ctx.rerender();
     } catch (err) { showError(err); }
   });

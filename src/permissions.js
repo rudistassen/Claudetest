@@ -37,6 +37,9 @@ export const PERMISSION_AREAS = [
   ['Staff', [
     ['staff.manage', 'Add and edit staff at their site, and see pay rates'],
   ]],
+  ['Holiday & availability', [
+    ['leave.manage', 'Approve holiday requests and see everyone’s availability'],
+  ]],
   ['Suppliers & products', [
     ['setup.products', 'Add and edit suppliers and products'],
   ]],

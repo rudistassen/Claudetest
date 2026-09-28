@@ -261,6 +261,31 @@ CREATE TABLE IF NOT EXISTS user_sites (
   PRIMARY KEY (user_id, location_id)
 );
 
+-- Holiday requests. Whole days from start_date to end_date; approved holidays block shifts on those days.
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined', 'cancelled')),
+  decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  decided_at TEXT,
+  decision_note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_leave_user_dates ON leave_requests(user_id, start_date, end_date);
+
+-- Someone's usual weekly availability (weekday 0 = Monday). No row for a day means available any time.
+CREATE TABLE IF NOT EXISTS availability (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  status TEXT NOT NULL CHECK (status IN ('some', 'none')),
+  from_time TEXT,
+  to_time TEXT,
+  PRIMARY KEY (user_id, weekday)
+);
+
 -- Named groups of permissions staff are assigned to. built_in marks the default Manager and Staff sets
 -- ('manager' / 'staff'), which people without a set fall back to by role.
 CREATE TABLE IF NOT EXISTS permission_sets (
@@ -296,6 +321,7 @@ const MIGRATIONS = [
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],
+  ['users', 'availability_note', 'ALTER TABLE users ADD COLUMN availability_note TEXT'],
   // Rota publishing: the pub_* columns hold what staff can see (null = never published); the other columns are the
   // draft editors work on, and removed marks a published shift deleted in the draft. Shifts that existed before
   // publishing was added count as published, and whoever could edit the rota can now also publish it.
@@ -366,6 +392,18 @@ export function openDb(file = ':memory:') {
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_square ON locations(square_location_id)');
   db.exec(VIEWS);
+  // One-off data changes, tracked with SQLite's user_version.
+  const version = db.prepare('PRAGMA user_version').get().user_version;
+  if (version < 1) {
+    // Holiday approval was added: whoever could manage staff can approve holiday.
+    for (const ps of db.prepare('SELECT id, permissions FROM permission_sets').all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (perms.includes('staff.manage') && !perms.includes('leave.manage')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...perms, 'leave.manage']), ps.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 1');
+  }
   ensureDefaultSets(db);
   return db;
 }

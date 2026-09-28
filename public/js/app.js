@@ -8,6 +8,7 @@ import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
 import * as sales from './views/sales.js';
 import * as stock from './views/stock.js';
+import * as timeoff from './views/timeoff.js';
 import * as trading from './views/trading.js';
 import * as wastage from './views/wastage.js';
 
@@ -38,6 +39,7 @@ const ROUTES = [
   [/^safety$/, safety.renderChecklist, SAFETY],
   [/^safety\/report$/, safety.renderReport, ['safety.report']],
   [/^rota$/, rota.render, ROTA],
+  [/^timeoff$/, timeoff.render],
   [/^wastage$/, wastage.render, WASTAGE],
   [/^stock$/, stock.renderList, STOCK],
   [/^stock\/(\d+)$/, stock.renderTake, STOCK],
@@ -70,6 +72,7 @@ function navItems() {
     ['dashboard', 'Dashboard', '▦'],
     ['safety', 'Food safety', '✓', SAFETY],
     ['rota', 'Rota', '◷', ROTA],
+    ['timeoff', 'Time off', '☀'],
     ['wastage', 'Wastage', '⌫', WASTAGE],
     ['stock', 'Stock takes', '☰', STOCK],
     ['recipes', 'Recipes', '✎', RECIPES],

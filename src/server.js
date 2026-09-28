@@ -9,6 +9,7 @@ import { registerRotaRoutes } from './routes/rota.js';
 import { registerSalesRoutes } from './routes/sales.js';
 import { registerSafetyRoutes } from './routes/safety.js';
 import { registerStockRoutes } from './routes/stock.js';
+import { registerLeaveRoutes } from './routes/leave.js';
 import { registerTradingRoutes } from './routes/trading.js';
 import { HttpError } from './util.js';
 
@@ -43,6 +44,7 @@ export function createApp(db, { square = null } = {}) {
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);
   registerTradingRoutes(api, db, square);
+  registerLeaveRoutes(api, db);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 
