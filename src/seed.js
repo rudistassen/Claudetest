@@ -1,5 +1,5 @@
 import { hashPassword, verifyPassword } from './auth.js';
-import { tx } from './db.js';
+import { publishAllShifts, tx } from './db.js';
 import { addDays, today, weekStart } from './util.js';
 
 export const DEMO_PASSWORD = 'changeme123';
@@ -240,4 +240,5 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
       }
     });
   });
+  publishAllShifts(db); // the demo rota is already published
 }

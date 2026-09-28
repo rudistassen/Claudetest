@@ -196,7 +196,7 @@ export function registerSafetyRoutes(router, db) {
         const done = checks.filter((c) => c.period === period && ids.has(c.task_id));
         return { due: ids.size, done: done.length, fails: done.filter((c) => c.status === 'fail').length };
       };
-      const shiftsToday = db.prepare(`SELECT s.start_time, s.end_time, s.position, u.name FROM shifts s JOIN users u ON u.id = s.user_id
+      const shiftsToday = db.prepare(`SELECT s.start_time, s.end_time, s.position, u.name FROM published_shifts s JOIN users u ON u.id = s.user_id
         WHERE s.location_id = ? AND s.date = ? ORDER BY s.start_time`).all(loc.id, d);
       const lastTake = db.prepare(`SELECT MAX(completed_at) AS at FROM stock_takes WHERE location_id = ? AND status = 'completed'`).get(loc.id).at;
       const takeInProgress = db.prepare(`SELECT id FROM stock_takes WHERE location_id = ? AND status = 'in_progress'`).get(loc.id)?.id ?? null;

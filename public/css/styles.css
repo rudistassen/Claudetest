@@ -451,3 +451,18 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .perm-edit legend { font-weight: 700; font-size: 0.85rem; margin-bottom: 0.1rem; }
 .perm-edit .check-row { margin: 0.35rem 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Rota publishing */
+.publish-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem;
+  background: var(--warn-soft); color: var(--text); border-left: 4px solid var(--warn); border-radius: 8px; padding: 0.6rem 0.9rem; margin-bottom: 0.75rem; }
+.publish-actions { display: flex; gap: 0.5rem; }
+.publish-ok { color: var(--good); font-weight: 600; margin: 0 0 0.5rem; }
+.shift .shift-tag { display: table; margin: 0.25rem 0 0.05rem; font-style: normal; font-size: 0.62rem; line-height: 1.5; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 0.4rem; border-radius: 4px; }
+.rota .shift-new { border-left: 3px dashed var(--brand); background: var(--brand-soft); }
+.rota .shift-new .shift-tag { background: var(--brand); color: var(--brand-contrast); }
+.rota .shift-changed { border-left-color: var(--warn); background: var(--warn-soft); }
+.rota .shift-changed .shift-tag { background: var(--warn); color: var(--surface); }
+.rota .shift-removed { border-left-color: var(--bad); opacity: 0.65; }
+.rota .shift-removed .shift-time { text-decoration: line-through; }
+.rota .shift-removed .shift-tag { background: var(--bad); color: var(--surface); }
+@media print { .publish-bar, .publish-ok { display: none; } }

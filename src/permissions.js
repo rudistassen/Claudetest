@@ -11,6 +11,7 @@ export const PERMISSION_AREAS = [
   ['Rota', [
     ['rota.view', 'See the rota'],
     ['rota.edit', 'Add, change and copy shifts'],
+    ['rota.publish', 'Publish the rota so staff can see it'],
   ]],
   ['Wastage', [
     ['wastage.record', 'Record wastage'],

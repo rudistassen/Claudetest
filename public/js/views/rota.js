@@ -29,7 +29,7 @@ export async function render(ctx) {
       const working = new Set(data.shifts.filter((x) => x.location_id === site.id).map((x) => x.user_id));
       const people = data.staff.filter((u) => u.location_id === site.id || working.has(u.id));
       if (!people.length) continue;
-      const siteShifts = data.shifts.filter((x) => x.location_id === site.id);
+      const siteShifts = counted.filter((x) => x.location_id === site.id);
       const rate = new Map(data.staff.map((u) => [u.id, u.hourly_rate]));
       rows.push({
         header: site.name,
@@ -48,13 +48,21 @@ export async function render(ctx) {
   } else {
     for (const u of data.staff) rows.push({ u, site: state.locationId });
   }
-  const rowHours = (u, site) => Math.round(data.shifts.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
-  // A shift at another site (greyed out on a single site's rota) says where it is.
+  // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
+  const counted = data.shifts.filter((x) => x.state !== 'removed');
+  const rowHours = (u, site) => Math.round(counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
+  // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
+  const TAGS = { new: 'New', changed: 'Changed', removed: 'Removed' };
   const shiftLabel = (s, u, site) => {
     const where = s.location_id !== site ? `@ ${s.location_name}` : '';
-    return `${s.start_time}–${s.end_time}${where ? `<small>${esc(where)}</small>` : ''}`;
+    const tag = TAGS[s.state] ? `<em class="shift-tag">${TAGS[s.state]}</em>` : '';
+    return `<span class="shift-time">${s.start_time}–${s.end_time}</span>${tag}${where ? `<small>${esc(where)}</small>` : ''}`;
   };
-  const dayHours = data.days.map((d) => data.shifts.filter((s) => s.date === d).reduce((t, s) => t + s.hours, 0));
+  const shiftTitle = (s) => (s.state === 'new' ? 'New – staff can’t see this until you publish'
+    : s.state === 'removed' ? 'Removed – staff still see this until you publish. Click to put it back.'
+      : s.state === 'changed' ? `Changed – staff still see ${fmtDate(s.published.date)} ${s.published.start_time}–${s.published.end_time}${s.published.moved ? ' for someone else' : ''} at ${s.published.location_name} until you publish` : '');
+  const dayHours = data.days.map((d) => counted.filter((s) => s.date === d).reduce((t, s) => t + s.hours, 0));
+  const pending = data.unpublished ?? 0;
 
   el.innerHTML = `
     <div class="page-head">
@@ -68,6 +76,15 @@ export async function render(ctx) {
         <button class="btn" id="print">Print</button>
       </div>
     </div>
+    ${canEdit ? (pending ? `
+    <div class="publish-bar">
+      <span><strong>${pending} unpublished change${pending === 1 ? '' : 's'}</strong> – staff can’t see ${pending === 1 ? 'it' : 'them'} yet.
+        ${data.can_publish ? '' : 'Ask someone who can publish the rota to publish it.'}</span>
+      <span class="publish-actions">
+        <button class="btn" id="discard">Discard changes</button>
+        ${data.can_publish ? `<button class="btn btn-primary" id="publish">Publish ${all ? 'all sites' : 'this week'}</button>` : ''}
+      </span>
+    </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
     <p class="muted">Week commencing ${fmtDate(week, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
       · ${data.total_hours} hours${data.labour_cost !== undefined ? ` · labour cost ${money(data.labour_cost)}` : ''}
       ${data.week_sales ? ` · sales to date ${money(data.week_sales)} · labour <span class="tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</span> of sales to date` : ''}</p>
@@ -86,7 +103,7 @@ export async function render(ctx) {
                 return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''}" data-user="${u.id}" data-date="${d}" data-site="${site}">
                   ${shifts.map((s) => (s.away
                     ? `<span class="shift shift-away" title="Working at ${esc(s.location_name)}">${shiftLabel(s, u, site)}</span>`
-                    : `<button class="shift" data-shift="${s.id}" ${canEdit ? '' : 'disabled'}>${shiftLabel(s, u, site)}</button>`)).join('')}
+                    : `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`)).join('')}
                   ${canEdit && !shifts.length ? '<span class="add-hint">+</span>' : ''}
                 </td>`;
               }).join('')}
@@ -103,7 +120,8 @@ export async function render(ctx) {
       </table>
     </div>
     ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under Setup → Staff.</div>` : ''}
-    ${data.away_shifts.length ? '<p class="muted small">Greyed-out shifts are at another site.</p>' : ''}`;
+    ${data.away_shifts.length ? '<p class="muted small">Greyed-out shifts are at another site.</p>' : ''}
+    ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see.</p>' : ''}`;
 
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
     const offset = Number(b.dataset.week);
@@ -139,7 +157,7 @@ export async function render(ctx) {
       danger: shift ? 'Delete shift' : null,
       onDanger: async () => {
         await api(`/shifts/${shift.id}`, { method: 'DELETE' });
-        toast('Shift deleted');
+        toast(shift.state === 'new' ? 'Shift deleted' : 'Shift removed. Staff will stop seeing it once you publish.');
         ctx.rerender();
       },
       onSubmit: async (v) => {
@@ -154,7 +172,20 @@ export async function render(ctx) {
 
   el.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
-    shiftModal(data.shifts.find((s) => s.id === Number(b.dataset.shift)));
+    const shift = data.shifts.find((s) => s.id === Number(b.dataset.shift));
+    if (shift.state === 'removed') {
+      confirmDialog(`Put back ${shift.user_name}’s ${shift.start_time}–${shift.end_time} shift on ${fmtDate(shift.date)}?`, { confirmLabel: 'Put it back', title: 'Removed shift' })
+        .then(async (ok) => {
+          if (!ok) return;
+          try {
+            await api(`/shifts/${shift.id}/restore`, { method: 'POST' });
+            toast('Shift put back');
+            ctx.rerender();
+          } catch (err) { showError(err); }
+        });
+      return;
+    }
+    shiftModal(shift);
   }));
   // Shifts at another site are edited from that site's rota (or All sites).
   el.querySelectorAll('.shift-away').forEach((a) => a.addEventListener('click', (e) => {
@@ -164,12 +195,29 @@ export async function render(ctx) {
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
     shiftModal(null, { user_id: Number(td.dataset.user), date: td.dataset.date, location_id: Number(td.dataset.site) });
   }));
+  const scopeBody = { location_id: all ? 'all' : state.locationId, week };
+  el.querySelector('#publish')?.addEventListener('click', async () => {
+    if (!(await confirmDialog(`Publish ${pending} change${pending === 1 ? '' : 's'}${all ? ' across every site' : ''}? Staff will see the rota as it is now.`, { confirmLabel: 'Publish', title: 'Publish rota' }))) return;
+    try {
+      const r = await api('/rota/publish', { method: 'POST', body: scopeBody });
+      toast(`Published ${r.published} change${r.published === 1 ? '' : 's'}`);
+      ctx.rerender();
+    } catch (err) { showError(err); }
+  });
+  el.querySelector('#discard')?.addEventListener('click', async () => {
+    if (!(await confirmDialog('Throw away every unpublished change this week? New shifts are deleted, changed ones go back to what staff can see, and removed ones come back.', { confirmLabel: 'Discard changes', title: 'Discard changes' }))) return;
+    try {
+      const r = await api('/rota/discard', { method: 'POST', body: scopeBody });
+      toast(`Discarded ${r.discarded} change${r.discarded === 1 ? '' : 's'}`);
+      ctx.rerender();
+    } catch (err) { showError(err); }
+  });
   el.querySelector('#copy-week').addEventListener('click', async () => {
     const hasShifts = data.shifts.length > 0;
     if (!(await confirmDialog(
       hasShifts
-        ? `Copy last week’s shifts${all ? ' at every site' : ''} into this week? Existing shifts stay; anything that would double-book someone is skipped.`
-        : `Copy last week’s shifts${all ? ' at every site' : ''} into this week?`,
+        ? `Copy last week’s shifts${all ? ' at every site' : ''} into this week? Existing shifts stay; anything that would double-book someone is skipped. The copies stay as drafts until you publish.`
+        : `Copy last week’s shifts${all ? ' at every site' : ''} into this week? The copies stay as drafts until you publish.`,
       { confirmLabel: 'Copy shifts', title: 'Copy previous week' },
     ))) return;
     try {

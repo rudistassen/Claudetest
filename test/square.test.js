@@ -346,6 +346,8 @@ describe('labour to date', () => {
     mem.prepare(`INSERT INTO users (id, name, email, password_hash, role, location_id, hourly_rate) VALUES (1, 'X', 'x@x', 'x', 'staff', 1, 12)`).run();
     // 08:00–16:30 with a 30 minute break = 8 paid hours
     mem.prepare(`INSERT INTO shifts (location_id, user_id, date, start_time, end_time, break_minutes) VALUES (1, 1, '2026-05-04', '08:00', '16:30', 30), (1, 1, '2026-05-05', '08:00', '16:30', 30)`).run();
+    const { publishAllShifts } = await import('../src/db.js');
+    publishAllShifts(mem); // labour figures come from the published rota
     const asOf = { date: '2026-05-04', minutes: 12 * 60 + 15 }; // 12:15, 4h15m into the shift
     const planned = labourByDay(mem, [1], '2026-05-04', '2026-05-05');
     const worked = labourByDay(mem, [1], '2026-05-04', '2026-05-05', { toDate: true, asOf });

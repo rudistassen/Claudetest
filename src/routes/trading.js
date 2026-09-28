@@ -207,7 +207,7 @@ export function registerTradingRoutes(router, db, square) {
 function staffComparison(db, ids, from, to, cards, locations) {
   const now = today();
   const shifts = db.prepare(`SELECT s.user_id, s.location_id, s.date, s.start_time, s.end_time, s.break_minutes, u.name
-    FROM shifts s JOIN users u ON u.id = s.user_id
+    FROM published_shifts s JOIN users u ON u.id = s.user_id
     WHERE s.date BETWEEN ? AND ? AND s.date <= ? AND s.location_id IN (${ids.map(() => '?').join(', ')})`).all(from, to, now, ...ids);
   const people = new Map();
   const person = (k, name, locationId) => {

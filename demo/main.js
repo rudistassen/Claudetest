@@ -2,7 +2,7 @@
 // and window.fetch('/api/...') is answered locally instead of by a server.
 import initSqlJs from 'sql.js/dist/sql-asm.js';
 import { loadUser, registerAuthRoutes, requireAuth } from '../src/auth.js';
-import { openDb } from '../src/db.js';
+import { openDb, publishAllShifts } from '../src/db.js';
 import { registerAdminRoutes } from '../src/routes/admin.js';
 import { registerOrderingRoutes } from '../src/routes/ordering.js';
 import { registerRecipeRoutes } from '../src/routes/recipes.js';
@@ -76,6 +76,7 @@ async function boot() {
   seedAdmin(db, { email: 'admin@cafe.local', password: DEMO_PASSWORD });
   seedDemo(db);
   seedActivity(db);
+  publishAllShifts(db);
 
   const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 30 };
   const square = { config, client: new SquareClient(config, fakeSquareFetch) };

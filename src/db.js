@@ -287,17 +287,76 @@ const MIGRATIONS = [
   ['users', 'permission_set_id', 'ALTER TABLE users ADD COLUMN permission_set_id INTEGER REFERENCES permission_sets(id) ON DELETE SET NULL'],
   ['square_sync_log', 'timecards', 'ALTER TABLE square_sync_log ADD COLUMN timecards INTEGER'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
+  // Rota publishing: the pub_* columns hold what staff can see (null = never published); the other columns are the
+  // draft editors work on, and removed marks a published shift deleted in the draft. Shifts that existed before
+  // publishing was added count as published, and whoever could edit the rota can now also publish it.
+  ['shifts', 'pub_date', (db) => {
+    db.exec(`ALTER TABLE shifts ADD COLUMN pub_location_id INTEGER;
+      ALTER TABLE shifts ADD COLUMN pub_user_id INTEGER;
+      ALTER TABLE shifts ADD COLUMN pub_date TEXT;
+      ALTER TABLE shifts ADD COLUMN pub_start_time TEXT;
+      ALTER TABLE shifts ADD COLUMN pub_end_time TEXT;
+      ALTER TABLE shifts ADD COLUMN pub_break_minutes INTEGER;
+      ALTER TABLE shifts ADD COLUMN removed INTEGER NOT NULL DEFAULT 0;`);
+    publishAllShifts(db);
+    for (const ps of db.prepare('SELECT id, permissions FROM permission_sets').all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (perms.includes('rota.edit') && !perms.includes('rota.publish')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...perms, 'rota.publish']), ps.id);
+      }
+    }
+  }],
 ];
+
+const PUBLISH_COLUMNS = `pub_location_id = location_id, pub_user_id = user_id, pub_date = date,
+  pub_start_time = start_time, pub_end_time = end_time, pub_break_minutes = break_minutes`;
+
+/** Marks every shift as published (demo data, and shifts from before publishing existed). */
+export function publishAllShifts(db) {
+  db.exec(`DELETE FROM shifts WHERE removed = 1; UPDATE shifts SET ${PUBLISH_COLUMNS};`);
+}
+
+/**
+ * Publishes the draft rota for the sites and dates given: removed shifts are deleted and every other shift's
+ * published copy is brought up to date. Returns how many changes were published.
+ */
+export function publishShifts(db, locationIds, from, to) {
+  const where = `location_id IN (${locationIds.map(() => '?').join(', ')}) AND date BETWEEN ? AND ?`;
+  const args = [...locationIds, from, to];
+  const changes = db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE ${where} AND (${UNPUBLISHED})`).get(...args).n;
+  tx(db, () => {
+    db.prepare(`DELETE FROM shifts WHERE ${where} AND removed = 1`).run(...args);
+    db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS} WHERE ${where}`).run(...args);
+  });
+  return changes;
+}
+
+/** SQL condition for a shift whose draft differs from what staff can see. */
+export const UNPUBLISHED = `removed = 1 OR pub_date IS NULL OR pub_location_id != location_id OR pub_user_id != user_id OR pub_date != date
+  OR pub_start_time != start_time OR pub_end_time != end_time OR pub_break_minutes != break_minutes`;
+
+// What staff see (published_shifts) and what editors see (draft_shifts), with the usual shift columns.
+const VIEWS = `
+CREATE VIEW IF NOT EXISTS published_shifts AS
+  SELECT id, pub_location_id AS location_id, pub_user_id AS user_id, pub_date AS date, pub_start_time AS start_time,
+    pub_end_time AS end_time, pub_break_minutes AS break_minutes, position, notes
+  FROM shifts WHERE pub_date IS NOT NULL;
+CREATE VIEW IF NOT EXISTS draft_shifts AS
+  SELECT id, location_id, user_id, date, start_time, end_time, break_minutes, position, notes FROM shifts WHERE removed = 0;
+`;
 
 export function openDb(file = ':memory:') {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys = ON;');
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
-  for (const [table, column, sql] of MIGRATIONS) {
-    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) db.exec(sql);
+  for (const [table, column, change] of MIGRATIONS) {
+    if (db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) continue;
+    if (typeof change === 'function') change(db);
+    else db.exec(change);
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_square ON locations(square_location_id)');
+  db.exec(VIEWS);
   ensureDefaultSets(db);
   return db;
 }

@@ -1,5 +1,5 @@
 import { assertLocation, can, requirePerm, resolveLocation } from '../auth.js';
-import { tx } from '../db.js';
+import { publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { dayKey, labourByDay, pct, salesByDay } from '../metrics.js';
 import { addDays, badRequest, date, id, notFound, num, round2, shiftHours, str, time, today, weekStart } from '../util.js';
 
@@ -12,11 +12,15 @@ function range(s) {
   return [start, end];
 }
 
+// Rota publishing: editors change a draft (the shifts table, where removed marks a published shift deleted in the
+// draft) and staff see only what was last published (the published_shifts view). See db.js.
 export function registerRotaRoutes(router, db) {
-  const shiftSelect = `
+  const select = (table) => `
     SELECT s.*, u.name AS user_name, l.name AS location_name
-    FROM shifts s JOIN users u ON u.id = s.user_id JOIN locations l ON l.id = s.location_id`;
+    FROM ${table} s JOIN users u ON u.id = s.user_id JOIN locations l ON l.id = s.location_id`;
+  const shiftSelect = select('draft_shifts');
 
+  // Double-booking is checked against the draft, which is what will be published.
   function findClash(shift, ignoreId = 0) {
     const others = db.prepare(`${shiftSelect} WHERE s.user_id = ? AND s.date = ? AND s.id != ?`)
       .all(shift.user_id, shift.date, ignoreId);
@@ -67,18 +71,32 @@ export function registerRotaRoutes(router, db) {
     const we = addDays(ws, 6);
     // Labour costs and pay rates only for people who can see sales or manage staff.
     const manager = can(req.user, 'sales.view') || can(req.user, 'staff.manage');
+    // Editors see the draft, with each shift marked new, changed or removed; everyone else sees the published rota.
+    const editor = can(req.user, 'rota.edit');
+    const table = editor ? 'shifts' : 'published_shifts';
     const inList = ids.map(() => '?').join(', ') || 'NULL';
 
-    const shifts = db.prepare(`${shiftSelect} WHERE s.location_id IN (${inList}) AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`)
+    const shifts = db.prepare(`${select(table)} WHERE s.location_id IN (${inList}) AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`)
       .all(...ids, ws, we);
+    const names = new Map(db.prepare('SELECT id, name FROM locations').all().map((l) => [l.id, l.name]));
+    if (editor) {
+      for (const s of shifts) {
+        s.state = s.removed ? 'removed' : s.pub_date === null ? 'new'
+          : s.pub_location_id !== s.location_id || s.pub_user_id !== s.user_id || s.pub_date !== s.date || s.pub_start_time !== s.start_time
+            || s.pub_end_time !== s.end_time || s.pub_break_minutes !== s.break_minutes ? 'changed' : 'published';
+        if (s.state === 'changed') {
+          s.published = { date: s.pub_date, start_time: s.pub_start_time, end_time: s.pub_end_time, location_name: names.get(s.pub_location_id), moved: s.pub_user_id !== s.user_id };
+        }
+      }
+    }
     const staff = db.prepare(`
       SELECT u.id, u.name, u.position, u.role, u.hourly_rate, u.location_id, l.name AS location_name FROM users u
       LEFT JOIN locations l ON l.id = u.location_id
-      WHERE (u.location_id IN (${inList}) AND u.active = 1) OR u.id IN (SELECT user_id FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?)
+      WHERE (u.location_id IN (${inList}) AND u.active = 1) OR u.id IN (SELECT user_id FROM ${table} WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?)
       ORDER BY ${all ? "l.name IS NULL, l.name, " : ''}CASE u.role WHEN 'manager' THEN 0 ELSE 1 END, u.name`).all(...ids, ...ids, ws, we);
     // On a single site's rota, the same people's shifts at other sites that week, so it's clear when they're not free.
     const staffIds = staff.map((u) => u.id);
-    const away = all || !staffIds.length ? [] : db.prepare(`${shiftSelect}
+    const away = all || !staffIds.length ? [] : db.prepare(`${select(editor ? 'draft_shifts' : 'published_shifts')}
       WHERE s.user_id IN (${staffIds.map(() => '?').join(', ')}) AND s.location_id NOT IN (${inList}) AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`)
       .all(...staffIds, ...ids, ws, we);
 
@@ -88,6 +106,7 @@ export function registerRotaRoutes(router, db) {
     let totalCost = 0;
     for (const s of shifts) {
       s.hours = round2(shiftHours(s.start_time, s.end_time, s.break_minutes));
+      if (s.removed) continue;
       byUser[s.user_id] = round2((byUser[s.user_id] ?? 0) + s.hours);
       totalHours += s.hours;
       totalCost += s.hours * (rates.get(s.user_id) ?? 0);
@@ -99,8 +118,8 @@ export function registerRotaRoutes(router, db) {
     let money;
     if (manager) {
       const sales = salesByDay(db, ids, ws, we);
-      const planned = labourByDay(db, ids, ws, we);
-      const worked = labourByDay(db, ids, ws, we, { toDate: true });
+      const planned = labourByDay(db, ids, ws, we, { draft: editor });
+      const worked = labourByDay(db, ids, ws, we, { toDate: true, draft: editor });
       money = days.map((d) => {
         // Across sites, labour % only counts sites that have sales that day (as on the Sales page).
         let net = null;
@@ -141,12 +160,37 @@ export function registerRotaRoutes(router, db) {
       hours_by_user: byUser,
       total_hours: round2(totalHours),
       labour_cost: manager ? round2(totalCost) : undefined,
+      // For editors: how many changes staff can't see yet, and whether this person may publish them.
+      unpublished: editor ? db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`).get(...ids, ws, we).n : undefined,
+      can_publish: editor ? can(req.user, 'rota.publish') : undefined,
     });
   });
 
+  router.post('/rota/publish', requirePerm('rota.publish'), (req, res) => {
+    const ids = rotaSites(req, req.body.location_id);
+    const ws = weekStart(date(req.body.week, 'week', { required: true }));
+    res.json({ published: publishShifts(db, ids, ws, addDays(ws, 6)) });
+  });
+
+  // Throws away draft changes for the week: new shifts go, changed ones go back to what's published, removed come back.
+  router.post('/rota/discard', requirePerm('rota.edit'), (req, res) => {
+    const ids = rotaSites(req, req.body.location_id);
+    const ws = weekStart(date(req.body.week, 'week', { required: true }));
+    const where = `location_id IN (${ids.map(() => '?').join(', ')}) AND date BETWEEN ? AND ?`;
+    const args = [...ids, ws, addDays(ws, 6)];
+    const n = db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE ${where} AND (${UNPUBLISHED})`).get(...args).n;
+    tx(db, () => {
+      db.prepare(`DELETE FROM shifts WHERE ${where} AND pub_date IS NULL`).run(...args);
+      db.prepare(`UPDATE shifts SET location_id = pub_location_id, user_id = pub_user_id, date = pub_date, start_time = pub_start_time,
+        end_time = pub_end_time, break_minutes = pub_break_minutes, removed = 0 WHERE ${where}`).run(...args);
+    });
+    res.json({ discarded: n });
+  });
+
+  // Your own upcoming shifts, as published.
   router.get('/my-shifts', (req, res) => {
     const from = today();
-    res.json(db.prepare(`${shiftSelect} WHERE s.user_id = ? AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`)
+    res.json(db.prepare(`${select('published_shifts')} WHERE s.user_id = ? AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`)
       .all(req.user.id, from, addDays(from, 13)));
   });
 
@@ -170,15 +214,24 @@ export function registerRotaRoutes(router, db) {
     const existing = loadShift(req);
     const s = shiftBody(req);
     assertNoClash(s, existing.id);
-    db.prepare(`UPDATE shifts SET location_id = ?, user_id = ?, date = ?, start_time = ?, end_time = ?, break_minutes = ?, position = ?, notes = ? WHERE id = ?`)
+    db.prepare(`UPDATE shifts SET location_id = ?, user_id = ?, date = ?, start_time = ?, end_time = ?, break_minutes = ?, position = ?, notes = ?, removed = 0 WHERE id = ?`)
       .run(s.location_id, s.user_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes, existing.id);
     res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(existing.id));
   });
 
+  // A shift staff have never seen is deleted; a published one is marked removed until the rota is published.
   router.delete('/shifts/:id', requirePerm('rota.edit'), (req, res) => {
     const shift = loadShift(req);
-    db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
+    if (shift.pub_date === null) db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
+    else db.prepare('UPDATE shifts SET removed = 1 WHERE id = ?').run(shift.id);
     res.json({ ok: true });
+  });
+
+  router.post('/shifts/:id/restore', requirePerm('rota.edit'), (req, res) => {
+    const shift = loadShift(req);
+    assertNoClash(shift, shift.id);
+    db.prepare('UPDATE shifts SET removed = 0 WHERE id = ?').run(shift.id);
+    res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(shift.id));
   });
 
   // Copies one week's shifts onto another, skipping any that would double-book someone.
@@ -192,9 +245,11 @@ export function registerRotaRoutes(router, db) {
     const result = tx(db, () => {
       const inList = ids.map(() => '?').join(', ') || 'NULL';
       if (req.body.replace) {
-        db.prepare(`DELETE FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?`).run(...ids, to, addDays(to, 6));
+        db.prepare(`DELETE FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND pub_date IS NULL`).run(...ids, to, addDays(to, 6));
+        db.prepare(`UPDATE shifts SET removed = 1 WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?`).run(...ids, to, addDays(to, 6));
       }
-      const source = db.prepare(`SELECT s.* FROM shifts s JOIN users u ON u.id = s.user_id
+      // Copied shifts are drafts until the week is published.
+      const source = db.prepare(`SELECT s.* FROM draft_shifts s JOIN users u ON u.id = s.user_id
         WHERE s.location_id IN (${inList}) AND s.date BETWEEN ? AND ? AND u.active = 1 ORDER BY s.date, s.start_time`).all(...ids, from, addDays(from, 6));
       const insert = db.prepare(`INSERT INTO shifts (location_id, user_id, date, start_time, end_time, break_minutes, position, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);

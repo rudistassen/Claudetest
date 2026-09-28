@@ -20,14 +20,15 @@ export function hoursWorkedBy(s, upTo) {
 }
 
 /**
- * Rostered hours and cost per site per day, keyed "locationId|date".
+ * Rostered hours and cost per site per day, keyed "locationId|date", from the published rota.
  * Default: the full rota. With { toDate: true }, only hours worked so far count – today's shifts are cut off
  * at the current time and future days count nothing – so it can be compared fairly with sales so far.
  */
-export function rotaByDay(db, locationIds, from, to, { toDate = false, asOf } = {}) {
+export function rotaByDay(db, locationIds, from, to, { toDate = false, asOf, draft = false } = {}) {
   const current = asOf ?? { date: today(), minutes: nowMinutes() };
+  // The published rota, or with { draft: true } the one being edited.
   const rows = db.prepare(`SELECT s.location_id, s.date, s.start_time, s.end_time, s.break_minutes, u.hourly_rate
-    FROM shifts s JOIN users u ON u.id = s.user_id
+    FROM ${draft ? 'draft_shifts' : 'published_shifts'} s JOIN users u ON u.id = s.user_id
     WHERE s.date BETWEEN ? AND ? AND s.location_id IN (${locationIds.map(() => '?').join(', ')})`).all(from, to, ...locationIds);
   const out = new Map();
   for (const r of rows) {
@@ -134,7 +135,7 @@ export function clockedByWeekHour(cards, tz = BUSINESS_TZ) {
 export function rotaByWeekHour(db, locationIds, from, to, include = () => true, asOf) {
   const current = asOf ?? { date: today(), minutes: nowMinutes() };
   const rows = db.prepare(`SELECT s.location_id, s.date, s.start_time, s.end_time, s.break_minutes, u.hourly_rate
-    FROM shifts s JOIN users u ON u.id = s.user_id
+    FROM published_shifts s JOIN users u ON u.id = s.user_id
     WHERE s.date BETWEEN ? AND ? AND s.date <= ? AND s.location_id IN (${locationIds.map(() => '?').join(', ')})`)
     .all(from, to, current.date, ...locationIds);
   const out = new Map();
