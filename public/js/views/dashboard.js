@@ -104,7 +104,7 @@ function downloadPdf(state, date) {
   const page = document.createElement('style');
   page.textContent = '@page { size: A4 landscape; margin: 10mm; }';
   document.head.append(page);
-  document.title = `Cafe Ops dashboard - ${state.multiSite ? 'All sites' : state.location?.name ?? ''} - ${date}`;
+  document.title = `BrewView dashboard - ${state.multiSite ? 'All sites' : state.location?.name ?? ''} - ${date}`;
   const restore = () => {
     document.title = title;
     page.remove();
@@ -194,7 +194,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
         <button class="btn" id="dash-pdf">Download PDF</button>
       </div>
     </div>
-    <p class="print-only print-meta">Cafe Ops dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
+    <p class="print-only print-meta">BrewView dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     <div class="kpis">
       ${hasSales ? `<div class="kpi"><span>Sales today (ex VAT)</span><strong>${money(todayTotals.net_sales)}</strong></div>

@@ -1,12 +1,12 @@
 @echo off
-rem Double-click to update Cafe Ops to the latest version from GitHub.
+rem Double-click to update BrewView to the latest version from GitHub.
 rem Your data (the data folder) and your Square token are kept; the database is backed up first.
 cd /d "%~dp0"
-title Update Cafe Ops
+title Update BrewView
 
 netstat -ano | findstr /r /c:":3000 .*LISTENING" >nul
 if not errorlevel 1 (
-  echo Cafe Ops is still running. Close the black Cafe Ops window first, then double-click this file again.
+  echo BrewView is still running. Close the black BrewView window first, then double-click this file again.
   pause
   exit /b
 )
@@ -25,7 +25,7 @@ call npm.cmd install --omit=dev --no-audit --no-fund
 if errorlevel 1 goto failed
 
 echo.
-echo Cafe Ops is up to date. Double-click start-windows to start it, then refresh your browser.
+echo BrewView is up to date. Double-click start-windows to start it, then refresh your browser.
 pause
 exit /b
 

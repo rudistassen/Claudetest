@@ -81,7 +81,7 @@ export function planTeamImport(db, { members, wages }, { deactivateOthers = fals
       ? (m.assigned_locations.location_ids ?? []).map((id) => siteBySquare.get(id)).filter(Boolean)
       : [];
     const role = user?.role ?? (m.is_owner ? 'admin' : 'staff');
-    // Someone already here keeps the home site set in Cafe Ops (it can be changed on the Staff page); only new
+    // Someone already here keeps the home site set in BrewView (it can be changed on the Staff page); only new
     // people take theirs from Square.
     let locationId = null;
     if (role !== 'admin') {

@@ -1,4 +1,4 @@
-# Cafe Ops
+# BrewView
 
 One web app for running a multi-site cafe business. It works on desktops, tablets and phones, so staff can use it on a tablet behind the counter and managers can use it from anywhere.
 
@@ -74,19 +74,19 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 
 ## Connecting Square
 
-1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "Cafe Ops").
+1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "BrewView").
 2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders, locations, team members and timecards (the token needs `ORDERS_READ`, `MERCHANT_PROFILE_READ`, `EMPLOYEES_READ` and `TIMECARDS_READ`). Treat it like a password.
-3. Start Cafe Ops with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
-4. In Cafe Ops go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
+3. Start BrewView with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
+4. In BrewView go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
 5. Click **Import sales** to backfill history (up to 92 days per run). After that, sales and clock-ins refresh automatically every 30 minutes. The first automatic run backfills the last 28 days.
 6. To use your Square team as your staff list, go to **Setup → Staff → Import from Square**. It shows what will change before anything is saved. Everyone in Square Team is added, or updated if already here (matched by email, then name). Their hourly rate comes from their pay in Square. New people's home site comes from their assigned Square locations (or where they usually clock in); after that the home site is yours to change on the Staff page, and importing again keeps it. Tick **Deactivate staff who aren't in Square** to switch off everyone else, such as the demo staff; they keep their history, and the admin running the import stays active. New people get a random password, so set one (click their name) if they need to sign in. Run it again any time to pick up changes.
 7. Once your sites are linked and your staff imported, **Setup → Square → Remove what isn't in Square** deletes the sites not linked to Square and the staff not in your Square team (for example the demo data), with their rotas and records. It lists what will go first, never removes you, moves anyone in Square whose home site is removed to a site you keep, and saves a copy of the database as `data/cafe-before-cleanup-<date>.db` before deleting.
-8. Staff clock in and out on Square (Square Team / Timecards). Each Square team member is matched to a Cafe Ops user by **email address**, then by name, so use the same email in both. If the token can't read timecards, sales still sync and the reason is shown on the Trading page and in the sync history.
+8. Staff clock in and out on Square (Square Team / Timecards). Each Square team member is matched to a BrewView user by **email address**, then by name, so use the same email in both. If the token can't read timecards, sales still sync and the reason is shown on the Trading page and in the sync history.
 
 How the numbers are worked out:
 - **Net sales** = line-item totals after discounts, minus VAT (UK Square prices include VAT), minus itemised returns. Tips and service charges are excluded. Only `COMPLETED` orders are counted, and each is assigned to a business day by its close time in UK time.
 - **Labour %** = rostered hours × each person's hourly rate ÷ net sales. For today it only counts hours worked up to now, and days with no Square sales are left out. The colours are green at 30% or below and amber up to 35%. Change `LABOUR_TARGET` in `public/js/views/sales.js` if your target differs.
-- **Clocked labour** = paid hours on each Square timecard (unpaid breaks removed; still-open timecards count up to now) × the wage set on the job in Square, or the person's hourly rate in Cafe Ops if Square has none. Each timecard counts on the day it started.
+- **Clocked labour** = paid hours on each Square timecard (unpaid breaks removed; still-open timecards count up to now) × the wage set on the job in Square, or the person's hourly rate in BrewView if Square has none. Each timecard counts on the day it started.
 - **Sales per labour hour** = net sales ÷ clocked hours, on days that have both. **Staff on the clock** by hour is paid clocked hours in that hour, averaged over the days with sales.
 - Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
 
@@ -99,7 +99,7 @@ Email goes through [Brevo](https://www.brevo.com) (free for up to 300 emails a d
 1. Sign up at brevo.com.
 2. Under **Senders, domains & dedicated IPs → Senders**, add the address emails should come from and confirm it from the email Brevo sends.
 3. Under **SMTP & API → API keys**, generate a key.
-4. Set `BREVO_API_KEY` (the key) and `EMAIL_FROM` (the sender address) in the app's environment (Railway → Variables), and deploy. Optional: `EMAIL_FROM_NAME` (default "Cafe Ops") and `APP_URL` (your Cafe Ops address, for an "Open Cafe Ops" button; on Railway it's found automatically).
+4. Set `BREVO_API_KEY` (the key) and `EMAIL_FROM` (the sender address) in the app's environment (Railway → Variables), and deploy. Optional: `EMAIL_FROM_NAME` (default "BrewView") and `APP_URL` (your BrewView address, for an "Open BrewView" button; on Railway it's found automatically).
 
 ## Standalone demo
 

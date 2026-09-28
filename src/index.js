@@ -66,4 +66,4 @@ if (mailer) {
 }
 
 const port = Number(process.env.PORT) || 3000;
-createApp(db, { square, mailer }).listen(port, () => console.log(`Cafe Ops running at http://localhost:${port}`));
+createApp(db, { square, mailer }).listen(port, () => console.log(`BrewView running at http://localhost:${port}`));

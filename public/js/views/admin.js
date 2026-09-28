@@ -324,7 +324,7 @@ function cleanupSection(c) {
   return `
     <section class="card" id="cleanup">
       <h2>Remove what isn’t in Square</h2>
-      ${!c.ready ? `<p class="notice">${!c.linked_sites.length ? 'Link your sites to Square locations above first.' : 'Import your staff from Square first (Setup → Staff → Import from Square), so Cafe Ops knows who to keep.'}</p>` : ''}
+      ${!c.ready ? `<p class="notice">${!c.linked_sites.length ? 'Link your sites to Square locations above first.' : 'Import your staff from Square first (Setup → Staff → Import from Square), so BrewView knows who to keep.'}</p>` : ''}
       <p class="muted">Deletes sites that aren’t linked to a Square location and staff who aren’t in your Square team, such as the made-up demo data, along with their rotas and records. Sites linked to Square (${esc(c.linked_sites.join(', ') || 'none yet')}) and you are always kept. A backup copy of your data is saved first.</p>
       ${c.locations.length ? `
         <label class="check-row"><input type="checkbox" name="remove_locations" ${c.linked_sites.length ? '' : 'disabled'}>
@@ -352,7 +352,7 @@ function wireCleanup(ctx, c) {
   staff?.addEventListener('change', update);
   btn.addEventListener('click', async () => {
     const parts = [sites?.checked && plural(c.locations.length, 'site'), staff?.checked && plural(c.staff.length, 'staff member')].filter(Boolean);
-    const ok = await confirmDialog(`This permanently deletes ${parts.join(' and ')} and their records. A backup copy of your data is saved first.`, { confirmLabel: 'Delete', title: 'Remove from Cafe Ops?' });
+    const ok = await confirmDialog(`This permanently deletes ${parts.join(' and ')} and their records. A backup copy of your data is saved first.`, { confirmLabel: 'Delete', title: 'Remove from BrewView?' });
     if (!ok) return;
     btn.disabled = true;
     try {
@@ -390,7 +390,7 @@ export async function renderSquare(ctx) {
            ${squareError ? `<p class="alert-text">${esc(squareError)}</p>` : ''}`
         : `<p><span class="badge badge-draft">Not connected</span></p>
            <ol class="steps">
-             <li>Go to <strong>developer.squareup.com</strong>, sign in with your Square account and create an application (e.g. “Cafe Ops”).</li>
+             <li>Go to <strong>developer.squareup.com</strong>, sign in with your Square account and create an application (e.g. “BrewView”).</li>
              <li>Switch the app to <strong>Production</strong> and copy the <strong>Production access token</strong>.</li>
              <li>Set it where the app runs: <code>SQUARE_ACCESS_TOKEN=…</code> then restart the app.</li>
            </ol>

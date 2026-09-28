@@ -10,7 +10,7 @@ export function render(root, onLogin) {
   root.innerHTML = `
     <div class="login-wrap">
       <form class="login card">
-        <h1>Cafe Ops</h1>
+        <h1>BrewView</h1>
         <p class="muted">Sign in to manage your site.</p>
         <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required></label>
         <label class="field"><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label>

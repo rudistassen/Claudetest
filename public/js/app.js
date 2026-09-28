@@ -138,7 +138,7 @@ function renderShell() {
   document.getElementById('app').innerHTML = `
     <header class="topbar">
       <button class="icon-btn menu-toggle" aria-label="Menu">☰</button>
-      <a class="brand" href="#/dashboard">Cafe Ops${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
+      <a class="brand" href="#/dashboard">BrewView${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <div class="loc-picker">
         ${state.multiSite
           ? `<select id="location-select" aria-label="Location">${locOptions}</select>`

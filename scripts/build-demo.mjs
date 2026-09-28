@@ -29,13 +29,13 @@ const band = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
   .match(/<header class="brand-band"[\s\S]*?<\/header>/)[0]
   .replace(/src="\/img\/([\w-]+\.png)"/g, (_, f) => `src="data:image/png;base64,${fs.readFileSync(path.join(root, 'public/img', f)).toString('base64')}"`);
 
-const html = `<title>Cafe Ops</title>
+const html = `<title>BrewView</title>
 <meta name="theme-color" content="#1f5f4a">
 <style>
 ${css}
 </style>
 ${band}
-<div id="app"><div class="loading">Loading Cafe Ops demo…</div></div>
+<div id="app"><div class="loading">Loading BrewView demo…</div></div>
 <div id="modal-root"></div>
 <div id="toasts" aria-live="polite"></div>
 <script>window.CAFE_OPS_DEMO = true; document.body.classList.add('demo');</script>

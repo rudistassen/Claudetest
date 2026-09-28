@@ -16,11 +16,11 @@ const periodText = (p) => (p === 'yesterday' ? 'yesterday’s full day' : 'today
 
 function setupHelp(data) {
   if (data.demo) return '<p class="notice">Demo: emails aren’t really sent here. Use <strong>Preview</strong> to see exactly what people will get.</p>';
-  if (data.ready) return `<p class="small muted">Emails are sent from <strong>${esc(data.sender)}</strong>.${data.app_url ? '' : ' Add <code>APP_URL</code> (your Cafe Ops web address) to put an “Open Cafe Ops” button in the email.'}</p>`;
+  if (data.ready) return `<p class="small muted">Emails are sent from <strong>${esc(data.sender)}</strong>.${data.app_url ? '' : ' Add <code>APP_URL</code> (your BrewView web address) to put an “Open BrewView” button in the email.'}</p>`;
   return `
     <section class="card email-setup">
       <h2>First, switch on email (one-off, about 10 minutes)</h2>
-      <p>Cafe Ops sends email through <strong>Brevo</strong>, a free email service (up to 300 emails a day).</p>
+      <p>BrewView sends email through <strong>Brevo</strong>, a free email service (up to 300 emails a day).</p>
       <ol>
         <li>Go to <a href="https://www.brevo.com" target="_blank" rel="noopener">brevo.com</a> and sign up for a free account.</li>
         <li>In Brevo, open <strong>Senders, domains &amp; dedicated IPs → Senders</strong>, add the email address the reports should come from (e.g. your own) and click the link Brevo emails you to confirm it.</li>
@@ -62,7 +62,7 @@ export async function renderEmailReports(ctx) {
       <h1>Email reports</h1>
       <div class="actions"><button class="btn btn-primary" id="add">+ New email report</button></div>
     </div>
-    <p class="muted">Email the dashboard to chosen people at a set time. Each person gets the sites they can access in Cafe Ops, and sales and labour figures only if their permissions let them see sales.</p>
+    <p class="muted">Email the dashboard to chosen people at a set time. Each person gets the sites they can access in BrewView, and sales and labour figures only if their permissions let them see sales.</p>
     ${setupHelp(data)}
     ${data.schedules.length ? `<div class="report-cards">${data.schedules.map(card).join('')}</div>`
       : '<div class="empty">No email reports yet. Click <strong>+ New email report</strong> to set one up.</div>'}`;
@@ -84,7 +84,7 @@ export async function renderEmailReports(ctx) {
           <button type="button" class="btn btn-small btn-ghost" data-pick="none">Clear</button></div>
         <div class="people-picks">${data.people.map((p) => `<label class="check-row"><input type="checkbox" name="person_pick" value="${p.id}" data-sales="${p.sees_sales ? 1 : 0}" ${picked.has(p.id) ? 'checked' : ''}>
           <span><strong>${esc(p.name)}</strong> <small class="muted">${esc(p.access_name ?? p.role)} · ${p.sites} site${p.sites === 1 ? '' : 's'}${p.sees_sales ? '' : ' · no sales figures'}</small></span></label>`).join('')}</div>
-        <small class="muted">Only people with an email address in Cafe Ops are listed.</small>
+        <small class="muted">Only people with an email address in BrewView are listed.</small>
       </div>
       ${field('Switched on', `<input type="checkbox" name="active" ${s.active === 0 ? '' : 'checked'}>`, { className: 'field-inline' })}`;
   };
