@@ -1,8 +1,6 @@
 import { fmtPct, labourTone } from './sales.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart } from '../lib.js';
 
-const POSITIONS = ['Manager', 'Supervisor', 'Barista', 'Kitchen', 'Front of house', 'Cleaner'];
-
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const week = weekStart(query.week || todayISO());
@@ -54,9 +52,7 @@ export async function render(ctx) {
   // A shift at another site (greyed out on a single site's rota) says where it is.
   const shiftLabel = (s, u, site) => {
     const where = s.location_id !== site ? `@ ${s.location_name}` : '';
-    const role = s.position && s.position !== u.position ? s.position : '';
-    const sub = [where, role].filter(Boolean).join(' · ');
-    return `${s.start_time}–${s.end_time}${sub ? `<small>${esc(sub)}</small>` : ''}`;
+    return `${s.start_time}–${s.end_time}${where ? `<small>${esc(where)}</small>` : ''}`;
   };
   const dayHours = data.days.map((d) => data.shifts.filter((s) => s.date === d).reduce((t, s) => t + s.hours, 0));
 
@@ -84,7 +80,7 @@ export async function render(ctx) {
             <span class="rota-group-meta">${summary.people} ${summary.people === 1 ? 'person' : 'people'} · ${summary.hours} h${summary.cost === null ? '' : ` · ${money(summary.cost)} labour`}</span>
           </th></tr>` : `
             <tr class="${u.location_id !== site ? 'rota-cover' : ''}">
-              <th><strong>${esc(u.name)}</strong><small>${esc(u.position ?? '')}${u.location_id !== site ? ` · cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}` : ''}</small></th>
+              <th><strong>${esc(u.name)}</strong>${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${data.days.map((d) => {
                 const shifts = byCell.get(cellKey(u.id, site, d)) ?? [];
                 return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''}" data-user="${u.id}" data-date="${d}" data-site="${site}">
@@ -138,7 +134,7 @@ export async function render(ctx) {
           ${field('End', input('end_time', s.end_time, 'type="time" required'))}
           ${field('Unpaid break (mins)', input('break_minutes', s.break_minutes, 'type="number" min="0" step="5"'))}
         </div>
-        ${field('Role on shift', select('position', [['', '—'], ...POSITIONS.map((p) => [p, p])], s.position ?? person?.position ?? ''))}
+        <input type="hidden" name="position" value="${esc(s.position ?? person?.position ?? '')}">
         ${field('Notes', textarea('notes', s.notes))}`,
       danger: shift ? 'Delete shift' : null,
       onDanger: async () => {

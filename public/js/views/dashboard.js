@@ -55,7 +55,7 @@ function card(loc, state) {
         <div class="span-2">
           <h3>On shift today (${staff.length})</h3>
           ${staff.length
-            ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(s.name)}</strong> ${s.start_time}–${s.end_time}${s.position ? ` · ${esc(s.position)}` : ''}</li>`).join('')}</ul>`
+            ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(s.name)}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
             : '<p class="muted">Nobody rostered</p>'}
         </div>
       </div>
@@ -96,7 +96,7 @@ export async function render({ el, state, navigate, stale }) {
     ${myShifts.length ? `
     <section class="card">
       <h2>Your upcoming shifts</h2>
-      <ul class="shift-list">${myShifts.slice(0, 7).map((s) => `<li><strong>${fmtDate(s.date)}</strong> ${s.start_time}–${s.end_time} · ${esc(s.location_name)}${s.position ? ` · ${esc(s.position)}` : ''}</li>`).join('')}</ul>
+      <ul class="shift-list">${myShifts.slice(0, 7).map((s) => `<li><strong>${fmtDate(s.date)}</strong> ${s.start_time}–${s.end_time} · ${esc(s.location_name)}</li>`).join('')}</ul>
     </section>` : ''}
     <div class="site-cards">${locs.map((l) => card(l, state)).join('')}</div>`;
 

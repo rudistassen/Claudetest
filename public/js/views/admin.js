@@ -45,7 +45,7 @@ function openSquareImport(ctx) {
     wide: true,
     submitLabel: 'Import',
     body: `
-      <p class="muted">Everyone in your Square team is added here, or updated if they're already here (matched by email, then name). Their position and hourly rate come from their job and pay in Square. New people’s home site comes from the locations they’re assigned to in Square; people already here keep the home site set on this page.</p>
+      <p class="muted">Everyone in your Square team is added here, or updated if they're already here (matched by email, then name). Their hourly rate comes from their pay in Square. New people’s home site comes from the locations they’re assigned to in Square; people already here keep the home site set on this page.</p>
       <label class="check-row"><input type="checkbox" name="deactivate_others">
         <span><strong>Deactivate staff who aren’t in Square</strong>
         <small>For example the made-up demo staff. They keep their history but can no longer sign in or be put on the rota. You stay active.</small></span></label>
@@ -70,11 +70,11 @@ function openSquareImport(ctx) {
       const summary = [[n('create'), 'to add'], [n('update'), 'to update'], [n('deactivate'), 'to deactivate'], [n('skip'), 'skipped']]
         .filter(([c]) => c).map(([c, l]) => `<strong>${c}</strong> ${l}`).join(' · ');
       preview.innerHTML = rows.length ? `<p>${summary}</p><div class="table-wrap"><table>
-        <thead><tr><th>Person</th><th>Change</th><th>Site</th><th>Position</th><th class="num">Hourly rate</th></tr></thead>
+        <thead><tr><th>Person</th><th>Change</th><th>Site</th><th class="num">Hourly rate</th></tr></thead>
         <tbody>${rows.map((r) => `<tr class="${r.action === 'skip' || r.action === 'deactivate' ? 'inactive' : ''}">
           <td>${esc(r.name)}${r.email ? `<small>${esc(r.email)}${r.no_email ? ' · no email in Square' : ''}</small>` : ''}</td>
           <td>${ACTION_LABELS[r.action]}${r.action === 'update' && r.existing && r.existing.name !== r.name ? ` <small>was ${esc(r.existing.name)}</small>` : ''}${r.reason ? ` <small>${esc(r.reason)}</small>` : ''}</td>
-          <td>${esc(r.site ?? '')}</td><td>${esc(r.position ?? '')}</td>
+          <td>${esc(r.site ?? '')}</td>
           <td class="num">${r.hourly_rate === null ? '' : money(r.hourly_rate)}</td></tr>`).join('')}</tbody>
       </table></div>` : '<p class="muted">Your Square team is empty.</p>';
     } catch (err) {
@@ -107,7 +107,6 @@ export async function renderStaff(ctx) {
       { label: 'Name', key: 'name' },
       { label: 'Email', key: 'email' },
       { label: 'Role', value: (r) => r.role[0].toUpperCase() + r.role.slice(1) },
-      { label: 'Position', key: 'position' },
       { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
       { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
       { label: 'Active', value: (r) => yesNo(r.active) },
@@ -119,7 +118,7 @@ export async function renderStaff(ctx) {
         ${field('Home site', select('location_id', state.isAdmin ? [['', '—'], ...locOptions] : locOptions.filter(([id]) => id === state.user.location_id), u.location_id ?? state.locationId))}
       </div>
       <div class="row">
-        ${field('Position', input('position', u.position, 'placeholder="e.g. Barista"'))}
+        <input type="hidden" name="position" value="${esc(u.position ?? '')}">
         ${field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"'))}
       </div>
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password', input('password', '', `type="password" minlength="8" autocomplete="new-password" ${u.id ? '' : 'required'}`), { hint: 'At least 8 characters' })}
