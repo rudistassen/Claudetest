@@ -3,7 +3,10 @@ import path from 'node:path';
 import { openDb } from './db.js';
 import { cleanEnv, DEMO_PASSWORD, ensureAdmin, isEmpty, lockDemoAccounts, seedAdmin, seedDemo, seedSafetyTasks } from './seed.js';
 import { createApp } from './server.js';
-import { SquareClient, squareConfig, startAutoSync } from './square.js';
+import { brevoMailer, emailConfig } from './email.js';
+import { startReportScheduler } from './reports.js';
+import { SquareClient, squareConfig, startAutoSync, syncSales } from './square.js';
+import { addDays, today } from './util.js';
 
 const args = new Set(process.argv.slice(2));
 const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'data', 'cafe.db');
@@ -52,5 +55,15 @@ if (square) {
   startAutoSync(db, square.client, config);
 }
 
+// Emailed reports: fetch the latest from Square just before sending, so the figures are fresh.
+const emailSettings = emailConfig();
+const mailer = emailSettings ? brevoMailer(emailSettings) : null;
+if (mailer) {
+  console.log(`Email reports switched on (sending from ${emailSettings.from}).`);
+  startReportScheduler(db, mailer, {
+    beforeSend: square ? () => syncSales(db, square.client, { from: addDays(today(), -1), to: today(), triggeredBy: 'email report' }) : null,
+  });
+}
+
 const port = Number(process.env.PORT) || 3000;
-createApp(db, { square }).listen(port, () => console.log(`Cafe Ops running at http://localhost:${port}`));
+createApp(db, { square, mailer }).listen(port, () => console.log(`Cafe Ops running at http://localhost:${port}`));

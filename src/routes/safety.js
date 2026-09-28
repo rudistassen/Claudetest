@@ -1,16 +1,13 @@
 import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
-import { nowMinutes, pct, rotaByDay, timecardsFor } from '../metrics.js';
-import { addDays, badRequest, bool, BUSINESS_TZ, date, forbidden, id, notFound, num, oneOf, round2, str, today, weekStart, zonedMidnightUTC } from '../util.js';
+import { siteSummaries, tasksAt } from '../dashboard.js';
+import { addDays, badRequest, bool, date, forbidden, id, notFound, num, oneOf, round2, str, today, weekStart } from '../util.js';
 
 const MAX_REPORT_DAYS = 92;
 
 export function registerSafetyRoutes(router, db) {
   // The checks a site does: shared checks (unless switched off there) plus the site's own.
-  const tasksStmt = db.prepare(`SELECT * FROM safety_tasks WHERE active = 1 AND (location_id = ? OR (location_id IS NULL
-      AND id NOT IN (SELECT task_id FROM safety_task_exclusions WHERE location_id = ?)))
-    ORDER BY frequency, sort_order, title`);
-  const tasksFor = (locationId) => tasksStmt.all(locationId, locationId);
+  const tasksFor = (locationId) => tasksAt(db, locationId);
 
   // --- Task templates ---
 
@@ -239,95 +236,11 @@ export function registerSafetyRoutes(router, db) {
   // --- Dashboard: one card per site the user can see ---
 
   router.get('/dashboard', (req, res) => {
-    const d = today();
-    const ws = weekStart(d);
-    const seeSales = can(req.user, 'sales.view');
-    const seeOrders = can(req.user, 'orders.manage');
-    const locations = reportLocations(req);
-
-    // Sales figures are only as fresh as the last Square sync. Each is compared with the same weekday last week
-    // up to the same time of day, so a mid-afternoon look isn't measured against a whole day.
-    const lastWeek = addDays(d, -7);
-    const minutes = nowMinutes();
-    const cutoff = Date.parse(zonedMidnightUTC(lastWeek)) + minutes * 60000;
-    const ids = locations.map((l) => l.id);
-    const labourSynced = !!db.prepare('SELECT 1 FROM timecards LIMIT 1').get();
-    const seeClockIns = seeSales || can(req.user, 'staff.manage');
-    const cardsToday = ids.length && (seeSales || seeClockIns) ? timecardsFor(db, ids, d, d) : [];
-    const cardsLastWeek = ids.length && seeSales && labourSynced
-      ? timecardsFor(db, ids, lastWeek, lastWeek).map((t) => {
-        // Only the part worked by this time last week, breaks taken off pro rata.
-        const worked = Math.max(0, Math.min(t.end, cutoff) - t.start) / 3600000;
-        const hours = t.span > 0 ? worked * (t.hours / t.span) : 0;
-        return { ...t, hours, cost: hours * t.rate };
-      })
-      : [];
-    const rotaToday = seeSales && !labourSynced ? rotaByDay(db, ids, d, d, { toDate: true }) : new Map();
-    const rotaLastWeek = seeSales && !labourSynced ? rotaByDay(db, ids, lastWeek, lastWeek, { toDate: true, asOf: { date: lastWeek, minutes } }) : new Map();
-    const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: BUSINESS_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-
-    const salesSummary = (locationId) => {
-      const todaySales = db.prepare('SELECT net_sales, gross_sales, orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, d);
-      const lastDay = db.prepare('SELECT net_sales, gross_sales, orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, lastWeek);
-      // Last week's net sales by this time, from its hourly sales (the current hour counted pro rata).
-      const hour = Math.floor(minutes / 60);
-      const lastNet = db.prepare(`SELECT COALESCE(SUM(CASE WHEN hour < ? THEN net_sales WHEN hour = ? THEN net_sales * ? ELSE 0 END), 0) AS net
-        FROM sales_hourly WHERE location_id = ? AND date = ?`).get(hour, hour, (minutes % 60) / 60, locationId, lastWeek).net;
-      // Hourly figures are net only, so last week's gross by now is its day's gross scaled the same way.
-      const lastGross = lastDay && lastDay.net_sales ? lastDay.gross_sales * (lastNet / lastDay.net_sales) : 0;
-      const sum = (list) => list.filter((t) => t.location_id === locationId).reduce((n, t) => n + t.cost, 0);
-      const labourToday = labourSynced ? sum(cardsToday) : rotaToday.get(`${locationId}|${d}`)?.cost ?? 0;
-      const labourLast = labourSynced ? sum(cardsLastWeek) : rotaLastWeek.get(`${locationId}|${lastWeek}`)?.cost ?? 0;
-      return {
-        sales_today: todaySales ? round2(todaySales.net_sales) : null,
-        gross_today: todaySales ? round2(todaySales.gross_sales) : null,
-        orders_today: todaySales?.orders ?? 0,
-        last_week: lastDay ? { net: round2(lastNet), gross: round2(lastGross), labour_cost: round2(labourLast) } : { net: null, gross: null, labour_cost: round2(labourLast) },
-        labour_cost_today: round2(labourToday),
-        labour_basis: labourSynced ? 'clocked' : 'rostered',
-        labour_pct_today: todaySales && labourToday ? pct(labourToday, todaySales.net_sales) : null,
-      };
-    };
-    // Who has clocked in at a site today (from Square), with how long they've worked so far.
-    const clockIns = (locationId) => cardsToday.filter((t) => t.location_id === locationId).map((t) => ({
-      name: t.name,
-      start: timeFormat.format(new Date(t.start)),
-      end: t.end_at ? timeFormat.format(new Date(t.end)) : null,
-      hours: Math.round(t.hours * 100) / 100,
+    res.json(siteSummaries(db, {
+      locations: reportLocations(req),
+      seeSales: can(req.user, 'sales.view'),
+      seeOrders: can(req.user, 'orders.manage'),
+      seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage'),
     }));
-
-    const cards = locations.map((loc) => {
-      const tasks = tasksFor(loc.id);
-      const checks = db.prepare('SELECT task_id, period, status FROM safety_checks WHERE location_id = ? AND period IN (?, ?)').all(loc.id, d, ws);
-      const count = (freq, period) => {
-        const ids = new Set(tasks.filter((t) => t.frequency === freq).map((t) => t.id));
-        const done = checks.filter((c) => c.period === period && ids.has(c.task_id));
-        return { due: ids.size, done: done.length, fails: done.filter((c) => c.status === 'fail').length };
-      };
-      const shiftsToday = db.prepare(`SELECT s.start_time, s.end_time, s.position, u.name FROM published_shifts s JOIN users u ON u.id = s.user_id
-        WHERE s.location_id = ? AND s.date = ? ORDER BY s.start_time`).all(loc.id, d);
-      const lastTake = db.prepare(`SELECT MAX(completed_at) AS at FROM stock_takes WHERE location_id = ? AND status = 'completed'`).get(loc.id).at;
-      const takeInProgress = db.prepare(`SELECT id FROM stock_takes WHERE location_id = ? AND status = 'in_progress'`).get(loc.id)?.id ?? null;
-      const wastage = db.prepare('SELECT COALESCE(SUM(total_cost), 0) AS total FROM wastage WHERE location_id = ? AND date BETWEEN ? AND ?')
-        .get(loc.id, addDays(d, -6), d).total;
-      const orders = seeOrders
-        ? db.prepare(`SELECT status, COUNT(*) AS n FROM purchase_orders WHERE location_id = ? AND status IN ('draft', 'sent') GROUP BY status`).all(loc.id)
-        : [];
-      return {
-        id: loc.id,
-        name: loc.name,
-        daily: count('daily', d),
-        weekly: count('weekly', ws),
-        shifts_today: shiftsToday,
-        wastage_7d: round2(wastage),
-        last_stock_take: lastTake,
-        stock_take_in_progress: takeInProgress,
-        orders_draft: orders.find((o) => o.status === 'draft')?.n ?? 0,
-        orders_sent: orders.find((o) => o.status === 'sent')?.n ?? 0,
-        ...(seeSales ? salesSummary(loc.id) : {}),
-        ...(seeClockIns ? { clock_ins: clockIns(loc.id) } : {}),
-      };
-    });
-    res.json({ date: d, week_start: ws, compare_date: lastWeek, labour_synced: labourSynced, locations: cards });
   });
 }

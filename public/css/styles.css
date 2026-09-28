@@ -605,3 +605,22 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
   .clock-list li { padding: 0.05rem 0; font-size: 0.85rem; }
   .chart-tip { display: none !important; }
 }
+
+/* Setup → Email reports */
+.report-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 1rem; }
+.report-cards .card { margin: 0; }
+.report-card .card-head { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
+.report-card .card-head h2 { margin: 0; }
+.report-card p { margin: 0.4rem 0; }
+.report-card.is-off > *:not(.card-head) { opacity: 0.6; }
+.report-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+.email-setup ol { padding-left: 1.3rem; line-height: 1.6; }
+.email-setup li + li { margin-top: 0.35rem; }
+.day-picks { display: flex; flex-wrap: wrap; gap: 0.2rem 1rem; margin-top: 0.3rem; }
+.day-picks .check-row, .people-picks .check-row { margin: 0.2rem 0; align-items: center; }
+.day-picks .check-row input, .people-picks .check-row input { width: auto; margin: 0; }
+.day-picks .check-row span, .people-picks .check-row span { font-weight: 400; }
+.people-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0 1rem; max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.7rem; margin: 0.35rem 0; }
+.pick-links { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+.email-preview { width: 100%; height: 60vh; border: 1px solid var(--border); border-radius: 8px; background: #f4f1ea; }
+@media (max-width: 700px) { .report-cards { grid-template-columns: 1fr; } }

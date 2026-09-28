@@ -90,6 +90,17 @@ How the numbers are worked out:
 - **Sales per labour hour** = net sales ÷ clocked hours, on days that have both. **Staff on the clock** by hour is paid clocked hours in that hour, averaged over the days with sales.
 - Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
 
+## Email reports
+
+Admins can email the dashboard to chosen people at a set time (**Setup → Email reports**): pick the time, the days, whether it covers **yesterday's full day** (good for a morning email) or **today so far**, and who gets it. Each person gets the sites they can access, with sales and labour figures only if their permissions include sales. Just before sending, the app fetches the latest figures from Square. **Preview** shows exactly what each person will get; **Send me a test** emails just you.
+
+Email goes through [Brevo](https://www.brevo.com) (free for up to 300 emails a day), because hosts such as Railway block ordinary email on their cheaper plans. To switch it on:
+
+1. Sign up at brevo.com.
+2. Under **Senders, domains & dedicated IPs → Senders**, add the address emails should come from and confirm it from the email Brevo sends.
+3. Under **SMTP & API → API keys**, generate a key.
+4. Set `BREVO_API_KEY` (the key) and `EMAIL_FROM` (the sender address) in the app's environment (Railway → Variables), and deploy. Optional: `EMAIL_FROM_NAME` (default "Cafe Ops") and `APP_URL` (your Cafe Ops address, for an "Open Cafe Ops" button; on Railway it's found automatically).
+
 ## Standalone demo
 
 ```bash

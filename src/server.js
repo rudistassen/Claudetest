@@ -11,6 +11,7 @@ import { registerSafetyRoutes } from './routes/safety.js';
 import { registerStockRoutes } from './routes/stock.js';
 import { registerLeaveRoutes } from './routes/leave.js';
 import { registerTradingRoutes } from './routes/trading.js';
+import { registerReportRoutes } from './reports.js';
 import { HttpError } from './util.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -21,7 +22,8 @@ export function trustProxy(env) {
 }
 
 // square: { config, client } when a Square access token is configured, otherwise null.
-export function createApp(db, { square = null } = {}) {
+// mailer: sends the emailed reports (see email.js), or null when email isn't set up.
+export function createApp(db, { square = null, mailer = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Behind a hosting platform's proxy (Railway, Render, …) trust one hop, so HTTPS and visitors' addresses are seen.
@@ -45,6 +47,7 @@ export function createApp(db, { square = null } = {}) {
   registerRecipeRoutes(api, db);
   registerTradingRoutes(api, db, square);
   registerLeaveRoutes(api, db);
+  registerReportRoutes(api, db, mailer);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 

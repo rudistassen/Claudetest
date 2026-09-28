@@ -261,6 +261,25 @@ CREATE TABLE IF NOT EXISTS safety_task_exclusions (
   PRIMARY KEY (task_id, location_id)
 );
 
+-- Emailed reports: the dashboard, sent to chosen people at a set time on chosen days.
+CREATE TABLE IF NOT EXISTS report_schedules (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  send_time TEXT NOT NULL,
+  days TEXT NOT NULL DEFAULT '0123456',
+  period TEXT NOT NULL DEFAULT 'today' CHECK (period IN ('today', 'yesterday')),
+  active INTEGER NOT NULL DEFAULT 1,
+  last_sent_date TEXT,
+  last_result TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS report_recipients (
+  schedule_id INTEGER NOT NULL REFERENCES report_schedules(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (schedule_id, user_id)
+);
+
 -- Extra sites someone can work with when they don't have access to every site (users.all_sites = 0).
 CREATE TABLE IF NOT EXISTS user_sites (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -14,6 +14,8 @@ import { registerLeaveRoutes } from '../src/routes/leave.js';
 import { registerTradingRoutes } from '../src/routes/trading.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { SquareClient, syncSales } from '../src/square.js';
+import { memoryMailer } from '../src/email.js';
+import { registerReportRoutes } from '../src/reports.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
@@ -81,6 +83,7 @@ async function boot() {
 
   const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 30 };
   const square = { config, client: new SquareClient(config, fakeSquareFetch) };
+  const demoMailer = memoryMailer();
   for (const l of SQUARE_LOCATIONS.slice(0, 7)) {
     db.prepare('UPDATE locations SET square_location_id = ? WHERE name = ?').run(l.id, l.name);
   }
@@ -106,6 +109,7 @@ async function boot() {
   registerRecipeRoutes(api, db);
   registerTradingRoutes(api, db, square);
   registerLeaveRoutes(api, db);
+  registerReportRoutes(api, db, demoMailer, { demo: true });
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
 
   const realFetch = window.fetch.bind(window);

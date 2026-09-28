@@ -6,6 +6,7 @@ import * as orders from './views/orders.js';
 import * as recipes from './views/recipes.js';
 import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
+import * as reports from './views/reports.js';
 import * as sales from './views/sales.js';
 import * as stock from './views/stock.js';
 import * as timeoff from './views/timeoff.js';
@@ -63,6 +64,7 @@ const ROUTES = [
   [/^admin\/products$/, admin.renderProducts, SUPPLIERS],
   [/^admin\/safety-tasks$/, safety.renderSetup, ['safety.manage']],
   [/^admin\/square$/, admin.renderSquare, 'admin'],
+  [/^admin\/email-reports$/, reports.renderEmailReports, 'admin'],
   [/^account$/, admin.renderAccount],
 ];
 
@@ -95,6 +97,7 @@ function navGroups() {
       ['admin/permissions', 'Permissions', '', 'admin'],
       ['admin/locations', 'Locations', '', 'admin'],
       ['admin/square', 'Square', '', 'admin'],
+      ['admin/email-reports', 'Email reports', '', 'admin'],
       ['admin/suppliers', 'Suppliers', '', SUPPLIERS],
       ['admin/products', 'Products', '', SUPPLIERS],
       ['safety/setup', 'Trail checks', '', ['safety.manage']],
