@@ -5,6 +5,7 @@ import * as login from './views/login.js';
 import * as orders from './views/orders.js';
 import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
+import * as sales from './views/sales.js';
 import * as stock from './views/stock.js';
 import * as wastage from './views/wastage.js';
 
@@ -29,6 +30,7 @@ const ROUTES = [
   [/^wastage$/, wastage.render],
   [/^stock$/, stock.renderList],
   [/^stock\/(\d+)$/, stock.renderTake],
+  [/^sales$/, sales.render, 'manager'],
   [/^orders$/, orders.renderList, 'manager'],
   [/^orders\/new$/, orders.renderNew, 'manager'],
   [/^orders\/(\d+)$/, orders.renderOrder, 'manager'],
@@ -37,6 +39,7 @@ const ROUTES = [
   [/^admin\/suppliers$/, admin.renderSuppliers, 'manager'],
   [/^admin\/products$/, admin.renderProducts, 'manager'],
   [/^admin\/safety-tasks$/, admin.renderSafetyTasks, 'manager'],
+  [/^admin\/square$/, admin.renderSquare, 'admin'],
   [/^account$/, admin.renderAccount],
 ];
 
@@ -48,14 +51,14 @@ function navItems() {
     ['wastage', 'Wastage', '⌫'],
     ['stock', 'Stock takes', '☰'],
   ];
-  if (state.isManager) items.push(['orders', 'Orders', '⇄']);
+  if (state.isManager) items.push(['sales', 'Sales', '£'], ['orders', 'Orders', '⇄']);
   return items;
 }
 
 function adminItems() {
   if (!state.isManager) return [];
   const items = [['admin/staff', 'Staff']];
-  if (state.isAdmin) items.push(['admin/locations', 'Locations']);
+  if (state.isAdmin) items.push(['admin/locations', 'Locations'], ['admin/square', 'Square']);
   items.push(['admin/suppliers', 'Suppliers'], ['admin/products', 'Products'], ['admin/safety-tasks', 'Safety checks']);
   return items;
 }

@@ -12,6 +12,7 @@ One web app for running a multi-site cafe business. It works on desktops, tablet
 | **Supplier orders** | Suppliers have order days, lead times and minimum orders. When you build an order, quantities are suggested as *par level minus the last stock count*, and par levels can be set per site. Orders go draft → sent (opens a ready-written email to the supplier) → received (record short or missing items) or cancelled. |
 | **Stock takes** | Count stock by category on a phone or tablet. Counts save automatically, and you can search or show only uncounted items. The previous count is shown next to each item, with a running stock value. A manager completes the count. |
 | **Wastage** | Staff record waste from the product list (costed automatically) or as a free-text item, with a reason. Reports break wastage down by reason, item and site over any date range, and export to CSV. |
+| **Sales (Square)** | Pulls completed orders from your Square account for each linked site. Shows net sales (after discounts, excluding VAT and tips), transactions, average spend and top items, next to **labour %** (rostered wages ÷ net sales) and **wastage %** by day and by site. Sales also appear on the dashboard, in the rota footer and on the wastage page. Managers only. |
 | **Setup** | Manage staff (role, home site, position, hourly rate), locations, suppliers, products and food-safety checks. |
 
 ## Roles
@@ -53,8 +54,25 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 | `TZ_BUSINESS` | `Europe/London` | Time zone used to decide what "today" is |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | demo values | First admin account (only used when the database is empty) |
 | `SEED_DEMO` | `true` | Set to `false` to skip demo data |
+| `SQUARE_ACCESS_TOKEN` | – | Square access token; turns on the Square integration |
+| `SQUARE_ENVIRONMENT` | `production` | `sandbox` to use a Square sandbox token and test data |
+| `SQUARE_SYNC_MINUTES` | `30` | How often today's and yesterday's sales are refreshed |
+| `SQUARE_API_VERSION` | `2025-01-23` | Square API version header |
 
 `npm run seed` **deletes** the database and recreates it.
+
+## Connecting Square
+
+1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "Cafe Ops").
+2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders and locations. Treat it like a password.
+3. Start Cafe Ops with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
+4. In Cafe Ops go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
+5. Click **Import sales** to backfill history (up to 92 days per run). After that, sales refresh automatically every 30 minutes. The first automatic run backfills the last 28 days.
+
+How the numbers are worked out:
+- **Net sales** = line-item totals after discounts, minus VAT (UK Square prices include VAT), minus itemised returns. Tips and service charges are excluded. Only `COMPLETED` orders are counted, and each is assigned to a business day by its close time in UK time.
+- **Labour %** = rostered hours × each person's hourly rate ÷ net sales. For today it only counts hours worked up to now, and days with no Square sales are left out. The colours are green at 30% or below and amber up to 35%. Change `LABOUR_TARGET` in `public/js/views/sales.js` if your target differs.
+- Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
 
 ## Tests
 
@@ -62,7 +80,7 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 npm test
 ```
 
-The API tests cover login, site and role permissions, rota clash detection and week copying, suggested order quantities, the order lifecycle, stock-take completion, wastage costing and reports, and food-safety range checks and compliance.
+The Square tests run against a local mock of Square's Locations and Orders APIs: pagination, request format, VAT, returns, UK time zone day boundaries and idempotent re-syncs. The API tests cover login, site and role permissions, rota clash detection and week copying, suggested order quantities, the order lifecycle, stock-take completion, wastage costing and reports, and food-safety range checks and compliance.
 
 ## Deploying
 
@@ -77,17 +95,20 @@ src/
   db.js             schema
   auth.js           passwords, sessions, role/location checks
   seed.js           demo data and default food-safety checks
-  routes/           admin, rota, ordering, stock (stock takes + wastage), safety (+ dashboard)
+  square.js         Square API client, order summarising and sales sync
+  metrics.js        sales / labour / wastage per site per day
+  routes/           admin, rota, ordering, stock (stock takes + wastage), safety (+ dashboard), sales (+ Square setup)
 public/
   index.html, css/, js/app.js (router), js/views/*   no build step
-test/api.test.js
+test/api.test.js, test/square.test.js
 ```
 
 ## Ideas for next steps
 
 - Holiday/leave requests and staff availability on the rota; export hours to payroll
 - Emailing orders straight from the server (SMTP), plus supplier price updates
-- Theoretical stock (deliveries − sales − wastage) and variance against counts, using an EPOS integration
+- Recipes that link Square menu items to stock products, giving theoretical stock (deliveries − sales − wastage), variance against counts, and smarter order suggestions
+- Importing staff from Square Team and comparing actual clock-in hours from Square with the rota
 - Photo uploads for wastage and failed safety checks
 - Reminders or push notifications for overdue checks
 - Allergen and recipe management, and a temperature-probe (Bluetooth) integration

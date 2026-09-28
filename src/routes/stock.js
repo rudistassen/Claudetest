@@ -176,7 +176,7 @@ export function registerStockRoutes(router, db) {
   });
 
   router.get('/wastage/report', (req, res) => {
-    const { from, to, rows } = wastageRows(req);
+    const { from, to, locationId, rows } = wastageRows(req);
     const group = (keyFn) => {
       const m = new Map();
       for (const r of rows) {
@@ -190,10 +190,18 @@ export function registerStockRoutes(router, db) {
       return [...m.values()].map((g) => ({ ...g, total_cost: round2(g.total_cost), quantity: round2(g.quantity) }))
         .sort((a, b) => b.total_cost - a.total_cost);
     };
+    const totalCost = round2(rows.reduce((s, r) => s + r.total_cost, 0));
+    let sales = null;
+    if (isManager(req.user)) {
+      const sql = `SELECT COALESCE(SUM(net_sales), 0) AS net, COUNT(*) AS n FROM sales_daily WHERE date BETWEEN ? AND ?${locationId ? ' AND location_id = ?' : ''}`;
+      const r = locationId ? db.prepare(sql).get(from, to, locationId) : db.prepare(sql).get(from, to);
+      if (r.n) sales = { net_sales: round2(r.net), wastage_pct: r.net > 0 ? round2((totalCost / r.net) * 100) : null };
+    }
     res.json({
       from,
       to,
-      total_cost: round2(rows.reduce((s, r) => s + r.total_cost, 0)),
+      sales,
+      total_cost: totalCost,
       entries: rows.length,
       by_location: group((r) => r.location_name),
       by_reason: group((r) => r.reason),

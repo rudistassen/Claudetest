@@ -1,4 +1,5 @@
 import { api, esc, fmtDate, fmtDateTime, money } from '../lib.js';
+import { fmtPct, labourTone } from './sales.js';
 
 function progress(done, due) {
   const pct = due ? Math.round((done / due) * 100) : 100;
@@ -38,6 +39,16 @@ function card(loc, state) {
         </div>
         ${state.isManager ? `
         <div>
+          <h3>Sales today</h3>
+          <p class="stat">${loc.sales_today === null ? '<span class="muted">–</span>' : money(loc.sales_today)}</p>
+          <p class="small muted">${loc.orders_today} orders · 7 days ${money(loc.sales_7d)}</p>
+        </div>
+        <div>
+          <h3>Labour today</h3>
+          <p class="stat tone-${labourTone(loc.labour_pct_today)}">${fmtPct(loc.labour_pct_today)}</p>
+          <p class="small muted">${money(loc.labour_cost_today)} worked so far</p>
+        </div>
+        <div>
           <h3>Orders</h3>
           <p>${loc.orders_draft} draft · ${loc.orders_sent} awaiting delivery</p>
         </div>` : ''}
@@ -62,7 +73,11 @@ export async function render({ el, state, navigate, stale }) {
     fails: t.fails + l.daily.fails + l.weekly.fails,
     wastage: t.wastage + l.wastage_7d,
     staff: t.staff + l.shifts_today.length,
-  }), { dailyDone: 0, dailyDue: 0, fails: 0, wastage: 0, staff: 0 });
+    sales: t.sales + (l.sales_today ?? 0),
+    labour: t.labour + (l.labour_cost_today ?? 0),
+  }), { dailyDone: 0, dailyDue: 0, fails: 0, wastage: 0, staff: 0, sales: 0, labour: 0 });
+  const hasSales = locs.some((l) => l.sales_today !== null && l.sales_today !== undefined);
+  const labourPct = totals.sales > 0 ? (totals.labour / totals.sales) * 100 : null;
 
   el.innerHTML = `
     <div class="page-head">
@@ -71,6 +86,8 @@ export async function render({ el, state, navigate, stale }) {
     </div>
     ${state.isAdmin ? `
     <div class="kpis">
+      ${hasSales ? `<div class="kpi"><span>Sales today (ex VAT)</span><strong>${money(totals.sales)}</strong></div>
+      <div class="kpi kpi-${labourTone(labourPct)}"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
       <div class="kpi"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
       <div class="kpi ${totals.fails ? 'kpi-bad' : ''}"><span>Failed checks</span><strong>${totals.fails}</strong></div>
       <div class="kpi"><span>Wastage, last 7 days</span><strong>${money(totals.wastage)}</strong></div>

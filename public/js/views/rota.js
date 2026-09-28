@@ -1,3 +1,4 @@
+import { fmtPct, labourTone } from './sales.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart } from '../lib.js';
 
 const POSITIONS = ['Manager', 'Supervisor', 'Barista', 'Kitchen', 'Front of house', 'Cleaner'];
@@ -29,7 +30,8 @@ export async function render(ctx) {
       </div>
     </div>
     <p class="muted">Week commencing ${fmtDate(week, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-      · ${data.total_hours} hours${data.labour_cost !== undefined ? ` · labour cost ${money(data.labour_cost)}` : ''}</p>
+      · ${data.total_hours} hours${data.labour_cost !== undefined ? ` · labour cost ${money(data.labour_cost)}` : ''}
+      ${data.week_sales ? ` · sales to date ${money(data.week_sales)} · labour <span class="tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</span> of sales to date` : ''}</p>
     <div class="table-wrap">
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}">${fmtDate(d)}</th>`).join('')}<th>Hours</th></tr></thead>
@@ -48,7 +50,13 @@ export async function render(ctx) {
               <td class="num">${data.hours_by_user[u.id] ?? 0}</td>
             </tr>`).join('')}
         </tbody>
-        <tfoot><tr><th>Total hours</th>${dayHours.map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr></tfoot>
+        <tfoot><tr><th>Total hours</th>${dayHours.map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>
+          ${data.daily_money ? `
+          <tr><th>Labour cost</th>${data.daily_money.map((m) => `<td class="num">${money(m.labour_cost)}</td>`).join('')}<td class="num">${money(data.labour_cost)}</td></tr>
+          ${data.daily_money.some((m) => m.net_sales !== null) ? `
+          <tr><th>Sales (Square)</th>${data.daily_money.map((m) => `<td class="num">${m.net_sales === null ? '–' : money(m.net_sales)}</td>`).join('')}<td class="num">${money(data.week_sales)}</td></tr>
+          <tr><th>Labour %</th>${data.daily_money.map((m) => `<td class="num tone-${labourTone(m.labour_pct)}">${fmtPct(m.labour_pct)}</td>`).join('')}<td class="num tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</td></tr>` : ''}` : ''}
+        </tfoot>
       </table>
     </div>
     ${!data.staff.length ? '<div class="empty">No staff at this location yet. Add them under Setup → Staff.</div>' : ''}`;

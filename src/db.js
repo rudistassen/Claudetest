@@ -162,13 +162,60 @@ CREATE TABLE IF NOT EXISTS safety_checks (
   UNIQUE (task_id, location_id, period)
 );
 CREATE INDEX IF NOT EXISTS idx_safety_checks_location_period ON safety_checks(location_id, period);
+
+-- Square POS sales, summarised per site per business day (net = after discounts, excluding VAT and tips).
+CREATE TABLE IF NOT EXISTS sales_daily (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  net_sales REAL NOT NULL DEFAULT 0,
+  gross_sales REAL NOT NULL DEFAULT 0,
+  tax REAL NOT NULL DEFAULT 0,
+  discounts REAL NOT NULL DEFAULT 0,
+  tips REAL NOT NULL DEFAULT 0,
+  orders INTEGER NOT NULL DEFAULT 0,
+  synced_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (location_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS sales_items (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  item_key TEXT NOT NULL,
+  catalog_object_id TEXT,
+  name TEXT NOT NULL,
+  variation_name TEXT,
+  quantity REAL NOT NULL DEFAULT 0,
+  net_sales REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (location_id, date, item_key)
+);
+
+CREATE TABLE IF NOT EXISTS square_sync_log (
+  id INTEGER PRIMARY KEY,
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  finished_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('running', 'ok', 'error')),
+  date_from TEXT,
+  date_to TEXT,
+  orders INTEGER,
+  message TEXT,
+  triggered_by TEXT
+);
 `;
+
+// Columns added after the first release; ALTER TABLE for databases created before them.
+const MIGRATIONS = [
+  ['locations', 'square_location_id', 'ALTER TABLE locations ADD COLUMN square_location_id TEXT'],
+];
 
 export function openDb(file = ':memory:') {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys = ON;');
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  for (const [table, column, sql] of MIGRATIONS) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) db.exec(sql);
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_square ON locations(square_location_id)');
   return db;
 }
 

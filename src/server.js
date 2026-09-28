@@ -5,13 +5,15 @@ import { loadUser, registerAuthRoutes, requireAuth } from './auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerOrderingRoutes } from './routes/ordering.js';
 import { registerRotaRoutes } from './routes/rota.js';
+import { registerSalesRoutes } from './routes/sales.js';
 import { registerSafetyRoutes } from './routes/safety.js';
 import { registerStockRoutes } from './routes/stock.js';
 import { HttpError } from './util.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
-export function createApp(db) {
+// square: { config, client } when a Square access token is configured, otherwise null.
+export function createApp(db, { square = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback');
@@ -30,6 +32,7 @@ export function createApp(db) {
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
   registerSafetyRoutes(api, db);
+  registerSalesRoutes(api, db, square);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 

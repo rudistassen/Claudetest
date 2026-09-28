@@ -3,6 +3,7 @@ import path from 'node:path';
 import { openDb } from './db.js';
 import { DEMO_PASSWORD, isEmpty, seedAdmin, seedDemo, seedSafetyTasks } from './seed.js';
 import { createApp } from './server.js';
+import { SquareClient, squareConfig, startAutoSync } from './square.js';
 
 const args = new Set(process.argv.slice(2));
 const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'data', 'cafe.db');
@@ -31,5 +32,12 @@ if (isEmpty(db)) {
 
 if (args.has('--seed-only')) process.exit(0);
 
+const config = squareConfig();
+const square = config ? { config, client: new SquareClient(config) } : null;
+if (square) {
+  console.log(`Square connected (${config.environment}); syncing sales every ${config.syncMinutes} minutes.`);
+  startAutoSync(db, square.client, config);
+}
+
 const port = Number(process.env.PORT) || 3000;
-createApp(db).listen(port, () => console.log(`Cafe Ops running at http://localhost:${port}`));
+createApp(db, { square }).listen(port, () => console.log(`Cafe Ops running at http://localhost:${port}`));

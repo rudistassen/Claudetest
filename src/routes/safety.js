@@ -1,4 +1,5 @@
 import { assertLocation, isManager, requireManager, resolveLocation } from '../auth.js';
+import { labourByDay, pct } from '../metrics.js';
 import { addDays, badRequest, bool, date, forbidden, id, notFound, num, oneOf, round2, str, today, weekStart } from '../util.js';
 
 const MAX_REPORT_DAYS = 92;
@@ -171,6 +172,21 @@ export function registerSafetyRoutes(router, db) {
       ? db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY name').all()
       : db.prepare('SELECT id, name FROM locations WHERE id = ?').all(req.user.location_id);
 
+    // Sales figures are only as fresh as the last Square sync.
+    const salesSummary = (locationId) => {
+      const todaySales = db.prepare('SELECT net_sales, orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, d);
+      const week = db.prepare('SELECT COALESCE(SUM(net_sales), 0) AS net FROM sales_daily WHERE location_id = ? AND date BETWEEN ? AND ?')
+        .get(locationId, addDays(d, -6), d).net;
+      const labourToday = labourByDay(db, [locationId], d, d, { toDate: true }).get(`${locationId}|${d}`) ?? 0;
+      return {
+        sales_today: todaySales ? round2(todaySales.net_sales) : null,
+        orders_today: todaySales?.orders ?? 0,
+        sales_7d: round2(week),
+        labour_cost_today: round2(labourToday),
+        labour_pct_today: todaySales ? pct(labourToday, todaySales.net_sales) : null,
+      };
+    };
+
     const cards = locations.map((loc) => {
       const tasks = tasksFor.all(loc.id);
       const checks = db.prepare('SELECT task_id, period, status FROM safety_checks WHERE location_id = ? AND period IN (?, ?)').all(loc.id, d, ws);
@@ -199,6 +215,7 @@ export function registerSafetyRoutes(router, db) {
         stock_take_in_progress: takeInProgress,
         orders_draft: orders.find((o) => o.status === 'draft')?.n ?? 0,
         orders_sent: orders.find((o) => o.status === 'sent')?.n ?? 0,
+        ...(manager ? salesSummary(loc.id) : {}),
       };
     });
     res.json({ date: d, week_start: ws, locations: cards });

@@ -110,3 +110,25 @@ export function csv(rows, columns) {
   for (const r of rows) lines.push(columns.map((c) => cell(r[c.key])).join(','));
   return lines.join('\n') + '\n';
 }
+
+// Milliseconds the given time zone is ahead of UTC at the instant utcMs.
+function tzOffsetMs(utcMs, tz) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(utcMs)).map((p) => [p.type, p.value]));
+  return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second) - utcMs;
+}
+
+// UTC instant (RFC 3339) of local midnight at the start of iso in time zone tz.
+export function zonedMidnightUTC(iso, tz = TZ) {
+  const guess = Date.parse(`${iso}T00:00:00Z`);
+  const first = guess - tzOffsetMs(guess, tz);
+  return new Date(guess - tzOffsetMs(first, tz)).toISOString();
+}
+
+// Local calendar date (YYYY-MM-DD) in tz of a UTC timestamp.
+export function localDate(timestamp, tz = TZ) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(timestamp));
+}
+
+export const BUSINESS_TZ = TZ;

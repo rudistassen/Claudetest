@@ -1,5 +1,5 @@
 import { loadLocations } from '../app.js';
-import { api, esc, field, input, money, openModal, qs, select, textarea, toast } from '../lib.js';
+import { api, esc, field, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast } from '../lib.js';
 
 const yesNo = (v) => (v ? 'Yes' : 'No');
 const activeBox = (v) => field('Active', `<input type="checkbox" name="active" ${v === undefined || v ? 'checked' : ''}>`, { className: 'field-inline' });
@@ -254,6 +254,103 @@ export async function renderAccount(ctx) {
       toast('Password updated');
     } catch (err) {
       toast(err.message, 'error');
+    }
+  });
+}
+
+export async function renderSquare(ctx) {
+  const { el, state } = ctx;
+  const status = await api('/square/status');
+  let squareLocations = [];
+  let squareError = null;
+  if (status.configured) {
+    try { squareLocations = await api('/square/locations'); } catch (err) { squareError = err.message; }
+  }
+  if (ctx.stale()) return;
+  const sites = state.locations;
+  const unlinked = squareLocations.filter((l) => !l.linked_location);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date());
+  const monthAgo = new Date(Date.parse(`${today}T00:00:00Z`) - 27 * 86400000).toISOString().slice(0, 10);
+
+  el.innerHTML = `
+    <div class="page-head"><h1>Square</h1></div>
+    <section class="card">
+      <h2>Connection</h2>
+      ${status.configured
+        ? `<p><span class="badge badge-completed">Connected</span> ${esc(status.environment)} · sales sync automatically every ${status.sync_minutes} minutes</p>
+           ${squareError ? `<p class="alert-text">${esc(squareError)}</p>` : ''}`
+        : `<p><span class="badge badge-draft">Not connected</span></p>
+           <ol class="steps">
+             <li>Go to <strong>developer.squareup.com</strong>, sign in with your Square account and create an application (e.g. “Cafe Ops”).</li>
+             <li>Switch the app to <strong>Production</strong> and copy the <strong>Production access token</strong>.</li>
+             <li>Set it where the app runs: <code>SQUARE_ACCESS_TOKEN=…</code> then restart the app.</li>
+           </ol>
+           <p class="muted small">The token is only read from the server’s environment and is never shown in or saved by the app. Use <code>SQUARE_ENVIRONMENT=sandbox</code> with a sandbox token to try it with test data.</p>`}
+    </section>
+    ${status.configured && !squareError ? `
+    <section class="card">
+      <h2>Link your sites to Square locations</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Site</th><th>Square location</th></tr></thead>
+        <tbody>${sites.map((s) => `<tr><td>${esc(s.name)}</td><td>
+          <select data-link="${s.id}"><option value="">— Not linked —</option>
+            ${squareLocations.map((l) => `<option value="${esc(l.id)}" ${s.square_location_id === l.id ? 'selected' : ''} ${l.linked_location && l.linked_location.id !== s.id ? 'disabled' : ''}>${esc(l.name)}${l.address ? ` · ${esc(l.address)}` : ''}${l.status !== 'ACTIVE' ? ' (inactive)' : ''}</option>`).join('')}
+          </select></td></tr>`).join('')}</tbody>
+      </table></div>
+      ${unlinked.length ? `
+        <h3 class="group-title">Square locations not linked to a site</h3>
+        <ul class="plain-list">${unlinked.map((l) => `<li><strong>${esc(l.name)}</strong> <span class="muted">${esc(l.address)}</span>
+          <button class="btn btn-small" data-import="${esc(l.id)}">Add as new site</button></li>`).join('')}</ul>` : ''}
+    </section>
+    <section class="card">
+      <h2>Import sales</h2>
+      <p class="muted">Re-importing a period replaces what was stored for it, so it’s safe to run again (e.g. after refunds).</p>
+      <form class="filters" id="sync">
+        <input type="date" name="from" value="${monthAgo}" max="${today}"> <span>to</span> <input type="date" name="to" value="${today}" max="${today}">
+        <button class="btn btn-primary" type="submit">Import sales</button>
+      </form>
+    </section>` : ''}
+    ${status.history.length ? `
+    <section class="card">
+      <h2>Recent syncs</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Started</th><th>Period</th><th>Status</th><th class="num">Orders</th><th>By</th><th>Message</th></tr></thead>
+        <tbody>${status.history.map((h) => `<tr><td>${fmtDateTime(h.started_at)}</td><td>${esc(h.date_from)} – ${esc(h.date_to)}</td>
+          <td>${statusBadge(h.status === 'ok' ? 'completed' : h.status === 'error' ? 'fail' : 'in_progress')}</td>
+          <td class="num">${h.orders ?? '–'}</td><td>${esc(h.triggered_by ?? '')}</td><td class="small">${esc(h.message ?? '')}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </section>` : ''}`;
+
+  el.querySelectorAll('[data-link]').forEach((sel) => sel.addEventListener('change', async () => {
+    try {
+      await api(`/locations/${sel.dataset.link}/square`, { method: 'PUT', body: { square_location_id: sel.value || null } });
+      await loadLocations();
+      toast('Link saved');
+      ctx.rerender();
+    } catch (err) { toast(err.message, 'error'); ctx.rerender(); }
+  }));
+  el.querySelectorAll('[data-import]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      await api('/square/import-location', { method: 'POST', body: { square_location_id: b.dataset.import } });
+      await loadLocations();
+      toast('Site added and linked');
+      ctx.rerender();
+    } catch (err) { toast(err.message, 'error'); }
+  }));
+  el.querySelector('#sync')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const btn = f.querySelector('button');
+    btn.disabled = true;
+    btn.textContent = 'Importing…';
+    try {
+      const r = await api('/square/sync', { method: 'POST', body: { from: f.from.value, to: f.to.value } });
+      toast(`Imported ${r.orders} order(s) across ${r.days} site-day(s)`);
+      ctx.rerender();
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Import sales';
     }
   });
 }

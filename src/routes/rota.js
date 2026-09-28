@@ -1,5 +1,6 @@
 import { assertLocation, isManager, requireManager, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
+import { dayKey, labourByDay, pct, salesByDay } from '../metrics.js';
 import { addDays, badRequest, date, id, notFound, num, round2, shiftHours, str, time, today, weekStart } from '../util.js';
 
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -75,10 +76,36 @@ export function registerRotaRoutes(router, db) {
     }
     if (!manager) for (const u of staff) delete u.hourly_rate;
 
+    const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+    let money;
+    if (manager) {
+      const sales = salesByDay(db, [locationId], ws, we);
+      const planned = labourByDay(db, [locationId], ws, we);
+      const worked = labourByDay(db, [locationId], ws, we, { toDate: true });
+      money = days.map((d) => {
+        const net = sales.get(dayKey(locationId, d))?.net_sales ?? null;
+        const workedCost = worked.get(dayKey(locationId, d)) ?? 0;
+        return {
+          date: d,
+          net_sales: net,
+          labour_cost: round2(planned.get(dayKey(locationId, d)) ?? 0),
+          worked_cost: workedCost,
+          labour_pct: net === null ? null : pct(workedCost, net),
+        };
+      });
+    }
+    const salesDays = money?.filter((m) => m.net_sales !== null) ?? [];
+    const weekSales = salesDays.reduce((s, m) => s + m.net_sales, 0);
+    const weekWorked = salesDays.reduce((s, m) => s + m.worked_cost, 0);
+    for (const m of money ?? []) delete m.worked_cost;
+
     res.json({
       location_id: locationId,
       week_start: ws,
-      days: Array.from({ length: 7 }, (_, i) => addDays(ws, i)),
+      days,
+      daily_money: money,
+      week_sales: manager ? round2(weekSales) : undefined,
+      labour_pct: manager ? pct(weekWorked, weekSales) : undefined,
       staff,
       shifts,
       hours_by_user: byUser,
