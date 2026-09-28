@@ -1,7 +1,7 @@
 import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
-import { labourByDay, pct } from '../metrics.js';
-import { addDays, badRequest, bool, date, forbidden, id, notFound, num, oneOf, round2, str, today, weekStart } from '../util.js';
+import { nowMinutes, pct, rotaByDay, timecardsFor } from '../metrics.js';
+import { addDays, badRequest, bool, BUSINESS_TZ, date, forbidden, id, notFound, num, oneOf, round2, str, today, weekStart, zonedMidnightUTC } from '../util.js';
 
 const MAX_REPORT_DAYS = 92;
 
@@ -245,20 +245,56 @@ export function registerSafetyRoutes(router, db) {
     const seeOrders = can(req.user, 'orders.manage');
     const locations = reportLocations(req);
 
-    // Sales figures are only as fresh as the last Square sync.
+    // Sales figures are only as fresh as the last Square sync. Each is compared with the same weekday last week
+    // up to the same time of day, so a mid-afternoon look isn't measured against a whole day.
+    const lastWeek = addDays(d, -7);
+    const minutes = nowMinutes();
+    const cutoff = Date.parse(zonedMidnightUTC(lastWeek)) + minutes * 60000;
+    const ids = locations.map((l) => l.id);
+    const labourSynced = !!db.prepare('SELECT 1 FROM timecards LIMIT 1').get();
+    const seeClockIns = seeSales || can(req.user, 'staff.manage');
+    const cardsToday = ids.length && (seeSales || seeClockIns) ? timecardsFor(db, ids, d, d) : [];
+    const cardsLastWeek = ids.length && seeSales && labourSynced
+      ? timecardsFor(db, ids, lastWeek, lastWeek).map((t) => {
+        // Only the part worked by this time last week, breaks taken off pro rata.
+        const worked = Math.max(0, Math.min(t.end, cutoff) - t.start) / 3600000;
+        const hours = t.span > 0 ? worked * (t.hours / t.span) : 0;
+        return { ...t, hours, cost: hours * t.rate };
+      })
+      : [];
+    const rotaToday = seeSales && !labourSynced ? rotaByDay(db, ids, d, d, { toDate: true }) : new Map();
+    const rotaLastWeek = seeSales && !labourSynced ? rotaByDay(db, ids, lastWeek, lastWeek, { toDate: true, asOf: { date: lastWeek, minutes } }) : new Map();
+    const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: BUSINESS_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+
     const salesSummary = (locationId) => {
-      const todaySales = db.prepare('SELECT net_sales, orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, d);
-      const week = db.prepare('SELECT COALESCE(SUM(net_sales), 0) AS net FROM sales_daily WHERE location_id = ? AND date BETWEEN ? AND ?')
-        .get(locationId, addDays(d, -6), d).net;
-      const labourToday = labourByDay(db, [locationId], d, d, { toDate: true }).get(`${locationId}|${d}`) ?? 0;
+      const todaySales = db.prepare('SELECT net_sales, gross_sales, orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, d);
+      const lastDay = db.prepare('SELECT net_sales, gross_sales, orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, lastWeek);
+      // Last week's net sales by this time, from its hourly sales (the current hour counted pro rata).
+      const hour = Math.floor(minutes / 60);
+      const lastNet = db.prepare(`SELECT COALESCE(SUM(CASE WHEN hour < ? THEN net_sales WHEN hour = ? THEN net_sales * ? ELSE 0 END), 0) AS net
+        FROM sales_hourly WHERE location_id = ? AND date = ?`).get(hour, hour, (minutes % 60) / 60, locationId, lastWeek).net;
+      // Hourly figures are net only, so last week's gross by now is its day's gross scaled the same way.
+      const lastGross = lastDay && lastDay.net_sales ? lastDay.gross_sales * (lastNet / lastDay.net_sales) : 0;
+      const sum = (list) => list.filter((t) => t.location_id === locationId).reduce((n, t) => n + t.cost, 0);
+      const labourToday = labourSynced ? sum(cardsToday) : rotaToday.get(`${locationId}|${d}`)?.cost ?? 0;
+      const labourLast = labourSynced ? sum(cardsLastWeek) : rotaLastWeek.get(`${locationId}|${lastWeek}`)?.cost ?? 0;
       return {
         sales_today: todaySales ? round2(todaySales.net_sales) : null,
+        gross_today: todaySales ? round2(todaySales.gross_sales) : null,
         orders_today: todaySales?.orders ?? 0,
-        sales_7d: round2(week),
+        last_week: lastDay ? { net: round2(lastNet), gross: round2(lastGross), labour_cost: round2(labourLast) } : { net: null, gross: null, labour_cost: round2(labourLast) },
         labour_cost_today: round2(labourToday),
+        labour_basis: labourSynced ? 'clocked' : 'rostered',
         labour_pct_today: todaySales && labourToday ? pct(labourToday, todaySales.net_sales) : null,
       };
     };
+    // Who has clocked in at a site today (from Square), with how long they've worked so far.
+    const clockIns = (locationId) => cardsToday.filter((t) => t.location_id === locationId).map((t) => ({
+      name: t.name,
+      start: timeFormat.format(new Date(t.start)),
+      end: t.end_at ? timeFormat.format(new Date(t.end)) : null,
+      hours: Math.round(t.hours * 100) / 100,
+    }));
 
     const cards = locations.map((loc) => {
       const tasks = tasksFor(loc.id);
@@ -289,8 +325,9 @@ export function registerSafetyRoutes(router, db) {
         orders_draft: orders.find((o) => o.status === 'draft')?.n ?? 0,
         orders_sent: orders.find((o) => o.status === 'sent')?.n ?? 0,
         ...(seeSales ? salesSummary(loc.id) : {}),
+        ...(seeClockIns ? { clock_ins: clockIns(loc.id) } : {}),
       };
     });
-    res.json({ date: d, week_start: ws, locations: cards });
+    res.json({ date: d, week_start: ws, compare_date: lastWeek, labour_synced: labourSynced, locations: cards });
   });
 }

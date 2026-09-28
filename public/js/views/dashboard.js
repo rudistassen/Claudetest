@@ -9,25 +9,65 @@ function progress(done, due) {
     <div class="progress-label">${done} / ${due} done</div>`;
 }
 
-function card(loc, state) {
+// "4h 05m" from hours.
+const duration = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; };
+
+// Today so far against the same weekday last week up to the same time. Up is good for sales; labour is neutral.
+function versus(now, then, { goodUp = true } = {}) {
+  if (now === null || now === undefined) return '<span class="muted">No sales synced today</span>';
+  if (!then) return `<span class="muted">${then === null ? 'Nothing to compare' : '£0'} last week</span>`;
+  const change = ((now - then) / then) * 100;
+  const tone = !goodUp || Math.abs(change) < 0.5 ? '' : (change > 0) === goodUp ? 'tone-good' : 'tone-bad';
+  return `<span class="${tone}">${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%</span><br><span class="muted">${money(then)} last week</span>`;
+}
+
+function card(loc, state, data) {
   const staff = loc.shifts_today;
+  const lw = loc.last_week;
+  const clocked = loc.clock_ins && data.labour_synced;
   return `
     <section class="card site-card">
       <header class="card-head">
         <h2>${esc(loc.name)}</h2>
         ${state.multiSite ? `<button class="btn btn-small" data-open="${loc.id}">Open site</button>` : ''}
       </header>
+      ${state.can('sales.view') ? `
+      <div class="site-money">
+        <div>
+          <h3>Gross sales</h3>
+          <p class="stat">${loc.gross_today === null ? '<span class="muted">–</span>' : money(loc.gross_today)}</p>
+          <p class="small">${versus(loc.gross_today, lw.gross)}</p>
+        </div>
+        <div>
+          <h3>Net sales</h3>
+          <p class="stat">${loc.sales_today === null ? '<span class="muted">–</span>' : money(loc.sales_today)}</p>
+          <p class="small">${versus(loc.sales_today, lw.net)}</p>
+        </div>
+        <div>
+          <h3>Labour cost</h3>
+          <p class="stat">${money(loc.labour_cost_today)}</p>
+          <p class="small">${versus(loc.labour_cost_today, lw.labour_cost, { goodUp: false })}</p>
+          <p class="small tone-${labourTone(loc.labour_pct_today)}">${fmtPct(loc.labour_pct_today)} of sales${loc.labour_basis === 'rostered' ? ' (rota)' : ''}</p>
+        </div>
+      </div>
+      <p class="small muted site-compare">Today so far vs ${fmtDate(data.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })} at the same time</p>` : ''}
       <div class="site-grid">
-        <div>
-          <h3>Daily Trail checks</h3>
-          ${progress(loc.daily.done, loc.daily.due)}
-          ${loc.daily.fails ? `<p class="alert-text">⚠ ${loc.daily.fails} failed check(s) today</p>` : ''}
-        </div>
-        <div>
-          <h3>Weekly Trail checks</h3>
-          ${progress(loc.weekly.done, loc.weekly.due)}
-          ${loc.weekly.fails ? `<p class="alert-text">⚠ ${loc.weekly.fails} failed this week</p>` : ''}
-        </div>
+        ${clocked ? `
+        <div class="span-2">
+          <h3>Clocked in today (${loc.clock_ins.length})</h3>
+          ${loc.clock_ins.length
+            ? `<ul class="shift-list clock-list">${loc.clock_ins.map((c) => `<li><strong>${esc(c.name)}</strong>
+                <span class="muted">${c.start}–${c.end ?? 'now'}</span>
+                <span class="clock-hours">${c.end ? '' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}</span></li>`).join('')}</ul>
+              <p class="small muted">${duration(loc.clock_ins.reduce((n, c) => n + c.hours, 0))} in total</p>`
+            : '<p class="muted">Nobody has clocked in yet</p>'}
+        </div>` : `
+        <div class="span-2">
+          <h3>On shift today (${staff.length})</h3>
+          ${staff.length
+            ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(s.name)}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
+            : '<p class="muted">Nobody rostered</p>'}
+        </div>`}
         <div>
           <h3>Wastage (7 days)</h3>
           <p class="stat">${money(loc.wastage_7d)}</p>
@@ -38,27 +78,20 @@ function card(loc, state) {
             ? `<a href="#/stock/${loc.stock_take_in_progress}" data-site="${loc.id}">Count in progress →</a>`
             : loc.last_stock_take ? `Last: ${fmtDateTime(loc.last_stock_take)}` : '<span class="muted">None yet</span>'}</p>
         </div>
-        ${state.can('sales.view') ? `
-        <div>
-          <h3>Sales today</h3>
-          <p class="stat">${loc.sales_today === null ? '<span class="muted">–</span>' : money(loc.sales_today)}</p>
-          <p class="small muted">${loc.orders_today} orders · 7 days ${money(loc.sales_7d)}</p>
-        </div>
-        <div>
-          <h3>Labour today</h3>
-          <p class="stat tone-${labourTone(loc.labour_pct_today)}">${fmtPct(loc.labour_pct_today)}</p>
-          <p class="small muted">${money(loc.labour_cost_today)} worked so far</p>
-        </div>` : ''}
         ${state.can('orders.manage') ? `
-        <div>
+        <div class="span-2">
           <h3>Orders</h3>
           <p>${loc.orders_draft} draft · ${loc.orders_sent} awaiting delivery</p>
         </div>` : ''}
-        <div class="span-2">
-          <h3>On shift today (${staff.length})</h3>
-          ${staff.length
-            ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(s.name)}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
-            : '<p class="muted">Nobody rostered</p>'}
+        <div class="site-checks">
+          <h3>Daily Trail checks</h3>
+          ${progress(loc.daily.done, loc.daily.due)}
+          ${loc.daily.fails ? `<p class="alert-text">⚠ ${loc.daily.fails} failed check(s) today</p>` : ''}
+        </div>
+        <div class="site-checks">
+          <h3>Weekly Trail checks</h3>
+          ${progress(loc.weekly.done, loc.weekly.due)}
+          ${loc.weekly.fails ? `<p class="alert-text">⚠ ${loc.weekly.fails} failed this week</p>` : ''}
         </div>
       </div>
     </section>`;
@@ -156,7 +189,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
       <h2>Your upcoming shifts</h2>
       <ul class="shift-list">${myShifts.slice(0, 7).map((s) => `<li><strong>${fmtDate(s.date)}</strong> ${s.start_time}–${s.end_time} · ${esc(s.location_name)}</li>`).join('')}</ul>
     </section>` : ''}
-    <div class="site-cards">${locs.map((l) => card(l, state)).join('')}</div>`;
+    <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div>`;
 
   el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
     try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }

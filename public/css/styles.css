@@ -170,11 +170,18 @@ main { flex: 1; min-width: 0; padding: 1.25rem 1.5rem 3rem; }
 .kpi strong { font-size: 1.3rem; }
 .kpi span.badge { display: inline-block; font-size: 0.85rem; }
 .kpi-bad strong { color: var(--bad); }
-.site-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1rem; }
+.site-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 1rem; }
 .site-cards .card { margin: 0; }
 .site-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .site-grid p { margin: 0; }
 .span-2 { grid-column: span 2; }
+.site-money { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; padding-bottom: 0.4rem; }
+.site-money p { margin: 0; }
+.site-money .stat { font-size: 1.15rem; }
+.site-compare { margin: 0 0 0.9rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+.site-checks { border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.clock-list li { display: flex; gap: 0.5rem; align-items: baseline; }
+.clock-list .clock-hours { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stat { font-size: 1.25rem; font-weight: 700; }
 .progress { height: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; overflow: hidden; }
 .progress div { height: 100%; }
