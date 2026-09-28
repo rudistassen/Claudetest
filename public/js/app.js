@@ -140,7 +140,10 @@ function renderShell() {
     location.hash = '';
     start();
   });
-  document.querySelector('.menu-toggle').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+  document.querySelector('.menu-toggle').addEventListener('click', () => {
+    placeNav();
+    document.body.classList.toggle('nav-open');
+  });
   document.querySelector('.sidebar').addEventListener('click', (e) => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
 }
 
@@ -207,6 +210,14 @@ async function start() {
   await loadLocations();
   route();
 }
+
+// On phones the menu slides out just below the green bar, which sits lower while the logo band is in view.
+function placeNav() {
+  const bar = document.querySelector('.topbar');
+  if (bar) document.body.style.setProperty('--nav-top', `${Math.max(0, bar.getBoundingClientRect().bottom)}px`);
+}
+window.addEventListener('scroll', placeNav, { passive: true });
+window.addEventListener('resize', placeNav);
 
 window.addEventListener('hashchange', route);
 window.addEventListener('auth:expired', () => { if (state.user) { state.user = null; start(); } });

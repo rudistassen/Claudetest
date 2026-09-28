@@ -24,12 +24,17 @@ const result = await build({
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const css = fs.readFileSync(path.join(root, 'public/css/styles.css'), 'utf8');
+// The logo band from index.html, with each logo inlined so the demo stays one file.
+const band = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
+  .match(/<header class="brand-band"[\s\S]*?<\/header>/)[0]
+  .replace(/src="\/img\/([\w-]+\.png)"/g, (_, f) => `src="data:image/png;base64,${fs.readFileSync(path.join(root, 'public/img', f)).toString('base64')}"`);
 
 const html = `<title>Cafe Ops</title>
 <meta name="theme-color" content="#1f5f4a">
 <style>
 ${css}
 </style>
+${band}
 <div id="app"><div class="loading">Loading Cafe Ops demo…</div></div>
 <div id="modal-root"></div>
 <div id="toasts" aria-live="polite"></div>
