@@ -15,26 +15,38 @@ export async function render(ctx) {
   const today = todayISO();
   const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
 
+  // Cells are keyed by person, site and day. On All sites each site has its own group of rows: everyone rostered
+  // there that week, plus that site's own staff so they can be added. Someone working at two sites is in both.
+  const cellKey = (userId, siteId, d) => `${userId}|${all ? siteId : ''}|${d}`;
   const byCell = new Map();
   for (const s of [...data.shifts, ...data.away_shifts.map((a) => ({ ...a, away: true }))]) {
-    const k = `${s.user_id}|${s.date}`;
+    const k = cellKey(s.user_id, s.location_id, s.date);
     byCell.set(k, [...(byCell.get(k) ?? []), s]);
   }
   for (const list of byCell.values()) list.sort((a, b) => a.start_time.localeCompare(b.start_time));
-  // A shift away from the person's home site is labelled with where it is.
-  const shiftLabel = (s, u) => {
-    const where = s.location_id !== (all ? u.location_id : state.locationId) ? `@ ${s.location_name}` : '';
+  const rows = [];
+  if (all) {
+    const sites = state.locations.filter((l) => l.active).sort((a, b) => a.name.localeCompare(b.name));
+    for (const site of sites) {
+      const working = new Set(data.shifts.filter((x) => x.location_id === site.id).map((x) => x.user_id));
+      const people = data.staff.filter((u) => u.location_id === site.id || working.has(u.id));
+      if (!people.length) continue;
+      rows.push({ header: site.name });
+      // The site's own staff first, then people covering from elsewhere.
+      for (const u of [...people.filter((p) => p.location_id === site.id), ...people.filter((p) => p.location_id !== site.id)]) {
+        rows.push({ u, site: site.id });
+      }
+    }
+  } else {
+    for (const u of data.staff) rows.push({ u, site: state.locationId });
+  }
+  const rowHours = (u, site) => Math.round(data.shifts.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
+  // A shift at another site (greyed out on a single site's rota) says where it is.
+  const shiftLabel = (s, u, site) => {
+    const where = s.location_id !== site ? `@ ${s.location_name}` : '';
     const role = s.position && s.position !== u.position ? s.position : '';
     const sub = [where, role].filter(Boolean).join(' · ');
     return `${s.start_time}–${s.end_time}${sub ? `<small>${esc(sub)}</small>` : ''}`;
-  };
-  let group = null;
-  const groupRow = (u) => {
-    if (!all) return '';
-    const name = u.location_name ?? 'No home site';
-    if (name === group) return '';
-    group = name;
-    return `<tr class="rota-group"><th colspan="${data.days.length + 2}">${esc(name)}</th></tr>`;
   };
   const dayHours = data.days.map((d) => data.shifts.filter((s) => s.date === d).reduce((t, s) => t + s.hours, 0));
 
@@ -57,20 +69,20 @@ export async function render(ctx) {
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}">${fmtDate(d)}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
-          ${data.staff.map((u) => `${groupRow(u)}
-            <tr>
-              <th><strong>${esc(u.name)}</strong><small>${esc(u.position ?? '')}${!all && u.location_id !== state.locationId ? ` · cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}` : ''}</small></th>
+          ${rows.map(({ header, u, site }) => (header ? `<tr class="rota-group"><th colspan="${data.days.length + 2}">${esc(header)}</th></tr>` : `
+            <tr class="${u.location_id !== site ? 'rota-cover' : ''}">
+              <th><strong>${esc(u.name)}</strong><small>${esc(u.position ?? '')}${u.location_id !== site ? ` · cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}` : ''}</small></th>
               ${data.days.map((d) => {
-                const shifts = byCell.get(`${u.id}|${d}`) ?? [];
-                return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''}" data-user="${u.id}" data-date="${d}">
+                const shifts = byCell.get(cellKey(u.id, site, d)) ?? [];
+                return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''}" data-user="${u.id}" data-date="${d}" data-site="${site}">
                   ${shifts.map((s) => (s.away
-                    ? `<span class="shift shift-away" title="Working at ${esc(s.location_name)}">${shiftLabel(s, u)}</span>`
-                    : `<button class="shift ${all && s.location_id !== u.location_id ? 'shift-elsewhere' : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'}>${shiftLabel(s, u)}</button>`)).join('')}
+                    ? `<span class="shift shift-away" title="Working at ${esc(s.location_name)}">${shiftLabel(s, u, site)}</span>`
+                    : `<button class="shift" data-shift="${s.id}" ${canEdit ? '' : 'disabled'}>${shiftLabel(s, u, site)}</button>`)).join('')}
                   ${canEdit && !shifts.length ? '<span class="add-hint">+</span>' : ''}
                 </td>`;
               }).join('')}
-              <td class="num">${data.hours_by_user[u.id] ?? 0}</td>
-            </tr>`).join('')}
+              <td class="num">${rowHours(u, site)}</td>
+            </tr>`)).join('')}
         </tbody>
         <tfoot><tr><th>Total hours</th>${dayHours.map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>
           ${data.daily_money ? `
@@ -141,7 +153,7 @@ export async function render(ctx) {
     toast(`${a.title}. Edit it from that site’s rota${state.isAdmin ? ' or All sites' : ''}.`);
   }));
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
-    shiftModal(null, { user_id: Number(td.dataset.user), date: td.dataset.date });
+    shiftModal(null, { user_id: Number(td.dataset.user), date: td.dataset.date, location_id: Number(td.dataset.site) });
   }));
   el.querySelector('#copy-week').addEventListener('click', async () => {
     const hasShifts = data.shifts.length > 0;

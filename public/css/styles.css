@@ -427,4 +427,6 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 /* Rota: all-sites grouping and shifts at other sites */
 .rota tr.rota-group th { background: var(--surface-2); text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 0.35rem 0.6rem; }
 .rota .shift-away { opacity: 0.6; border-left: 3px dashed var(--muted); font-weight: 500; cursor: default; }
-.rota .shift-elsewhere { border-left-color: var(--warn); }
+.rota tr.rota-cover > th small { color: var(--warn); }
+.rota thead th:last-child, .rota tbody td:last-child, .rota tfoot td:last-child { min-width: 64px; }
+.rota tbody td { padding: 0.35rem; }
