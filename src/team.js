@@ -49,6 +49,15 @@ export function planTeamImport(db, { members, wages }, { deactivateOthers = fals
     WHERE team_member_id IS NOT NULL GROUP BY team_member_id, location_id ORDER BY n DESC`).all().reverse().map((r) => [r.team_member_id, r.location_id]));
 
   const claimed = new Set();
+  // Emails given out by this plan so far, so two rows never end up with the same one.
+  const planned = new Set();
+  const emailFree = (email, userId) => {
+    if (planned.has(email.toLowerCase())) return false;
+    const holder = userByEmail.get(email);
+    return !holder || holder.id === userId;
+  };
+  const current = currentUserId ? userById.get(currentUserId) : null;
+  const currentLinked = current && [...linked.values()].includes(current.id);
   const rows = [];
   for (const m of members) {
     const name = memberName(m);
@@ -57,6 +66,9 @@ export function planTeamImport(db, { members, wages }, { deactivateOthers = fals
     if (!user && validEmail(m.email_address)) user = userByEmail.get(m.email_address);
     if (!user) user = userByName.get(name);
     if (user && claimed.has(user.id)) user = null;
+    // The Square account owner is almost always the admin running the import: link them rather than
+    // creating a second admin account with the owner's email.
+    if (!user && m.is_owner && current?.role === 'admin' && !currentLinked && !claimed.has(current.id)) user = current;
     if (user) claimed.add(user.id);
 
     if (!active) {
@@ -84,12 +96,14 @@ export function planTeamImport(db, { members, wages }, { deactivateOthers = fals
 
     const jobs = wages.get(m.id) ?? [];
     const top = jobs.reduce((best, j) => (!best || j.rate > best.rate ? j : best), null);
+    // Never change the sign-in email of the person running the import.
     let email = user?.email;
-    if (validEmail(m.email_address)) {
-      const clash = userByEmail.get(m.email_address);
-      if (!clash || clash.id === user?.id) email = m.email_address;
+    if (validEmail(m.email_address) && user?.id !== currentUserId && emailFree(m.email_address, user?.id)) email = m.email_address;
+    if (!email) {
+      email = placeholderEmail(m);
+      for (let n = 2; !emailFree(email, user?.id); n++) email = placeholderEmail(m).replace('@', `-${n}@`);
     }
-    if (!email) email = placeholderEmail(m);
+    planned.add(email.toLowerCase());
     rows.push({
       member: m,
       name,

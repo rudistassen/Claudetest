@@ -31,6 +31,9 @@ const TEAM = [
     assigned_locations: { assignment_type: 'EXPLICIT_LOCATIONS', location_ids: ['SQ_ELSEWHERE', 'SQ_HIGH'] },
     wage_setting: { job_assignments: [{ job_title: 'Barista', pay_type: 'HOURLY', hourly_rate: { amount: 1221, currency: 'GBP' } }] } },
   { id: 'TM_4', given_name: 'Sam', family_name: 'Noemail', status: 'ACTIVE', assigned_locations: { assignment_type: 'ALL_CURRENT_AND_FUTURE_LOCATIONS' } },
+  // Same email as TM_3, which Square allows but Cafe Ops can't.
+  { id: 'TM_5', given_name: 'Priya', family_name: 'Twin', email_address: 'Priya@Example.com', status: 'ACTIVE' },
+  { id: 'TM_6', given_name: 'Rudi', family_name: 'Owner', email_address: 'owner@example.com', status: 'ACTIVE', is_owner: true },
 ];
 
 // Minimal stand-in for Square's Locations and Orders APIs, paging 2 orders at a time.
@@ -348,15 +351,20 @@ describe('staff from Square', () => {
     assert.equal(row('Sam Noemail').email, 'square-tm4@staff.local');
     assert.equal(row('Sam Noemail').no_email, true);
     assert.ok(preview.some((r) => r.action === 'deactivate' && r.existing.email === 'staff1@cafe.local'));
-    assert.ok(!preview.some((r) => r.existing?.email === 'admin@cafe.local'), 'never deactivates you');
+    assert.ok(!preview.some((r) => r.action === 'deactivate' && r.existing.email === 'admin@cafe.local'), 'never deactivates you');
+    assert.deepEqual([row('Rudi Owner').action, row('Rudi Owner').existing.email, row('Rudi Owner').email, row('Rudi Owner').role],
+      ['update', 'admin@cafe.local', 'admin@cafe.local', 'admin'], 'the Square owner is linked to you, keeping your sign-in email');
+    assert.equal(row('Priya Twin').action, 'create');
+    assert.equal(row('Priya Twin').email, 'square-tm5@staff.local', 'a duplicate email gets a placeholder instead of failing');
     const before = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users').get().n, before, 'the preview changes nothing');
 
     const r = (await admin('/square/import-staff', { method: 'POST', body: { deactivate_others: true } })).data;
-    assert.equal(r.created, 2);
-    assert.equal(r.updated, 1);
+    assert.equal(r.created, 3);
+    assert.equal(r.updated, 2);
     assert.ok(r.deactivated > 10);
-    assert.deepEqual(r.need_password.sort(), ['Priya Shah', 'Sam Noemail']);
+    assert.deepEqual(r.need_password.sort(), ['Priya Shah', 'Priya Twin', 'Sam Noemail']);
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM users WHERE role = 'admin'`).get().n, 1, 'no second admin account for the owner');
 
     const manager1 = db.prepare(`SELECT * FROM users WHERE email = 'MANAGER1@cafe.local'`).get();
     assert.equal(manager1.name, 'Someone Else');
@@ -368,7 +376,11 @@ describe('staff from Square', () => {
     assert.equal((await admin('/auth/me')).status, 200, 'the admin who ran it stays signed in');
 
     const again = (await admin('/square/import-staff', { method: 'POST', body: { deactivate_others: true } })).data;
-    assert.deepEqual([again.created, again.updated, again.deactivated], [0, 3, 0], 'running it again adds nobody twice');
+    assert.deepEqual([again.created, again.updated, again.deactivated], [0, 5, 0], 'running it again adds nobody twice');
+
+    const clash = await admin(`/users/${priya.id}`, { method: 'PUT', body: { name: 'Priya Shah', email: 'MANAGER1@cafe.local', role: 'staff', location_id: priya.location_id } });
+    assert.equal(clash.status, 400);
+    assert.match(clash.data.error, /^Someone Else already uses that email/);
     assert.equal((await login('staff1@cafe.local').catch(() => null)), null);
   });
 });

@@ -58,6 +58,12 @@ export function registerAdminRoutes(router, db) {
       active: b.active === undefined ? 1 : bool(b.active),
     };
     if (!/^[^\s@]+@[^\s@]+$/.test(u.email)) throw badRequest('email is not valid');
+    const clash = db.prepare('SELECT id, name, active FROM users WHERE email = ? COLLATE NOCASE').get(u.email);
+    if (clash && clash.id !== existing?.id) {
+      throw badRequest(req.user.role === 'admin'
+        ? `${clash.name}${clash.active ? '' : ' (deactivated)'} already uses that email. Give them a different email first.`
+        : 'Someone else already uses that email');
+    }
     if (u.role !== 'admin' && !u.location_id) throw badRequest('location_id is required for managers and staff');
     if (u.role === 'admin') u.location_id = null;
     if (req.user.role === 'manager') {
