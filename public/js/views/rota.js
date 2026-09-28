@@ -54,6 +54,15 @@ export async function render(ctx) {
     byCell.set(k, [...(byCell.get(k) ?? []), s]);
   }
   for (const list of byCell.values()) list.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  // Shifts someone is covering away from their home site, by person and day: their home-site day is greyed out
+  // and says where they are.
+  const coverAway = new Map();
+  for (const x of [...data.shifts, ...data.away_shifts]) {
+    const u = data.staff.find((p) => p.id === x.user_id);
+    if (!u || x.state === 'removed' || !u.location_id || x.location_id === u.location_id) continue;
+    const k = `${x.user_id}|${x.date}`;
+    coverAway.set(k, [...(coverAway.get(k) ?? []), x].sort((a, b) => a.start_time.localeCompare(b.start_time)));
+  }
   // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
   const counted = data.shifts.filter((x) => x.state !== 'removed');
   const rows = [];
@@ -140,14 +149,16 @@ export async function render(ctx) {
             <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${all ? `data-in-group="${site}"` : ''}>
               <th><strong>${esc(u.name)}</strong>${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${data.days.map((d) => {
-                const shifts = byCell.get(cellKey(u.id, site, d)) ?? [];
+                const shifts = (byCell.get(cellKey(u.id, site, d)) ?? []).filter((x) => !x.away);
                 const off = !!holidayOn(u.id, d, 'approved');
-                return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''}" data-user="${u.id}" data-date="${d}" data-site="${site}">
+                // On their home site's row: a day spent covering elsewhere is greyed out and says where.
+                const away = site === u.location_id ? coverAway.get(`${u.id}|${d}`) ?? [] : [];
+                const covering = away.length > 0 && !shifts.length;
+                return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''} ${covering ? 'is-covering' : ''}" data-user="${u.id}" data-date="${d}" data-site="${site}">
                   ${cellNotes(u.id, d)}
-                  ${shifts.map((s) => (s.away
-                    ? `<span class="shift shift-away" title="Working at ${esc(s.location_name)}">${shiftLabel(s, u, site)}</span>`
-                    : `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`)).join('')}
-                  ${canEdit && !shifts.length && !off ? '<span class="add-hint">+</span>' : ''}
+                  ${away.map((x) => `<span class="cover-away" title="Covering at ${esc(x.location_name)} ${x.start_time}–${x.end_time}">Covering at ${esc(x.location_name)}<small>${x.start_time}–${x.end_time}</small></span>`).join('')}
+                  ${shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
+                  ${canEdit && !shifts.length && !off && !covering ? '<span class="add-hint">+</span>' : ''}
                 </td>`;
               }).join('')}
               <td class="num">${rowHours(u, site)}</td>
@@ -163,7 +174,7 @@ export async function render(ctx) {
       </table>
     </div>
     ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under Setup → Staff.</div>` : ''}
-    ${data.away_shifts.length ? '<p class="muted small">Greyed-out shifts are at another site.</p>' : ''}
+    ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is covering at another site.</p>' : ''}
     ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see.</p>' : ''}`;
 
   el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs({ week, site: e.target.value })}`));
@@ -282,7 +293,7 @@ export async function render(ctx) {
     shiftModal(shift);
   }));
   // Shifts at another site are edited from that site's rota (or All sites).
-  el.querySelectorAll('.shift-away').forEach((a) => a.addEventListener('click', (e) => {
+  el.querySelectorAll('.cover-away').forEach((a) => a.addEventListener('click', (e) => {
     e.stopPropagation();
     toast(`${a.title}. Edit it from that site’s rota${state.multiSite ? ' or All sites' : ''}.`);
   }));

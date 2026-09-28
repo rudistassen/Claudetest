@@ -567,6 +567,11 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .rota .cell-note { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 0.2rem; }
 .rota .cell-holiday { color: var(--brand); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .rota .cell-pending { color: var(--warn); font-weight: 600; }
+.rota td.is-covering { background: color-mix(in srgb, var(--muted) 16%, var(--surface)); }
+.rota td.is-covering .add-hint { display: none; }
+.rota .cover-away { display: block; font-size: 0.72rem; line-height: 1.25; color: var(--muted); font-style: italic; margin: 0.1rem 0; cursor: default; }
+.rota .cover-away small { display: block; font-style: normal; font-size: 0.68rem; opacity: 0.85; }
+@media print { .rota td.is-covering { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 .rota td.is-holiday { background: repeating-linear-gradient(135deg, var(--brand-soft) 0 6px, transparent 6px 12px); }
 
 /* Rota: site picker and folding sites */
