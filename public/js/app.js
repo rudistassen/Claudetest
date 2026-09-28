@@ -134,6 +134,12 @@ function renderShell() {
   document.getElementById('location-select')?.addEventListener('change', (e) => {
     state.locationId = Number(e.target.value);
     try { localStorage.setItem(LOCATION_KEY, String(state.locationId)); } catch { /* storage unavailable */ }
+    // A page that picks its own site (the rota) follows the site chosen here.
+    const { path, query } = parseHash();
+    if (query.site) {
+      navigate(`${path}?${new URLSearchParams({ ...query, site: String(state.locationId) })}`);
+      return;
+    }
     route();
   });
   document.getElementById('logout').addEventListener('click', async (e) => {

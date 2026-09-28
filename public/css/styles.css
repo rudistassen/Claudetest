@@ -525,3 +525,11 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .rota .cell-holiday { color: var(--brand); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .rota .cell-pending { color: var(--warn); font-weight: 600; }
 .rota td.is-holiday { background: repeating-linear-gradient(135deg, var(--brand-soft) 0 6px, transparent 6px 12px); }
+
+/* Rota: site picker and folding sites */
+#rota-site { width: auto; min-width: 170px; }
+.rota-group-toggle { display: flex; align-items: baseline; gap: 0.5rem; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.rota-chevron { display: inline-block; width: 1rem; transition: transform 0.15s; }
+.rota tr.rota-group.is-folded .rota-chevron { transform: rotate(-90deg); }
+.rota-group-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+@media print { .rota tr[data-in-group][hidden] { display: table-row !important; } }

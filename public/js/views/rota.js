@@ -6,9 +6,21 @@ export async function render(ctx) {
   const week = weekStart(query.week || todayISO());
   if (query.view === 'mine') return renderMine(ctx, week);
   // People with more than one site can see every site's rota at once.
-  const all = state.multiSite && query.scope === 'all';
-  const scopeQs = (extra = {}) => qs({ ...extra, scope: all ? 'all' : undefined });
-  const data = await api(`/rota${qs({ location_id: all ? 'all' : state.locationId, week })}`);
+  // Which site: ?site=all or a site id. People with several sites start on All sites; the old ?scope= links still work.
+  const active = state.locations.filter((l) => l.active);
+  const asked = query.site ?? (query.scope === 'site' ? String(state.locationId) : query.scope === 'all' ? 'all' : null);
+  const all = state.multiSite && (asked ?? 'all') === 'all';
+  const siteId = all ? null : (active.find((l) => String(l.id) === asked)?.id ?? state.locationId);
+  if (siteId && siteId !== state.locationId) {
+    // Keep the site in the top bar in step with the one picked here.
+    state.locationId = siteId;
+    try { localStorage.setItem('cafe-ops:location', String(siteId)); } catch { /* storage unavailable */ }
+    const picker = document.getElementById('location-select');
+    if (picker) picker.value = String(siteId);
+  }
+  const siteParam = all ? 'all' : String(siteId);
+  const scopeQs = (extra = {}) => qs({ ...extra, site: state.multiSite ? siteParam : undefined });
+  const data = await api(`/rota${qs({ location_id: all ? 'all' : siteId, week })}`);
   if (stale()) return;
   const canEdit = state.can('rota.edit');
   const today = todayISO();
@@ -50,6 +62,7 @@ export async function render(ctx) {
       const rate = new Map(data.staff.map((u) => [u.id, u.hourly_rate]));
       rows.push({
         header: site.name,
+        siteId: site.id,
         summary: {
           people: people.length,
           hours: Math.round(siteShifts.reduce((t, x) => t + x.hours, 0) * 10) / 10,
@@ -63,7 +76,7 @@ export async function render(ctx) {
       }
     }
   } else {
-    for (const u of data.staff) rows.push({ u, site: state.locationId });
+    for (const u of data.staff) rows.push({ u, site: siteId });
   }
   const rowHours = (u, site) => Math.round(counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
   // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
@@ -83,7 +96,11 @@ export async function render(ctx) {
     <div class="page-head">
       <h1>Rota · ${all ? 'All sites' : esc(state.location?.name ?? '')}</h1>
       <div class="actions">
-        ${state.multiSite ? `<a class="btn" href="#/rota${all ? qs({ week }) : qs({ week, scope: 'all' })}">${all ? 'This site only' : 'All sites'}</a>` : ''}
+        ${state.multiSite ? `<select id="rota-site" aria-label="Site">
+          <option value="all" ${all ? 'selected' : ''}>All sites</option>
+          ${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+        </select>` : ''}
+        ${all ? '<button class="btn" id="collapse-all"></button>' : ''}
         <a class="btn" href="#/rota${qs({ view: 'mine', week })}">My shifts</a>
         <button class="btn" data-week="-7">‹ Prev</button>
         <button class="btn" data-week="0">This week</button>
@@ -108,11 +125,14 @@ export async function render(ctx) {
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}">${fmtDate(d)}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
-          ${rows.map(({ header, summary, u, site }) => (header ? `<tr class="rota-group"><th colspan="${data.days.length + 2}">
-            <span class="rota-group-name">${esc(header)}</span>
-            <span class="rota-group-meta">${summary.people} ${summary.people === 1 ? 'person' : 'people'} · ${summary.hours} h${summary.cost === null ? '' : ` · ${money(summary.cost)} labour`}</span>
+          ${rows.map(({ header, siteId: groupId, summary, u, site }) => (header ? `<tr class="rota-group" data-group="${groupId}"><th colspan="${data.days.length + 2}">
+            <button class="rota-group-toggle" aria-expanded="true" data-toggle="${groupId}">
+              <span class="rota-chevron" aria-hidden="true">▾</span>
+              <span class="rota-group-name">${esc(header)}</span>
+              <span class="rota-group-meta">${summary.people} ${summary.people === 1 ? 'person' : 'people'} · ${summary.hours} h${summary.cost === null ? '' : ` · ${money(summary.cost)} labour`}</span>
+            </button>
           </th></tr>` : `
-            <tr class="${u.location_id !== site ? 'rota-cover' : ''}">
+            <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${all ? `data-in-group="${site}"` : ''}>
               <th><strong>${esc(u.name)}</strong>${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${data.days.map((d) => {
                 const shifts = byCell.get(cellKey(u.id, site, d)) ?? [];
@@ -141,6 +161,38 @@ export async function render(ctx) {
     ${data.away_shifts.length ? '<p class="muted small">Greyed-out shifts are at another site.</p>' : ''}
     ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see.</p>' : ''}`;
 
+  el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs({ week, site: e.target.value })}`));
+
+  // Folding sites away on All sites. Which are folded is remembered in this browser.
+  const FOLD_KEY = 'cafe-ops:rota-collapsed';
+  let folded = new Set();
+  try { folded = new Set(JSON.parse(localStorage.getItem(FOLD_KEY) ?? '[]')); } catch { /* storage unavailable */ }
+  const groups = [...el.querySelectorAll('tr.rota-group')].map((g) => g.dataset.group);
+  const applyFolds = () => {
+    for (const g of groups) {
+      const shut = folded.has(g);
+      el.querySelectorAll(`tr[data-in-group="${g}"]`).forEach((tr) => { tr.hidden = shut; });
+      const btn = el.querySelector(`[data-toggle="${g}"]`);
+      btn.setAttribute('aria-expanded', String(!shut));
+      btn.closest('tr').classList.toggle('is-folded', shut);
+    }
+    const allShut = groups.length && groups.every((g) => folded.has(g));
+    const toggleAll = el.querySelector('#collapse-all');
+    if (toggleAll) toggleAll.textContent = allShut ? 'Expand all' : 'Collapse all';
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify([...folded])); } catch { /* storage unavailable */ }
+  };
+  el.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('click', () => {
+    const g = b.dataset.toggle;
+    if (folded.has(g)) folded.delete(g); else folded.add(g);
+    applyFolds();
+  }));
+  el.querySelector('#collapse-all')?.addEventListener('click', () => {
+    const allShut = groups.every((g) => folded.has(g));
+    folded = allShut ? new Set([...folded].filter((g) => !groups.includes(g))) : new Set([...folded, ...groups]);
+    applyFolds();
+  });
+  if (groups.length) applyFolds();
+
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
     const offset = Number(b.dataset.week);
     ctx.navigate(`rota${scopeQs({ week: offset ? addDays(week, offset) : undefined })}`);
@@ -155,7 +207,7 @@ export async function render(ctx) {
   const shiftModal = (shift, defaults = {}) => {
     const s = shift ?? { start_time: '07:00', end_time: '15:00', break_minutes: 30, ...defaults };
     const person = data.staff.find((u) => u.id === s.user_id);
-    const site = s.location_id ?? (all ? person?.location_id : state.locationId) ?? state.locationId;
+    const site = s.location_id ?? (all ? person?.location_id : siteId) ?? state.locationId;
     const { form } = openModal({
       title: shift ? 'Edit shift' : 'Add shift',
       body: `
@@ -232,7 +284,7 @@ export async function render(ctx) {
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
     shiftModal(null, { user_id: Number(td.dataset.user), date: td.dataset.date, location_id: Number(td.dataset.site) });
   }));
-  const scopeBody = { location_id: all ? 'all' : state.locationId, week };
+  const scopeBody = { location_id: all ? 'all' : siteId, week };
   el.querySelector('#publish')?.addEventListener('click', async () => {
     if (!(await confirmDialog(`Publish ${pending} change${pending === 1 ? '' : 's'}${all ? ' across every site' : ''}? Staff will see the rota as it is now.`, { confirmLabel: 'Publish', title: 'Publish rota' }))) return;
     try {
@@ -258,7 +310,7 @@ export async function render(ctx) {
       { confirmLabel: 'Copy shifts', title: 'Copy previous week' },
     ))) return;
     try {
-      const r = await api('/rota/copy-week', { method: 'POST', body: { location_id: all ? 'all' : state.locationId, from_week: addDays(week, -7), to_week: week } });
+      const r = await api('/rota/copy-week', { method: 'POST', body: { location_id: all ? 'all' : siteId, from_week: addDays(week, -7), to_week: week } });
       toast(`Copied ${r.copied} shift(s)${r.skipped ? `, skipped ${r.skipped} (double-booked or on holiday)` : ''}`);
       ctx.rerender();
     } catch (err) { showError(err); }
