@@ -1,4 +1,4 @@
-import { assertLocation, isManager, requireManager, resolveLocation } from '../auth.js';
+import { assertLocation, can, requirePerm, resolveLocation } from '../auth.js';
 import { labourByDay, pct } from '../metrics.js';
 import { addDays, badRequest, bool, date, forbidden, id, notFound, num, oneOf, round2, str, today, weekStart } from '../util.js';
 
@@ -10,7 +10,7 @@ export function registerSafetyRoutes(router, db) {
 
   // --- Task templates ---
 
-  router.get('/safety/tasks', (req, res) => {
+  router.get('/safety/tasks', requirePerm('safety.manage', 'safety.complete'), (req, res) => {
     const rows = req.user.role === 'admin'
       ? db.prepare(`SELECT t.*, l.name AS location_name FROM safety_tasks t LEFT JOIN locations l ON l.id = t.location_id
           ORDER BY t.active DESC, t.frequency, t.sort_order, t.title`).all()
@@ -43,14 +43,14 @@ export function registerSafetyRoutes(router, db) {
   }
   const taskCols = ['title', 'description', 'category', 'frequency', 'location_id', 'requires_reading', 'reading_unit', 'min_value', 'max_value', 'sort_order', 'active'];
 
-  router.post('/safety/tasks', requireManager, (req, res) => {
+  router.post('/safety/tasks', requirePerm('safety.manage'), (req, res) => {
     const t = taskBody(req);
     const r = db.prepare(`INSERT INTO safety_tasks (${taskCols.join(', ')}) VALUES (${taskCols.map(() => '?').join(', ')})`)
       .run(...taskCols.map((c) => t[c]));
     res.status(201).json(db.prepare('SELECT * FROM safety_tasks WHERE id = ?').get(r.lastInsertRowid));
   });
 
-  router.put('/safety/tasks/:id', requireManager, (req, res) => {
+  router.put('/safety/tasks/:id', requirePerm('safety.manage'), (req, res) => {
     const existing = db.prepare('SELECT * FROM safety_tasks WHERE id = ?').get(Number(req.params.id));
     if (!existing) throw notFound('Task');
     if (existing.location_id) assertLocation(req, existing.location_id);
@@ -63,7 +63,7 @@ export function registerSafetyRoutes(router, db) {
 
   // --- Checklists ---
 
-  router.get('/safety/checklist', (req, res) => {
+  router.get('/safety/checklist', requirePerm('safety.complete', 'safety.manage', 'safety.report'), (req, res) => {
     const locationId = resolveLocation(req, req.query.location_id);
     const d = date(req.query.date, 'date') ?? today();
     const ws = weekStart(d);
@@ -76,7 +76,7 @@ export function registerSafetyRoutes(router, db) {
     res.json({ location_id: locationId, date: d, week_start: ws, tasks });
   });
 
-  router.post('/safety/checks', (req, res) => {
+  router.post('/safety/checks', requirePerm('safety.complete'), (req, res) => {
     const b = req.body;
     const locationId = resolveLocation(req, b.location_id);
     const task = db.prepare('SELECT * FROM safety_tasks WHERE id = ? AND active = 1').get(id(b.task_id, 'task_id', { required: true }));
@@ -112,7 +112,7 @@ export function registerSafetyRoutes(router, db) {
       WHERE c.task_id = ? AND c.location_id = ? AND c.period = ?`).get(task.id, locationId, period));
   });
 
-  router.delete('/safety/checks/:id', requireManager, (req, res) => {
+  router.delete('/safety/checks/:id', requirePerm('safety.manage'), (req, res) => {
     const check = db.prepare('SELECT * FROM safety_checks WHERE id = ?').get(Number(req.params.id));
     if (!check) throw notFound('Check');
     assertLocation(req, check.location_id);
@@ -121,7 +121,7 @@ export function registerSafetyRoutes(router, db) {
   });
 
   // Compliance by day/week plus a log of every failed check. Admins may omit location_id for all sites.
-  router.get('/safety/report', (req, res) => {
+  router.get('/safety/report', requirePerm('safety.report'), (req, res) => {
     const to = date(req.query.to, 'to') ?? today();
     const from = date(req.query.from, 'from') ?? addDays(to, -13);
     if (from > to) throw badRequest('from must be before to');
@@ -167,7 +167,8 @@ export function registerSafetyRoutes(router, db) {
   router.get('/dashboard', (req, res) => {
     const d = today();
     const ws = weekStart(d);
-    const manager = isManager(req.user);
+    const seeSales = can(req.user, 'sales.view');
+    const seeOrders = can(req.user, 'orders.manage');
     const locations = req.user.role === 'admin'
       ? db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY name').all()
       : db.prepare('SELECT id, name FROM locations WHERE id = ?').all(req.user.location_id);
@@ -201,7 +202,7 @@ export function registerSafetyRoutes(router, db) {
       const takeInProgress = db.prepare(`SELECT id FROM stock_takes WHERE location_id = ? AND status = 'in_progress'`).get(loc.id)?.id ?? null;
       const wastage = db.prepare('SELECT COALESCE(SUM(total_cost), 0) AS total FROM wastage WHERE location_id = ? AND date BETWEEN ? AND ?')
         .get(loc.id, addDays(d, -6), d).total;
-      const orders = manager
+      const orders = seeOrders
         ? db.prepare(`SELECT status, COUNT(*) AS n FROM purchase_orders WHERE location_id = ? AND status IN ('draft', 'sent') GROUP BY status`).all(loc.id)
         : [];
       return {
@@ -215,7 +216,7 @@ export function registerSafetyRoutes(router, db) {
         stock_take_in_progress: takeInProgress,
         orders_draft: orders.find((o) => o.status === 'draft')?.n ?? 0,
         orders_sent: orders.find((o) => o.status === 'sent')?.n ?? 0,
-        ...(manager ? salesSummary(loc.id) : {}),
+        ...(seeSales ? salesSummary(loc.id) : {}),
       };
     });
     res.json({ date: d, week_start: ws, locations: cards });

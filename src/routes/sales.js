@@ -1,4 +1,4 @@
-import { requireAdmin, requireManager, resolveLocation } from '../auth.js';
+import { requireAdmin, requirePerm, resolveLocation } from '../auth.js';
 import { dayKey, labourByDay, pct, salesByDay, wastageByDay } from '../metrics.js';
 import { syncSales } from '../square.js';
 import { applyTeamImport, fetchTeam, planTeamImport } from '../team.js';
@@ -14,7 +14,7 @@ export function registerSalesRoutes(router, db, square) {
 
   // --- Connection & location mapping (admin) ---
 
-  router.get('/square/status', requireManager, (_req, res) => {
+  router.get('/square/status', requirePerm('sales.view', 'sales.sync', 'staff.manage'), (_req, res) => {
     res.json({
       configured: !!square,
       environment: square?.config.environment ?? null,
@@ -105,19 +105,19 @@ export function registerSalesRoutes(router, db, square) {
     res.json(applyCleanup(db, { currentUserId: req.user.id, removeLocations, removeStaff }));
   });
 
-  router.post('/square/sync', requireManager, requireSquare, async (req, res) => {
+  router.post('/square/sync', requirePerm('sales.sync'), requireSquare, async (req, res) => {
     const to = date(req.body.to, 'to') ?? today();
     const from = date(req.body.from, 'from') ?? addDays(to, -1);
     if (from > to) throw badRequest('from must be before to');
     if (to > today()) throw badRequest('Cannot sync future dates');
     if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_SYNC_DAYS) throw badRequest(`Sync at most ${MAX_SYNC_DAYS} days at a time`);
-    if (req.user.role !== 'admin' && (Date.parse(to) - Date.parse(from)) / 86400000 > 7) throw badRequest('Managers can sync up to a week at a time');
+    if (req.user.role !== 'admin' && (Date.parse(to) - Date.parse(from)) / 86400000 > 7) throw badRequest('You can sync up to a week at a time');
     res.json(await syncSales(db, square.client, { from, to, triggeredBy: req.user.name }));
   });
 
   // --- Sales report: daily sales alongside labour and wastage (managers and admins) ---
 
-  router.get('/sales', requireManager, (req, res) => {
+  router.get('/sales', requirePerm('sales.view'), (req, res) => {
     const to = date(req.query.to, 'to') ?? today();
     const from = date(req.query.from, 'from') ?? addDays(to, -6);
     if (from > to) throw badRequest('from must be before to');

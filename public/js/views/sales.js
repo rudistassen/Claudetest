@@ -29,7 +29,7 @@ export async function render(ctx) {
       <h1>Sales</h1>
       <div class="actions">
         <span class="muted small">${data.last_sync ? `Square synced ${fmtDateTime(data.last_sync)}` : 'Not synced yet'}</span>
-        ${status.configured ? '<button class="btn" id="sync">Sync now</button>' : ''}
+        ${status.configured && state.can('sales.sync') ? '<button class="btn" id="sync">Sync now</button>' : ''}
       </div>
     </div>
     ${!status.configured ? `<p class="notice">Square isn’t connected yet. ${state.isAdmin ? 'See <a href="#/admin/square">Setup → Square</a>.' : 'Ask an admin to connect it.'}</p>` : ''}

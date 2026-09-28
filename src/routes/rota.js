@@ -1,4 +1,4 @@
-import { assertLocation, isManager, requireManager, resolveLocation } from '../auth.js';
+import { assertLocation, can, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { dayKey, labourByDay, pct, salesByDay } from '../metrics.js';
 import { addDays, badRequest, date, id, notFound, num, round2, shiftHours, str, time, today, weekStart } from '../util.js';
@@ -60,12 +60,13 @@ export function registerRotaRoutes(router, db) {
     return [resolveLocation(req, raw)];
   }
 
-  router.get('/rota', (req, res) => {
+  router.get('/rota', requirePerm('rota.view', 'rota.edit'), (req, res) => {
     const all = req.query.location_id === 'all';
     const ids = rotaSites(req, req.query.location_id);
     const ws = weekStart(date(req.query.week, 'week') ?? today());
     const we = addDays(ws, 6);
-    const manager = isManager(req.user);
+    // Labour costs and pay rates only for people who can see sales or manage staff.
+    const manager = can(req.user, 'sales.view') || can(req.user, 'staff.manage');
     const inList = ids.map(() => '?').join(', ') || 'NULL';
 
     const shifts = db.prepare(`${shiftSelect} WHERE s.location_id IN (${inList}) AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`)
@@ -149,7 +150,7 @@ export function registerRotaRoutes(router, db) {
       .all(req.user.id, from, addDays(from, 13)));
   });
 
-  router.post('/shifts', requireManager, (req, res) => {
+  router.post('/shifts', requirePerm('rota.edit'), (req, res) => {
     const s = shiftBody(req);
     assertNoClash(s, 0);
     const r = db.prepare(`INSERT INTO shifts (location_id, user_id, date, start_time, end_time, break_minutes, position, notes)
@@ -165,7 +166,7 @@ export function registerRotaRoutes(router, db) {
     return shift;
   }
 
-  router.put('/shifts/:id', requireManager, (req, res) => {
+  router.put('/shifts/:id', requirePerm('rota.edit'), (req, res) => {
     const existing = loadShift(req);
     const s = shiftBody(req);
     assertNoClash(s, existing.id);
@@ -174,14 +175,14 @@ export function registerRotaRoutes(router, db) {
     res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(existing.id));
   });
 
-  router.delete('/shifts/:id', requireManager, (req, res) => {
+  router.delete('/shifts/:id', requirePerm('rota.edit'), (req, res) => {
     const shift = loadShift(req);
     db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
     res.json({ ok: true });
   });
 
   // Copies one week's shifts onto another, skipping any that would double-book someone.
-  router.post('/rota/copy-week', requireManager, (req, res) => {
+  router.post('/rota/copy-week', requirePerm('rota.edit'), (req, res) => {
     const ids = rotaSites(req, req.body.location_id);
     const from = weekStart(date(req.body.from_week, 'from_week', { required: true }));
     const to = weekStart(date(req.body.to_week, 'to_week', { required: true }));

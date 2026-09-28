@@ -36,7 +36,7 @@ export async function render(ctx) {
       <h1>Trading</h1>
       <div class="actions">
         <span class="muted small">${data.last_sync ? `Square synced ${fmtDateTime(data.last_sync.finished_at)}` : 'Not synced yet'}</span>
-        ${data.square_connected ? '<button class="btn" id="sync">Sync now</button>' : ''}
+        ${data.square_connected && state.can('sales.sync') ? '<button class="btn" id="sync">Sync now</button>' : ''}
       </div>
     </div>
     ${tabs('trading', state.isAdmin ? scope : undefined)}

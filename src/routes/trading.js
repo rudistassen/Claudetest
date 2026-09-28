@@ -1,4 +1,4 @@
-import { requireManager, resolveLocation } from '../auth.js';
+import { requirePerm, resolveLocation } from '../auth.js';
 import { clockedByDay, clockedByHour, clockedByWeekHour, dayKey, dayOfWeek, hoursWorkedBy, nowMinutes, pct, rotaByDay, rotaByWeekHour, salesByDay, timecardsFor } from '../metrics.js';
 import { addDays, badRequest, BUSINESS_TZ, date, oneOf, round2, shiftHours, today } from '../util.js';
 
@@ -32,7 +32,7 @@ export function registerTradingRoutes(router, db, square) {
    * Labour % by day of the week and hour of the day: labour cost ÷ net sales in each slot, added up over the
    * period. Only site-days with Square sales count, so closed or unsynced days don't skew it.
    */
-  router.get('/trading/heatmap', requireManager, (req, res) => {
+  router.get('/trading/heatmap', requirePerm('sales.view'), (req, res) => {
     const { from, to, locations, ids } = reportScope(db, req, 28);
     const labourSynced = !!db.prepare('SELECT 1 FROM timecards LIMIT 1').get();
     const basis = oneOf(req.query.basis, 'basis', ['clocked', 'rostered']) ?? (labourSynced ? 'clocked' : 'rostered');
@@ -104,7 +104,7 @@ export function registerTradingRoutes(router, db, square) {
     });
   });
 
-  router.get('/trading', requireManager, (req, res) => {
+  router.get('/trading', requirePerm('sales.view'), (req, res) => {
     const { from, to, locations, ids } = reportScope(db, req, 7);
     const days = [];
     for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);

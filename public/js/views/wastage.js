@@ -14,10 +14,11 @@ export async function render(ctx) {
   const from = query.from || addDays(to, -6);
   const scope = state.isAdmin ? (query.scope ?? 'site') : 'site';
   const params = { from, to, location_id: scope === 'all' ? undefined : state.locationId };
+  const canRecord = state.can('wastage.record');
   const [report, entries, [products, reasons, recipes]] = await Promise.all([
-    api(`/wastage/report${qs(params)}`),
+    state.can('wastage.reports') ? api(`/wastage/report${qs(params)}`) : null,
     api(`/wastage${qs(params)}`),
-    Promise.all([api('/products'), api('/wastage/reasons'), api('/recipes')]),
+    Promise.all([api('/products'), api('/wastage/reasons'), state.can('recipes.view', 'recipes.costs', 'recipes.edit') ? api('/recipes') : []]),
   ]);
   if (stale()) return;
   const active = products.filter((p) => p.active);
@@ -26,8 +27,8 @@ export async function render(ctx) {
     <div class="page-head">
       <h1>Wastage</h1>
       <div class="actions">
-        <button class="btn btn-primary" id="log">+ Log wastage</button>
-        <a class="btn" href="/api/wastage/export.csv${qs(params)}">Export CSV</a>
+        ${canRecord ? '<button class="btn btn-primary" id="log">+ Log wastage</button>' : ''}
+        ${report ? `<a class="btn" href="/api/wastage/export.csv${qs(params)}">Export CSV</a>` : ''}
       </div>
     </div>
     <form class="filters" id="range">
@@ -35,7 +36,7 @@ export async function render(ctx) {
       <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
       <button class="btn" type="submit">Update</button>
     </form>
-    <div class="kpis">
+    ${report ? `<div class="kpis">
       <div class="kpi"><span>Total wastage</span><strong>${money(report.total_cost)}</strong></div>
       <div class="kpi"><span>Entries</span><strong>${report.entries}</strong></div>
       ${report.sales ? `<div class="kpi"><span>% of sales (${money(report.sales.net_sales)})</span><strong>${report.sales.wastage_pct === null ? '–' : `${report.sales.wastage_pct.toFixed(1)}%`}</strong></div>` : ''}
@@ -45,7 +46,7 @@ export async function render(ctx) {
       <section class="card"><h2>By reason</h2>${bars(report.by_reason, report.total_cost)}</section>
       <section class="card"><h2>Top items</h2>${bars(report.by_item, report.total_cost)}</section>
       ${scope === 'all' ? `<section class="card"><h2>By site</h2>${bars(report.by_location, report.total_cost)}</section>` : ''}
-    </div>
+    </div>` : ''}
     <section class="card">
       <h2>Entries</h2>
       ${entries.length ? `<div class="table-wrap"><table>
@@ -55,7 +56,7 @@ export async function render(ctx) {
           <td>${esc(w.item_name)}${w.notes ? `<small class="muted block">${esc(w.notes)}</small>` : ''}</td>
           <td class="num">${qty(w.quantity)} ${esc(w.unit ?? '')}</td><td class="num">${money(w.total_cost)}</td>
           <td>${esc(w.reason)}</td><td>${esc(w.recorded_by_name ?? '')}</td>
-          <td>${state.isManager || (w.recorded_by === state.user.id && w.date === todayISO()) ? `<button class="btn btn-small btn-ghost" data-del="${w.id}">Delete</button>` : ''}</td>
+          <td>${state.can('wastage.manage') || (canRecord && w.recorded_by === state.user.id && w.date === todayISO()) ? `<button class="btn btn-small btn-ghost" data-del="${w.id}">Delete</button>` : ''}</td>
         </tr>`).join('')}</tbody></table></div>` : '<p class="muted">No wastage recorded in this period.</p>'}
     </section>`;
 
@@ -65,7 +66,7 @@ export async function render(ctx) {
     ctx.navigate(`wastage${qs({ from: f.from.value, to: f.to.value, scope: f.scope?.value })}`);
   });
 
-  el.querySelector('#log').addEventListener('click', () => {
+  el.querySelector('#log')?.addEventListener('click', () => {
     const byCat = new Map();
     for (const p of active) byCat.set(p.category ?? 'Other', [...(byCat.get(p.category ?? 'Other') ?? []), p]);
     const made = recipes.filter((r) => r.active);

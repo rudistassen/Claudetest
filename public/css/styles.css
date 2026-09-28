@@ -396,7 +396,7 @@ small.inline { display: inline; }
 h2 .muted.small { font-weight: 400; margin-left: 0.4rem; }
 
 .check-row { display: flex; gap: 0.6rem; align-items: flex-start; margin: 0.75rem 0; cursor: pointer; }
-.check-row input { margin-top: 0.25rem; }
+.check-row input { margin-top: 0.25rem; flex: none; }
 
 /* Labour heatmap */
 .hm-wrap { margin-top: 0.5rem; }
@@ -436,3 +436,18 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .rota tr.rota-cover > th small { color: var(--warn); }
 .rota thead th:last-child, .rota tbody td:last-child, .rota tfoot td:last-child { min-width: 64px; }
 .rota tbody td { padding: 0.35rem; }
+
+/* Setup → Permissions */
+.perm-matrix th, .perm-matrix td { text-align: center; }
+.perm-matrix tbody th[scope=row] { text-align: left; font-weight: 400; min-width: 220px; }
+.perm-matrix .perm-set { vertical-align: bottom; min-width: 110px; }
+.perm-matrix .perm-set small { display: block; font-weight: 400; }
+.perm-matrix .perm-area-row th { text-align: left; background: var(--surface-2); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.perm-yes { color: var(--good); font-weight: 700; }
+.perm-no { color: var(--muted); }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--brand); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.perm-edit { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.25rem 1.25rem; }
+.perm-edit fieldset { border: 0; padding: 0; margin: 0 0 0.5rem; }
+.perm-edit legend { font-weight: 700; font-size: 0.85rem; margin-bottom: 0.1rem; }
+.perm-edit .check-row { margin: 0.35rem 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

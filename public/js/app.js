@@ -18,60 +18,75 @@ export const state = {
   locations: [],
   locationId: null,
   get isAdmin() { return this.user?.role === 'admin'; },
-  get isManager() { return this.user?.role === 'admin' || this.user?.role === 'manager'; },
+  // Admins can do everything; everyone else has the permissions of their permission set.
+  can(...perms) { return this.user?.role === 'admin' || perms.some((p) => this.user?.permissions?.includes(p)); },
   get location() { return this.locations.find((l) => l.id === this.locationId); },
 };
 
-// [pattern, view, required role]
+// [pattern, view, who can open it: 'admin', or a list of permissions (any one is enough)]
+const SAFETY = ['safety.complete', 'safety.manage', 'safety.report'];
+const ROTA = ['rota.view', 'rota.edit'];
+const WASTAGE = ['wastage.record', 'wastage.reports', 'wastage.manage'];
+const STOCK = ['stock.count', 'stock.complete'];
+const RECIPES = ['recipes.view', 'recipes.costs', 'recipes.edit'];
+const SUPPLIERS = ['orders.manage', 'setup.products'];
 const ROUTES = [
   [/^$/, dashboard.render],
   [/^dashboard$/, dashboard.render],
-  [/^safety$/, safety.renderChecklist],
-  [/^safety\/report$/, safety.renderReport],
-  [/^rota$/, rota.render],
-  [/^wastage$/, wastage.render],
-  [/^stock$/, stock.renderList],
-  [/^stock\/(\d+)$/, stock.renderTake],
-  [/^recipes$/, recipes.renderList],
-  [/^recipes\/allergens$/, recipes.renderAllergens],
-  [/^recipes\/performance$/, recipes.renderPerformance, 'manager'],
-  [/^recipes\/new$/, recipes.renderEdit, 'admin'],
-  [/^recipes\/(\d+)\/edit$/, recipes.renderEdit, 'admin'],
-  [/^recipes\/(\d+)$/, recipes.renderRecipe],
-  [/^sales$/, sales.render, 'manager'],
-  [/^trading$/, trading.render, 'manager'],
-  [/^trading\/heatmap$/, trading.renderHeatmap, 'manager'],
-  [/^orders$/, orders.renderList, 'manager'],
-  [/^orders\/new$/, orders.renderNew, 'manager'],
-  [/^orders\/(\d+)$/, orders.renderOrder, 'manager'],
-  [/^admin\/staff$/, admin.renderStaff, 'manager'],
+  [/^safety$/, safety.renderChecklist, SAFETY],
+  [/^safety\/report$/, safety.renderReport, ['safety.report']],
+  [/^rota$/, rota.render, ROTA],
+  [/^wastage$/, wastage.render, WASTAGE],
+  [/^stock$/, stock.renderList, STOCK],
+  [/^stock\/(\d+)$/, stock.renderTake, STOCK],
+  [/^recipes$/, recipes.renderList, RECIPES],
+  [/^recipes\/allergens$/, recipes.renderAllergens, RECIPES],
+  [/^recipes\/performance$/, recipes.renderPerformance, ['recipes.costs']],
+  [/^recipes\/new$/, recipes.renderEdit, ['recipes.edit']],
+  [/^recipes\/(\d+)\/edit$/, recipes.renderEdit, ['recipes.edit']],
+  [/^recipes\/(\d+)$/, recipes.renderRecipe, RECIPES],
+  [/^sales$/, sales.render, ['sales.view']],
+  [/^trading$/, trading.render, ['sales.view']],
+  [/^trading\/heatmap$/, trading.renderHeatmap, ['sales.view']],
+  [/^orders$/, orders.renderList, ['orders.manage']],
+  [/^orders\/new$/, orders.renderNew, ['orders.manage']],
+  [/^orders\/(\d+)$/, orders.renderOrder, ['orders.manage']],
+  [/^admin\/staff$/, admin.renderStaff, ['staff.manage']],
+  [/^admin\/permissions$/, admin.renderPermissions, 'admin'],
   [/^admin\/locations$/, admin.renderLocations, 'admin'],
-  [/^admin\/suppliers$/, admin.renderSuppliers, 'manager'],
-  [/^admin\/products$/, admin.renderProducts, 'manager'],
-  [/^admin\/safety-tasks$/, admin.renderSafetyTasks, 'manager'],
+  [/^admin\/suppliers$/, admin.renderSuppliers, SUPPLIERS],
+  [/^admin\/products$/, admin.renderProducts, SUPPLIERS],
+  [/^admin\/safety-tasks$/, admin.renderSafetyTasks, ['safety.manage']],
   [/^admin\/square$/, admin.renderSquare, 'admin'],
   [/^account$/, admin.renderAccount],
 ];
 
+const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(...who));
+
 function navItems() {
-  const items = [
+  return [
     ['dashboard', 'Dashboard', '▦'],
-    ['safety', 'Food safety', '✓'],
-    ['rota', 'Rota', '◷'],
-    ['wastage', 'Wastage', '⌫'],
-    ['stock', 'Stock takes', '☰'],
-    ['recipes', 'Recipes', '✎'],
-  ];
-  if (state.isManager) items.push(['trading', 'Trading', '◔'], ['sales', 'Sales', '£'], ['orders', 'Orders', '⇄']);
-  return items;
+    ['safety', 'Food safety', '✓', SAFETY],
+    ['rota', 'Rota', '◷', ROTA],
+    ['wastage', 'Wastage', '⌫', WASTAGE],
+    ['stock', 'Stock takes', '☰', STOCK],
+    ['recipes', 'Recipes', '✎', RECIPES],
+    ['trading', 'Trading', '◔', ['sales.view']],
+    ['sales', 'Sales', '£', ['sales.view']],
+    ['orders', 'Orders', '⇄', ['orders.manage']],
+  ].filter(([, , , who]) => allowed(who));
 }
 
 function adminItems() {
-  if (!state.isManager) return [];
-  const items = [['admin/staff', 'Staff']];
-  if (state.isAdmin) items.push(['admin/locations', 'Locations'], ['admin/square', 'Square']);
-  items.push(['admin/suppliers', 'Suppliers'], ['admin/products', 'Products'], ['admin/safety-tasks', 'Safety checks']);
-  return items;
+  return [
+    ['admin/staff', 'Staff', ['staff.manage']],
+    ['admin/permissions', 'Permissions', 'admin'],
+    ['admin/locations', 'Locations', 'admin'],
+    ['admin/square', 'Square', 'admin'],
+    ['admin/suppliers', 'Suppliers', SUPPLIERS],
+    ['admin/products', 'Products', SUPPLIERS],
+    ['admin/safety-tasks', 'Safety checks', ['safety.manage']],
+  ].filter(([, , who]) => allowed(who));
 }
 
 export function navigate(path) {
@@ -139,7 +154,7 @@ export async function route() {
     el.innerHTML = '<div class="empty">Page not found.</div>';
     return;
   }
-  if ((match.role === 'manager' && !state.isManager) || (match.role === 'admin' && !state.isAdmin)) {
+  if (!allowed(match.role)) {
     el.innerHTML = '<div class="empty">You do not have access to this page.</div>';
     return;
   }

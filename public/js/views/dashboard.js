@@ -37,7 +37,7 @@ function card(loc, state) {
             ? `<a href="#/stock/${loc.stock_take_in_progress}" data-site="${loc.id}">Count in progress →</a>`
             : loc.last_stock_take ? `Last: ${fmtDateTime(loc.last_stock_take)}` : '<span class="muted">None yet</span>'}</p>
         </div>
-        ${state.isManager ? `
+        ${state.can('sales.view') ? `
         <div>
           <h3>Sales today</h3>
           <p class="stat">${loc.sales_today === null ? '<span class="muted">–</span>' : money(loc.sales_today)}</p>
@@ -47,7 +47,8 @@ function card(loc, state) {
           <h3>Labour today</h3>
           <p class="stat tone-${labourTone(loc.labour_pct_today)}">${fmtPct(loc.labour_pct_today)}</p>
           <p class="small muted">${money(loc.labour_cost_today)} worked so far</p>
-        </div>
+        </div>` : ''}
+        ${state.can('orders.manage') ? `
         <div>
           <h3>Orders</h3>
           <p>${loc.orders_draft} draft · ${loc.orders_sent} awaiting delivery</p>

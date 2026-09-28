@@ -9,7 +9,7 @@ export async function render(ctx) {
   const scopeQs = (extra = {}) => qs({ ...extra, scope: all ? 'all' : undefined });
   const data = await api(`/rota${qs({ location_id: all ? 'all' : state.locationId, week })}`);
   if (stale()) return;
-  const canEdit = state.isManager;
+  const canEdit = state.can('rota.edit');
   const today = todayISO();
   const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
 
@@ -37,7 +37,7 @@ export async function render(ctx) {
           people: people.length,
           hours: Math.round(siteShifts.reduce((t, x) => t + x.hours, 0) * 10) / 10,
           // Pay rates are only sent to managers and admins.
-          cost: canEdit ? siteShifts.reduce((t, x) => t + x.hours * (rate.get(x.user_id) ?? 0), 0) : null,
+          cost: data.labour_cost !== undefined ? siteShifts.reduce((t, x) => t + x.hours * (rate.get(x.user_id) ?? 0), 0) : null,
         },
       });
       // The site's own staff first, then people covering from elsewhere.

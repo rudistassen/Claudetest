@@ -12,7 +12,7 @@ export async function renderList(ctx) {
       <div class="actions">
         ${open
           ? `<a class="btn btn-primary" href="#/stock/${open.id}">Continue count (${open.counted_count}/${open.line_count})</a>`
-          : '<button class="btn btn-primary" id="start">Start stock take</button>'}
+          : state.can('stock.count') ? '<button class="btn btn-primary" id="start">Start stock take</button>' : ''}
       </div>
     </div>
     <section class="card">
@@ -54,8 +54,8 @@ export async function renderTake(ctx) {
       <div class="actions">
         <a class="btn" href="#/stock">‹ All stock takes</a>
         ${editable ? `<button class="btn" id="save">Save progress</button>` : ''}
-        ${editable && state.isManager ? `<button class="btn btn-primary" id="complete">Complete stock take</button>` : ''}
-        ${editable && state.isManager ? `<button class="btn btn-ghost" id="discard">Discard</button>` : ''}
+        ${editable && state.can('stock.complete') ? `<button class="btn btn-primary" id="complete">Complete stock take</button>` : ''}
+        ${editable && state.can('stock.complete') ? `<button class="btn btn-ghost" id="discard">Discard</button>` : ''}
         ${!editable ? '<button class="btn" id="print">Print</button>' : ''}
       </div>
     </div>

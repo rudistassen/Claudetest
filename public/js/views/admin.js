@@ -89,12 +89,20 @@ export async function renderStaff(ctx) {
   const { state } = ctx;
   // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
   const scope = state.isAdmin ? (ctx.query.scope ?? 'all') : 'site';
-  const [rows, square] = await Promise.all([
+  const [rows, square, perms] = await Promise.all([
     api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
     state.isAdmin ? api('/square/status') : null,
+    api('/permissions'),
   ]);
   if (ctx.stale()) return;
   const locOptions = state.locations.map((l) => [l.id, l.name]);
+  // Admin, or a permission set. People who aren't admins can only hand out sets they're allowed to.
+  const staffSet = perms.sets.find((s) => s.built_in === 'staff');
+  const accessOptions = (u) => {
+    const opts = perms.sets.filter((s) => s.assignable || s.id === u.access_set_id).map((s) => [s.id, s.name]);
+    return state.isAdmin ? [['admin', 'Admin – everything, every site'], ...opts] : opts;
+  };
+  const accessValue = (u) => (u.role === 'admin' ? 'admin' : u.access_set_id ?? staffSet?.id ?? '');
   listPage(ctx, {
     title: `Staff · ${scope === 'all' ? 'All sites' : state.location?.name ?? ''}`,
     rows,
@@ -106,7 +114,7 @@ export async function renderStaff(ctx) {
     columns: [
       { label: 'Name', key: 'name' },
       { label: 'Email', key: 'email' },
-      { label: 'Role', value: (r) => r.role[0].toUpperCase() + r.role.slice(1) },
+      { label: 'Access', value: (r) => r.access_name ?? '' },
       { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
       { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
       { label: 'Active', value: (r) => yesNo(r.active) },
@@ -114,7 +122,7 @@ export async function renderStaff(ctx) {
     form: (u) => `
       <div class="row">${field('Name', input('name', u.name, 'required'))}${field('Email (used to sign in)', input('email', u.email, 'type="email" required'))}</div>
       <div class="row">
-        ${field('Role', select('role', state.isAdmin ? [['staff', 'Staff'], ['manager', 'Manager'], ['admin', 'Admin (all sites)']] : [['staff', 'Staff']], u.role ?? 'staff'))}
+        ${field('Access', select('permission_set_id', accessOptions(u), accessValue(u)), { hint: state.isAdmin ? 'Set up what each option allows under Setup → Permissions' : '' })}
         ${field('Home site', select('location_id', state.isAdmin ? [['', '—'], ...locOptions] : locOptions.filter(([id]) => id === state.user.location_id), u.location_id ?? state.locationId))}
       </div>
       <div class="row">
@@ -163,7 +171,7 @@ export async function renderSuppliers(ctx) {
   listPage(ctx, {
     title: 'Suppliers',
     rows,
-    canEdit: ctx.state.isAdmin,
+    canEdit: ctx.state.can('setup.products'),
     addLabel: 'Add supplier',
     columns: [
       { label: 'Name', key: 'name' },
@@ -196,7 +204,7 @@ export async function renderProducts(ctx) {
   listPage(ctx, {
     title: 'Products',
     rows,
-    canEdit: state.isAdmin,
+    canEdit: state.can('setup.products'),
     addLabel: 'Add product',
     columns: [
       { label: 'Name', key: 'name' },
@@ -308,7 +316,7 @@ export async function renderAccount(ctx) {
     <div class="page-head"><h1>Your account</h1></div>
     <section class="card narrow">
       <p><strong>${esc(state.user.name)}</strong><br>${esc(state.user.email)}<br>
-        <span class="muted">${esc(state.user.role)}${state.location && !state.isAdmin ? ` · ${esc(state.location.name)}` : ''}</span></p>
+        <span class="muted">${esc(state.user.access_name ?? state.user.role)}${state.location && !state.isAdmin ? ` · ${esc(state.location.name)}` : ''}</span></p>
       <form id="pw">
         <h2>Change password</h2>
         ${field('Current password', input('current_password', '', 'type="password" required autocomplete="current-password"'))}
@@ -480,4 +488,67 @@ export async function renderSquare(ctx) {
       btn.textContent = 'Import sales';
     }
   });
+}
+
+// --- Setup → Permissions: named permission sets, compared side by side ---
+
+export async function renderPermissions(ctx) {
+  const { el } = ctx;
+  const data = await api('/permissions');
+  if (ctx.stale()) return;
+  const { areas, sets } = data;
+
+  el.innerHTML = `
+    <div class="page-head">
+      <h1>Permissions</h1>
+      <div class="actions"><button class="btn btn-primary" id="add">+ New permission set</button></div>
+    </div>
+    <p class="muted">Give each person a permission set on the Staff page. They can do what their set allows, at their home site.
+      <strong>Admins</strong> can do everything at every site, so they don’t need a set. Only admins can give someone access to manage staff.</p>
+    <section class="card">
+      <div class="table-wrap"><table class="perm-matrix">
+        <thead><tr><th></th>${sets.map((s) => `<th class="perm-set">
+          <button class="link-btn" data-edit="${s.id}">${esc(s.name)}</button>
+          <small>${s.people} ${s.people === 1 ? 'person' : 'people'}${s.built_in ? ' · built in' : ''}</small></th>`).join('')}</tr></thead>
+        <tbody>${areas.map((a) => `
+          <tr class="perm-area-row"><th colspan="${sets.length + 1}">${esc(a.area)}</th></tr>
+          ${a.permissions.map((p) => `<tr><th scope="row">${esc(p.label)}</th>${sets.map((s) => (s.permissions.includes(p.key)
+            ? '<td class="perm-yes"><span aria-hidden="true">✓</span><span class="sr-only">Yes</span></td>'
+            : '<td class="perm-no"><span aria-hidden="true">–</span><span class="sr-only">No</span></td>')).join('')}</tr>`).join('')}`).join('')}
+        </tbody>
+      </table></div>
+      <p class="muted small">Click a set’s name to change it. Changes apply the next time each person opens a page.</p>
+    </section>`;
+
+  const open = (set) => {
+    const has = new Set(set?.permissions ?? []);
+    openModal({
+      title: set ? `Edit ${set.name}` : 'New permission set',
+      wide: true,
+      submitLabel: set ? 'Save' : 'Create',
+      danger: set && !set.built_in ? 'Delete set' : null,
+      body: `
+        <div class="row">${field('Name', input('name', set?.name, 'required maxlength="60" placeholder="e.g. Supervisor"'))}
+          ${field('Description', input('description', set?.description, 'maxlength="300" placeholder="Who it’s for"'))}</div>
+        <p class="small muted">${set?.built_in ? 'This set is built in: people without a set get it by default. You can change what it allows but not delete it.' : 'Tick what people with this set can do.'}</p>
+        <div class="perm-edit">${areas.map((a) => `
+          <fieldset><legend>${esc(a.area)}</legend>
+            ${a.permissions.map((p) => `<label class="check-row"><input type="checkbox" name="perm" value="${p.key}" ${has.has(p.key) ? 'checked' : ''}><span>${esc(p.label)}</span></label>`).join('')}
+          </fieldset>`).join('')}</div>`,
+      onSubmit: async (v, form) => {
+        const body = { name: v.name, description: v.description, permissions: [...form.querySelectorAll('input[name=perm]:checked')].map((i) => i.value) };
+        if (set) await api(`/permission-sets/${set.id}`, { method: 'PUT', body });
+        else await api('/permission-sets', { method: 'POST', body });
+        toast(set ? 'Permission set saved' : 'Permission set created');
+        ctx.rerender();
+      },
+      onDanger: async () => {
+        await api(`/permission-sets/${set.id}`, { method: 'DELETE' });
+        toast('Permission set deleted');
+        ctx.rerender();
+      },
+    });
+  };
+  el.querySelector('#add').addEventListener('click', () => open(null));
+  el.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => open(sets.find((s) => s.id === Number(b.dataset.edit)))));
 }

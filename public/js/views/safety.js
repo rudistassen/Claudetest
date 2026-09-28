@@ -21,7 +21,7 @@ function taskRow(t, state) {
         ${c.reading !== null ? `<strong>${c.reading}${esc(t.reading_unit ?? '')}</strong>` : ''}
         <span class="muted">${esc(c.completed_by_name ?? '')} · ${fmtDateTime(c.completed_at)}</span>
         <button class="btn btn-small btn-ghost" data-redo="${t.id}">Redo</button>
-        ${state.isManager ? `<button class="btn btn-small btn-ghost" data-undo="${c.id}">Clear</button>` : ''}
+        ${state.can('safety.manage') ? `<button class="btn btn-small btn-ghost" data-undo="${c.id}">Clear</button>` : ''}
       </div>
       ${c.corrective_action ? `<p class="corrective"><strong>Action taken:</strong> ${esc(c.corrective_action)}</p>` : ''}
       ${c.notes ? `<p class="muted small">${esc(c.notes)}</p>` : ''}`;
@@ -73,7 +73,7 @@ export async function renderChecklist(ctx) {
         <button class="btn" data-day="-1">‹</button>
         <input type="date" id="check-date" value="${date}" max="${todayISO()}">
         <button class="btn" data-day="1" ${isToday ? 'disabled' : ''}>›</button>
-        <a class="btn" href="#/safety/report">Compliance report</a>
+        ${state.can('safety.report') ? '<a class="btn" href="#/safety/report">Compliance report</a>' : ''}
       </div>
     </div>
     ${!isToday ? `<p class="notice">You are recording checks for ${fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' })}. Late entries are time-stamped.</p>` : ''}

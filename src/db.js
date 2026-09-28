@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { ensureDefaultSets } from './permissions.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS locations (
@@ -253,6 +254,16 @@ CREATE TABLE IF NOT EXISTS timecards (
 );
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
+-- Named groups of permissions staff are assigned to. built_in marks the default Manager and Staff sets
+-- ('manager' / 'staff'), which people without a set fall back to by role.
+CREATE TABLE IF NOT EXISTS permission_sets (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  description TEXT,
+  permissions TEXT NOT NULL DEFAULT '[]',
+  built_in TEXT UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS square_sync_log (
   id INTEGER PRIMARY KEY,
   started_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -273,6 +284,7 @@ const MIGRATIONS = [
   ['products', 'recipe_unit', 'ALTER TABLE products ADD COLUMN recipe_unit TEXT'],
   ['products', 'units_per_pack', 'ALTER TABLE products ADD COLUMN units_per_pack REAL NOT NULL DEFAULT 1'],
   ['products', 'allergens', 'ALTER TABLE products ADD COLUMN allergens TEXT'],
+  ['users', 'permission_set_id', 'ALTER TABLE users ADD COLUMN permission_set_id INTEGER REFERENCES permission_sets(id) ON DELETE SET NULL'],
   ['square_sync_log', 'timecards', 'ALTER TABLE square_sync_log ADD COLUMN timecards INTEGER'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
 ];
@@ -286,6 +298,7 @@ export function openDb(file = ':memory:') {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) db.exec(sql);
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_square ON locations(square_location_id)');
+  ensureDefaultSets(db);
   return db;
 }
 

@@ -1,5 +1,5 @@
 import { cleanAllergens } from '../recipes.js';
-import { assertLocation, requireAdmin, requireManager, resolveLocation } from '../auth.js';
+import { assertLocation, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { badRequest, bool, date, id, notFound, num, round2, str } from '../util.js';
 
@@ -24,14 +24,14 @@ export function registerOrderingRoutes(router, db) {
   });
   const supplierCols = ['name', 'contact_name', 'email', 'phone', 'order_days', 'lead_time_days', 'min_order', 'notes', 'active'];
 
-  router.post('/suppliers', requireAdmin, (req, res) => {
+  router.post('/suppliers', requirePerm('setup.products'), (req, res) => {
     const s = supplierBody(req.body);
     const r = db.prepare(`INSERT INTO suppliers (${supplierCols.join(', ')}) VALUES (${supplierCols.map(() => '?').join(', ')})`)
       .run(...supplierCols.map((c) => s[c]));
     res.status(201).json(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(r.lastInsertRowid));
   });
 
-  router.put('/suppliers/:id', requireAdmin, (req, res) => {
+  router.put('/suppliers/:id', requirePerm('setup.products'), (req, res) => {
     const s = supplierBody(req.body);
     const r = db.prepare(`UPDATE suppliers SET ${supplierCols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`)
       .run(...supplierCols.map((c) => s[c]), Number(req.params.id));
@@ -65,14 +65,14 @@ export function registerOrderingRoutes(router, db) {
   };
   const productCols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'active'];
 
-  router.post('/products', requireAdmin, (req, res) => {
+  router.post('/products', requirePerm('setup.products'), (req, res) => {
     const p = productBody(req.body);
     const r = db.prepare(`INSERT INTO products (${productCols.join(', ')}) VALUES (${productCols.map(() => '?').join(', ')})`)
       .run(...productCols.map((c) => p[c]));
     res.status(201).json(db.prepare('SELECT * FROM products WHERE id = ?').get(r.lastInsertRowid));
   });
 
-  router.put('/products/:id', requireAdmin, (req, res) => {
+  router.put('/products/:id', requirePerm('setup.products'), (req, res) => {
     const p = productBody(req.body);
     const r = db.prepare(`UPDATE products SET ${productCols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`)
       .run(...productCols.map((c) => p[c]), Number(req.params.id));
@@ -81,7 +81,7 @@ export function registerOrderingRoutes(router, db) {
   });
 
   // Per-location par levels override the product default.
-  router.get('/products/:id/pars', requireManager, (req, res) => {
+  router.get('/products/:id/pars', requirePerm('orders.manage'), (req, res) => {
     const product = db.prepare('SELECT id, name, par_level FROM products WHERE id = ?').get(Number(req.params.id));
     if (!product) throw notFound('Product');
     const pars = db.prepare(`SELECT l.id AS location_id, l.name AS location_name, pp.par_level
@@ -90,7 +90,7 @@ export function registerOrderingRoutes(router, db) {
     res.json({ product, pars });
   });
 
-  router.put('/products/:id/pars', requireManager, (req, res) => {
+  router.put('/products/:id/pars', requirePerm('orders.manage'), (req, res) => {
     const productId = Number(req.params.id);
     if (!db.prepare('SELECT 1 FROM products WHERE id = ?').get(productId)) throw notFound('Product');
     const pars = Array.isArray(req.body.pars) ? req.body.pars : [];
@@ -128,7 +128,7 @@ export function registerOrderingRoutes(router, db) {
     return order;
   }
 
-  router.get('/orders', requireManager, (req, res) => {
+  router.get('/orders', requirePerm('orders.manage'), (req, res) => {
     const locationId = resolveLocation(req, req.query.location_id);
     const status = str(req.query.status, 'status');
     const rows = status
@@ -139,7 +139,7 @@ export function registerOrderingRoutes(router, db) {
   });
 
   // Suggested quantities: par level minus what was on hand at the last completed stock take.
-  router.get('/orders/suggest', requireManager, (req, res) => {
+  router.get('/orders/suggest', requirePerm('orders.manage'), (req, res) => {
     const locationId = resolveLocation(req, req.query.location_id);
     const supplierId = id(req.query.supplier_id, 'supplier_id', { required: true });
     const lastTake = db.prepare(`SELECT id, completed_at FROM stock_takes WHERE location_id = ? AND status = 'completed'
@@ -158,7 +158,7 @@ export function registerOrderingRoutes(router, db) {
     res.json({ last_stock_take: lastTake ?? null, products: rows });
   });
 
-  router.get('/orders/:id', requireManager, (req, res) => res.json(loadOrder(req)));
+  router.get('/orders/:id', requirePerm('orders.manage'), (req, res) => res.json(loadOrder(req)));
 
   function parseLines(raw) {
     if (!Array.isArray(raw)) throw badRequest('lines must be a list');
@@ -181,7 +181,7 @@ export function registerOrderingRoutes(router, db) {
     }
   }
 
-  router.post('/orders', requireManager, (req, res) => {
+  router.post('/orders', requirePerm('orders.manage'), (req, res) => {
     const locationId = resolveLocation(req, req.body.location_id);
     const supplierId = id(req.body.supplier_id, 'supplier_id', { required: true });
     if (!db.prepare('SELECT 1 FROM suppliers WHERE id = ?').get(supplierId)) throw notFound('Supplier');
@@ -196,7 +196,7 @@ export function registerOrderingRoutes(router, db) {
     res.status(201).json(loadOrder(req));
   });
 
-  router.put('/orders/:id', requireManager, (req, res) => {
+  router.put('/orders/:id', requirePerm('orders.manage'), (req, res) => {
     const order = loadOrder(req);
     if (order.status !== 'draft') throw badRequest('Only draft orders can be edited');
     const lines = parseLines(req.body.lines);
@@ -208,14 +208,14 @@ export function registerOrderingRoutes(router, db) {
     res.json(loadOrder(req));
   });
 
-  router.post('/orders/:id/send', requireManager, (req, res) => {
+  router.post('/orders/:id/send', requirePerm('orders.manage'), (req, res) => {
     const order = loadOrder(req);
     if (order.status !== 'draft') throw badRequest('Only draft orders can be sent');
     db.prepare(`UPDATE purchase_orders SET status = 'sent', sent_at = datetime('now') WHERE id = ?`).run(order.id);
     res.json(loadOrder(req));
   });
 
-  router.post('/orders/:id/receive', requireManager, (req, res) => {
+  router.post('/orders/:id/receive', requirePerm('orders.manage'), (req, res) => {
     const order = loadOrder(req);
     if (order.status !== 'sent') throw badRequest('Only sent orders can be received');
     const received = new Map((req.body.lines ?? []).map((l) => [Number(l.id), num(l.received_quantity, 'received_quantity', { min: 0 })]));
@@ -231,14 +231,14 @@ export function registerOrderingRoutes(router, db) {
     res.json(loadOrder(req));
   });
 
-  router.post('/orders/:id/cancel', requireManager, (req, res) => {
+  router.post('/orders/:id/cancel', requirePerm('orders.manage'), (req, res) => {
     const order = loadOrder(req);
     if (!['draft', 'sent'].includes(order.status)) throw badRequest('This order can no longer be cancelled');
     db.prepare(`UPDATE purchase_orders SET status = 'cancelled' WHERE id = ?`).run(order.id);
     res.json(loadOrder(req));
   });
 
-  router.delete('/orders/:id', requireManager, (req, res) => {
+  router.delete('/orders/:id', requirePerm('orders.manage'), (req, res) => {
     const order = loadOrder(req);
     if (order.status !== 'draft') throw badRequest('Only draft orders can be deleted');
     db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(order.id);

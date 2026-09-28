@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { ALL_PERMISSIONS, parsePermissions } from './permissions.js';
 import { HttpError, badRequest, forbidden, notFound, str } from './util.js';
 
 const SESSION_DAYS = 30;
@@ -24,7 +25,20 @@ export function validatePassword(password) {
   return p;
 }
 
-export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active';
+export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id';
+
+// Joins a user's permission set, or the built-in set for their role when they don't have one.
+export const ACCESS_JOIN = `LEFT JOIN permission_sets ps ON ps.id = u.permission_set_id
+  LEFT JOIN permission_sets dps ON u.permission_set_id IS NULL AND dps.built_in = u.role`;
+export const ACCESS_FIELDS = `CASE WHEN u.role = 'admin' THEN 'Admin' ELSE COALESCE(ps.name, dps.name) END AS access_name,
+  COALESCE(ps.id, dps.id) AS access_set_id, COALESCE(ps.permissions, dps.permissions) AS permissions_json`;
+
+/** Adds a user's permissions (every permission for admins) and removes the raw JSON column. */
+export function withPermissions(u) {
+  if (!u) return u;
+  const { permissions_json: json, ...rest } = u;
+  return { ...rest, permissions: u.role === 'admin' ? [...ALL_PERMISSIONS] : parsePermissions(json) };
+}
 
 function parseCookies(header = '') {
   const out = {};
@@ -37,11 +51,11 @@ function parseCookies(header = '') {
 
 export function loadUser(db) {
   const stmt = db.prepare(`
-    SELECT ${PUBLIC_USER_FIELDS} FROM sessions s JOIN users u ON u.id = s.user_id
+    SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM sessions s JOIN users u ON u.id = s.user_id ${ACCESS_JOIN}
     WHERE s.token = ? AND s.expires_at > datetime('now') AND u.active = 1`);
   return (req, _res, next) => {
     const token = parseCookies(req.headers.cookie)[COOKIE];
-    req.user = token ? stmt.get(token) ?? null : null;
+    req.user = token ? withPermissions(stmt.get(token)) ?? null : null;
     req.sessionToken = req.user ? token : null;
     next();
   };
@@ -55,10 +69,14 @@ export function requireAuth(req, _res, next) {
 export const requireRole = (...roles) => (req, _res, next) =>
   roles.includes(req.user.role) ? next() : next(forbidden());
 
-export const requireManager = requireRole('admin', 'manager');
 export const requireAdmin = requireRole('admin');
 
-export const isManager = (user) => user.role === 'admin' || user.role === 'manager';
+/** Whether the user has a permission. Admins have every permission. */
+export const can = (user, permission) => !!user && (user.role === 'admin' || user.permissions?.includes(permission));
+
+/** Allows the request if the user has any of the permissions. */
+export const requirePerm = (...permissions) => (req, _res, next) =>
+  (permissions.some((p) => can(req.user, p)) ? next() : next(forbidden()));
 
 export function assertLocation(req, locationId) {
   const loc = req.db.prepare('SELECT id FROM locations WHERE id = ?').get(locationId);
@@ -122,7 +140,7 @@ export function registerAuthRoutes(router, db) {
       maxAge: SESSION_DAYS * 24 * 3600 * 1000,
       path: '/',
     });
-    res.json({ user: db.prepare(`SELECT ${PUBLIC_USER_FIELDS} FROM users u WHERE id = ?`).get(user.id) });
+    res.json({ user: withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(user.id)) });
   });
 
   router.post('/auth/logout', (req, res) => {

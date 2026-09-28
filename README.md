@@ -15,13 +15,14 @@ One web app for running a multi-site cafe business. It works on desktops, tablet
 | **Sales (Square)** | Pulls completed orders from your Square account for each linked site. Shows net sales (after discounts, excluding VAT and tips), transactions, average spend and top items, next to **labour %** (rostered wages ÷ net sales) and **wastage %** by day and by site. Sales also appear on the dashboard, in the rota footer and on the wastage page. Managers only. |
 | **Trading (Square)** | A dashboard of Square sales next to **actual labour from Square clock-ins** (Timecards). Charts show net sales by day, labour % of sales (clocked vs rostered, against the target), and sales and staff on the clock by hour of the day. Tables show sales per labour hour, hours clocked vs rostered by site, who is clocked in now, and each person's rota vs clock-ins (late starts, missed shifts, clock-ins with no shift). A **Labour heatmap** tab shows labour % for every day of the week × hour of the day (clocked or rostered, blue under target through red over), with the hours where labour runs highest and the labour cost in hours with no sales. Managers only. |
 | **Recipes** | Recipe cards with ingredients, method, shelf life and portions. Each recipe is **costed automatically** from product prices and pack sizes (e.g. a 4L bottle of milk = 4000 ml), with cost per portion and **GP after VAT** (target 70%). **Allergens** come from the ingredients across the UK's 14 allergens, plus any you add by hand and "may contain" warnings. There is an **allergen matrix** with a "free from" filter for the counter. Link a recipe to its Square item to get **menu performance** (units sold, food cost and GP per item) and **theoretical ingredient usage**, and to cost wasted made items (e.g. a toastie) from the recipe. Staff can see recipes and allergens but not costs. Only admins edit recipes, so all sites stay the same. |
-| **Setup** | Manage staff (role, home site, hourly rate), locations, suppliers, products and food-safety checks. |
+| **Setup** | Manage staff (access, home site, hourly rate), permission sets, locations, suppliers, products and food-safety checks. |
 
-## Roles
+## Roles and permissions
 
-- **Admin** (owner/ops): all 7 sites, can change settings, and can switch site from the top bar.
-- **Manager**: their own site. Can manage the rota, orders, stock takes, staff and site-specific safety checks.
-- **Staff**: their own site. Can complete safety checks, record wastage, enter stock counts and view the rota.
+- **Admin** (owner/ops): everything at all sites, can switch site from the top bar. Admins aren't limited by a permission set, so you can't lock yourself out.
+- **Everyone else** works at their home site and can do what their **permission set** allows. Sets are managed by admins under **Setup → Permissions**: tick what each set allows, area by area (food safety, rota, wastage, stock takes, orders, recipes, sales & trading, staff, suppliers & products). Give each person a set with the **Access** box on the Staff page.
+- Two sets are built in and match the old roles: **Manager** (runs their site: rota, orders, stock, staff and sales) and **Staff** (food-safety checks, wastage, stock counts, the rota and recipes). People without a set get the one for their role. Built-in sets can be changed but not deleted, and a set can't be deleted while anyone uses it.
+- People who can manage staff can only give others access they have themselves, and only admins can give someone access to manage staff.
 
 ## Running it
 
@@ -121,7 +122,8 @@ src/
   index.js          start-up, first-run seeding
   server.js         Express app and error handling
   db.js             schema
-  auth.js           passwords, sessions, role/location checks
+  auth.js           passwords, sessions, permission and location checks
+  permissions.js    the permission catalogue and built-in Manager/Staff sets
   seed.js           demo data and default food-safety checks
   square.js         Square API client, order and timecard summarising, sales + clock-in sync
   team.js           importing Square Team members as staff
