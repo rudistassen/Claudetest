@@ -1,5 +1,6 @@
-import { api, esc, fmtDate, fmtDateTime, money } from '../lib.js';
-import { fmtPct, labourTone } from './sales.js';
+import { attachTip } from '../charts.js';
+import { addDays, api, esc, fmtDate, fmtDateTime, money, todayISO } from '../lib.js';
+import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
 function progress(done, due) {
   const pct = due ? Math.round((done / due) * 100) : 100;
@@ -63,9 +64,61 @@ function card(loc, state) {
     </section>`;
 }
 
-export async function render({ el, state, navigate, stale }) {
-  const [data, myShifts, leave] = await Promise.all([api('/dashboard'), api('/my-shifts'), state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 }]);
+// Sales and labour % for each site, today or over the last 7 days (the same figures as the Trading page).
+const PERIOD_KEY = 'cafe-ops:dashboard-period';
+const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`;
+
+function bySite(t, period) {
+  const labour = (r) => (t.labour_synced && r.labour_pct !== null ? r.labour_pct : r.rostered_labour_pct);
+  const rows = [...t.locations].sort((a, b) => b.net_sales - a.net_sales);
+  const maxSales = Math.max(1, ...rows.map((r) => r.net_sales));
+  // Labour bars run to at least twice the target, so the target line sits in a sensible place.
+  const scale = Math.max(LABOUR_TARGET * 2, ...rows.map((r) => Math.min(labour(r) ?? 0, 150)));
+  const icon = (p) => (p === null || p === undefined ? '' : labourTone(p) === 'good' ? '✓ ' : '⚠ ');
+  const labourCell = (p) => `<td class="dash-labour">
+    <span class="dash-bar dash-bar-labour"><span class="fill tone-bg-${labourTone(p) || 'none'}" style="width:${p === null ? 0 : Math.min(100, (p / scale) * 100)}%"></span>
+      <i class="dash-target" style="left:${(LABOUR_TARGET / scale) * 100}%" title="Target ${LABOUR_TARGET}%"></i></span>
+    <strong class="tone-${labourTone(p)}">${icon(p)}${fmtPct(p)}</strong></td>`;
+  const total = t.totals;
+  return `
+    <section class="card dash-sites">
+      <header class="card-head">
+        <h2>Sales &amp; labour by site</h2>
+        <div class="seg" role="group" aria-label="Period">
+          <button class="${period === 'today' ? 'is-on' : ''}" data-period="today">Today</button>
+          <button class="${period === 'week' ? 'is-on' : ''}" data-period="week">Last 7 days</button>
+        </div>
+      </header>
+      <div class="table-wrap"><table class="dash-table">
+        <thead><tr><th>Site</th><th>Net sales (ex VAT)</th><th class="num">Orders</th><th>Labour % of sales <small class="inline">(${t.labour_synced ? 'clocked' : 'rostered'} · target ${LABOUR_TARGET}%)</small></th></tr></thead>
+        <tbody>${rows.map((r) => `<tr data-site-row="${r.id}" tabindex="0">
+          <th>${esc(r.name)}${r.linked ? '' : ' <small class="inline muted">not on Square</small>'}</th>
+          <td class="dash-sales"><span class="dash-bar"><span class="fill" style="width:${(r.net_sales / maxSales) * 100}%"></span></span><strong>${money(r.net_sales)}</strong></td>
+          <td class="num">${r.orders}</td>
+          ${labourCell(labour(r))}
+        </tr>`).join('')}</tbody>
+        ${rows.length > 1 ? `<tfoot><tr><th>All sites</th><td><strong>${money(total.net_sales)}</strong></td><td class="num">${total.orders}</td>
+          <td><strong class="tone-${labourTone(labour(total))}">${icon(labour(total))}${fmtPct(labour(total))}</strong></td></tr></tfoot>` : ''}
+      </table></div>
+      <p class="muted small">${period === 'today' ? 'So far today' : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
+        Labour % only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
+    </section>`;
+}
+
+export async function render({ el, state, navigate, stale, rerender }) {
+  const seeSales = state.can('sales.view');
+  let period = 'today';
+  try { period = localStorage.getItem(PERIOD_KEY) === 'week' ? 'week' : 'today'; } catch { /* storage unavailable */ }
+  const d0 = todayISO();
+  const [data, myShifts, leave, tradeToday, tradeWeek] = await Promise.all([
+    api('/dashboard'),
+    api('/my-shifts'),
+    state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
+    seeSales ? api(`/trading?from=${d0}&to=${d0}`) : null,
+    seeSales && period === 'week' ? api(`/trading?from=${addDays(d0, -6)}&to=${d0}`) : null,
+  ]);
   if (stale()) return;
+  const trade = period === 'week' ? tradeWeek : tradeToday;
 
   const locs = data.locations;
   const totals = locs.reduce((t, l) => ({
@@ -77,8 +130,10 @@ export async function render({ el, state, navigate, stale }) {
     sales: t.sales + (l.sales_today ?? 0),
     labour: t.labour + (l.labour_cost_today ?? 0),
   }), { dailyDone: 0, dailyDue: 0, fails: 0, wastage: 0, staff: 0, sales: 0, labour: 0 });
-  const hasSales = locs.some((l) => l.sales_today !== null && l.sales_today !== undefined);
-  const labourPct = totals.sales > 0 ? (totals.labour / totals.sales) * 100 : null;
+  // Today's sales and labour % for the whole group, matching the by-site panel and the Trading page.
+  const hasSales = !!tradeToday && tradeToday.square_connected;
+  const todayTotals = tradeToday?.totals;
+  const labourPct = todayTotals ? (tradeToday.labour_synced && todayTotals.labour_pct !== null ? todayTotals.labour_pct : todayTotals.rostered_labour_pct) : null;
 
   el.innerHTML = `
     <div class="page-head">
@@ -87,13 +142,14 @@ export async function render({ el, state, navigate, stale }) {
     </div>
     ${state.multiSite ? `
     <div class="kpis">
-      ${hasSales ? `<div class="kpi"><span>Sales today (ex VAT)</span><strong>${money(totals.sales)}</strong></div>
+      ${hasSales ? `<div class="kpi"><span>Sales today (ex VAT)</span><strong>${money(todayTotals.net_sales)}</strong></div>
       <div class="kpi kpi-${labourTone(labourPct)}"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
       <div class="kpi"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
       <div class="kpi ${totals.fails ? 'kpi-bad' : ''}"><span>Failed checks</span><strong>${totals.fails}</strong></div>
       <div class="kpi"><span>Wastage, last 7 days</span><strong>${money(totals.wastage)}</strong></div>
       <div class="kpi"><span>Staff on shift today</span><strong>${totals.staff}</strong></div>
     </div>` : ''}
+    ${trade?.square_connected ? bySite(trade, period) : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
     ${myShifts.length ? `
     <section class="card">
@@ -101,6 +157,22 @@ export async function render({ el, state, navigate, stale }) {
       <ul class="shift-list">${myShifts.slice(0, 7).map((s) => `<li><strong>${fmtDate(s.date)}</strong> ${s.start_time}–${s.end_time} · ${esc(s.location_name)}</li>`).join('')}</ul>
     </section>` : ''}
     <div class="site-cards">${locs.map((l) => card(l, state)).join('')}</div>`;
+
+  el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
+    try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }
+    rerender();
+  }));
+  // Hover or focus a site for its labour cost, hours and sales per labour hour.
+  el.querySelectorAll('[data-site-row]').forEach((tr) => {
+    const r = trade.locations.find((l) => l.id === Number(tr.dataset.siteRow));
+    const clocked = trade.labour_synced && r.clocked_hours > 0;
+    attachTip(tr, () => r.name, () => [
+      { value: money(r.net_sales), label: `net sales · ${r.orders} orders` },
+      { value: money(clocked ? r.clocked_cost : r.rostered_cost), label: `labour (${clocked ? 'clocked' : 'rostered'}) · ${hrs(clocked ? r.clocked_hours : r.rostered_hours)}` },
+      ...(r.sales_per_labour_hour !== null ? [{ value: money(r.sales_per_labour_hour), label: 'sales per labour hour' }] : []),
+      ...(r.avg_spend !== null ? [{ value: money(r.avg_spend), label: 'average spend' }] : []),
+    ]);
+  });
 
   el.querySelectorAll('[data-open], [data-site]').forEach((b) => b.addEventListener('click', (e) => {
     const id = Number(b.dataset.open ?? b.dataset.site);

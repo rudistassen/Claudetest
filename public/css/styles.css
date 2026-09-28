@@ -533,3 +533,35 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .rota tr.rota-group.is-folded .rota-chevron { transform: rotate(-90deg); }
 .rota-group-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
 @media print { .rota tr[data-in-group][hidden] { display: table-row !important; } }
+
+/* Dashboard: sales & labour by site */
+.dash-sites .card-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.dash-sites .card-head h2 { margin: 0; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; padding: 0.35rem 0.8rem; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.is-on { background: var(--brand); color: var(--brand-contrast); font-weight: 600; }
+.dash-table tbody th, .dash-table tfoot th { text-align: left; white-space: nowrap; }
+.dash-table tbody tr { cursor: default; }
+.dash-table tbody tr:hover, .dash-table tbody tr:focus-visible { background: var(--surface-2); outline: none; }
+.dash-sales, .dash-labour { min-width: 230px; }
+.dash-sales, .dash-labour { white-space: nowrap; }
+.dash-bar { position: relative; display: inline-block; vertical-align: middle; width: 55%; max-width: 220px; height: 10px; margin-right: 0.6rem; background: var(--surface-2); border-radius: 3px; }
+.dash-bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 3px 3px 0; background: var(--series-1); }
+.dash-bar .fill.tone-bg-good { background: var(--good); }
+.dash-bar .fill.tone-bg-warn { background: var(--warn); }
+.dash-bar .fill.tone-bg-bad { background: var(--bad); }
+.dash-target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: 0.7; }
+.dash-table tfoot th, .dash-table tfoot td { border-top: 2px solid var(--border); }
+/* On phones each site becomes a small block: name, then sales and labour side by side. */
+@media (max-width: 600px) {
+  .dash-table thead { display: none; }
+  .dash-table, .dash-table tbody, .dash-table tfoot { display: block; }
+  .dash-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+  .dash-table th, .dash-table td { border: 0 !important; padding: 0; }
+  .dash-table tr > th { grid-column: 1 / -1; }
+  .dash-table td.num { display: none; }
+  .dash-sales, .dash-labour { min-width: 0; white-space: normal; }
+  .dash-bar { display: block; width: 100%; max-width: none; margin: 0.25rem 0 0.2rem; }
+  .dash-table tfoot tr { border-top: 2px solid var(--border); border-bottom: 0; }
+}
