@@ -105,7 +105,14 @@ The Square tests run against a local mock of Square's Locations, Orders, Team an
 
 ## Deploying
 
-The app is one Node process plus one SQLite file, so it runs on any small VPS or platform with a persistent disk (Render, Railway, Fly.io, a DigitalOcean droplet, etc.). Put it behind HTTPS (the session cookie is marked `Secure` when served over HTTPS) and back up `data/cafe.db` regularly.
+The app is one Node process plus one SQLite file, so it runs on any platform with a persistent disk (Railway, Render, Fly.io, a small VPS). For example on **Railway**:
+
+1. New project → **Deploy from GitHub repo** → pick this repository (and the branch to run, under the service's Settings → Source).
+2. Add a **Volume** to the service, mounted at `/data`.
+3. Add these **Variables**: `DB_PATH=/data/cafe.db`, `SEED_DEMO=false`, `ADMIN_EMAIL=you@yourcafe.co.uk`, `ADMIN_PASSWORD=<a strong password>`, `SQUARE_ACCESS_TOKEN=<your token>`.
+4. Under **Settings → Networking**, click **Generate Domain** to get a web address (HTTPS is included).
+
+The first start creates your admin account from `ADMIN_EMAIL`/`ADMIN_PASSWORD` (only when the database is empty). `PORT` is set by the platform. On Railway, Render and Fly.io the app trusts the platform's proxy automatically, so the session cookie is marked `Secure`; elsewhere set `TRUST_PROXY=1` when running behind a reverse proxy. Failed sign-ins are limited to 10 per account and 20 per address every 15 minutes. Back up the database file regularly.
 
 ## Project layout
 

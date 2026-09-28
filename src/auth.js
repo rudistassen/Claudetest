@@ -76,14 +76,41 @@ export function resolveLocation(req, raw) {
   return locationId;
 }
 
+// Failed sign-ins are limited per address and per email, so passwords can't be guessed by trying many.
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILS = { ip: 20, email: 10 };
+const loginFails = new Map();
+
+function recentFails(key, now) {
+  const list = (loginFails.get(key) ?? []).filter((t) => now - t < LOGIN_WINDOW_MS);
+  if (list.length) loginFails.set(key, list);
+  else loginFails.delete(key);
+  return list;
+}
+
+function checkLoginLimit(keys, now) {
+  for (const [key, max] of keys) {
+    const list = recentFails(key, now);
+    if (list.length >= max) {
+      const minutes = Math.ceil((LOGIN_WINDOW_MS - (now - list[0])) / 60000);
+      throw new HttpError(429, `Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`);
+    }
+  }
+}
+
 export function registerAuthRoutes(router, db) {
   router.post('/auth/login', (req, res) => {
     const email = str(req.body?.email, 'email', { required: true });
     const password = str(req.body?.password, 'password', { required: true });
+    const now = Date.now();
+    const keys = [[`ip:${req.ip}`, MAX_FAILS.ip], [`email:${email.toLowerCase()}`, MAX_FAILS.email]];
+    checkLoginLimit(keys, now);
     const user = db.prepare('SELECT * FROM users WHERE email = ? AND active = 1').get(email);
     if (!user || !verifyPassword(password, user.password_hash)) {
+      for (const [key] of keys) loginFails.set(key, [...recentFails(key, now), now]);
       throw new HttpError(401, 'Incorrect email or password');
     }
+    loginFails.delete(keys[1][0]);
     const token = randomBytes(32).toString('hex');
     db.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', ?))`)
       .run(token, user.id, `+${SESSION_DAYS} days`);

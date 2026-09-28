@@ -14,11 +14,17 @@ import { HttpError } from './util.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
+export function trustProxy(env) {
+  if (env.TRUST_PROXY) return /^\d+$/.test(env.TRUST_PROXY) ? Number(env.TRUST_PROXY) : env.TRUST_PROXY;
+  return env.RAILWAY_ENVIRONMENT || env.RENDER || env.FLY_APP_NAME ? 1 : 'loopback';
+}
+
 // square: { config, client } when a Square access token is configured, otherwise null.
 export function createApp(db, { square = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', 'loopback');
+  // Behind a hosting platform's proxy (Railway, Render, …) trust one hop, so HTTPS and visitors' addresses are seen.
+  app.set('trust proxy', trustProxy(process.env));
   app.use(express.json({ limit: '1mb' }));
   app.use((req, _res, next) => {
     req.db = db;
