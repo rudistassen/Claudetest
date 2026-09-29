@@ -1,4 +1,4 @@
-import { api, confirmDialog, esc, fmtDateTime, money, qs, qty, showError, statusBadge, toast } from '../lib.js';
+import { api, confirmDialog, esc, fmtDateTime, money, qs, qty, showError, statusBadge, toast, sitePicker } from '../lib.js';
 
 export async function renderList(ctx) {
   const { el, state, stale } = ctx;
@@ -8,8 +8,9 @@ export async function renderList(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Stock takes · ${esc(state.location?.name ?? '')}</h1>
+      <h1>Stock takes${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
       <div class="actions">
+        ${sitePicker(state)}
         ${open
           ? `<a class="btn btn-primary" href="#/stock/${open.id}">Continue count (${open.counted_count}/${open.line_count})</a>`
           : state.can('stock.count') ? '<button class="btn btn-primary" id="start">Start stock take</button>' : ''}

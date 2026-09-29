@@ -1,5 +1,5 @@
 import { fmtPct, labourTone } from './sales.js';
-import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart } from '../lib.js';
+import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite } from '../lib.js';
 
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
@@ -14,18 +14,8 @@ export async function render(ctx) {
   const asked = query.site ?? (query.scope === 'site' ? String(state.locationId) : query.scope === 'all' ? 'all' : null);
   const all = state.multiSite && (asked ?? 'all') === 'all';
   const siteId = all ? null : (active.find((l) => String(l.id) === asked)?.id ?? state.locationId);
-  if (siteId && siteId !== state.locationId) {
-    // Keep the site in the top bar in step with the one picked here.
-    state.locationId = siteId;
-    try { localStorage.setItem('cafe-ops:location', String(siteId)); } catch { /* storage unavailable */ }
-    const name = document.querySelector('.site-btn-name');
-    if (name) name.textContent = active.find((l) => l.id === siteId)?.name ?? '';
-    document.querySelectorAll('#site-menu li').forEach((li) => {
-      const on = Number(li.dataset.siteId) === siteId;
-      li.setAttribute('aria-selected', String(on));
-      li.querySelector('.site-tick').textContent = on ? '✓' : '';
-    });
-  }
+  // Remember the site picked here, so other pages open on it too.
+  if (siteId && siteId !== state.locationId) chooseSite(state, siteId);
   const siteParam = all ? 'all' : String(siteId);
   const scopeQs = (extra = {}) => qs({ view: view === 'week' ? 'week' : undefined, ...extra, site: state.multiSite ? siteParam : undefined });
   const data = await api(`/rota${qs({ location_id: all ? 'all' : siteId, week })}`);

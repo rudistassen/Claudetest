@@ -1,5 +1,5 @@
 import { attachTip, barChart, legend, lineChart } from '../charts.js';
-import { addDays, api, esc, fmtDate, fmtDateTime, money, qs, showError, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, fmtDateTime, money, qs, showError, toast, todayISO, siteScope, siteFilter } from '../lib.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
 const hrs = (h) => (h === null || h === undefined ? '–' : `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`);
@@ -21,7 +21,7 @@ export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -6);
-  const scope = state.multiSite ? (query.scope ?? 'all') : 'site';
+  const scope = siteScope(state, query.scope);
   const data = await api(`/trading${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`);
   if (stale()) return;
   const t = data.totals;
@@ -49,7 +49,7 @@ export async function render(ctx) {
         <option value="" ${PRESETS.some(([n]) => to === todayISO() && span === n) ? '' : 'selected'}>Custom</option>
       </select>
       <input type="date" name="from" value="${from}" aria-label="From"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}" aria-label="To">
-      ${state.multiSite ? `<select name="scope" aria-label="Sites"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      ${siteFilter(state, scope)}
       <button class="btn" type="submit">Update</button>
     </form>
 
@@ -247,7 +247,7 @@ export async function renderHeatmap(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -27);
-  const scope = state.multiSite ? (query.scope ?? 'all') : 'site';
+  const scope = siteScope(state, query.scope);
   const data = await api(`/trading/heatmap${qs({ from, to, basis: query.basis, location_id: scope === 'all' ? undefined : state.locationId })}`);
   if (stale()) return;
   const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
@@ -274,7 +274,7 @@ export async function renderHeatmap(ctx) {
         <option value="" ${HEAT_PRESETS.some(([n]) => to === todayISO() && span === n) ? '' : 'selected'}>Custom</option>
       </select>
       <input type="date" name="from" value="${from}" aria-label="From"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}" aria-label="To">
-      ${state.multiSite ? `<select name="scope" aria-label="Sites"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      ${siteFilter(state, scope)}
       <select name="basis" aria-label="Labour">
         <option value="clocked" ${data.basis === 'clocked' ? 'selected' : ''} ${data.labour_synced ? '' : 'disabled'}>Clocked labour</option>
         <option value="rostered" ${data.basis === 'rostered' ? 'selected' : ''}>Rostered labour</option>

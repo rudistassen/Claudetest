@@ -146,33 +146,7 @@ small { display: block; color: var(--muted); font-size: 0.8rem; }
 .login-logo { margin: 0 0 0.25rem; color: var(--brand); font-size: 1.7rem; }
 .login-logo .logo { --logo-accent: #c8902a; }
 .login-logo .logo-word span { color: var(--brand); opacity: 0.75; }
-.loc-picker { margin-left: auto; min-width: 0; display: flex; justify-content: flex-end; }
-.loc-name { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.9rem; opacity: 0.9; }
-.pin { flex-shrink: 0; opacity: 0.85; }
-.site-picker { position: relative; display: inline-block; max-width: 100%; }
-.site-btn {
-  display: inline-flex; align-items: center; gap: 0.4rem; max-width: 240px; height: 32px; padding: 0 0.7rem 0 0.6rem;
-  border: 0; border-radius: 99px; background: var(--surface-2);
-  color: inherit; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
-}
-.site-btn:hover, .site-btn[aria-expanded="true"] { background: color-mix(in srgb, var(--text) 10%, var(--surface)); }
-.site-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.site-btn-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.site-caret { font-size: 0.7rem; opacity: 0.8; }
-.site-menu {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 270px; max-width: calc(100vw - 24px);
-  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); padding: 0.35rem;
-}
-.site-search { width: 100%; margin-bottom: 0.3rem; font-size: 0.9rem; padding: 0.4rem 0.6rem; }
-.site-menu ul { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
-.site-menu li { display: flex; align-items: center; gap: 0.45rem; padding: 0.45rem 0.55rem; border-radius: 7px; cursor: pointer; font-size: 0.9rem; }
-.site-menu li:hover, .site-menu li:focus { background: var(--surface-2); outline: none; }
-.site-menu li[aria-selected="true"] { font-weight: 600; color: var(--brand); }
-.site-tick { width: 1rem; text-align: center; color: var(--brand); }
-.site-opt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.site-home { font-size: 0.7rem; font-weight: 600; color: var(--muted); background: var(--surface-2); border-radius: 99px; padding: 0.05rem 0.45rem; white-space: nowrap; }
-.site-none { margin: 0.4rem 0.55rem; color: var(--muted); font-size: 0.85rem; }
+.topbar-gap { margin-left: auto; }
 .topbar .menu-toggle { color: inherit; margin: -0.2rem -0.3rem; font-size: 1.3rem; border-radius: 6px; }
 .topbar .menu-toggle:hover { background: var(--surface-2); }
 
@@ -458,7 +432,6 @@ tfoot th, tfoot td { font-weight: 600; }
 @media (max-width: 800px) {
   main { padding: 1rem; }
   .site-cards { grid-template-columns: 1fr; }
-  .site-btn { max-width: 170px; }
   .brand .logo-word { display: none; }
   .task-action { align-items: stretch; width: 100%; }
   .check-done, .check-actions, .reading-form { justify-content: flex-start; }
@@ -1228,3 +1201,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 /* The company logos are dark ink, so their strip stays white in dark mode too. */
 .brand-band { background: #ffffff; border-bottom-color: #dbdbdb; }
 .login-logo { color: var(--text); }
+
+/* A page's own site drop-down. */
+.site-pick { font-weight: 600; max-width: 240px; }

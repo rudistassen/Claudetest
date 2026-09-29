@@ -1,4 +1,4 @@
-import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, qty, select, showError, textarea, toast, todayISO } from '../lib.js';
+import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, qty, select, showError, textarea, toast, todayISO, siteScope, siteFilter } from '../lib.js';
 
 function bars(rows, total) {
   if (!rows.length) return '<p class="muted">Nothing recorded.</p>';
@@ -12,7 +12,7 @@ export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -6);
-  const scope = state.multiSite ? (query.scope ?? 'site') : 'site';
+  const scope = siteScope(state, query.scope, 'site');
   const params = { from, to, location_id: scope === 'all' ? undefined : state.locationId };
   const canRecord = state.can('wastage.record');
   const [report, entries, [products, reasons, recipes]] = await Promise.all([
@@ -32,7 +32,7 @@ export async function render(ctx) {
       </div>
     </div>
     <form class="filters" id="range">
-      ${state.multiSite ? `<select name="scope"><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option></select>` : ''}
+      ${siteFilter(state, scope)}
       <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
       <button class="btn" type="submit">Update</button>
     </form>
@@ -76,8 +76,9 @@ export async function render(ctx) {
       ${[...byCat].map(([cat, list]) => `<optgroup label="${esc(cat)}">${list.map((p) => `<option value="p:${p.id}">${esc(p.name)} (${esc(p.unit)}, ${money(p.unit_cost)})</option>`).join('')}</optgroup>`).join('')}
     </select>`;
     const { form } = openModal({
-      title: `Log wastage · ${state.location?.name ?? ''}`,
+      title: state.multiSite ? 'Log wastage' : `Log wastage · ${state.location?.name ?? ''}`,
       body: `
+        ${state.multiSite ? field('Site', select('location_id', state.locations.filter((l) => l.active).map((l) => [l.id, l.name]), state.locationId, 'required')) : ''}
         ${field('Item', productSelect)}
         <div class="other-item">
           ${field('Item name', input('item_name', '', 'placeholder="e.g. Ham & cheese toastie"'))}
@@ -92,7 +93,7 @@ export async function render(ctx) {
       submitLabel: 'Save',
       onSubmit: async (v) => {
         const { item, ...rest } = v;
-        const body = { ...rest, location_id: state.locationId };
+        const body = { ...rest, location_id: Number(rest.location_id) || state.locationId };
         if (item) {
           body[item.startsWith('r:') ? 'recipe_id' : 'product_id'] = Number(item.slice(2));
           delete body.item_name; delete body.unit_cost; delete body.unit;

@@ -1,4 +1,4 @@
-import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, statusBadge, textarea, toast, todayISO } from '../lib.js';
+import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, statusBadge, textarea, toast, todayISO, siteScope, siteFilter, sitePicker } from '../lib.js';
 
 // Trail: food-safety checklists, the compliance report and setting up checks for each site.
 function trailTabs(state, active) {
@@ -75,8 +75,9 @@ export async function renderChecklist(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Trail · ${esc(state.location?.name ?? '')}</h1>
+      <h1>Trail${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
       <div class="actions">
+        ${sitePicker(state)}
         <button class="btn" data-day="-1">‹</button>
         <input type="date" id="check-date" value="${date}" max="${todayISO()}">
         <button class="btn" data-day="1" ${isToday ? 'disabled' : ''}>›</button>
@@ -151,7 +152,7 @@ export async function renderReport(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -13);
-  const scope = state.multiSite ? (query.scope ?? 'all') : 'site';
+  const scope = siteScope(state, query.scope);
   const data = await api(`/safety/report${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`);
   if (stale()) return;
 
@@ -165,7 +166,7 @@ export async function renderReport(ctx) {
     <div class="page-head">
       <h1>Trail compliance</h1>
       <form class="actions" id="range">
-        ${state.multiSite ? `<select name="scope"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+        ${siteFilter(state, scope)}
         <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
         <button class="btn" type="submit">Update</button>
         <button class="btn" type="button" id="print">Print</button>

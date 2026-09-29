@@ -1,7 +1,7 @@
 import { loadLocations } from '../app.js';
 import { exportProducts, openProductImport } from './product-import.js';
 import { installCard, wireInstallCard } from '../install.js';
-import { api, confirmDialog, esc, isDemo, field, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast } from '../lib.js';
+import { api, confirmDialog, esc, isDemo, field, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast, siteScope, siteFilter } from '../lib.js';
 
 const yesNo = (v) => (v ? 'Yes' : 'No');
 const activeBox = (v) => field('Active', `<input type="checkbox" name="active" ${v === undefined || v ? 'checked' : ''}>`, { className: 'field-inline' });
@@ -189,7 +189,7 @@ function openBulkStaff(ctx, people, { roles, locOptions, access }) {
 export async function renderStaff(ctx) {
   const { state } = ctx;
   // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
-  const scope = state.multiSite ? (ctx.query.scope ?? 'all') : 'site';
+  const scope = siteScope(state, ctx.query.scope);
   const [rows, square, perms] = await Promise.all([
     api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
     state.isAdmin ? api('/square/status') : null,
@@ -228,13 +228,13 @@ export async function renderStaff(ctx) {
   // Roles already in use, plus a few common ones, to pick from.
   const rotaGroups = [...new Set([...rows.map((r) => r.rota_group).filter(Boolean), 'Management', 'Front of house', 'Kitchen', 'Bar'])].sort((a, b) => a.localeCompare(b));
   listPage(ctx, {
-    title: `Staff · ${scope === 'all' ? 'All sites' : state.location?.name ?? ''}`,
+    title: state.multiSite ? 'Staff' : `Staff · ${state.location?.name ?? ''}`,
     rows,
     search: true,
     bulk: { label: 'Edit selected', run: (people) => openBulkStaff(ctx, people, { roles: rotaGroups, locOptions, access: accessOptions({}) }) },
     addLabel: 'Add staff member',
     extraActions: `${state.isAdmin && square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
-      ${state.multiSite ? `<a class="btn" href="#/admin/staff${scope === 'all' ? '?scope=site' : ''}">${scope === 'all' ? 'This site only' : 'Show all sites'}</a>` : ''}`,
+      ${siteFilter(state, scope)}`,
     columns: [
       { label: 'Name', key: 'name' },
       { label: 'Email', key: 'email' },

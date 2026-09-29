@@ -188,3 +188,43 @@ export function statusBadge(status) {
 export function empty(message) {
   return `<div class="empty">${esc(message)}</div>`;
 }
+
+// --- Choosing a site on a page ---
+// Pages that show one site at a time carry their own "Site" drop-down listing every site (and "All sites" where
+// that makes sense). The choice is remembered, so the next page opens on the same site.
+
+const SITE_KEY = 'cafe-ops:location';
+
+export function chooseSite(state, id) {
+  state.locationId = id;
+  try { localStorage.setItem(SITE_KEY, String(id)); } catch { /* storage unavailable */ }
+}
+
+/** 'all' or 'site' from a page's ?scope= (either 'all', 'site' or a site's id, which becomes the chosen site). */
+export function siteScope(state, raw, fallback = 'all') {
+  if (!state.multiSite) return 'site';
+  const v = raw ?? fallback;
+  if (v === 'all') return 'all';
+  const id = Number(v);
+  if (id && state.locations.some((l) => l.id === id && l.active)) chooseSite(state, id);
+  return 'site';
+}
+
+/** A filter form's site drop-down (name="scope"); picking a site updates the page straight away. */
+export function siteFilter(state, scope, { all = true } = {}) {
+  if (!state.multiSite) return '';
+  const sites = state.locations.filter((l) => l.active);
+  return `<select name="scope" aria-label="Site" data-site-scope>
+    ${all ? `<option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option>` : ''}
+    ${sites.map((l) => `<option value="${l.id}" ${scope !== 'all' && l.id === state.locationId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+  </select>`;
+}
+
+/** A stand-alone site drop-down for pages about one site (checklist, stock takes, orders); changing it reloads the page. */
+export function sitePicker(state) {
+  if (!state.multiSite) return '';
+  const sites = state.locations.filter((l) => l.active);
+  return `<select class="site-pick" aria-label="Site" data-site-pick>
+    ${sites.map((l) => `<option value="${l.id}" ${l.id === state.locationId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+  </select>`;
+}

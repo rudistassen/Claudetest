@@ -1,4 +1,4 @@
-import { addDays, api, esc, field, fmtDate, input, money, qs, qty, textarea, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, field, fmtDate, input, money, qs, qty, textarea, toast, todayISO, siteScope, siteFilter } from '../lib.js';
 
 let metaCache = null;
 const meta = async () => (metaCache ??= await api('/recipes/meta'));
@@ -345,7 +345,7 @@ export async function renderPerformance(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -6);
-  const scope = state.multiSite ? (query.scope ?? 'all') : 'site';
+  const scope = siteScope(state, query.scope);
   const [data, m] = await Promise.all([
     api(`/recipes/performance${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`),
     meta(),
@@ -357,7 +357,7 @@ export async function renderPerformance(ctx) {
     <div class="page-head"><h1>Menu performance</h1></div>
     ${tabs(state, 'recipes/performance')}
     <form class="filters" id="range">
-      ${state.multiSite ? `<select name="scope"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      ${siteFilter(state, scope)}
       <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
       <button class="btn" type="submit">Update</button>
     </form>

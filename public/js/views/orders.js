@@ -1,4 +1,4 @@
-import { addDays, api, isDemo, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, qs, qty, select, showError, statusBadge, textarea, toast, todayISO } from '../lib.js';
+import { addDays, api, isDemo, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, qs, qty, select, showError, statusBadge, textarea, toast, todayISO, sitePicker } from '../lib.js';
 
 const STATUSES = [['', 'All'], ['draft', 'Draft'], ['sent', 'Sent'], ['received', 'Received'], ['cancelled', 'Cancelled']];
 
@@ -10,8 +10,8 @@ export async function renderList(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Supplier orders · ${esc(state.location?.name ?? '')}</h1>
-      <div class="actions"><a class="btn btn-primary" href="#/orders/new">+ New order</a></div>
+      <h1>Supplier orders${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
+      <div class="actions">${sitePicker(state)}<a class="btn btn-primary" href="#/orders/new">+ New order</a></div>
     </div>
     <div class="tabs">${STATUSES.map(([v, l]) => `<a href="#/orders${v ? `?status=${v}` : ''}" class="${status === v ? 'active' : ''}">${l}</a>`).join('')}</div>
     <section class="card">
@@ -73,8 +73,8 @@ export async function renderNew(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>New order · ${esc(state.location?.name ?? '')}</h1>
-      <div class="actions"><a class="btn" href="#/orders">‹ Orders</a></div>
+      <h1>New order${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
+      <div class="actions">${sitePicker(state)}<a class="btn" href="#/orders">‹ Orders</a></div>
     </div>
     <section class="card">
       ${field('Supplier', select('supplier', [['', 'Choose a supplier…'], ...suppliers.map((s) => [s.id, s.name])], supplierId ?? '', 'id="supplier"'))}
