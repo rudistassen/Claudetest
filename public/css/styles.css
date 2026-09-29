@@ -717,3 +717,10 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 @media (display-mode: standalone) {
   body { padding-bottom: env(safe-area-inset-bottom); }
 }
+
+/* Rota: sub-headings by rota group */
+.rota tr.rota-subgroup th { text-align: left; padding: 0.35rem 0.75rem 0.3rem 1rem; background: var(--surface-2); border-left: 4px solid color-mix(in srgb, var(--brand) 40%, transparent); }
+.rota-subgroup-name { font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--brand); }
+.rota tr.rota-subgroup .rota-group-meta { font-size: 0.8rem; }
+#by-group.is-on { background: var(--brand); color: var(--brand-contrast); border-color: var(--brand); }
+@media print { .rota tr.rota-subgroup[hidden] { display: table-row !important; } }

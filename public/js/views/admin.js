@@ -126,6 +126,8 @@ export async function renderStaff(ctx) {
         <small>Their home site is always included.</small>
       </div></div>`;
   };
+  // Groups already in use, plus a few common ones, to pick from.
+  const rotaGroups = [...new Set([...rows.map((r) => r.rota_group).filter(Boolean), 'Management', 'Front of house', 'Kitchen', 'Bar'])].sort((a, b) => a.localeCompare(b));
   listPage(ctx, {
     title: `Staff · ${scope === 'all' ? 'All sites' : state.location?.name ?? ''}`,
     rows,
@@ -138,6 +140,7 @@ export async function renderStaff(ctx) {
       { label: 'Access', value: (r) => r.access_name ?? '' },
       { label: 'Sites', value: sitesLabel },
       { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
+      { label: 'Rota group', value: (r) => r.rota_group ?? '' },
       { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
       { label: 'Active', value: (r) => yesNo(r.active) },
     ],
@@ -150,8 +153,10 @@ export async function renderStaff(ctx) {
       ${u.role === 'admin' ? '<p class="small muted">Admins can work with every site.</p>' : sitesField(u)}
       <div class="row">
         <input type="hidden" name="position" value="${esc(u.position ?? '')}">
+        ${field('Rota group', input('rota_group', u.rota_group, 'list="rota-groups" maxlength="50" placeholder="e.g. Kitchen, Front of house"'), { hint: 'Groups people together on the rota' })}
         ${field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"'))}
       </div>
+      <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password', input('password', '', `type="password" minlength="8" autocomplete="new-password" ${u.id ? '' : 'required'}`), { hint: 'At least 8 characters' })}
       ${activeBox(u.active)}`,
     save: async (v, row, form) => {

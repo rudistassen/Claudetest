@@ -65,6 +65,23 @@ export async function render(ctx) {
   }
   // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
   const counted = data.shifts.filter((x) => x.state !== 'removed');
+  // "Group by rota group": sub-headings for each group (Kitchen, Front of house…), remembered on this device.
+  const BY_GROUP_KEY = 'cafe-ops:rota-by-group';
+  let byGroup = false;
+  try { byGroup = localStorage.getItem(BY_GROUP_KEY) === '1'; } catch { /* storage unavailable */ }
+  const hoursAt = (u, site) => counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0);
+  const withGroups = (people, site) => {
+    if (!byGroup) return people.map((u) => ({ u, site }));
+    const names = [...new Set(people.map((u) => u.rota_group ?? ''))]
+      .sort((a, b) => (a === '') - (b === '') || a.localeCompare(b));
+    return names.flatMap((name) => {
+      const inGroup = people.filter((u) => (u.rota_group ?? '') === name);
+      return [
+        { sub: name || 'No rota group', site, people: inGroup.length, hours: Math.round(inGroup.reduce((t, u) => t + hoursAt(u, site), 0) * 10) / 10 },
+        ...inGroup.map((u) => ({ u, site })),
+      ];
+    });
+  };
   const rows = [];
   if (all) {
     const sites = state.locations.filter((l) => l.active).sort((a, b) => a.name.localeCompare(b.name));
@@ -85,12 +102,10 @@ export async function render(ctx) {
         },
       });
       // The site's own staff first, then people covering from elsewhere.
-      for (const u of [...people.filter((p) => p.location_id === site.id), ...people.filter((p) => p.location_id !== site.id)]) {
-        rows.push({ u, site: site.id });
-      }
+      rows.push(...withGroups([...people.filter((p) => p.location_id === site.id), ...people.filter((p) => p.location_id !== site.id)], site.id));
     }
   } else {
-    for (const u of data.staff) rows.push({ u, site: siteId });
+    rows.push(...withGroups(data.staff, siteId));
   }
   const rowHours = (u, site) => Math.round(counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
   // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
@@ -114,6 +129,7 @@ export async function render(ctx) {
           <option value="all" ${all ? 'selected' : ''}>All sites</option>
           ${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
         </select>` : ''}
+        <button class="btn ${byGroup ? 'is-on' : ''}" id="by-group" aria-pressed="${byGroup}" title="Show sub-headings for each rota group (set on the Staff page)">Group by rota group</button>
         ${all ? '<button class="btn" id="collapse-all"></button>' : ''}
         <a class="btn" href="#/rota${qs({ view: 'mine', week })}">My shifts</a>
         <button class="btn" data-week="-7">‹ Prev</button>
@@ -139,7 +155,9 @@ export async function render(ctx) {
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}">${fmtDate(d)}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
-          ${rows.map(({ header, siteId: groupId, summary, u, site }) => (header ? `<tr class="rota-group" data-group="${groupId}"><th colspan="${data.days.length + 2}">
+          ${rows.map(({ header, siteId: groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${all ? `data-in-group="${site}"` : ''}>
+            <th colspan="${data.days.length + 2}"><span class="rota-subgroup-name">${esc(sub)}</span>
+              <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group" data-group="${groupId}"><th colspan="${data.days.length + 2}">
             <button class="rota-group-toggle" aria-expanded="true" data-toggle="${groupId}">
               <span class="rota-chevron" aria-hidden="true">▾</span>
               <span class="rota-group-name">${esc(header)}</span>
@@ -175,8 +193,13 @@ export async function render(ctx) {
     </div>
     ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under Setup → Staff.</div>` : ''}
     ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is covering at another site.</p>' : ''}
+    ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a rota group yet – set one for each person on the Staff page.</p>' : ''}
     ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see.</p>' : ''}`;
 
+  el.querySelector('#by-group').addEventListener('click', () => {
+    try { localStorage.setItem(BY_GROUP_KEY, byGroup ? '0' : '1'); } catch { /* storage unavailable */ }
+    ctx.rerender();
+  });
   el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs({ week, site: e.target.value })}`));
 
   // Folding sites away on All sites. Which are folded is remembered in this browser.

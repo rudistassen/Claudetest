@@ -81,6 +81,8 @@ export function registerAdminRoutes(router, db) {
       email: str(b.email, 'email', { required: true, max: 200 }),
       location_id: id(b.location_id, 'location_id'),
       position: str(b.position, 'position', { max: 100 }),
+      // Left as it is when not sent (e.g. by older screens).
+      rota_group: b.rota_group === undefined ? existing?.rota_group ?? null : str(b.rota_group, 'rota_group', { max: 50 }),
       hourly_rate: num(b.hourly_rate, 'hourly_rate', { min: 0 }) ?? 0,
       active: b.active === undefined ? 1 : bool(b.active),
     };
@@ -156,9 +158,9 @@ export function registerAdminRoutes(router, db) {
     const u = userBody(req);
     const password = validatePassword(req.body.password);
     const userId = tx(db, () => {
-      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, hourly_rate, active, permission_set_id, all_sites)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites);
+      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, rota_group, hourly_rate, active, permission_set_id, all_sites)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.all_sites);
       saveSites(r.lastInsertRowid, u);
       return r.lastInsertRowid;
     });
@@ -174,8 +176,8 @@ export function registerAdminRoutes(router, db) {
       throw badRequest('You cannot change your own access or deactivate yourself');
     }
     tx(db, () => {
-      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, hourly_rate = ?, active = ?, permission_set_id = ?, all_sites = ? WHERE id = ?`)
-        .run(u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, userId);
+      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, all_sites = ? WHERE id = ?`)
+        .run(u.name, u.email, u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, userId);
       saveSites(userId, u);
     });
     if (req.body.password) {

@@ -91,7 +91,7 @@ export function registerRotaRoutes(router, db) {
       }
     }
     const staff = db.prepare(`
-      SELECT u.id, u.name, u.position, u.role, u.hourly_rate, u.location_id, l.name AS location_name FROM users u
+      SELECT u.id, u.name, u.position, u.rota_group, u.role, u.hourly_rate, u.location_id, l.name AS location_name FROM users u
       LEFT JOIN locations l ON l.id = u.location_id
       WHERE (u.location_id IN (${inList}) AND u.active = 1) OR u.id IN (SELECT user_id FROM ${table} WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?)
       ORDER BY ${all ? "l.name IS NULL, l.name, " : ''}CASE u.role WHEN 'manager' THEN 0 ELSE 1 END, u.name`).all(...ids, ...ids, ws, we);

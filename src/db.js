@@ -392,6 +392,8 @@ const MIGRATIONS = [
   ['products', 'recipe_unit', 'ALTER TABLE products ADD COLUMN recipe_unit TEXT'],
   ['products', 'units_per_pack', 'ALTER TABLE products ADD COLUMN units_per_pack REAL NOT NULL DEFAULT 1'],
   ['products', 'allergens', 'ALTER TABLE products ADD COLUMN allergens TEXT'],
+  // The group someone is in on the rota (e.g. Kitchen, Front of house), for grouping the rota.
+  ['users', 'rota_group', 'ALTER TABLE users ADD COLUMN rota_group TEXT'],
   ['users', 'permission_set_id', 'ALTER TABLE users ADD COLUMN permission_set_id INTEGER REFERENCES permission_sets(id) ON DELETE SET NULL'],
   ['square_sync_log', 'timecards', 'ALTER TABLE square_sync_log ADD COLUMN timecards INTEGER'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
