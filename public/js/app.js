@@ -243,6 +243,10 @@ function renderShell() {
   const active = activeItem(path, groups.flatMap(([, items]) => items));
   const folded = foldedGroups();
   const sitePage = SITE_PAGES.test(path);
+  // The section the page belongs to, shown as a small coloured label above its title.
+  const section = groups.find(([, items]) => items.some(([p]) => p === active))?.[0] ?? null;
+  document.body.dataset.section = section ? (NAV_TONES[section] ?? 'setup') : '';
+  document.body.style.setProperty('--section-label', section ? JSON.stringify(section) : '""');
   const link = ([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}"><span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}</a>`;
   document.getElementById('app').innerHTML = `
     <header class="topbar">

@@ -197,12 +197,12 @@ export async function render({ el, state, navigate, stale, rerender }) {
     <p class="print-only print-meta">BrewView dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     <div class="kpis">
-      ${hasSales ? `<div class="kpi"><span>Sales today (ex VAT)</span><strong>${money(todayTotals.net_sales)}</strong></div>
-      <div class="kpi kpi-${labourTone(labourPct)}"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
-      <div class="kpi"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
-      <div class="kpi ${totals.fails ? 'kpi-bad' : ''}"><span>Failed checks</span><strong>${totals.fails}</strong></div>
-      <div class="kpi"><span>Wastage, last 7 days</span><strong>${money(totals.wastage)}</strong></div>
-      <div class="kpi"><span>Staff on shift today</span><strong>${totals.staff}</strong></div>
+      ${hasSales ? `<div class="kpi kpi-feature" data-icon="£"><span>Sales today (ex VAT)</span><strong>${money(todayTotals.net_sales)}</strong></div>
+      <div class="kpi kpi-${labourTone(labourPct)}" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
+      <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
+      <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks</span><strong>${totals.fails}</strong></div>
+      <div class="kpi" data-icon="⌫"><span>Wastage, last 7 days</span><strong>${money(totals.wastage)}</strong></div>
+      <div class="kpi" data-icon="☺"><span>Staff on shift today</span><strong>${totals.staff}</strong></div>
     </div>` : ''}
     ${trade?.square_connected ? bySite(trade, period) : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
