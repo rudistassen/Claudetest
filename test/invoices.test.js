@@ -184,4 +184,14 @@ test('the Claude reader sends the PDF with a fixed output shape and handles refu
     (s.anyOf ?? []).forEach(walk);
   };
   walk(INVOICE_SCHEMA);
+  // The API rejects schemas with more than 16 optional (union-typed) fields.
+  let unions = 0;
+  const count = (x) => { if (x.anyOf || Array.isArray(x.type)) unions++; Object.values(x.properties ?? {}).forEach(count); if (x.items) count(x.items); };
+  count(INVOICE_SCHEMA);
+  assert.ok(unions <= 16, `${unions} optional fields`);
+
+  // Empty text from the model means "not on the invoice".
+  reply = { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ is_invoice: true, invoice_number: '', supplier: { name: 'Acme', email: ' ' }, lines: [{ description: 'Milk', sku: '', quantity: 2 }] }) }] };
+  assert.deepEqual(await r.read({ media_type: 'application/pdf', data: PDF }),
+    { is_invoice: true, invoice_number: null, supplier: { name: 'Acme', email: null }, lines: [{ description: 'Milk', sku: null, quantity: 2 }] });
 });

@@ -8,7 +8,8 @@ const DEFAULT_MODEL = 'claude-opus-5-5';
 
 const nullable = (type) => ({ anyOf: [{ type }, { type: 'null' }] });
 
-// The shape every reading comes back in (structured outputs guarantee it).
+// The shape every reading comes back in (structured outputs guarantee it). Text that isn't on the invoice comes
+// back empty; only numbers are optional (null), as the API allows at most 16 optional fields in a schema.
 export const INVOICE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -20,18 +21,18 @@ export const INVOICE_SCHEMA = {
       additionalProperties: false,
       required: ['name', 'email', 'phone', 'vat_number', 'address'],
       properties: {
-        name: nullable('string'),
-        email: nullable('string'),
-        phone: nullable('string'),
-        vat_number: nullable('string'),
-        address: nullable('string'),
+        name: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+        vat_number: { type: 'string' },
+        address: { type: 'string' },
       },
     },
-    invoice_number: nullable('string'),
-    invoice_date: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] },
-    due_date: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] },
-    order_reference: nullable('string'),
-    currency: nullable('string'),
+    invoice_number: { type: 'string' },
+    invoice_date: { type: 'string', description: 'YYYY-MM-DD, or empty' },
+    due_date: { type: 'string', description: 'YYYY-MM-DD, or empty' },
+    order_reference: { type: 'string' },
+    currency: { type: 'string' },
     lines: {
       type: 'array',
       items: {
@@ -40,9 +41,9 @@ export const INVOICE_SCHEMA = {
         required: ['description', 'sku', 'quantity', 'unit', 'unit_price', 'line_total', 'vat_rate'],
         properties: {
           description: { type: 'string' },
-          sku: nullable('string'),
+          sku: { type: 'string' },
           quantity: nullable('number'),
-          unit: nullable('string'),
+          unit: { type: 'string' },
           unit_price: nullable('number'),
           line_total: nullable('number'),
           vat_rate: nullable('number'),
@@ -52,15 +53,15 @@ export const INVOICE_SCHEMA = {
     subtotal: nullable('number'),
     vat: nullable('number'),
     total: nullable('number'),
-    notes: nullable('string'),
+    notes: { type: 'string' },
   },
 };
 
 const SYSTEM = `You read supplier invoices for a group of UK cafés so their stock system can record what was bought and at what price.
 
-Extract exactly what the document says; never invent values. Use null for anything that isn't shown.
+Extract exactly what the document says; never invent values. Use an empty string for text that isn't shown, and null for numbers that aren't shown.
 - supplier: the business that issued the invoice (not the café it is addressed to).
-- Dates as YYYY-MM-DD. UK documents write dates day first (03/04/2026 is 3 April 2026).
+- Dates as YYYY-MM-DD (empty if not shown). UK documents write dates day first (03/04/2026 is 3 April 2026).
 - lines: one entry per product line, in the order printed. Leave out carriage/delivery charges only if they have no price; include them (as their own line) if they are charged. Include credits and discounts as lines with negative amounts.
 - sku: the supplier's product or item code for the line, if printed.
 - quantity: the number of units invoiced; unit: the pack or unit it is sold by (e.g. case, each, kg, 4L bottle) if shown.
@@ -68,7 +69,14 @@ Extract exactly what the document says; never invent values. Use null for anythi
 - subtotal (net), vat and total (gross) as printed on the invoice.
 - currency: the ISO code, e.g. GBP.
 - is_invoice: false if this isn't an invoice, credit note or priced delivery note.
-- notes: anything a person checking it should know (e.g. "handwritten amendments", "page 2 appears to be missing"), otherwise null.`;
+- notes: anything a person checking it should know (e.g. "handwritten amendments", "page 2 appears to be missing"), otherwise empty.`;
+
+// Empty text means "not on the invoice": the rest of BrewView treats that as null.
+function blanksToNull(v) {
+  if (Array.isArray(v)) return v.map(blanksToNull);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, blanksToNull(x)]));
+  return typeof v === 'string' && !v.trim() ? null : v;
+}
 
 export function invoiceReaderFromEnv(env = process.env) {
   const apiKey = cleanEnv(env.ANTHROPIC_API_KEY);
@@ -118,7 +126,7 @@ export function claudeInvoiceReader({ client, model = DEFAULT_MODEL }) {
       if (response.stop_reason === 'max_tokens') throw new HttpError(422, 'This invoice is too long to read in one go – try uploading it a few pages at a time');
       const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
       try {
-        return JSON.parse(text);
+        return blanksToNull(JSON.parse(text));
       } catch {
         throw new HttpError(502, 'The invoice reader returned something unexpected – try again');
       }
