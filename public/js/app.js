@@ -1,5 +1,6 @@
 import { api, esc, isDemo, showError } from './lib.js';
 import { logo } from './logo.js';
+import { install, installState, setUpInstall } from './install.js';
 import * as admin from './views/admin.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -229,6 +230,7 @@ function renderShell() {
           </div>`;
         }).join('')}
         <div class="nav-heading"></div>
+        <a href="#" id="install-app" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span>Install app</a>
         <a href="#" id="logout">Sign out</a>
       </nav>
       <main id="view"></main>
@@ -244,6 +246,7 @@ function renderShell() {
     }
     route();
   });
+  document.getElementById('install-app').addEventListener('click', (e) => { e.preventDefault(); install(); });
   document.getElementById('logout').addEventListener('click', async (e) => {
     e.preventDefault();
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
@@ -316,7 +319,17 @@ export async function loadLocations() {
 async function start() {
   try {
     state.user = (await api('/auth/me')).user;
-  } catch {
+  } catch (err) {
+    // No connection (e.g. the installed app opened offline): say so, rather than asking them to sign in again.
+    if (!navigator.onLine || err instanceof TypeError) {
+      document.getElementById('app').innerHTML = `<div class="login-wrap"><div class="card login offline-card">
+        <h1 class="login-logo" aria-label="BrewView">${logo(40)}</h1>
+        <p><strong>You’re offline.</strong> BrewView needs an internet connection – check your Wi-Fi or mobile data.</p>
+        <button class="btn btn-primary btn-block" id="retry">Try again</button></div></div>`;
+      document.getElementById('retry').addEventListener('click', start);
+      window.addEventListener('online', start, { once: true });
+      return;
+    }
     state.user = null;
   }
   if (!state.user) {
@@ -341,4 +354,5 @@ window.addEventListener('resize', placeNav);
 
 window.addEventListener('hashchange', route);
 window.addEventListener('auth:expired', () => { if (state.user) { state.user = null; start(); } });
+setUpInstall();
 start();

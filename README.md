@@ -90,6 +90,16 @@ How the numbers are worked out:
 - **Sales per labour hour** = net sales ÷ clocked hours, on days that have both. **Staff on the clock** by hour is paid clocked hours in that hour, averaged over the days with sales.
 - Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
 
+## Installing the app
+
+BrewView can be installed as an app (a Progressive Web App) – an icon on the home screen or in the computer's apps, opening full screen. It's the same website underneath, so it updates itself whenever the site does.
+
+- **iPhone / iPad:** open the site in Safari → **Share** → **Add to Home Screen**.
+- **Android:** in Chrome, tap **Install app** (or ⋮ → **Install app**).
+- **Windows / Mac:** in Chrome or Edge, click the install icon in the address bar, or **Install app** at the bottom of the menu in BrewView.
+
+**Your account** shows the right steps for the device you're on. Installing needs the site on https (Railway provides it); the app needs a connection to work and says so when it's offline.
+
 ## Supplier invoices
 
 **Stock and Ordering → Invoices** reads supplier invoices for you. Upload a PDF (or a photo of a paper invoice) – several at once, or drag them onto the page – and BrewView reads the supplier, invoice number, dates, every line (description, code, quantity, price, total) and the totals, whatever the supplier's layout. It then:

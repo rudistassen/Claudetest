@@ -1,5 +1,6 @@
 import { loadLocations } from '../app.js';
 import { exportProducts, openProductImport } from './product-import.js';
+import { installCard, wireInstallCard } from '../install.js';
 import { api, confirmDialog, esc, isDemo, field, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast } from '../lib.js';
 
 const yesNo = (v) => (v ? 'Yes' : 'No');
@@ -303,7 +304,9 @@ export async function renderAccount(ctx) {
         ${field('New password', input('new_password', '', 'type="password" minlength="8" required autocomplete="new-password"'))}
         <button class="btn btn-primary" type="submit">Update password</button>
       </form>
-    </section>`;
+    </section>
+    ${installCard()}`;
+  wireInstallCard(el);
   el.querySelector('#pw').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;

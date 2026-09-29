@@ -707,3 +707,13 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .invoice-totals { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.5rem 1.25rem; margin-top: 0.75rem; font-size: 0.92rem; }
 .invoice-totals input { width: 6.5rem; text-align: right; margin-left: 0.3rem; }
 @media (max-width: 1100px) { .invoice-layout { grid-template-columns: 1fr; } .invoice-doc { position: static; } .invoice-frame { height: 55vh; } }
+
+/* Installing the app */
+.install-card { margin-top: 1rem; }
+.install-steps { padding-left: 1.3rem; line-height: 1.6; }
+.install-steps li + li { margin-top: 0.3rem; }
+.ios-share { display: inline-block; vertical-align: -3px; color: #0a84ff; }
+/* Installed on a phone: keep clear of the notch and home bar. */
+@media (display-mode: standalone) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}
