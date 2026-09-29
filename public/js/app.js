@@ -10,6 +10,7 @@ import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
 import * as reports from './views/reports.js';
 import * as invoices from './views/invoices.js';
+import * as mybrew from './views/mybrew.js';
 import * as sales from './views/sales.js';
 import * as stock from './views/stock.js';
 import * as timeoff from './views/timeoff.js';
@@ -67,6 +68,8 @@ const ROUTES = [
   [/^admin\/products$/, admin.renderProducts, SUPPLIERS],
   [/^admin\/safety-tasks$/, safety.renderSetup, ['safety.manage']],
   [/^admin\/square$/, admin.renderSquare, 'admin'],
+  [/^mybrew$/, mybrew.renderMyBrew],
+  [/^admin\/news$/, mybrew.renderNewsSetup, ['news.manage']],
   [/^invoices$/, invoices.renderList, ['orders.manage']],
   [/^invoices\/(\d+)$/, invoices.renderInvoice, ['orders.manage']],
   [/^admin\/email-reports$/, reports.renderEmailReports, 'admin'],
@@ -80,6 +83,7 @@ function navGroups() {
   return [
     [null, [['dashboard', 'Dashboard', '▦']]],
     ['Team', [
+      ['mybrew', 'My Brew', '☕'],
       ['rota', 'Rota', '◷', ROTA],
       ['timeoff', 'Time off', '☀'],
     ]],
@@ -104,12 +108,30 @@ function navGroups() {
       ['admin/locations', 'Locations', '', 'admin'],
       ['admin/square', 'Square', '', 'admin'],
       ['admin/email-reports', 'Email reports', '', 'admin'],
+      ['admin/news', 'News', '', ['news.manage']],
       ['admin/suppliers', 'Suppliers', '', SUPPLIERS],
       ['admin/products', 'Products', '', SUPPLIERS],
       ['safety/setup', 'Trail checks', '', ['safety.manage']],
     ]],
   ].map(([heading, items]) => [heading, items.filter(([, , , who]) => allowed(who))]).filter(([, items]) => items.length);
 }
+
+// Each menu section's colour.
+const NAV_TONES = { Team: 'team', Trail: 'trail', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
+
+// The number of news posts waiting for this person to confirm they've read them, shown on My Brew in the menu.
+let newsUnread = { count: 0, at: 0, user: null };
+async function showNewsBadge(force = false) {
+  if (force || newsUnread.user !== state.user?.id || Date.now() - newsUnread.at > 60000) {
+    try { newsUnread = { count: (await api('/news/unread')).count, at: Date.now(), user: state.user?.id }; } catch { return; }
+  }
+  const b = document.getElementById('news-badge');
+  if (!b) return;
+  b.hidden = !newsUnread.count;
+  b.textContent = newsUnread.count;
+  b.title = `${newsUnread.count} update${newsUnread.count === 1 ? '' : 's'} to read`;
+}
+window.addEventListener('news:read', () => showNewsBadge(true));
 
 // Menu sections someone has folded away, remembered in this browser.
 const NAV_FOLD_KEY = 'cafe-ops:nav-folded';
@@ -220,11 +242,11 @@ function renderShell() {
     <div class="layout">
       <nav class="sidebar">
         ${groups.map(([heading, items]) => {
-          const links = items.map(([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${icon ? `<span class="nav-icon">${icon}</span>` : ''}${label}</a>`).join('');
+          const links = items.map(([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${icon ? `<span class="nav-icon">${icon}</span>` : ''}${label}${p === 'mybrew' ? '<span class="nav-badge" id="news-badge" hidden></span>' : ''}</a>`).join('');
           if (!heading) return links;
           // The section holding the current page always stays open.
           const open = !folded.has(heading) || items.some(([p]) => p === active);
-          return `<div class="nav-group ${open ? '' : 'is-folded'}">
+          return `<div class="nav-group ${open ? '' : 'is-folded'}" data-tone="${NAV_TONES[heading] ?? ''}">
             <button type="button" class="nav-heading nav-toggle" data-group="${esc(heading)}" aria-expanded="${open}">${esc(heading)}<span class="nav-caret" aria-hidden="true">${open ? '▾' : '▸'}</span></button>
             <div class="nav-links">${links}</div>
           </div>`;
@@ -235,6 +257,7 @@ function renderShell() {
       </nav>
       <main id="view"></main>
     </div>`;
+  showNewsBadge();
   wireSitePicker((id) => {
     state.locationId = id;
     try { localStorage.setItem(LOCATION_KEY, String(state.locationId)); } catch { /* storage unavailable */ }

@@ -37,6 +37,9 @@ export const PERMISSION_AREAS = [
   ['Staff', [
     ['staff.manage', 'Add and edit staff at their site, and see pay rates'],
   ]],
+  ['My Brew news', [
+    ['news.manage', 'Post staff news, announcements and policy updates, and see who has read them'],
+  ]],
   ['Holiday & availability', [
     ['leave.manage', 'Approve holiday requests and see everyone’s availability'],
   ]],

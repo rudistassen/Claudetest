@@ -311,6 +311,32 @@ CREATE TABLE IF NOT EXISTS invoice_aliases (
   PRIMARY KEY (supplier_id, text)
 );
 
+-- My Brew news feed: announcements and policy updates for staff, for every site or chosen sites.
+CREATE TABLE IF NOT EXISTS news_posts (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'announcement' CHECK (category IN ('announcement', 'policy', 'event', 'reminder')),
+  pinned INTEGER NOT NULL DEFAULT 0,
+  requires_ack INTEGER NOT NULL DEFAULT 0,
+  all_sites INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS news_post_sites (
+  post_id INTEGER NOT NULL REFERENCES news_posts(id) ON DELETE CASCADE,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  PRIMARY KEY (post_id, location_id)
+);
+-- Who has confirmed they've read a post that asks them to.
+CREATE TABLE IF NOT EXISTS news_reads (
+  post_id INTEGER NOT NULL REFERENCES news_posts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (post_id, user_id)
+);
+
 -- Emailed reports: the dashboard, sent to chosen people at a set time on chosen days.
 CREATE TABLE IF NOT EXISTS report_schedules (
   id INTEGER PRIMARY KEY,
@@ -483,6 +509,16 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 1');
+  }
+  if (version < 2) {
+    // The My Brew news feed was added: whoever could manage staff can post news.
+    for (const ps of db.prepare('SELECT id, permissions FROM permission_sets').all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (perms.includes('staff.manage') && !perms.includes('news.manage')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...perms, 'news.manage']), ps.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 2');
   }
   ensureDefaultSets(db);
   return db;

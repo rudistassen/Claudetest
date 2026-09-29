@@ -13,6 +13,7 @@ import { registerLeaveRoutes } from './routes/leave.js';
 import { registerTradingRoutes } from './routes/trading.js';
 import { registerReportRoutes } from './reports.js';
 import { registerInvoiceRoutes } from './routes/invoices.js';
+import { registerNewsRoutes } from './routes/news.js';
 import { HttpError } from './util.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -53,6 +54,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, mailer);
   registerInvoiceRoutes(api, db, invoiceReader);
+  registerNewsRoutes(api, db);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 

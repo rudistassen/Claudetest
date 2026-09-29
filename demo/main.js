@@ -18,6 +18,7 @@ import { memoryMailer } from '../src/email.js';
 import { registerReportRoutes } from '../src/reports.js';
 import { demoInvoiceReader } from '../src/invoice-demo.js';
 import { registerInvoiceRoutes } from '../src/routes/invoices.js';
+import { registerNewsRoutes } from '../src/routes/news.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
@@ -113,6 +114,7 @@ async function boot() {
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, demoMailer, { demo: true });
   registerInvoiceRoutes(api, db, demoInvoiceReader(db));
+  registerNewsRoutes(api, db);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
 
   const realFetch = window.fetch.bind(window);
