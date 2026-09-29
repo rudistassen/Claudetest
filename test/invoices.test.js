@@ -171,6 +171,11 @@ test('the Claude reader sends the PDF with a fixed output shape and handles refu
   await assert.rejects(r.read({ media_type: 'application/pdf', data: PDF }), /too long/);
   const failing = claudeInvoiceReader({ client: { beta: { messages: { create: async () => { throw new Anthropic.AuthenticationError(401, { type: 'error' }, 'invalid x-api-key', new Headers()); } } } } });
   await assert.rejects(failing.read({ media_type: 'application/pdf', data: PDF }), /ANTHROPIC_API_KEY/);
+  const noWorkspace = claudeInvoiceReader({ client: { beta: { messages: { create: async () => { throw new Anthropic.BadRequestError(400, { type: 'error', error: { type: 'invalid_request_error', message: 'This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use.' } }, undefined, new Headers()); } } } } });
+  await assert.rejects(noWorkspace.read({ media_type: 'application/pdf', data: PDF }), /Workspaces → your workspace → API keys/);
+  // ANTHROPIC_WORKSPACE_ID is sent as the workspace header.
+  const withWs = invoiceReaderFromEnv({ ANTHROPIC_API_KEY: 'sk-ant-test', ANTHROPIC_WORKSPACE_ID: 'wrkspc_123' });
+  assert.ok(withWs);
 
   // Every object in the schema is closed, as structured outputs require.
   const walk = (s) => {

@@ -114,7 +114,7 @@ You check it next to the original, correct anything, then **Confirm**: new suppl
 Invoices are read by Claude (Anthropic's AI model, `claude-opus-5-5`), which costs roughly 5–10p per invoice. To switch it on:
 
 1. Sign up at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, and create a key under **API keys**.
-2. Set `ANTHROPIC_API_KEY` to the key in the app's environment (Railway → Variables) and deploy. Optional: `INVOICE_MODEL` to use a different Claude model.
+2. Set `ANTHROPIC_API_KEY` to the key in the app's environment (Railway → Variables) and deploy. Create the key **inside a workspace** (Console → Workspaces → your workspace → API keys); a key made at organisation level also needs `ANTHROPIC_WORKSPACE_ID` set to the workspace's ID. Optional: `INVOICE_MODEL` to use a different Claude model.
 
 The uploaded file is sent to Anthropic to be read and stored in BrewView's database with the invoice.
 

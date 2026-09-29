@@ -73,7 +73,10 @@ Extract exactly what the document says; never invent values. Use null for anythi
 export function invoiceReaderFromEnv(env = process.env) {
   const apiKey = cleanEnv(env.ANTHROPIC_API_KEY);
   if (!apiKey) return null;
-  return claudeInvoiceReader({ client: new Anthropic({ apiKey }), model: cleanEnv(env.INVOICE_MODEL) || DEFAULT_MODEL });
+  // A key made at organisation level (not inside a workspace) needs to be told which workspace to bill.
+  const workspace = cleanEnv(env.ANTHROPIC_WORKSPACE_ID);
+  const client = new Anthropic({ apiKey, ...(workspace ? { defaultHeaders: { 'anthropic-workspace-id': workspace } } : {}) });
+  return claudeInvoiceReader({ client, model: cleanEnv(env.INVOICE_MODEL) || DEFAULT_MODEL });
 }
 
 export function claudeInvoiceReader({ client, model = DEFAULT_MODEL }) {
@@ -104,6 +107,9 @@ export function claudeInvoiceReader({ client, model = DEFAULT_MODEL }) {
         if (err instanceof Anthropic.AuthenticationError) throw new HttpError(502, 'The invoice reader’s API key was refused – check ANTHROPIC_API_KEY');
         if (err instanceof Anthropic.PermissionDeniedError) throw new HttpError(502, 'The invoice reader’s API key isn’t allowed to use this model');
         if (err instanceof Anthropic.RateLimitError) throw new HttpError(503, 'The invoice reader is busy – try again in a minute');
+        if (err instanceof Anthropic.BadRequestError && /workspace/i.test(err.message)) {
+          throw new HttpError(502, 'The Claude API key isn’t linked to a workspace. In the Anthropic Console, open Workspaces → your workspace → API keys, create a key there and put it in ANTHROPIC_API_KEY (or add ANTHROPIC_WORKSPACE_ID with the workspace’s ID).');
+        }
         if (err instanceof Anthropic.BadRequestError) throw new HttpError(400, `The invoice couldn’t be read: ${err.message}`);
         if (err instanceof Anthropic.APIError) throw new HttpError(502, `The invoice reader had a problem (${err.status ?? 'network'}) – try again`);
         throw err;
