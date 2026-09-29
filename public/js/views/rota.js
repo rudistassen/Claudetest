@@ -3,8 +3,11 @@ import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openMod
 
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
-  const week = weekStart(query.week || todayISO());
-  if (query.view === 'mine') return renderMine(ctx, week);
+  if (query.view === 'mine') return renderMine(ctx, weekStart(query.week || todayISO()));
+  // The rota opens on today (only the shifts that are on); the Week button shows the whole week's grid.
+  const view = query.view === 'week' || (query.week && query.view !== 'day') ? 'week' : 'day';
+  const day = view === 'day' ? (/^\d{4}-\d{2}-\d{2}$/.test(query.day ?? '') ? query.day : todayISO()) : null;
+  const week = weekStart(day ?? query.week ?? todayISO());
   // People with more than one site can see every site's rota at once.
   // Which site: ?site=all or a site id. People with several sites start on All sites; the old ?scope= links still work.
   const active = state.locations.filter((l) => l.active);
@@ -24,7 +27,7 @@ export async function render(ctx) {
     });
   }
   const siteParam = all ? 'all' : String(siteId);
-  const scopeQs = (extra = {}) => qs({ ...extra, site: state.multiSite ? siteParam : undefined });
+  const scopeQs = (extra = {}) => qs({ view: view === 'week' ? 'week' : undefined, ...extra, site: state.multiSite ? siteParam : undefined });
   const data = await api(`/rota${qs({ location_id: all ? 'all' : siteId, week })}`);
   if (stale()) return;
   const canEdit = state.can('rota.edit');
@@ -123,6 +126,15 @@ export async function render(ctx) {
   } else {
     rows.push(...(byGroup ? byRotaGroup(data.staff, siteId, null) : data.staff.map((u) => ({ u, site: siteId, groupId: null }))));
   }
+  // Site layouts use the site id as each group's id.
+  const siteOfGroup = (groupId) => (groupId && /^\d+$/.test(groupId) ? Number(groupId) : null);
+  const groupForecast = (groupId) => {
+    const id = siteOfGroup(groupId);
+    const f = fc && id ? forecastWeek([id]) : null;
+    if (f === null) return '';
+    const p = pctOf(rotaCost([id]), f);
+    return ` · forecast ${whole((f))} · labour <span class="tone-${labourTone(p)}">${fmtPct(p)}</span>`;
+  };
   const rowHours = (u, site) => Math.round(counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
   // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
   const TAGS = { new: 'New', changed: 'Changed', removed: 'Removed' };
@@ -137,14 +149,144 @@ export async function render(ctx) {
   const dayHours = data.days.map((d) => counted.filter((s) => s.date === d).reduce((t, s) => t + s.hours, 0));
   const pending = data.unpublished ?? 0;
 
-  el.innerHTML = `
+  // Expected sales (each weekday's average over recent weeks, bank holidays left out) and the rota's labour % against
+  // them – for people who can see sales. Worked out from the draft, so it changes as shifts are added.
+  const fc = data.forecast;
+  const rateOf = new Map(data.staff.map((u) => [u.id, u.hourly_rate ?? 0]));
+  const shownSites = all ? active.map((l) => l.id) : [siteId];
+  const rotaCost = (ids, d) => counted.filter((x) => ids.includes(x.location_id) && (!d || x.date === d)).reduce((t, x) => t + x.hours * (rateOf.get(x.user_id) ?? 0), 0);
+  const forecastFor = (ids, d) => {
+    let total = 0;
+    let known = false;
+    for (const id of ids) {
+      const f = fc?.sites?.[id]?.[weekdayOf(d)];
+      if (f) { total += f.avg; known = true; }
+    }
+    return known ? total : null;
+  };
+  const forecastWeek = (ids) => {
+    const vals = data.days.map((d) => forecastFor(ids, d));
+    return vals.some((v) => v !== null) ? vals.reduce((t, v) => t + (v ?? 0), 0) : null;
+  };
+  // Forecasts are estimates, so they're shown in whole pounds.
+  const whole = (n) => `£${Math.round(n).toLocaleString('en-GB')}`;
+  const pctOf = (cost, sales) => (sales ? Math.round((cost / sales) * 1000) / 10 : null);
+  const fcCell = (ids, d) => {
+    const f = forecastFor(ids, d);
+    if (f === null) return '<span class="muted">–</span>';
+    const p = pctOf(rotaCost(ids, d), f);
+    return `${whole((f))}<small class="tone-${labourTone(p)}">${fmtPct(p)}</small>`;
+  };
+  const bankHol = (d) => data.bank_holidays?.[d];
+  const fcNote = fc ? `Forecast = each day’s average sales over the last ${fc.weeks} weeks (bank holidays and closed days left out); labour % = the rota’s cost ÷ that forecast.` : '';
+
+  // --- Day view: just the shifts on one day, site by site, on a timeline ---
+  const dayView = () => {
+    const onDay = data.shifts.filter((x) => x.date === day && (canEdit || x.state !== 'removed'));
+    const timeRange = (x) => {
+      const [h1, m1] = x.start_time.split(':').map(Number);
+      const [h2, m2] = x.end_time.split(':').map(Number);
+      const a1 = h1 + m1 / 60;
+      let a2 = h2 + m2 / 60;
+      if (a2 <= a1) a2 += 24;
+      return [a1, a2];
+    };
+    const spans = onDay.map(timeRange);
+    const from = Math.floor(Math.min(6, ...spans.map((r) => r[0])));
+    const to = Math.min(Math.ceil(Math.max(from + 10, ...spans.map((r) => r[1]))), from + 24);
+    const pctLeft = (h) => ((h - from) / (to - from)) * 100;
+    const hourMarks = Array.from({ length: to - from + 1 }, (_, i) => from + i).filter((h) => (to - from > 14 ? h % 2 === 0 : true));
+    const person = (id) => data.staff.find((u) => u.id === id);
+    const pendingDay = shownSites.reduce((t, id) => t + (data.unpublished_by_day?.[`${day}|${id}`] ?? 0), 0);
+    const sections = shownSites.map((id) => ({
+      id,
+      name: siteName(id),
+      list: onDay.filter((x) => x.location_id === id).sort((a, b) => a.start_time.localeCompare(b.start_time) || a.user_name.localeCompare(b.user_name)),
+    }));
+    const withShifts = sections.filter((x) => x.list.length);
+    const without = sections.filter((x) => !x.list.length);
+    const siteBlock = ({ id, name, list }) => {
+      const live = list.filter((x) => x.state !== 'removed');
+      const hours = Math.round(live.reduce((t, x) => t + x.hours, 0) * 10) / 10;
+      const cost = rotaCost([id], day);
+      const f = forecastFor([id], day);
+      const p = pctOf(cost, f);
+      const pendingHere = data.unpublished_by_day?.[`${day}|${id}`] ?? 0;
+      return `<section class="card day-site">
+        <header class="day-site-head">
+          <div><h2>${esc(name)}</h2>
+            <span class="muted small">${live.length} ${live.length === 1 ? 'shift' : 'shifts'} · ${hours} h${data.labour_cost !== undefined ? ` · ${money(cost)} labour` : ''}</span></div>
+          ${fc ? `<div class="day-fc"><span class="muted small">Forecast sales</span><strong>${f === null ? '–' : whole((f))}</strong>
+            <span class="small">Labour <strong class="tone-${labourTone(p)}">${fmtPct(p)}</strong></span></div>` : ''}
+          <div class="day-site-actions">
+            ${canEdit && data.can_publish && pendingHere ? `<button class="btn btn-small" data-publish-site="${id}">Publish ${pendingHere} change${pendingHere === 1 ? '' : 's'}</button>` : ''}
+            ${canEdit ? `<button class="btn btn-small" data-add-site="${id}">+ Add shift</button>` : ''}
+          </div>
+        </header>
+        <div class="day-timeline">
+          <div class="day-row day-scale-row"><div></div><div class="day-scale">${hourMarks.map((h) => `<span style="left:${pctLeft(h)}%">${String(h % 24).padStart(2, '0')}</span>`).join('')}</div><div></div></div>
+          ${list.map((x) => {
+            const [a1, a2] = timeRange(x);
+            const u = person(x.user_id);
+            const note = [u?.rota_group, u && u.location_id !== id && u.location_name ? `cover from ${u.location_name}` : null].filter(Boolean).join(' · ');
+            return `<div class="day-row ${x.state && x.state !== 'published' ? `is-${x.state}` : ''}">
+              <div class="day-who"><strong>${esc(x.user_name)}</strong>${note ? `<small class="muted">${esc(note)}</small>` : ''}</div>
+              <div class="day-track">
+                <button class="day-bar ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
+                  style="left:${pctLeft(a1)}%;width:${Math.max(2, pctLeft(a2) - pctLeft(a1))}%" title="${esc(shiftTitle(x) || `${x.start_time}–${x.end_time}`)}">
+                  <span>${x.start_time}–${x.end_time}</span>${TAGS[x.state] ? `<em class="shift-tag">${TAGS[x.state]}</em>` : ''}</button>
+              </div>
+              <div class="day-hours num">${x.hours} h</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </section>`;
+    };
+    const totalCost = rotaCost(shownSites, day);
+    const totalFc = forecastFor(shownSites, day);
+    const liveCount = onDay.filter((x) => x.state !== 'removed').length;
+    return `
+      <div class="page-head">
+        <h1>Rota · ${all ? 'All sites' : esc(state.location?.name ?? '')}</h1>
+        <div class="actions">
+          ${siteSelect}
+          ${viewToggle}
+          <button class="btn" data-day="-1" aria-label="Previous day">‹</button>
+          <input type="date" id="rota-day" value="${day}" aria-label="Day">
+          <button class="btn" data-day="1" aria-label="Next day">›</button>
+          ${day !== today ? '<button class="btn" data-day="0">Today</button>' : ''}
+          <a class="btn" href="#/rota${qs({ view: 'mine', week })}">My shifts</a>
+        </div>
+      </div>
+      ${canEdit && pendingDay ? `
+      <div class="publish-bar">
+        <span><strong>${pendingDay} unpublished change${pendingDay === 1 ? '' : 's'}</strong> on this day – staff can’t see ${pendingDay === 1 ? 'it' : 'them'} yet.
+          ${data.can_publish ? '' : 'Ask someone who can publish the rota to publish it.'}</span>
+        <span class="publish-actions">${data.can_publish ? `<button class="btn btn-primary" id="publish">Publish this day${all ? ' (all sites)' : ''}</button>` : ''}</span>
+      </div>` : ''}
+      <h2 class="day-title">${day === today ? 'Today · ' : ''}${fmtDate(day, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        ${bankHol(day) ? `<span class="badge badge-sent">${esc(bankHol(day))}</span>` : ''}</h2>
+      <p class="muted">${liveCount} shift${liveCount === 1 ? '' : 's'}${data.labour_cost !== undefined ? ` · ${money(totalCost)} labour` : ''}${fc && totalFc !== null ? ` · forecast sales ${whole((totalFc))} · labour <span class="tone-${labourTone(pctOf(totalCost, totalFc))}">${fmtPct(pctOf(totalCost, totalFc))}</span>` : ''}</p>
+      ${withShifts.length ? withShifts.map(siteBlock).join('') : `<div class="card empty">Nobody is on the rota ${day === today ? 'today' : 'this day'}.</div>`}
+      ${canEdit && without.length && withShifts.length ? `<p class="muted small">No shifts at ${without.map((x) => `${esc(x.name)} <button class="link-btn" data-add-site="${x.id}">+ Add</button>`).join(' · ')}</p>` : ''}
+      ${canEdit && !withShifts.length && without.length ? `<p>${without.map((x) => `<button class="btn btn-small" data-add-site="${x.id}">+ Add a shift at ${esc(x.name)}</button>`).join(' ')}</p>` : ''}
+      ${fcNote ? `<p class="muted small">${fcNote}</p>` : ''}
+      ${canEdit ? '<p class="muted small">You’re seeing the draft rota. Click a shift to change it, or to publish just that shift.</p>' : ''}`;
+  };
+
+  const siteSelect = state.multiSite ? `<select id="rota-site" aria-label="Site">
+          <option value="all" ${all ? 'selected' : ''}>All sites</option>
+          ${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+        </select>` : '';
+  const viewToggle = `<div class="seg" role="group" aria-label="Day or week">
+          <button data-view="day" class="${view === 'day' ? 'is-on' : ''}">Day</button><button data-view="week" class="${view === 'week' ? 'is-on' : ''}">Week</button></div>`;
+  if (view === 'day') el.innerHTML = dayView();
+  else el.innerHTML = `
     <div class="page-head">
       <h1>Rota · ${all ? 'All sites' : esc(state.location?.name ?? '')}</h1>
       <div class="actions">
-        ${state.multiSite ? `<select id="rota-site" aria-label="Site">
-          <option value="all" ${all ? 'selected' : ''}>All sites</option>
-          ${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
-        </select>` : ''}
+        ${siteSelect}
+        ${viewToggle}
         <select id="rota-layout" aria-label="View" title="How the rota is grouped (roles are set on the Staff page)">
           ${(all ? [['site', 'View: by site'], ['site-group', 'View: site, then role'], ['group-site', 'View: role, then site']]
             : [['site', 'View: everyone'], ['site-group', 'View: by role']])
@@ -173,17 +315,19 @@ export async function render(ctx) {
       ${data.week_sales ? ` · sales to date ${money(data.week_sales)} · labour <span class="tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</span> of sales to date` : ''}</p>
     <div class="table-wrap">
       <table class="rota">
-        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}">${fmtDate(d)}</th>`).join('')}<th>Hours</th></tr></thead>
+        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: undefined, day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
           ${rows.map(({ header, groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
             <th colspan="${data.days.length + 2}"><span class="rota-subgroup-name">${esc(sub)}</span>
               <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group ${layout === 'group-site' && all ? 'rota-group-by-rg' : ''}" data-group="${esc(groupId)}"><th colspan="${data.days.length + 2}">
-            <button class="rota-group-toggle" aria-expanded="true" data-toggle="${esc(groupId)}">
+            <div class="rota-group-line"><button class="rota-group-toggle" aria-expanded="true" data-toggle="${esc(groupId)}">
               <span class="rota-chevron" aria-hidden="true">▾</span>
               <span class="rota-group-name">${esc(header)}</span>
-              <span class="rota-group-meta">${summary.people} ${summary.people === 1 ? 'person' : 'people'} · ${summary.hours} h${summary.cost === null ? '' : ` · ${money(summary.cost)} labour`}</span>
+              <span class="rota-group-meta">${summary.people} ${summary.people === 1 ? 'person' : 'people'} · ${summary.hours} h${summary.cost === null ? '' : ` · ${money(summary.cost)} labour`}${groupForecast(groupId)}</span>
             </button>
-          </th></tr>` : `
+            ${canEdit && data.can_publish && siteOfGroup(groupId) && data.unpublished_by_site?.[siteOfGroup(groupId)] ? `<button class="btn btn-small rota-publish-site" data-publish-site="${siteOfGroup(groupId)}">Publish ${esc(header)} (${data.unpublished_by_site[siteOfGroup(groupId)]})</button>` : ''}</div>
+          </th></tr>
+          ${fc && siteOfGroup(groupId) ? `<tr class="rota-forecast" data-in-group="${esc(groupId)}"><th>Forecast · labour %</th>${data.days.map((d) => `<td class="num">${fcCell([siteOfGroup(groupId)], d)}</td>`).join('')}<td></td></tr>` : ''}` : `
             <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
               <th><strong>${esc(u.name)}</strong>${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${data.days.map((d) => {
@@ -205,6 +349,8 @@ export async function render(ctx) {
         <tfoot><tr><th>Total hours</th>${dayHours.map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>
           ${data.daily_money ? `
           <tr><th>Labour cost</th>${data.daily_money.map((m) => `<td class="num">${money(m.labour_cost)}</td>`).join('')}<td class="num">${money(data.labour_cost)}</td></tr>
+          ${fc ? `<tr class="rota-forecast-total"><th>Forecast sales<small>average for the day</small></th>${data.days.map((d) => { const f = forecastFor(shownSites, d); return `<td class="num">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num">${forecastWeek(shownSites) === null ? '–' : whole((forecastWeek(shownSites)))}</td></tr>
+          <tr class="rota-forecast-total"><th>Rota labour %<small>of forecast sales</small></th>${data.days.map((d) => { const p = pctOf(rotaCost(shownSites, d), forecastFor(shownSites, d)); return `<td class="num tone-${labourTone(p)}">${fmtPct(p)}</td>`; }).join('')}<td class="num tone-${labourTone(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}"><strong>${fmtPct(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}</strong></td></tr>` : ''}
           ${data.daily_money.some((m) => m.net_sales !== null) ? `
           <tr><th>Sales (Square)</th>${data.daily_money.map((m) => `<td class="num">${m.net_sales === null ? '–' : money(m.net_sales)}</td>`).join('')}<td class="num">${money(data.week_sales)}</td></tr>
           <tr><th>Labour %</th>${data.daily_money.map((m) => `<td class="num tone-${labourTone(m.labour_pct)}">${fmtPct(m.labour_pct)}</td>`).join('')}<td class="num tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</td></tr>` : ''}` : ''}
@@ -214,13 +360,23 @@ export async function render(ctx) {
     ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under Setup → Staff.</div>` : ''}
     ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is covering at another site.</p>' : ''}
     ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a role yet – set one for each person on the Staff page.</p>' : ''}
+    ${fcNote ? `<p class="muted small">${fcNote}</p>` : ''}
     ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see.</p>' : ''}`;
 
-  el.querySelector('#rota-layout').addEventListener('change', (e) => {
+  el.querySelector('#rota-layout')?.addEventListener('change', (e) => {
     try { localStorage.setItem(LAYOUT_KEY, e.target.value); } catch { /* storage unavailable */ }
     ctx.rerender();
   });
-  el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs({ week, site: e.target.value })}`));
+  el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs(view === 'day' ? { day, site: e.target.value } : { view: 'week', week, site: e.target.value })}`));
+  el.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.view === view) return;
+    ctx.navigate(`rota${scopeQs(b.dataset.view === 'day' ? { view: undefined, day: week === weekStart(today) ? today : week } : { view: 'week', week: weekStart(day) })}`);
+  }));
+  el.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => {
+    const n = Number(b.dataset.day);
+    ctx.navigate(`rota${scopeQs({ day: n ? addDays(day, n) : undefined })}`);
+  }));
+  el.querySelector('#rota-day')?.addEventListener('change', (e) => { if (e.target.value) ctx.navigate(`rota${scopeQs({ day: e.target.value })}`); });
 
   // Folding sites away on All sites. Which are folded is remembered in this browser.
   const FOLD_KEY = 'cafe-ops:rota-collapsed';
@@ -256,7 +412,7 @@ export async function render(ctx) {
     const offset = Number(b.dataset.week);
     ctx.navigate(`rota${scopeQs({ week: offset ? addDays(week, offset) : undefined })}`);
   }));
-  el.querySelector('#print').addEventListener('click', () => window.print());
+  el.querySelector('#print')?.addEventListener('click', () => window.print());
   if (!canEdit) return;
 
   const staffOptions = data.staff.map((u) => [u.id, all && u.location_name ? `${u.name} (${u.location_name})` : u.name]);
@@ -267,9 +423,12 @@ export async function render(ctx) {
     const s = shift ?? { start_time: '07:00', end_time: '15:00', break_minutes: 30, ...defaults };
     const person = data.staff.find((u) => u.id === s.user_id);
     const site = s.location_id ?? (all ? person?.location_id : siteId) ?? state.locationId;
+    const unpublished = shift && shift.state && shift.state !== 'published';
     const { form } = openModal({
       title: shift ? 'Edit shift' : 'Add shift',
       body: `
+        ${unpublished ? `<p class="notice publish-one">${shift.state === 'new' ? 'Staff can’t see this shift yet.' : 'Staff still see the old version of this shift.'}
+          ${data.can_publish ? '<button type="button" class="btn btn-small btn-primary" id="publish-one">Publish just this shift</button>' : ''}</p>` : ''}
         <div class="row">
           ${field('Staff member', select('user_id', staffOptions, s.user_id, 'required'))}
           ${field('Site', select('location_id', siteOptions, site, `required ${siteOptions.length > 1 ? '' : 'disabled'}`))}
@@ -316,21 +475,30 @@ export async function render(ctx) {
     };
     ['user_id', 'date', 'start_time', 'end_time'].forEach((n) => form[n].addEventListener('change', check));
     check();
+    form.querySelector('#publish-one')?.addEventListener('click', () => publishOne(shift));
+  };
+  // Publishes one shift as it's saved now (unsaved edits in the window aren't included).
+  const publishOne = async (shift) => {
+    try {
+      await api(`/shifts/${shift.id}/publish`, { method: 'POST' });
+      document.getElementById('modal-root').innerHTML = '';
+      toast(shift.state === 'removed' ? 'Removal published – staff no longer see this shift' : `Published ${shift.user_name}’s shift`);
+      ctx.rerender();
+    } catch (err) { showError(err); }
   };
 
   el.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const shift = data.shifts.find((s) => s.id === Number(b.dataset.shift));
     if (shift.state === 'removed') {
-      confirmDialog(`Put back ${shift.user_name}’s ${shift.start_time}–${shift.end_time} shift on ${fmtDate(shift.date)}?`, { confirmLabel: 'Put it back', title: 'Removed shift' })
-        .then(async (ok) => {
-          if (!ok) return;
-          try {
-            await api(`/shifts/${shift.id}/restore`, { method: 'POST' });
-            toast('Shift put back');
-            ctx.rerender();
-          } catch (err) { showError(err); }
-        });
+      openModal({
+        title: 'Removed shift',
+        body: `<p>${esc(shift.user_name)}’s ${shift.start_time}–${shift.end_time} shift on ${fmtDate(shift.date)} has been removed, but staff still see it until it’s published.</p>`,
+        submitLabel: 'Put it back',
+        onSubmit: async () => { await api(`/shifts/${shift.id}/restore`, { method: 'POST' }); toast('Shift put back'); ctx.rerender(); },
+        danger: data.can_publish ? 'Publish the removal' : null,
+        onDanger: async () => publishOne(shift),
+      });
       return;
     }
     shiftModal(shift);
@@ -343,15 +511,27 @@ export async function render(ctx) {
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
     shiftModal(null, { user_id: Number(td.dataset.user), date: td.dataset.date, location_id: Number(td.dataset.site) });
   }));
-  const scopeBody = { location_id: all ? 'all' : siteId, week };
+  const scopeBody = { location_id: all ? 'all' : siteId, week, date: day ?? undefined };
   el.querySelector('#publish')?.addEventListener('click', async () => {
-    if (!(await confirmDialog(`Publish ${pending} change${pending === 1 ? '' : 's'}${all ? ' across every site' : ''}? Staff will see the rota as it is now.`, { confirmLabel: 'Publish', title: 'Publish rota' }))) return;
+    if (!(await confirmDialog(day ? `Publish the changes on ${fmtDate(day)}${all ? ' at every site' : ''}? Staff will see that day as it is now.` : `Publish ${pending} change${pending === 1 ? '' : 's'}${all ? ' across every site' : ''}? Staff will see the rota as it is now.`, { confirmLabel: 'Publish', title: 'Publish rota' }))) return;
     try {
       const r = await api('/rota/publish', { method: 'POST', body: scopeBody });
       toast(`Published ${r.published} change${r.published === 1 ? '' : 's'}`);
       ctx.rerender();
     } catch (err) { showError(err); }
   });
+  el.querySelectorAll('[data-publish-site]').forEach((b) => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const id = Number(b.dataset.publishSite);
+    const where = siteName(id);
+    if (!(await confirmDialog(`Publish ${where}’s changes ${day ? `on ${fmtDate(day)}` : 'this week'}? Other sites stay as they are.`, { confirmLabel: `Publish ${where}`, title: 'Publish one site' }))) return;
+    try {
+      const r = await api('/rota/publish', { method: 'POST', body: { location_id: id, week, date: day ?? undefined } });
+      toast(`Published ${r.published} change${r.published === 1 ? '' : 's'} at ${where}`);
+      ctx.rerender();
+    } catch (err) { showError(err); }
+  }));
+  el.querySelectorAll('[data-add-site]').forEach((b) => b.addEventListener('click', () => shiftModal(null, { date: day ?? week, location_id: Number(b.dataset.addSite) })));
   el.querySelector('#discard')?.addEventListener('click', async () => {
     if (!(await confirmDialog('Throw away every unpublished change this week? New shifts are deleted, changed ones go back to what staff can see, and removed ones come back.', { confirmLabel: 'Discard changes', title: 'Discard changes' }))) return;
     try {
@@ -360,7 +540,7 @@ export async function render(ctx) {
       ctx.rerender();
     } catch (err) { showError(err); }
   });
-  el.querySelector('#copy-week').addEventListener('click', async () => {
+  el.querySelector('#copy-week')?.addEventListener('click', async () => {
     const hasShifts = data.shifts.length > 0;
     if (!(await confirmDialog(
       hasShifts

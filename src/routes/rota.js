@@ -1,7 +1,8 @@
 import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
-import { publishShifts, tx, UNPUBLISHED } from '../db.js';
+import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { availabilityFor, leaveFor, onHoliday } from './leave.js';
 import { dayKey, labourByDay, pct, salesByDay } from '../metrics.js';
+import { bankHoliday } from '../bank-holidays.js';
 import { addDays, badRequest, date, id, notFound, num, round2, shiftHours, str, time, today, weekStart } from '../util.js';
 
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -11,6 +12,39 @@ function range(s) {
   let end = toMin(s.end_time);
   if (end <= start) end += 24 * 60;
   return [start, end];
+}
+
+export const FORECAST_WEEKS = 8;
+
+/**
+ * Expected sales for each site on each day of the week: the average of that weekday's net sales over the last
+ * FORECAST_WEEKS weeks before the rota week (or before today, for a week that's still to come). Bank holidays and
+ * days with no sales (closed, or before Square was connected) are left out. Returns
+ * { weeks, from, to, sites: { [locationId]: [Mon..Sun: { avg, days } | null] } }.
+ */
+export function salesForecast(db, locationIds, weekStartDate) {
+  const to = [addDays(weekStartDate, -1), addDays(today(), -1)].sort()[0];
+  const from = addDays(to, -(FORECAST_WEEKS * 7 - 1));
+  const sites = {};
+  if (!locationIds.length) return { weeks: FORECAST_WEEKS, from, to, sites };
+  const rows = db.prepare(`SELECT location_id, date, net_sales FROM sales_daily
+    WHERE location_id IN (${locationIds.map(() => '?').join(', ')}) AND date BETWEEN ? AND ? AND net_sales > 0`).all(...locationIds, from, to);
+  const sums = new Map();
+  for (const r of rows) {
+    if (bankHoliday(r.date)) continue;
+    const k = `${r.location_id}|${(new Date(`${r.date}T00:00:00Z`).getUTCDay() + 6) % 7}`;
+    const v = sums.get(k) ?? { total: 0, days: 0 };
+    v.total += r.net_sales;
+    v.days += 1;
+    sums.set(k, v);
+  }
+  for (const id of locationIds) {
+    sites[id] = Array.from({ length: 7 }, (_, dow) => {
+      const v = sums.get(`${id}|${dow}`);
+      return v ? { avg: round2(v.total / v.days), days: v.days } : null;
+    });
+  }
+  return { weeks: FORECAST_WEEKS, from, to, sites };
 }
 
 // Rota publishing: editors change a draft (the shifts table, where removed marks a published shift deleted in the
@@ -166,14 +200,33 @@ export function registerRotaRoutes(router, db) {
       availability: editor || can(req.user, 'leave.manage') ? availabilityFor(db, staffIds) : undefined,
       // For editors: how many changes staff can't see yet, and whether this person may publish them.
       unpublished: editor ? db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`).get(...ids, ws, we).n : undefined,
+      unpublished_by_site: editor ? Object.fromEntries(db.prepare(`SELECT location_id, COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED}) GROUP BY location_id`).all(...ids, ws, we).map((r) => [r.location_id, r.n])) : undefined,
+      unpublished_by_day: editor ? Object.fromEntries(db.prepare(`SELECT date, location_id, COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED}) GROUP BY date, location_id`).all(...ids, ws, we).map((r) => [`${r.date}|${r.location_id}`, r.n])) : undefined,
+      // Expected sales (average for each weekday, bank holidays left out), so the rota's labour % can be seen while planning.
+      forecast: manager ? salesForecast(db, ids, ws) : undefined,
+      bank_holidays: Object.fromEntries(days.map((d) => [d, bankHoliday(d)]).filter(([, n]) => n)),
       can_publish: editor ? can(req.user, 'rota.publish') : undefined,
     });
   });
 
+  // Publish a site (or all sites) for a week, or with { date } just that day.
   router.post('/rota/publish', requirePerm('rota.publish'), (req, res) => {
     const ids = rotaSites(req, req.body.location_id);
+    const day = date(req.body.date, 'date');
+    if (day) return res.json({ published: publishShifts(db, ids, day, day) });
     const ws = weekStart(date(req.body.week, 'week', { required: true }));
     res.json({ published: publishShifts(db, ids, ws, addDays(ws, 6)) });
+  });
+
+  // Publish one shift on its own: staff see it (or stop seeing it, if it was removed) straight away.
+  router.post('/shifts/:id/publish', requirePerm('rota.publish'), (req, res) => {
+    const s = db.prepare('SELECT * FROM shifts WHERE id = ?').get(Number(req.params.id));
+    if (!s) throw notFound('Shift');
+    assertLocation(req, s.location_id);
+    if (s.pub_location_id && s.pub_location_id !== s.location_id) assertLocation(req, s.pub_location_id);
+    if (s.removed) db.prepare('DELETE FROM shifts WHERE id = ?').run(s.id);
+    else db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS} WHERE id = ?`).run(s.id);
+    res.json({ published: 1, removed: !!s.removed });
   });
 
   // Throws away draft changes for the week: new shifts go, changed ones go back to what's published, removed come back.

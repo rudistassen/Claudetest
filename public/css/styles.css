@@ -816,3 +816,43 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 .media-thumb.is-failed .media-state { color: var(--bad); }
 .media-kind { position: absolute; left: 4px; bottom: 4px; padding: 0 0.3rem; border-radius: 4px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.68rem; }
 .media-remove { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.9rem; line-height: 1; cursor: pointer; }
+
+/* Rota: day view (a timeline of the day's shifts, site by site) */
+.day-title { margin: 0.2rem 0 0.1rem; font-size: 1.25rem; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.day-site { margin-bottom: 1rem; }
+.day-site-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.5rem; margin-bottom: 0.6rem; }
+.day-site-head h2 { margin: 0; font-size: 1.1rem; }
+.day-fc { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.3rem 0.75rem; border-radius: 8px; background: var(--tone-reporting); }
+.day-fc strong { font-size: 1.05rem; }
+.day-site-actions { margin-left: auto; display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.day-timeline { display: grid; gap: 0.15rem; }
+.day-row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr 3.5rem; align-items: center; gap: 0.6rem; min-height: 2.3rem; }
+.day-row:not(.day-scale-row):nth-child(even) { background: var(--surface-2); border-radius: 6px; }
+.day-who { display: flex; flex-direction: column; line-height: 1.2; padding-left: 0.4rem; min-width: 0; }
+.day-who strong, .day-who small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-track { position: relative; height: 1.9rem; }
+.day-scale { position: relative; height: 1.1rem; border-bottom: 1px solid var(--border); }
+.day-scale span { position: absolute; transform: translateX(-50%); font-size: 0.68rem; color: var(--muted); }
+.day-bar { position: absolute; top: 0.15rem; bottom: 0.15rem; display: flex; align-items: center; gap: 0.3rem; padding: 0 0.5rem; overflow: hidden; white-space: nowrap;
+  border: 0; border-left: 4px solid var(--brand); border-radius: 6px; background: var(--brand-soft); color: var(--text); font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+.day-bar:disabled { cursor: default; }
+.day-bar.shift-new { border-left-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--surface)); }
+.day-bar.shift-changed { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); }
+.day-bar.shift-removed { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, var(--surface)); text-decoration: line-through; opacity: 0.7; }
+.day-hours { font-size: 0.85rem; color: var(--muted); padding-right: 0.4rem; }
+.day-link { color: inherit; text-decoration: none; }
+.day-link:hover { text-decoration: underline; }
+.rota th small.bank-hol { display: block; color: var(--warn); font-size: 0.68rem; font-weight: 700; }
+.rota-group-line { display: flex; align-items: center; gap: 0.75rem; }
+.rota-group-line .rota-group-toggle { flex: 1; width: auto; }
+.rota-publish-site { flex-shrink: 0; }
+.rota tr.rota-forecast th, .rota tr.rota-forecast td { background: color-mix(in srgb, var(--tone-reporting) 60%, var(--surface)); font-size: 0.8rem; padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.rota tr.rota-forecast td small, .rota-forecast-total td small { display: block; font-weight: 700; }
+.rota tfoot th small { display: block; font-weight: 400; color: var(--muted); font-size: 0.72rem; }
+.publish-one { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; justify-content: space-between; }
+@media (max-width: 700px) {
+  .day-row { grid-template-columns: 92px 1fr 2.8rem; gap: 0.35rem; }
+  .day-bar span { font-size: 0.72rem; }
+  .day-site-actions { margin-left: 0; }
+}
+@media print { .rota tr.rota-forecast[hidden] { display: table-row !important; } }

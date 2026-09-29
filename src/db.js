@@ -463,7 +463,7 @@ const MIGRATIONS = [
   }],
 ];
 
-const PUBLISH_COLUMNS = `pub_location_id = location_id, pub_user_id = user_id, pub_date = date,
+export const PUBLISH_COLUMNS = `pub_location_id = location_id, pub_user_id = user_id, pub_date = date,
   pub_start_time = start_time, pub_end_time = end_time, pub_break_minutes = break_minutes`;
 
 /** Marks every shift as published (demo data, and shifts from before publishing existed). */
