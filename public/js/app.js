@@ -149,6 +149,27 @@ const SITE_PAGES = /^(rota|safety|safety\/report|safety\/setup|wastage|stock|ord
 // Short names for the menu across the top.
 const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 
+// Line icons for the bar along the bottom on phones.
+const ICON = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+  rota: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  checks: '<rect x="3" y="3" width="18" height="18" rx="5"/><path d="m8 12 3 3 5-6"/>',
+  timeoff: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  mybrew: '<path d="M4 8h13v5a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2.5v3M12 2.5v3"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+};
+const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+
+// The phone icon bar: home, the everyday pages this person can use, then the full menu.
+function tabBar(items, active) {
+  const has = (p) => items.some(([q]) => q === p);
+  const tabs = [['dashboard', 'Home', 'home'], has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Brew', 'mybrew']].filter(Boolean);
+  return `<nav class="tabbar" aria-label="Quick links">
+    ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}</a>`).join('')}
+    <button type="button" class="tabbar-menu">${icon('menu')}<span>Menu</span></button>
+  </nav>`;
+}
+
 const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 
 // The menu item for a page: the longest item path that is the page or a parent of it (recipes/12 → Recipes).
@@ -271,7 +292,7 @@ function renderShell() {
       </div>
       <div class="topnav-group user-menu">
         <button type="button" class="user-btn" aria-haspopup="true" aria-expanded="false" title="${esc(state.user.name)}">
-          <span class="avatar" aria-hidden="true">${esc(initials(state.user.name) || '?')}</span><span class="user-name">${esc(state.user.name)}</span><span class="topnav-caret" aria-hidden="true">▾</span>
+          <span class="ring" aria-hidden="true"><span class="avatar">${esc(initials(state.user.name) || '?')}</span></span><span class="user-name">${esc(state.user.name)}</span><span class="topnav-caret" aria-hidden="true">▾</span>
         </button>
         <div class="topnav-menu topnav-menu-right" hidden>
           <p class="topnav-heading">${esc(state.user.name)}</p>
@@ -300,7 +321,8 @@ function renderShell() {
         <a href="#" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
       </nav>
       <main id="view"></main>
-    </div>`;
+    </div>
+    ${tabBar(groups.flatMap(([, items]) => items), active)}`;
   showNewsBadge();
   wireSitePicker((id) => {
     state.locationId = id;
@@ -323,10 +345,10 @@ function renderShell() {
   }));
   wireTopMenus();
   // On phones and smaller tablets ☰ slides the full menu out from the side.
-  document.querySelector('.menu-toggle').addEventListener('click', () => {
+  document.querySelectorAll('.menu-toggle, .tabbar-menu').forEach((b) => b.addEventListener('click', () => {
     placeNav();
     document.body.classList.toggle('nav-open');
-  });
+  }));
   document.querySelector('.sidebar').addEventListener('click', (e) => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
   document.querySelectorAll('.nav-toggle').forEach((b) => b.addEventListener('click', () => {
     const group = b.closest('.nav-group');

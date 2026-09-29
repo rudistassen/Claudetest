@@ -134,15 +134,17 @@ export async function renderMyBrew(ctx) {
 
   const post = (p) => `
     <article class="news-post ${p.pinned ? 'is-pinned' : ''} ${p.requires_ack && !p.read ? 'needs-read' : ''}" data-post="${p.id}" data-category="${p.category}">
-      <header>
-        <span class="news-tag ${CATEGORIES[p.category][1]}">${CATEGORIES[p.category][0]}</span>
+      <header class="post-head">
+        <span class="ring ${p.requires_ack && !p.read ? '' : 'is-seen'}" aria-hidden="true"><span>${esc(initials(p.author || 'BrewView'))}</span></span>
+        <span class="post-who"><strong>${esc(p.author || 'BrewView')}</strong>
+          <span class="muted">${fmtDate(p.created_at.slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}${p.updated_at ? ' · updated' : ''}</span></span>
         ${p.pinned ? '<span class="news-pin" title="Pinned">📌 Pinned</span>' : ''}
-        <span class="muted small">${fmtDate(p.created_at.slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}${p.author ? ` · ${esc(p.author)}` : ''}${p.updated_at ? ' · updated' : ''}</span>
       </header>
+      <p class="news-tag-row"><span class="news-tag ${CATEGORIES[p.category][1]}">${CATEGORIES[p.category][0]}</span></p>
+      ${gallery(p.media)}
       <h3>${esc(p.title)}</h3>
       <div class="news-body">${formatBody(p.body)}</div>
       <button class="link-btn news-more" hidden>Read more</button>
-      ${gallery(p.media)}
       ${p.requires_ack ? (p.read ? '<p class="news-read">✓ You’ve read this</p>' : `<button class="btn btn-primary btn-small" data-ack="${p.id}">I’ve read this</button>`) : ''}
     </article>`;
 
@@ -154,10 +156,15 @@ export async function renderMyBrew(ctx) {
     <div class="mybrew">
       <aside class="mybrew-side">
         <section class="card my-profile">
-          <div class="my-avatar" aria-hidden="true">${esc(initials(u.name))}</div>
+          <span class="ring" aria-hidden="true"><span class="my-avatar">${esc(initials(u.name))}</span></span>
           <div>
             <h2>${esc(u.name)}</h2>
             <p class="muted">${esc([u.rota_group, u.access_name ?? u.role].filter(Boolean).join(' · '))}</p>
+          </div>
+          <div class="my-stats">
+            <p><strong>${shifts.length}</strong><span>shift${shifts.length === 1 ? '' : 's'} coming up</span></p>
+            <p><strong>${Math.round(weekHours * 10) / 10}</strong><span>hours this week</span></p>
+            <p><strong>${leave.booked_this_year}</strong><span>holiday days</span></p>
           </div>
           <dl class="my-details">
             ${u.location_id ? `<dt>Home site</dt><dd>${esc(siteName(u.location_id))}</dd>` : ''}
