@@ -67,6 +67,35 @@ const toBase64 = (file) => new Promise((resolve, reject) => {
 // My Brew: each person's own page – their details, upcoming shifts, holiday and the staff news feed.
 // Setup → News is where announcements and policy updates are posted.
 
+// --- Company documents ---
+
+export const DOC_CATEGORIES = { handbook: 'Handbooks', policy: 'Policies', guide: 'Guides & training', form: 'Forms', other: 'Other' };
+const DOC_ICONS = [[/pdf/, '📕'], [/word|msword/, '📘'], [/sheet|excel/, '📗'], [/presentation|powerpoint/, '📙'], [/image/, '🖼️'], [/text/, '📄']];
+const docIcon = (type) => DOC_ICONS.find(([re]) => re.test(type))?.[1] ?? '📄';
+const fileSize = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const docUrl = (d, download = false) => `/api/documents/${d.id}/file${download ? '?download=1' : ''}`;
+function docItem(d) {
+  return `<li>
+    <span class="doc-icon" aria-hidden="true">${docIcon(d.file_type)}</span>
+    <span class="doc-text"><a href="${docUrl(d)}" target="_blank" rel="noopener" data-doc="${d.id}" data-name="${esc(d.file_name)}">${esc(d.title)}</a>
+      ${d.description ? `<small class="muted">${esc(d.description)}</small>` : ''}
+      <small class="muted">${fileSize(d.size)} · ${d.updated_at ? 'updated' : 'added'} ${fmtDate((d.updated_at ?? d.created_at).slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}</small></span>
+    <a class="doc-dl" href="${docUrl(d, true)}" data-doc="${d.id}" data-name="${esc(d.file_name)}" data-download="1" title="Download" aria-label="Download ${esc(d.title)}">⤓</a>
+  </li>`;
+}
+// In the standalone demo there's no server for the browser to open files from, so they're downloaded from memory.
+function wireDocLinks(root) {
+  if (!isDemo) return;
+  root.querySelectorAll('[data-doc]').forEach((a) => a.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const blob = await (await fetch(`/api/documents/${a.dataset.doc}/file?download=1`)).blob();
+    const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: a.dataset.name });
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }));
+}
+
 export const CATEGORIES = {
   announcement: ['Announcement', 'news-announcement'],
   policy: ['Policy update', 'news-policy'],
@@ -90,7 +119,7 @@ function greeting() {
 
 export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
-  const [shifts, leave, news] = await Promise.all([api('/my-shifts'), api('/leave/mine'), api('/news')]);
+  const [shifts, leave, news, docs] = await Promise.all([api('/my-shifts'), api('/leave/mine'), api('/news'), api('/documents')]);
   if (stale()) return;
   const u = state.user;
   const today = todayISO();
@@ -155,6 +184,14 @@ export async function renderMyBrew(ctx) {
           ${pending ? `<p class="small muted">${pending} request${pending === 1 ? '' : 's'} waiting for approval</p>` : ''}
           <a class="small" href="#/timeoff">Request holiday →</a>
         </section>
+        <section class="card my-docs">
+          <h2>Company documents</h2>
+          ${docs.length > 6 ? '<input type="search" id="doc-search" placeholder="Find a document…" aria-label="Find a document">' : ''}
+          ${docs.length ? Object.entries(DOC_CATEGORIES).filter(([k]) => docs.some((d) => d.category === k)).map(([k, label]) => `
+            <div class="doc-group"><h3>${label}</h3>
+              <ul class="doc-list">${docs.filter((d) => d.category === k).map(docItem).join('')}</ul></div>`).join('')
+            : '<p class="muted small">No documents shared yet.</p>'}
+        </section>
       </aside>
       <section class="mybrew-news">
         <div class="news-head">
@@ -180,6 +217,12 @@ export async function renderMyBrew(ctx) {
     }
   });
   wireGallery(el);
+  wireDocLinks(el);
+  el.querySelector('#doc-search')?.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    el.querySelectorAll('.doc-list li').forEach((li) => { li.hidden = !!q && !li.textContent.toLowerCase().includes(q); });
+    el.querySelectorAll('.doc-group').forEach((g) => { g.hidden = ![...g.querySelectorAll('li')].some((li) => !li.hidden); });
+  });
   el.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => {
     filter = b.dataset.filter;
     el.querySelectorAll('[data-filter]').forEach((x) => x.classList.toggle('is-on', x === b));
@@ -343,5 +386,99 @@ export async function renderNewsSetup(ctx) {
         </div>`,
       });
     } catch (err) { showError(err); }
+  }));
+}
+
+// --- Setup → Documents ---
+
+const DOC_TYPES = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png';
+const MAX_DOC_MB = 20;
+
+export async function renderDocumentsSetup(ctx) {
+  const { el, state, stale, rerender } = ctx;
+  const docs = await api('/documents/manage');
+  if (stale()) return;
+  const sites = state.locations.filter((l) => l.active);
+  const canAll = state.isAdmin || !!state.user.all_sites;
+  const siteNames = (d) => (d.all_sites ? 'Every site' : d.site_ids.map((id) => sites.find((l) => l.id === id)?.name ?? '').filter(Boolean).join(', '));
+
+  el.innerHTML = `
+    <div class="page-head">
+      <h1>Documents</h1>
+      <div class="actions"><button class="btn btn-primary" id="add">+ Add document</button></div>
+    </div>
+    <p class="muted">Handbooks, policies, guides and forms for the <strong>Company documents</strong> list on everyone’s <a href="#/mybrew">My Brew</a> page. To tell people about a new or changed policy, post it in <a href="#/admin/news">News</a> too.</p>
+    <section class="card">
+      ${docs.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>Document</th><th>Type</th><th>Who sees it</th><th>File</th><th>Added</th></tr></thead>
+        <tbody>${docs.map((d) => `<tr class="${d.can_edit ? 'clickable' : ''}" data-edit="${d.id}">
+          <td><strong>${esc(d.title)}</strong>${d.description ? `<br><span class="small muted">${esc(d.description)}</span>` : ''}</td>
+          <td>${DOC_CATEGORIES[d.category]}</td>
+          <td class="small">${esc(siteNames(d))}</td>
+          <td class="small">${docIcon(d.file_type)} <a href="${docUrl(d)}" target="_blank" rel="noopener" data-doc="${d.id}" data-name="${esc(d.file_name)}">${esc(d.file_name)}</a><br><span class="muted">${fileSize(d.size)}</span></td>
+          <td class="small muted">${fmtDateTime(d.updated_at ?? d.created_at)}${d.author ? `<br>${esc(d.author)}` : ''}</td></tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty">No documents yet. Click <strong>+ Add document</strong> to share your first handbook or policy.</div>'}
+    </section>`;
+  wireDocLinks(el);
+
+  const form = (d) => `
+    ${field('Title', input('title', d.title, 'required maxlength="150" placeholder="e.g. Staff handbook 2026"'))}
+    <div class="row">
+      ${field('Type', select('category', [['handbook', 'Handbook'], ['policy', 'Policy'], ['guide', 'Guide or training'], ['form', 'Form'], ['other', 'Other']], d.category ?? 'policy'))}
+      <div class="field"><span>Who sees it</span>
+        ${select('audience', [...(canAll ? [['all', 'Every site']] : []), ['sites', 'Only the sites ticked below']], d.id ? (d.all_sites ? 'all' : 'sites') : canAll ? 'all' : 'sites')}
+      </div>
+    </div>
+    <div class="site-picks doc-sites" ${d.id ? (d.all_sites ? 'hidden' : '') : canAll ? 'hidden' : ''}>
+      ${sites.map((l) => `<label class="check-row"><input type="checkbox" name="site_pick" value="${l.id}" ${(d.site_ids ?? []).includes(l.id) ? 'checked' : ''}><span>${esc(l.name)}</span></label>`).join('')}
+    </div>
+    ${field('Short description (optional)', input('description', d.description, 'maxlength="1000" placeholder="What it covers, who it’s for"'))}
+    <div class="field"><span>${d.id ? 'Replace the file (optional)' : 'File'}</span>
+      <input type="file" name="upload" accept="${DOC_TYPES}" ${d.id ? '' : 'required'}>
+      <small class="muted">${d.id ? `Now: ${esc(d.file_name)} (${fileSize(d.size)}). ` : ''}PDF, Word, Excel, PowerPoint, text or pictures, up to ${MAX_DOC_MB} MB.</small>
+    </div>`;
+  const wire = (f) => {
+    const aud = f.querySelector('[name=audience]');
+    aud.addEventListener('change', () => { f.querySelector('.doc-sites').hidden = aud.value !== 'sites'; });
+    // Fill in the title from the file name when it's empty.
+    f.querySelector('[name=upload]').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file && !f.title.value.trim()) f.title.value = file.name.replace(/\.\w+$/, '').replace(/[_-]+/g, ' ');
+    });
+  };
+  const values = async (v, f) => {
+    const out = {
+      title: v.title, description: v.description, category: v.category,
+      all_sites: v.audience === 'all',
+      site_ids: [...f.querySelectorAll('[name=site_pick]:checked')].map((c) => Number(c.value)),
+    };
+    const file = f.querySelector('[name=upload]').files[0];
+    if (file) {
+      if (file.size > MAX_DOC_MB * 1024 * 1024) throw new Error(`That file is over ${MAX_DOC_MB} MB`);
+      Object.assign(out, { file_name: file.name, media_type: file.type, data: await toBase64(file) });
+    }
+    return out;
+  };
+
+  el.querySelector('#add').addEventListener('click', () => {
+    const { form: f } = openModal({
+      title: 'Add a document', wide: true, submitLabel: 'Share it',
+      body: form({}),
+      onSubmit: async (v, f2) => { await api('/documents', { method: 'POST', body: await values(v, f2) }); toast('Shared – it’s on everyone’s My Brew page'); rerender(); },
+    });
+    wire(f);
+  });
+  el.querySelectorAll('tr[data-edit]').forEach((tr) => tr.addEventListener('click', (e) => {
+    if (e.target.closest('a, button')) return;
+    const d = docs.find((x) => x.id === Number(tr.dataset.edit));
+    if (!d.can_edit) return;
+    const { form: f } = openModal({
+      title: 'Edit document', wide: true,
+      body: form(d),
+      danger: 'Delete document',
+      onDanger: async () => { await api(`/documents/${d.id}`, { method: 'DELETE' }); toast('Document deleted'); rerender(); },
+      onSubmit: async (v, f2) => { await api(`/documents/${d.id}`, { method: 'PUT', body: await values(v, f2) }); toast('Saved'); rerender(); },
+    });
+    wire(f);
   }));
 }

@@ -351,6 +351,27 @@ CREATE TABLE IF NOT EXISTS news_reads (
   PRIMARY KEY (post_id, user_id)
 );
 
+-- Company documents on My Brew: handbooks, policies and forms, for every site or chosen sites.
+CREATE TABLE IF NOT EXISTS documents (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT NOT NULL DEFAULT 'policy' CHECK (category IN ('handbook', 'policy', 'form', 'guide', 'other')),
+  file_name TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  data BLOB NOT NULL,
+  all_sites INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS document_sites (
+  document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  PRIMARY KEY (document_id, location_id)
+);
+
 -- Emailed reports: the dashboard, sent to chosen people at a set time on chosen days.
 CREATE TABLE IF NOT EXISTS report_schedules (
   id INTEGER PRIMARY KEY,

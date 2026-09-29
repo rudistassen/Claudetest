@@ -19,6 +19,7 @@ import { registerReportRoutes } from '../src/reports.js';
 import { demoInvoiceReader } from '../src/invoice-demo.js';
 import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { registerNewsRoutes } from '../src/routes/news.js';
+import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
@@ -115,6 +116,7 @@ async function boot() {
   registerReportRoutes(api, db, demoMailer, { demo: true });
   registerInvoiceRoutes(api, db, demoInvoiceReader(db));
   registerNewsRoutes(api, db);
+  registerDocumentRoutes(api, db);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
 
   const realFetch = window.fetch.bind(window);
@@ -153,7 +155,7 @@ async function boot() {
 
   // Downloads are blocked inside the page, so show exports (CSV) in a dialog instead.
   document.addEventListener('click', async (e) => {
-    const a = e.target.closest('a[href^="/api/"]');
+    const a = e.target.closest('a[href^="/api/"]:not([data-doc])'); // company documents download themselves
     if (!a) return;
     e.preventDefault();
     const text = await (await window.fetch(a.getAttribute('href'))).text();

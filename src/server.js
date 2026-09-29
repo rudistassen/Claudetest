@@ -14,6 +14,7 @@ import { registerTradingRoutes } from './routes/trading.js';
 import { registerReportRoutes } from './reports.js';
 import { registerInvoiceRoutes } from './routes/invoices.js';
 import { registerNewsRoutes } from './routes/news.js';
+import { registerDocumentRoutes } from './routes/documents.js';
 import { HttpError } from './util.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -35,6 +36,8 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   app.use('/api/invoices/scan', express.json({ limit: '15mb' }));
   // News photos and short videos (up to 25 MB, a third bigger once encoded).
   app.use('/api/news/media', express.json({ limit: '36mb' }));
+  // Company documents (up to 20 MB, a third bigger once encoded).
+  app.use('/api/documents', express.json({ limit: '28mb' }));
   app.use(express.json({ limit: '1mb' }));
   app.use((req, _res, next) => {
     req.db = db;
@@ -57,6 +60,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerReportRoutes(api, db, mailer);
   registerInvoiceRoutes(api, db, invoiceReader);
   registerNewsRoutes(api, db);
+  registerDocumentRoutes(api, db);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 
