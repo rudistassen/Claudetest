@@ -4,6 +4,7 @@ import { openDb } from './db.js';
 import { cleanEnv, DEMO_PASSWORD, ensureAdmin, isEmpty, lockDemoAccounts, seedAdmin, seedDemo, seedSafetyTasks } from './seed.js';
 import { createApp } from './server.js';
 import { brevoMailer, emailConfig } from './email.js';
+import { invoiceReaderFromEnv } from './invoice-reader.js';
 import { startReportScheduler } from './reports.js';
 import { SquareClient, squareConfig, startAutoSync, syncSales } from './square.js';
 import { addDays, today } from './util.js';
@@ -65,5 +66,9 @@ if (mailer) {
   });
 }
 
+// Reading supplier invoices with Claude.
+const invoiceReader = invoiceReaderFromEnv();
+if (invoiceReader) console.log(`Invoice reading switched on (${invoiceReader.model}).`);
+
 const port = Number(process.env.PORT) || 3000;
-createApp(db, { square, mailer }).listen(port, () => console.log(`BrewView running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader }).listen(port, () => console.log(`BrewView running at http://localhost:${port}`));

@@ -16,6 +16,8 @@ import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { SquareClient, syncSales } from '../src/square.js';
 import { memoryMailer } from '../src/email.js';
 import { registerReportRoutes } from '../src/reports.js';
+import { demoInvoiceReader } from '../src/invoice-demo.js';
+import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
@@ -110,6 +112,7 @@ async function boot() {
   registerTradingRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, demoMailer, { demo: true });
+  registerInvoiceRoutes(api, db, demoInvoiceReader(db));
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
 
   const realFetch = window.fetch.bind(window);
@@ -131,7 +134,7 @@ async function boot() {
       body: '',
       status(code) { this.statusCode = code; return this; },
       json(data) { this.body = JSON.stringify(data); },
-      send(text) { this.body = String(text); },
+      send(body) { this.body = body instanceof Uint8Array ? body : String(body); },
       setHeader(k, v) { this.headers[k] = v; },
       cookie(name, value) { cookies[name] = value; },
       clearCookie(name) { delete cookies[name]; },

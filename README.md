@@ -90,6 +90,24 @@ How the numbers are worked out:
 - **Sales per labour hour** = net sales ÷ clocked hours, on days that have both. **Staff on the clock** by hour is paid clocked hours in that hour, averaged over the days with sales.
 - Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
 
+## Supplier invoices
+
+**Stock and Ordering → Invoices** reads supplier invoices for you. Upload a PDF (or a photo of a paper invoice) – several at once, or drag them onto the page – and BrewView reads the supplier, invoice number, dates, every line (description, code, quantity, price, total) and the totals, whatever the supplier's layout. It then:
+
+- recognises the **supplier** (by name, or their email address's domain), or offers to add them;
+- matches each **line to your products** – by what you matched it to last time for that supplier, then the supplier's product code, then the name, then the closest similar name – and says how sure it is;
+- shows **price changes** against your current cost (e.g. £3.20 → £3.40 ▲6%), ticked to update the cost unless the change is so big the units probably differ;
+- warns about **duplicates** (the same invoice number from the same supplier) and **totals that don't add up**.
+
+You check it next to the original, correct anything, then **Confirm**: new suppliers and products are added, ticked costs are updated, and lines you matched by hand are remembered for that supplier's future invoices. **Save for later** keeps it under *To check*.
+
+Invoices are read by Claude (Anthropic's AI model, `claude-opus-5-5`), which costs roughly 5–10p per invoice. To switch it on:
+
+1. Sign up at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, and create a key under **API keys**.
+2. Set `ANTHROPIC_API_KEY` to the key in the app's environment (Railway → Variables) and deploy. Optional: `INVOICE_MODEL` to use a different Claude model.
+
+The uploaded file is sent to Anthropic to be read and stored in BrewView's database with the invoice.
+
 ## Email reports
 
 Admins can email the dashboard to chosen people at a set time (**Setup → Email reports**): pick the time, the days, whether it covers **yesterday's full day** (good for a morning email) or **today so far**, and who gets it. Each person gets the sites they can access, with sales and labour figures only if their permissions include sales. Just before sending, the app fetches the latest figures from Square. **Preview** shows exactly what each person will get; **Send me a test** emails just you.

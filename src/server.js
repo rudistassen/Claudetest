@@ -12,6 +12,7 @@ import { registerStockRoutes } from './routes/stock.js';
 import { registerLeaveRoutes } from './routes/leave.js';
 import { registerTradingRoutes } from './routes/trading.js';
 import { registerReportRoutes } from './reports.js';
+import { registerInvoiceRoutes } from './routes/invoices.js';
 import { HttpError } from './util.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -23,11 +24,14 @@ export function trustProxy(env) {
 
 // square: { config, client } when a Square access token is configured, otherwise null.
 // mailer: sends the emailed reports (see email.js), or null when email isn't set up.
-export function createApp(db, { square = null, mailer = null } = {}) {
+// invoiceReader: reads uploaded supplier invoices (see invoice-reader.js), or null when it isn't set up.
+export function createApp(db, { square = null, mailer = null, invoiceReader = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Behind a hosting platform's proxy (Railway, Render, …) trust one hop, so HTTPS and visitors' addresses are seen.
   app.set('trust proxy', trustProxy(process.env));
+  // Invoice uploads carry the file itself (up to 10 MB, a third bigger once encoded); everything else is small.
+  app.use('/api/invoices/scan', express.json({ limit: '15mb' }));
   app.use(express.json({ limit: '1mb' }));
   app.use((req, _res, next) => {
     req.db = db;
@@ -48,6 +52,7 @@ export function createApp(db, { square = null, mailer = null } = {}) {
   registerTradingRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, mailer);
+  registerInvoiceRoutes(api, db, invoiceReader);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 

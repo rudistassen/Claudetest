@@ -23,7 +23,7 @@ export const PERMISSION_AREAS = [
     ['stock.complete', 'Complete or discard stock takes'],
   ]],
   ['Orders', [
-    ['orders.manage', 'Create, send and receive supplier orders, and set par levels'],
+    ['orders.manage', 'Create, send and receive supplier orders, set par levels, and upload supplier invoices'],
   ]],
   ['Recipes', [
     ['recipes.view', 'See recipes and allergens'],

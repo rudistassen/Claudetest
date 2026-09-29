@@ -261,6 +261,56 @@ CREATE TABLE IF NOT EXISTS safety_task_exclusions (
   PRIMARY KEY (task_id, location_id)
 );
 
+-- Supplier invoices, read from an uploaded PDF or photo, checked by a person and then confirmed.
+CREATE TABLE IF NOT EXISTS invoices (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id),
+  supplier_id INTEGER REFERENCES suppliers(id) ON DELETE SET NULL,
+  supplier_name TEXT,
+  supplier_details TEXT,
+  invoice_number TEXT,
+  invoice_date TEXT,
+  due_date TEXT,
+  subtotal REAL,
+  vat REAL,
+  total REAL,
+  status TEXT NOT NULL DEFAULT 'review' CHECK (status IN ('review', 'confirmed')),
+  file_name TEXT,
+  file_type TEXT,
+  file BLOB,
+  extracted TEXT,
+  notes TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  confirmed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status, created_at);
+
+CREATE TABLE IF NOT EXISTS invoice_lines (
+  id INTEGER PRIMARY KEY,
+  invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  line_no INTEGER NOT NULL,
+  description TEXT NOT NULL,
+  sku TEXT,
+  quantity REAL,
+  unit TEXT,
+  unit_price REAL,
+  line_total REAL,
+  vat_rate REAL,
+  product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+  match TEXT,
+  update_cost INTEGER NOT NULL DEFAULT 0
+);
+
+-- What a supplier calls a product on their invoices, learnt when someone matches a line by hand.
+CREATE TABLE IF NOT EXISTS invoice_aliases (
+  supplier_id INTEGER NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  PRIMARY KEY (supplier_id, text)
+);
+
 -- Emailed reports: the dashboard, sent to chosen people at a set time on chosen days.
 CREATE TABLE IF NOT EXISTS report_schedules (
   id INTEGER PRIMARY KEY,
