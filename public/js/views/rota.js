@@ -65,8 +65,8 @@ export async function render(ctx) {
   }
   // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
   const counted = data.shifts.filter((x) => x.state !== 'removed');
-  // How the rota is laid out, remembered on this device: by site; site then rota group (Kitchen, Front of house…);
-  // or rota group then site. On a single site's rota the last two both split it by rota group.
+  // How the rota is laid out, remembered on this device: by site; site then role (Kitchen, Front of house…);
+  // or role then site. On a single site's rota the last two both split it by role. (Roles are stored as rota_group.)
   const LAYOUT_KEY = 'cafe-ops:rota-layout';
   let layout = 'site';
   try {
@@ -79,13 +79,13 @@ export async function render(ctx) {
   const hoursAt = (u, site) => counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0);
   const rate = new Map(data.staff.map((u) => [u.id, u.hourly_rate]));
   const round1 = (n) => Math.round(n * 10) / 10;
-  // Sub-heading rows: one per rota group (or per site), each followed by its people.
+  // Sub-heading rows: one per role (or per site), each followed by its people.
   const subRows = (people, site, groupId, label) => [
     { sub: label, site, groupId, people: new Set(people.map((u) => u.id)).size, hours: round1(people.reduce((t, u) => t + hoursAt(u, site), 0)) },
     ...people.map((u) => ({ u, site, groupId })),
   ];
   const byRotaGroup = (people, site, groupId) => [...new Set(people.map(groupName))].sort(groupOrder)
-    .flatMap((name) => subRows(people.filter((u) => groupName(u) === name), site, groupId, name || 'No rota group'));
+    .flatMap((name) => subRows(people.filter((u) => groupName(u) === name), site, groupId, name || 'No role'));
   // Everyone rostered at a site that week (its own staff first, then people covering from elsewhere).
   const sites = state.locations.filter((l) => l.active).sort((a, b) => a.name.localeCompare(b.name));
   const peopleAt = (site) => {
@@ -101,7 +101,7 @@ export async function render(ctx) {
   });
   const rows = [];
   if (all && layout === 'group-site') {
-    // Rota group first, then the sites its people are rostered at.
+    // Role first, then the sites its people are rostered at.
     const perSite = sites.map((site) => ({ site, people: peopleAt(site) })).filter((x) => x.people.length);
     const names = [...new Set(perSite.flatMap((x) => x.people.map(groupName)))].sort(groupOrder);
     for (const name of names) {
@@ -109,7 +109,7 @@ export async function render(ctx) {
       const members = new Set(data.staff.filter((u) => groupName(u) === name).map((u) => u.id));
       const shifts = counted.filter((x) => members.has(x.user_id));
       const inGroup = perSite.map((x) => ({ site: x.site, people: x.people.filter((u) => groupName(u) === name) })).filter((x) => x.people.length);
-      rows.push({ header: name || 'No rota group', groupId, summary: summaryOf(shifts, new Set(inGroup.flatMap((x) => x.people.map((u) => u.id))).size) });
+      rows.push({ header: name || 'No role', groupId, summary: summaryOf(shifts, new Set(inGroup.flatMap((x) => x.people.map((u) => u.id))).size) });
       for (const { site, people } of inGroup) rows.push(...subRows(people, site.id, groupId, site.name));
     }
   } else if (all) {
@@ -145,9 +145,9 @@ export async function render(ctx) {
           <option value="all" ${all ? 'selected' : ''}>All sites</option>
           ${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
         </select>` : ''}
-        <select id="rota-layout" aria-label="View" title="How the rota is grouped (rota groups are set on the Staff page)">
-          ${(all ? [['site', 'View: by site'], ['site-group', 'View: site, then rota group'], ['group-site', 'View: rota group, then site']]
-            : [['site', 'View: everyone'], ['site-group', 'View: by rota group']])
+        <select id="rota-layout" aria-label="View" title="How the rota is grouped (roles are set on the Staff page)">
+          ${(all ? [['site', 'View: by site'], ['site-group', 'View: site, then role'], ['group-site', 'View: role, then site']]
+            : [['site', 'View: everyone'], ['site-group', 'View: by role']])
             .map(([v, l]) => `<option value="${v}" ${(all ? layout : byGroup ? 'site-group' : 'site') === v ? 'selected' : ''}>${l}</option>`).join('')}
         </select>
         ${all ? '<button class="btn" id="collapse-all"></button>' : ''}
@@ -213,7 +213,7 @@ export async function render(ctx) {
     </div>
     ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under Setup → Staff.</div>` : ''}
     ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is covering at another site.</p>' : ''}
-    ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a rota group yet – set one for each person on the Staff page.</p>' : ''}
+    ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a role yet – set one for each person on the Staff page.</p>' : ''}
     ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see.</p>' : ''}`;
 
   el.querySelector('#rota-layout').addEventListener('change', (e) => {

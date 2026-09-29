@@ -724,3 +724,11 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .rota tr.rota-subgroup .rota-group-meta { font-size: 0.8rem; }
 #rota-layout { width: auto; }
 @media print { .rota tr.rota-subgroup[hidden] { display: table-row !important; } }
+
+/* List pages: search and ticking rows for bulk edits */
+.list-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: -0.25rem 0 0.75rem; }
+.list-tools input[type=search] { width: min(340px, 100%); }
+.bulk-bar { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.4rem 0.3rem 0.8rem; border-radius: 99px; background: var(--brand-soft); color: var(--brand); }
+table.selectable th.pick, table.selectable td.pick { width: 2.2rem; text-align: center; padding-left: 0.4rem; padding-right: 0.2rem; }
+table.selectable .pick input { width: auto; margin: 0; cursor: pointer; }
+table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft); }

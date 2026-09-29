@@ -187,6 +187,45 @@ export function registerAdminRoutes(router, db) {
     res.json(userOut(userId));
   });
 
+  // Bulk edit: the same change for several people at once – their role, home site, access, hourly rate or whether
+  // they're active. Each person goes through the same checks as editing them one at a time; if anyone can't be
+  // changed, nobody is.
+  router.post('/users/bulk', requirePerm('staff.manage'), (req, res) => {
+    const ids = [...new Set((Array.isArray(req.body.ids) ? req.body.ids : []).map((x) => id(x, 'ids')))];
+    if (!ids.length) throw badRequest('Choose at least one person');
+    if (ids.length > 500) throw badRequest('Edit at most 500 people at a time');
+    const c = req.body.changes ?? {};
+    const keys = ['rota_group', 'location_id', 'permission_set_id', 'hourly_rate', 'active'].filter((k) => c[k] !== undefined);
+    if (!keys.length) throw badRequest('Choose something to change');
+    const updated = tx(db, () => ids.map((userId) => {
+      const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+      if (!existing) throw notFound('User');
+      const body = {
+        name: existing.name, email: existing.email, location_id: existing.location_id, position: existing.position,
+        rota_group: existing.rota_group, hourly_rate: existing.hourly_rate, active: existing.active,
+        permission_set_id: existing.role === 'admin' ? 'admin' : existing.permission_set_id ?? setByRole(existing.role)?.id ?? null,
+        ...Object.fromEntries(keys.map((k) => [k, c[k]])),
+      };
+      let u;
+      try {
+        u = userBody({ ...req, body }, existing);
+        if (userId === req.user.id && (u.role !== existing.role || u.permission_set_id !== existing.permission_set_id || !u.active)) {
+          throw badRequest('You cannot change your own access or deactivate yourself');
+        }
+      } catch (err) {
+        err.message = `${existing.name}: ${err.message}`;
+        throw err;
+      }
+      db.prepare(`UPDATE users SET role = ?, location_id = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, all_sites = ? WHERE id = ?`)
+        .run(u.role, u.location_id, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, userId);
+      saveSites(userId, u);
+      if (!u.active) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+      return userId;
+    }));
+    res.json({ updated: updated.length });
+  });
+  const setByRole = (role) => db.prepare('SELECT * FROM permission_sets WHERE built_in = ?').get(role);
+
   // --- Permission sets (Setup → Permissions). Anyone who manages staff can list them to assign; only admins edit. ---
 
   router.get('/permissions', requirePerm('staff.manage'), (req, res) => {

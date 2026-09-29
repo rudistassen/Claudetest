@@ -6,21 +6,74 @@ import { api, confirmDialog, esc, isDemo, field, fmtDateTime, input, money, open
 const yesNo = (v) => (v ? 'Yes' : 'No');
 const activeBox = (v) => field('Active', `<input type="checkbox" name="active" ${v === undefined || v ? 'checked' : ''}>`, { className: 'field-inline' });
 
-// A simple list page: table of rows, "Add" button and click-to-edit modal.
-function listPage(ctx, { title, rows, columns, canEdit = true, addLabel, form, save, extraActions = '' }) {
+// A simple list page: table of rows, "Add" button and click-to-edit modal. With search: true, a box that filters
+// the rows as you type (remembered while you move around). With bulk: { label, run(rows) }, tick boxes on each
+// row and a button to act on the ticked ones.
+const searchText = new Map();
+function listPage(ctx, { title, rows, columns, canEdit = true, addLabel, form, save, extraActions = '', search = false, bulk = null }) {
+  const key = title.split(' · ')[0];
+  const selectable = canEdit && !!bulk && rows.length > 0;
+  const cellText = (r) => columns.map((c) => (c.value ? c.value(r) : r[c.key] ?? '')).join(' ').toLowerCase();
   ctx.el.innerHTML = `
     <div class="page-head">
       <h1>${esc(title)}</h1>
       <div class="actions">${extraActions}${canEdit && addLabel ? `<button class="btn btn-primary" id="add">+ ${esc(addLabel)}</button>` : ''}</div>
     </div>
+    ${search && rows.length ? `<div class="list-tools">
+      <input type="search" id="list-search" placeholder="Search ${esc(key.toLowerCase())}…" aria-label="Search" value="${esc(searchText.get(key) ?? '')}" autocomplete="off">
+      <span class="muted small" id="list-count"></span>
+      ${selectable ? `<span class="bulk-bar" id="bulk-bar" hidden><strong id="bulk-n"></strong>
+        <button class="btn btn-primary btn-small" id="bulk-run">${esc(bulk.label)}</button>
+        <button class="btn btn-ghost btn-small" id="bulk-clear">Clear</button></span>` : ''}
+    </div>` : ''}
     <section class="card">
-      ${rows.length ? `<div class="table-wrap"><table>
-        <thead><tr>${columns.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
+      ${rows.length ? `<div class="table-wrap"><table class="${selectable ? 'selectable' : ''}">
+        <thead><tr>${selectable ? '<th class="pick"><input type="checkbox" id="pick-all" aria-label="Select all shown"></th>' : ''}${columns.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
         <tbody>${rows.map((r, i) => `<tr class="${canEdit ? 'clickable' : ''} ${r.active === 0 ? 'inactive' : ''}" data-i="${i}">
+          ${selectable ? `<td class="pick"><input type="checkbox" data-pick="${i}" aria-label="Select ${esc(r.name ?? '')}"></td>` : ''}
           ${columns.map((c) => `<td class="${c.num ? 'num' : ''}">${c.html ? c.html(r) : esc(c.value ? c.value(r) : r[c.key])}</td>`).join('')}</tr>`).join('')}</tbody>
-      </table></div>` : '<div class="empty">Nothing here yet.</div>'}
+      </table></div><div class="empty" id="no-match" hidden>Nothing matches your search.</div>` : '<div class="empty">Nothing here yet.</div>'}
     </section>`;
+  const el = ctx.el;
+  const trs = [...el.querySelectorAll('tr[data-i]')];
+  const shown = () => trs.filter((tr) => !tr.hidden);
+  const picked = () => [...el.querySelectorAll('[data-pick]:checked')].map((c) => rows[Number(c.dataset.pick)]);
+  const refreshBulk = () => {
+    if (!selectable) return;
+    const n = picked().length;
+    el.querySelector('#bulk-bar').hidden = !n;
+    el.querySelector('#bulk-n').textContent = `${n} selected`;
+    const visible = shown().map((tr) => tr.querySelector('[data-pick]'));
+    const all = el.querySelector('#pick-all');
+    all.checked = visible.length > 0 && visible.every((c) => c.checked);
+    all.indeterminate = !all.checked && visible.some((c) => c.checked);
+  };
+  const box = el.querySelector('#list-search');
+  const filter = () => {
+    const words = (box?.value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+    trs.forEach((tr) => {
+      const text = cellText(rows[Number(tr.dataset.i)]);
+      tr.hidden = !words.every((w) => text.includes(w));
+    });
+    const n = shown().length;
+    const count = el.querySelector('#list-count');
+    if (count) count.textContent = words.length ? `${n} of ${rows.length}` : `${rows.length}`;
+    const none = el.querySelector('#no-match');
+    if (none) none.hidden = n > 0;
+    refreshBulk();
+  };
+  box?.addEventListener('input', () => { searchText.set(key, box.value); filter(); });
+  if (box) filter();
   if (!canEdit) return;
+  if (selectable) {
+    el.querySelectorAll('[data-pick]').forEach((c) => c.addEventListener('change', refreshBulk));
+    el.querySelector('#pick-all').addEventListener('change', (e) => {
+      shown().forEach((tr) => { tr.querySelector('[data-pick]').checked = e.target.checked; });
+      refreshBulk();
+    });
+    el.querySelector('#bulk-clear').addEventListener('click', () => { el.querySelectorAll('[data-pick]').forEach((c) => { c.checked = false; }); refreshBulk(); });
+    el.querySelector('#bulk-run').addEventListener('click', () => bulk.run(picked()));
+  }
   const open = (row) => openModal({
     title: row ? `Edit ${row.name ?? row.title}` : addLabel,
     body: form(row ?? {}),
@@ -31,9 +84,9 @@ function listPage(ctx, { title, rows, columns, canEdit = true, addLabel, form, s
       ctx.rerender();
     },
   });
-  ctx.el.querySelector('#add')?.addEventListener('click', () => open(null));
-  ctx.el.querySelectorAll('tr[data-i]').forEach((tr) => tr.addEventListener('click', (e) => {
-    if (e.target.closest('button, a')) return;
+  el.querySelector('#add')?.addEventListener('click', () => open(null));
+  trs.forEach((tr) => tr.addEventListener('click', (e) => {
+    if (e.target.closest('button, a, input, .pick')) return;
     open(rows[Number(tr.dataset.i)]);
   }));
 }
@@ -87,6 +140,52 @@ function openSquareImport(ctx) {
   load();
 }
 
+// Edit selected staff: each change is optional ("leave as it is"); only what's picked is changed for everyone.
+function openBulkStaff(ctx, people, { roles, locOptions, access }) {
+  const KEEP = '__keep';
+  const names = people.map((p) => p.name);
+  const { form } = openModal({
+    title: `Edit ${people.length} ${people.length === 1 ? 'person' : 'people'}`,
+    submitLabel: 'Apply changes',
+    body: `
+      <p class="small muted">${esc(names.slice(0, 8).join(', '))}${names.length > 8 ? ` and ${names.length - 8} more` : ''}</p>
+      <p class="small">Only the things you change here are updated – everything else stays as it is for each person.</p>
+      <div class="row">
+        <label class="field"><span>Role</span>
+          <select name="role_pick">
+            <option value="${KEEP}">— Leave as it is —</option>
+            ${roles.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}
+            <option value="__new">✎ New role…</option>
+            <option value="">No role</option>
+          </select>
+          <input name="role_new" placeholder="Type the new role" maxlength="50" hidden>
+        </label>
+        ${field('Home site', select('location_id', [[KEEP, '— Leave as it is —'], ...locOptions], KEEP))}
+      </div>
+      <div class="row">
+        ${field('Access', select('permission_set_id', [[KEEP, '— Leave as it is —'], ...access], KEEP))}
+        ${field('Hourly rate (£)', input('hourly_rate', '', 'type="number" min="0" step="0.01" placeholder="Leave as it is"'))}
+        ${field('Active', select('active', [[KEEP, '— Leave as it is —'], ['1', 'Active'], ['0', 'Deactivated (can’t sign in or be rostered)']], KEEP))}
+      </div>`,
+    onSubmit: async (v) => {
+      const changes = {};
+      if (v.role_pick !== KEEP) changes.rota_group = v.role_pick === '__new' ? (v.role_new ?? '').trim() : v.role_pick || null;
+      if (v.role_pick === '__new' && !changes.rota_group) throw new Error('Type the new role');
+      if (v.location_id !== KEEP) changes.location_id = Number(v.location_id) || null;
+      if (v.permission_set_id !== KEEP) changes.permission_set_id = v.permission_set_id;
+      if (v.hourly_rate !== null && v.hourly_rate !== '') changes.hourly_rate = Number(v.hourly_rate);
+      if (v.active !== KEEP) changes.active = v.active === '1';
+      if (!Object.keys(changes).length) throw new Error('Choose at least one thing to change');
+      const r = await api('/users/bulk', { method: 'POST', body: { ids: people.map((p) => p.id), changes } });
+      toast(`Updated ${r.updated} ${r.updated === 1 ? 'person' : 'people'}`);
+      ctx.rerender();
+    },
+  });
+  const pick = form.querySelector('[name=role_pick]');
+  const typed = form.querySelector('[name=role_new]');
+  pick.addEventListener('change', () => { typed.hidden = pick.value !== '__new'; if (!typed.hidden) typed.focus(); });
+}
+
 export async function renderStaff(ctx) {
   const { state } = ctx;
   // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
@@ -126,11 +225,13 @@ export async function renderStaff(ctx) {
         <small>Their home site is always included.</small>
       </div></div>`;
   };
-  // Groups already in use, plus a few common ones, to pick from.
+  // Roles already in use, plus a few common ones, to pick from.
   const rotaGroups = [...new Set([...rows.map((r) => r.rota_group).filter(Boolean), 'Management', 'Front of house', 'Kitchen', 'Bar'])].sort((a, b) => a.localeCompare(b));
   listPage(ctx, {
     title: `Staff · ${scope === 'all' ? 'All sites' : state.location?.name ?? ''}`,
     rows,
+    search: true,
+    bulk: { label: 'Edit selected', run: (people) => openBulkStaff(ctx, people, { roles: rotaGroups, locOptions, access: accessOptions({}) }) },
     addLabel: 'Add staff member',
     extraActions: `${state.isAdmin && square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
       ${state.multiSite ? `<a class="btn" href="#/admin/staff${scope === 'all' ? '?scope=site' : ''}">${scope === 'all' ? 'This site only' : 'Show all sites'}</a>` : ''}`,
@@ -140,7 +241,7 @@ export async function renderStaff(ctx) {
       { label: 'Access', value: (r) => r.access_name ?? '' },
       { label: 'Sites', value: sitesLabel },
       { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
-      { label: 'Rota group', value: (r) => r.rota_group ?? '' },
+      { label: 'Role', value: (r) => r.rota_group ?? '' },
       { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
       { label: 'Active', value: (r) => yesNo(r.active) },
     ],
@@ -153,7 +254,7 @@ export async function renderStaff(ctx) {
       ${u.role === 'admin' ? '<p class="small muted">Admins can work with every site.</p>' : sitesField(u)}
       <div class="row">
         <input type="hidden" name="position" value="${esc(u.position ?? '')}">
-        ${field('Rota group', input('rota_group', u.rota_group, 'list="rota-groups" maxlength="50" placeholder="e.g. Kitchen, Front of house"'), { hint: 'Groups people together on the rota' })}
+        ${field('Role', input('rota_group', u.rota_group, 'list="rota-groups" maxlength="50" placeholder="e.g. Kitchen, Front of house"'), { hint: 'What they do – groups people together on the rota' })}
         ${field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"'))}
       </div>
       <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
@@ -202,6 +303,7 @@ export async function renderSuppliers(ctx) {
   listPage(ctx, {
     title: 'Suppliers',
     rows,
+    search: true,
     canEdit: ctx.state.can('setup.products'),
     addLabel: 'Add supplier',
     columns: [
@@ -235,6 +337,7 @@ export async function renderProducts(ctx) {
   listPage(ctx, {
     title: 'Products',
     rows,
+    search: true,
     canEdit: state.can('setup.products'),
     addLabel: 'Add product',
     extraActions: `${rows.length ? '<button class="btn" id="export-products">Export</button>' : ''}${state.can('setup.products') ? '<button class="btn" id="import-products">Import</button>' : ''}`,
