@@ -953,3 +953,12 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
   .table-wrap:has(> table.stacked) { overflow: visible; }
   .card > .table-wrap:has(> table.stacked) { margin: 0 -0.2rem; }
 }
+
+/* "A new version is ready" bar (install.js) */
+.update-bar {
+  position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 0.75rem; width: max-content; max-width: calc(100vw - 1.5rem);
+  padding: 0.55rem 0.6rem 0.55rem 1rem; border-radius: 12px; background: var(--text); color: var(--surface);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); font-size: 0.92rem;
+}
+@media print { .update-bar { display: none; } }

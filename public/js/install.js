@@ -16,6 +16,47 @@ export function installState() {
   return isIos() ? 'ios' : 'manual';
 }
 
+// Keeping BrewView up to date. An app left open in the background (on a phone especially) keeps showing the
+// version it first loaded, so it checks for a newer one whenever it's brought back to the screen, and every
+// ten minutes. Coming back to it, it simply reloads (unless a form is open); otherwise a bar offers the update.
+async function serverVersion() {
+  try {
+    const res = await fetch('/api/version', { cache: 'no-store' });
+    return res.ok ? (await res.json()).version : null;
+  } catch {
+    return null;
+  }
+}
+
+function offerUpdate() {
+  if (document.getElementById('update-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'update-bar';
+  bar.className = 'update-bar';
+  bar.innerHTML = '<span>A new version of BrewView is ready.</span><button type="button" class="btn btn-small btn-primary">Update now</button>';
+  bar.querySelector('button').addEventListener('click', () => location.reload());
+  document.body.append(bar);
+}
+
+async function watchForUpdates() {
+  const loaded = await serverVersion();
+  if (!loaded) return;
+  let checking = false;
+  const check = async (resumed) => {
+    if (checking) return;
+    checking = true;
+    const latest = await serverVersion();
+    checking = false;
+    if (!latest || latest === loaded) return;
+    const busy = document.getElementById('modal-root')?.childElementCount || document.activeElement?.matches('input, textarea, select');
+    if (resumed && !busy) location.reload();
+    else offerUpdate();
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(true); });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) check(true); });
+  setInterval(() => check(false), 10 * 60 * 1000);
+}
+
 const refresh = () => {
   const s = installState();
   document.querySelectorAll('[data-install]').forEach((el) => { el.hidden = !(s === 'prompt' || s === 'ios'); });
@@ -24,7 +65,8 @@ const refresh = () => {
 
 export function setUpInstall() {
   if (isDemo || !('serviceWorker' in navigator) || !window.isSecureContext) return;
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
+  watchForUpdates();
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferred = e;

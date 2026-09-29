@@ -17,7 +17,7 @@ import { registerNewsRoutes } from './routes/news.js';
 import { registerDocumentRoutes } from './routes/documents.js';
 import { HttpError } from './util.js';
 
-const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+export const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 export function trustProxy(env) {
   if (env.TRUST_PROXY) return /^\d+$/.test(env.TRUST_PROXY) ? Number(env.TRUST_PROXY) : env.TRUST_PROXY;
@@ -27,7 +27,8 @@ export function trustProxy(env) {
 // square: { config, client } when a Square access token is configured, otherwise null.
 // mailer: sends the emailed reports (see email.js), or null when email isn't set up.
 // invoiceReader: reads uploaded supplier invoices (see invoice-reader.js), or null when it isn't set up.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null } = {}) {
+// version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, version = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Behind a hosting platform's proxy (Railway, Render, …) trust one hop, so HTTPS and visitors' addresses are seen.
@@ -46,6 +47,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   app.use(loadUser(db));
 
   const api = express.Router();
+  api.get('/version', (_req, res) => res.set('Cache-Control', 'no-store').json({ version }));
   registerAuthRoutes(api, db);
   api.use(requireAuth);
   registerAdminRoutes(api, db);
@@ -64,8 +66,10 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 
-  app.use(express.static(publicDir));
-  app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(publicDir, 'index.html')));
+  // Browsers must check for a newer copy every time (a quick "not changed" when nothing is new), so an update
+  // shows up straight away instead of an old saved copy being used.
+  app.use(express.static(publicDir, { setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
+  app.get(/^\/(?!api\/).*/, (_req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(publicDir, 'index.html')));
 
   app.use((err, _req, res, _next) => {
     if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
