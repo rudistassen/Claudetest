@@ -170,22 +170,9 @@ export async function render(ctx) {
   const bankHol = (d) => data.bank_holidays?.[d];
   const fcNote = fc ? `Forecast = each day’s average sales over the last ${fc.weeks} weeks (bank holidays and closed days left out); labour % = the rota’s cost ÷ that forecast.` : '';
 
-  // --- Day view: just the shifts on one day, site by site, on a timeline ---
+  // --- Day view: just the shifts on one day, site by site: each person's name and a card with their times ---
   const dayView = () => {
     const onDay = data.shifts.filter((x) => x.date === day && (canEdit || x.state !== 'removed'));
-    const timeRange = (x) => {
-      const [h1, m1] = x.start_time.split(':').map(Number);
-      const [h2, m2] = x.end_time.split(':').map(Number);
-      const a1 = h1 + m1 / 60;
-      let a2 = h2 + m2 / 60;
-      if (a2 <= a1) a2 += 24;
-      return [a1, a2];
-    };
-    const spans = onDay.map(timeRange);
-    const from = Math.floor(Math.min(6, ...spans.map((r) => r[0])));
-    const to = Math.min(Math.ceil(Math.max(from + 10, ...spans.map((r) => r[1]))), from + 24);
-    const pctLeft = (h) => ((h - from) / (to - from)) * 100;
-    const hourMarks = Array.from({ length: to - from + 1 }, (_, i) => from + i).filter((h) => (to - from > 14 ? h % 2 === 0 : true));
     const person = (id) => data.staff.find((u) => u.id === id);
     const pendingDay = shownSites.reduce((t, id) => t + (data.unpublished_by_day?.[`${day}|${id}`] ?? 0), 0);
     const sections = shownSites.map((id) => ({
@@ -199,41 +186,31 @@ export async function render(ctx) {
       const live = list.filter((x) => x.state !== 'removed');
       const hours = Math.round(live.reduce((t, x) => t + x.hours, 0) * 10) / 10;
       const cost = rotaCost([id], day);
-      const f = forecastFor([id], day);
-      const p = pctOf(cost, f);
       const pendingHere = data.unpublished_by_day?.[`${day}|${id}`] ?? 0;
       return `<section class="card day-site">
         <header class="day-site-head">
           <div><h2>${esc(name)}</h2>
             <span class="muted small">${live.length} ${live.length === 1 ? 'shift' : 'shifts'} · ${hours} h${data.labour_cost !== undefined ? ` · ${money(cost)} labour` : ''}</span></div>
-          ${fc ? `<div class="day-fc"><span class="muted small">Forecast sales</span><strong>${f === null ? '–' : whole((f))}</strong>
-            <span class="small">Labour <strong class="tone-${labourTone(p)}">${fmtPct(p)}</strong></span></div>` : ''}
           <div class="day-site-actions">
             ${canEdit && data.can_publish && pendingHere ? `<button class="btn btn-small" data-publish-site="${id}">Publish ${pendingHere} change${pendingHere === 1 ? '' : 's'}</button>` : ''}
             ${canEdit ? `<button class="btn btn-small" data-add-site="${id}">+ Add shift</button>` : ''}
           </div>
         </header>
-        <div class="day-timeline">
-          <div class="day-row day-scale-row"><div></div><div class="day-scale">${hourMarks.map((h) => `<span style="left:${pctLeft(h)}%" ${h % 2 ? 'class="odd-hour"' : ''}>${String(h % 24).padStart(2, '0')}</span>`).join('')}</div><div></div></div>
+        <ul class="day-list">
           ${list.map((x) => {
-            const [a1, a2] = timeRange(x);
             const u = person(x.user_id);
-            const note = [u?.rota_group, u && u.location_id !== id && u.location_name ? `cover from ${u.location_name}` : null].filter(Boolean).join(' · ');
-            return `<div class="day-row ${x.state && x.state !== 'published' ? `is-${x.state}` : ''}">
-              <div class="day-who"><strong>${esc(x.user_name)}</strong>${note ? `<small class="muted">${esc(note)}</small>` : ''}</div>
-              <div class="day-track">
-                <button class="day-bar ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
-                  style="left:${pctLeft(a1)}%;width:${Math.max(2, pctLeft(a2) - pctLeft(a1))}%" title="${esc(shiftTitle(x) || `${x.start_time}–${x.end_time}`)}">
-                  <span>${x.start_time}–${x.end_time}</span>${TAGS[x.state] ? `<em class="shift-tag">${TAGS[x.state]}</em>` : ''}</button>
-              </div>
-              <div class="day-hours num">${x.hours} h</div>
-            </div>`;
+            const from = u && u.location_id !== id && u.location_name ? `Covering from ${u.location_name}` : '';
+            return `<li class="day-person ${x.state && x.state !== 'published' ? `is-${x.state}` : ''}">
+              <span class="day-name">${esc(x.user_name)}</span>
+              <button class="day-card ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
+                title="${esc([shiftTitle(x), from].filter(Boolean).join(' · ') || `${x.start_time}–${x.end_time}`)}">
+                <span>${x.start_time}–${x.end_time}</span>${TAGS[x.state] ? `<em class="shift-tag">${TAGS[x.state]}</em>` : ''}</button>
+            </li>`;
           }).join('')}
-        </div>
+        </ul>
       </section>`;
     };
     const totalCost = rotaCost(shownSites, day);
-    const totalFc = forecastFor(shownSites, day);
     const liveCount = onDay.filter((x) => x.state !== 'removed').length;
     return `
       <div class="page-head">
@@ -256,12 +233,11 @@ export async function render(ctx) {
       </div>` : ''}
       <h2 class="day-title">${day === today ? 'Today · ' : ''}${fmtDate(day, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         ${bankHol(day) ? `<span class="badge badge-sent">${esc(bankHol(day))}</span>` : ''}</h2>
-      <p class="muted">${liveCount} shift${liveCount === 1 ? '' : 's'}${data.labour_cost !== undefined ? ` · ${money(totalCost)} labour` : ''}${fc && totalFc !== null ? ` · forecast sales ${whole((totalFc))} · labour <span class="tone-${labourTone(pctOf(totalCost, totalFc))}">${fmtPct(pctOf(totalCost, totalFc))}</span>` : ''}</p>
+      <p class="muted">${liveCount} shift${liveCount === 1 ? '' : 's'}${data.labour_cost !== undefined ? ` · ${money(totalCost)} labour` : ''}</p>
       ${withShifts.length ? withShifts.map(siteBlock).join('') : `<div class="card empty">Nobody is on the rota ${day === today ? 'today' : 'this day'}.</div>`}
       ${canEdit && without.length && withShifts.length ? `<p class="muted small">No shifts at ${without.map((x) => `${esc(x.name)} <button class="link-btn" data-add-site="${x.id}">+ Add</button>`).join(' · ')}</p>` : ''}
       ${canEdit && !withShifts.length && without.length ? `<p>${without.map((x) => `<button class="btn btn-small" data-add-site="${x.id}">+ Add a shift at ${esc(x.name)}</button>`).join(' ')}</p>` : ''}
-      ${fcNote ? `<p class="muted small">${fcNote}</p>` : ''}
-      ${canEdit ? '<p class="muted small">You’re seeing the draft rota. Click a shift to change it, or to publish just that shift.</p>' : ''}`;
+      ${canEdit ? '<p class="muted small">You’re seeing the draft rota. Tap a shift to change it, or to publish just that shift.</p>' : ''}`;
   };
 
   const siteSelect = state.multiSite ? `<select id="rota-site" aria-label="Site">
