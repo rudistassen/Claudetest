@@ -104,8 +104,8 @@ small { display: block; color: var(--muted); font-size: 0.8rem; }
 }
 .brand-band img { display: block; height: calc(var(--h) * 0.4px); width: auto; max-width: 24%; object-fit: contain; }
 @media (max-width: 800px) {
-  .brand-band { padding: 0.45rem 0.75rem; gap: 0.5rem; }
-  .brand-band img { height: calc(var(--h) * 0.3px); }
+  .brand-band { padding: 0.3rem 0.75rem; gap: 0.5rem; }
+  .brand-band img { height: calc(var(--h) * 0.24px); }
 }
 @media print { .brand-band { display: none; } }
 
@@ -901,3 +901,55 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 .rota-scroll .rota tr.rota-forecast > th:first-child { background: color-mix(in srgb, var(--tone-reporting) 60%, var(--surface)); }
 @media (max-width: 800px) { .rota-scroll { max-height: none; } }
 @media print { .rota-scroll { max-height: none; overflow: visible; border: 0; } .rota-scroll .rota th, .rota-scroll .rota td { position: static !important; } }
+
+/* Phones: tighter spacing and smaller controls so pages fit without zooming. Boxes you type in use 16px text,
+   because iPhones zoom the whole page in when you tap into anything smaller. */
+@media (max-width: 640px) {
+  body { font-size: 14.5px; }
+  input, select, textarea { font-size: 16px; padding: 0.4rem 0.55rem; }
+  main { padding: 0.75rem 0.7rem 2rem; }
+  h1 { font-size: 1.2rem; }
+  h2 { font-size: 1.02rem; }
+  .card { padding: 0.75rem 0.8rem; margin-bottom: 0.7rem; border-radius: 10px; }
+  .page-head { gap: 0.45rem; margin-bottom: 0.65rem; }
+  .actions, .filters { gap: 0.35rem; }
+  .btn { padding: 0.32rem 0.6rem; font-size: 0.9rem; }
+  .btn-small { padding: 0.22rem 0.5rem; font-size: 0.82rem; }
+  .page-head #print { display: none; }
+  .kpis { grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.7rem; }
+  .kpi { padding: 0.55rem 0.7rem; }
+  .kpi strong { font-size: 1.1rem; }
+  .site-money { gap: 0.5rem; }
+  .site-money .stat { font-size: 1rem; }
+  .site-grid { gap: 0.7rem; }
+  .topbar { gap: 0.6rem; padding: 0.45rem 0.7rem; }
+  .day-scale .odd-hour { display: none; }
+  .day-title { font-size: 1.05rem; }
+  .rota th, .rota td { min-width: 92px; }
+  .rota tbody th { min-width: 96px; max-width: 120px; font-size: 0.85rem; }
+  .rota tbody td { padding: 0.25rem; }
+  .tabs { overflow-x: auto; scrollbar-width: none; }
+
+  /* A table too wide for the screen becomes a stack of cards (see fitTables in app.js). */
+  table.stacked, table.stacked tbody, table.stacked tfoot { display: block; }
+  table.stacked thead { display: none; }
+  table.stacked tr {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.8rem; position: relative;
+    margin-bottom: 0.5rem; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  }
+  table.stacked tr:last-child { margin-bottom: 0; }
+  table.stacked td, table.stacked th { display: block; padding: 0; border: 0; text-align: left; min-width: 0; overflow-wrap: anywhere; }
+  table.stacked td[data-label]::before, table.stacked th[data-label]::before {
+    content: attr(data-label); display: block; color: var(--muted); font-size: 0.72rem; font-weight: 500; line-height: 1.3;
+  }
+  table.stacked .cell-title { grid-column: 1 / -1; font-weight: 600; font-size: 1rem; padding-right: 2rem; }
+  table.stacked td.cell-title::before, table.stacked th.cell-title::before { display: none; }
+  table.stacked tr.clickable:hover td { background: none; }
+  table.stacked tr.clickable:active { background: var(--surface-2); }
+  table.stacked .cell-tick { position: absolute; top: 0.5rem; right: 0.7rem; }
+  table.stacked td:empty { display: none; }
+  table.stacked td:not([data-label]):not(.cell-tick), table.stacked tr > [colspan] { grid-column: 1 / -1; }
+  table.stacked input:not([type=checkbox]), table.stacked select { width: 100%; }
+  .table-wrap:has(> table.stacked) { overflow: visible; }
+  .card > .table-wrap:has(> table.stacked) { margin: 0 -0.2rem; }
+}

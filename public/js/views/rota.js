@@ -224,7 +224,7 @@ export async function render(ctx) {
           </div>
         </header>
         <div class="day-timeline">
-          <div class="day-row day-scale-row"><div></div><div class="day-scale">${hourMarks.map((h) => `<span style="left:${pctLeft(h)}%">${String(h % 24).padStart(2, '0')}</span>`).join('')}</div><div></div></div>
+          <div class="day-row day-scale-row"><div></div><div class="day-scale">${hourMarks.map((h) => `<span style="left:${pctLeft(h)}%" ${h % 2 ? 'class="odd-hour"' : ''}>${String(h % 24).padStart(2, '0')}</span>`).join('')}</div><div></div></div>
           ${list.map((x) => {
             const [a1, a2] = timeRange(x);
             const u = person(x.user_id);

@@ -388,6 +388,56 @@ async function start() {
   route();
 }
 
+// On phones, a table too wide for the screen is shown as a stack of small cards (one per row, each value labelled
+// with its column heading) instead of making people scroll sideways. Grids that only make sense as grids are left alone.
+const NO_STACK = '.rota, .hm, .grid-table, .matrix, .perm-matrix, .avail-table';
+const phoneTables = window.matchMedia('(max-width: 640px)');
+function labelCells(table) {
+  const heads = [];
+  for (const th of table.tHead?.rows[table.tHead.rows.length - 1]?.cells ?? []) {
+    for (let i = 0; i < th.colSpan; i++) heads.push(th.textContent.trim());
+  }
+  for (const row of [...table.tBodies].flatMap((b) => [...b.rows]).concat([...table.tFoot?.rows ?? []])) {
+    let col = 0;
+    let titled = false;
+    for (const cell of row.cells) {
+      const label = cell.colSpan === 1 ? heads[col] : '';
+      if (label) cell.dataset.label = label; else delete cell.dataset.label;
+      cell.classList.toggle('cell-tick', !label && !!cell.querySelector('input[type=checkbox]') && !cell.textContent.trim());
+      // The first labelled cell (usually the name) is the card's title.
+      cell.classList.toggle('cell-title', !!label && !titled);
+      if (label) titled = true;
+      col += cell.colSpan;
+    }
+  }
+}
+function fitTables() {
+  const view = document.getElementById('view');
+  if (!view) return;
+  view.querySelectorAll('.table-wrap > table').forEach((t) => {
+    if (t.matches(NO_STACK) || !t.tHead) return;
+    if (!phoneTables.matches) { t.classList.remove('stacked'); return; }
+    if (t.classList.contains('stacked')) { labelCells(t); return; }
+    const wrap = t.parentElement;
+    if (wrap.clientWidth && wrap.scrollWidth - wrap.clientWidth > 4) {
+      labelCells(t);
+      t.classList.add('stacked');
+    }
+  });
+}
+let fitQueued = false;
+const queueFit = () => {
+  if (fitQueued) return;
+  fitQueued = true;
+  requestAnimationFrame(() => { fitQueued = false; fitTables(); });
+};
+new MutationObserver(queueFit).observe(document.getElementById('app'), { childList: true, subtree: true });
+phoneTables.addEventListener('change', () => {
+  document.querySelectorAll('table.stacked').forEach((t) => t.classList.remove('stacked'));
+  queueFit();
+});
+document.addEventListener('click', queueFit);
+
 // On phones the menu slides out just below the green bar, which sits lower while the logo band is in view.
 function placeNav() {
   const bar = document.querySelector('.topbar');
