@@ -797,3 +797,22 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 .reads-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 .reads-cols h3 { font-size: 0.95rem; }
 @media (max-width: 900px) { .mybrew { grid-template-columns: 1fr; } .reads-cols { grid-template-columns: 1fr; } }
+
+/* News photos and videos */
+.news-media { display: grid; gap: 0.4rem; margin: 0.2rem 0 0.8rem; }
+.news-media.n-2, .news-media.n-3 { grid-template-columns: 1fr 1fr; }
+.news-media img, .news-media video { display: block; width: 100%; border-radius: 10px; background: var(--surface-2); }
+.news-media.n-1 img, .news-media.n-1 video { max-height: 460px; object-fit: contain; }
+.news-media.n-2 img, .news-media.n-3 img { aspect-ratio: 4 / 3; object-fit: cover; }
+.news-media video { max-height: 460px; background: #000; }
+.news-img { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.news-full { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; border-radius: 8px; }
+.media-picker { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.35rem 0 0.5rem; }
+.media-picker:empty { display: none; }
+.media-thumb { position: relative; width: 96px; height: 96px; border-radius: 8px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); }
+.media-thumb img, .media-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.media-thumb.is-failed { width: 220px; border-color: var(--bad); }
+.media-state { display: grid; place-items: center; height: 100%; padding: 0.3rem; font-size: 0.72rem; text-align: center; color: var(--muted); }
+.media-thumb.is-failed .media-state { color: var(--bad); }
+.media-kind { position: absolute; left: 4px; bottom: 4px; padding: 0 0.3rem; border-radius: 4px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.68rem; }
+.media-remove { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.9rem; line-height: 1; cursor: pointer; }

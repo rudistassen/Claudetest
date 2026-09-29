@@ -33,6 +33,8 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   app.set('trust proxy', trustProxy(process.env));
   // Invoice uploads carry the file itself (up to 10 MB, a third bigger once encoded); everything else is small.
   app.use('/api/invoices/scan', express.json({ limit: '15mb' }));
+  // News photos and short videos (up to 25 MB, a third bigger once encoded).
+  app.use('/api/news/media', express.json({ limit: '36mb' }));
   app.use(express.json({ limit: '1mb' }));
   app.use((req, _res, next) => {
     req.db = db;

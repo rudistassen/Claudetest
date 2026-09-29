@@ -140,6 +140,7 @@ async function boot() {
       setHeader(k, v) { this.headers[k] = v; },
       cookie(name, value) { cookies[name] = value; },
       clearCookie(name) { delete cookies[name]; },
+      end() {},
     };
     try {
       await api.handle(req, res);

@@ -329,6 +329,20 @@ CREATE TABLE IF NOT EXISTS news_post_sites (
   location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
   PRIMARY KEY (post_id, location_id)
 );
+-- Photos and short videos on news posts. Uploaded first (post_id empty), then attached when the post is saved.
+CREATE TABLE IF NOT EXISTS news_media (
+  id INTEGER PRIMARY KEY,
+  post_id INTEGER REFERENCES news_posts(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL CHECK (kind IN ('image', 'video')),
+  file_name TEXT,
+  file_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  data BLOB NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_news_media_post ON news_media(post_id, position);
 -- Who has confirmed they've read a post that asks them to.
 CREATE TABLE IF NOT EXISTS news_reads (
   post_id INTEGER NOT NULL REFERENCES news_posts(id) ON DELETE CASCADE,

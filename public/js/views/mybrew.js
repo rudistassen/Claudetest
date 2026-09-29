@@ -1,4 +1,68 @@
-import { api, esc, field, fmtDate, fmtDateTime, input, money, openModal, select, showError, textarea, toast, todayISO } from '../lib.js';
+import { api, esc, field, fmtDate, fmtDateTime, input, isDemo, money, openModal, select, showError, textarea, toast, todayISO } from '../lib.js';
+
+// --- Photos and short videos on posts ---
+
+const MAX_VIDEO_MB = 25;
+const mediaUrl = (id) => `/api/news/media/${id}`;
+// The standalone demo has no real server, so its media is loaded through fetch and shown from memory.
+const srcAttr = (id) => (isDemo ? `data-src="${mediaUrl(id)}"` : `src="${mediaUrl(id)}"`);
+async function hydrateMedia(root) {
+  if (!isDemo) return;
+  for (const el of root.querySelectorAll('[data-src]')) {
+    const blob = await (await fetch(el.dataset.src)).blob();
+    el.src = URL.createObjectURL(blob);
+    el.removeAttribute('data-src');
+  }
+}
+
+function gallery(media = []) {
+  if (!media.length) return '';
+  return `<div class="news-media n-${Math.min(media.length, 3)}">${media.map((m) => (m.kind === 'video'
+    ? `<video controls playsinline preload="metadata" ${srcAttr(m.id)}></video>`
+    : `<button type="button" class="news-img" data-full="${m.id}" aria-label="Open photo"><img ${srcAttr(m.id)} alt="" loading="lazy"></button>`)).join('')}</div>`;
+}
+
+function wireGallery(root) {
+  root.querySelectorAll('.news-img').forEach((b) => b.addEventListener('click', () => {
+    openModal({ title: 'Photo', wide: true, body: `<img class="news-full" src="${b.querySelector('img').src}" alt="">` });
+  }));
+  hydrateMedia(root);
+}
+
+// Big phone photos are resized (longest side 1600px, JPEG) before uploading, so they load quickly on mobile data.
+// This also turns iPhone HEIC photos into JPEGs where the browser can open them.
+async function shrinkImage(file) {
+  if (file.type === 'image/gif') return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error(`${file.name} couldn’t be opened – use a JPEG or PNG photo`));
+      i.src = url;
+    });
+    const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    if (scale === 1 && file.size < 1.5 * 1024 * 1024 && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return file;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    const c = canvas.getContext('2d');
+    c.fillStyle = '#fff';
+    c.fillRect(0, 0, canvas.width, canvas.height);
+    c.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+const toBase64 = (file) => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ''));
+  r.onerror = () => reject(new Error(`Couldn’t read ${file.name}`));
+  r.readAsDataURL(file);
+});
 
 // My Brew: each person's own page – their details, upcoming shifts, holiday and the staff news feed.
 // Setup → News is where announcements and policy updates are posted.
@@ -49,6 +113,7 @@ export async function renderMyBrew(ctx) {
       <h3>${esc(p.title)}</h3>
       <div class="news-body">${formatBody(p.body)}</div>
       <button class="link-btn news-more" hidden>Read more</button>
+      ${gallery(p.media)}
       ${p.requires_ack ? (p.read ? '<p class="news-read">✓ You’ve read this</p>' : `<button class="btn btn-primary btn-small" data-ack="${p.id}">I’ve read this</button>`) : ''}
     </article>`;
 
@@ -114,6 +179,7 @@ export async function renderMyBrew(ctx) {
       more.addEventListener('click', () => { bodyEl.classList.toggle('is-clipped'); more.textContent = bodyEl.classList.contains('is-clipped') ? 'Read more' : 'Show less'; });
     }
   });
+  wireGallery(el);
   el.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => {
     filter = b.dataset.filter;
     el.querySelectorAll('[data-filter]').forEach((x) => x.classList.toggle('is-on', x === b));
@@ -157,7 +223,7 @@ export async function renderNewsSetup(ctx) {
       ${posts.length ? `<div class="table-wrap"><table>
         <thead><tr><th>Post</th><th>Type</th><th>Who sees it</th><th>Posted</th><th>Read</th></tr></thead>
         <tbody>${posts.map((p) => `<tr class="${p.can_edit ? 'clickable' : ''}" data-edit="${p.id}">
-          <td><strong>${esc(p.title)}</strong>${p.pinned ? ' <span class="small">📌</span>' : ''}</td>
+          <td><strong>${esc(p.title)}</strong>${p.pinned ? ' <span class="small">📌</span>' : ''}${p.media.length ? ` <span class="small muted">· ${p.media.length} photo${p.media.length === 1 ? '' : 's'}/video${p.media.length === 1 ? '' : 's'}</span>` : ''}</td>
           <td><span class="news-tag ${CATEGORIES[p.category][1]}">${CATEGORIES[p.category][0]}</span></td>
           <td class="small">${esc(siteNames(p))}</td>
           <td class="small muted">${fmtDateTime(p.created_at)}${p.author ? `<br>${esc(p.author)}` : ''}</td>
@@ -177,14 +243,58 @@ export async function renderNewsSetup(ctx) {
       ${sites.map((l) => `<label class="check-row"><input type="checkbox" name="site_pick" value="${l.id}" ${(p.site_ids ?? []).includes(l.id) ? 'checked' : ''}><span>${esc(l.name)}</span></label>`).join('')}
     </div>
     ${field('Message', textarea('body', p.body, 'rows="9" required'), { hint: 'Leave a blank line between paragraphs. Web addresses become links.' })}
+    <div class="field"><span>Photos and videos</span>
+      <div class="media-picker" id="media-list"></div>
+      <label class="btn btn-small" for="media-file">+ Add photos or videos</label>
+      <input type="file" id="media-file" accept="image/*,video/mp4,video/quicktime,video/webm" multiple hidden>
+      <small class="muted">Photos are resized for you. Videos up to ${MAX_VIDEO_MB} MB – about 30–60 seconds from a phone.</small>
+    </div>
     <label class="check-row"><input type="checkbox" name="pinned" ${p.pinned ? 'checked' : ''}><span><strong>Pin to the top</strong> <small>Stays above newer posts</small></span></label>
     <label class="check-row"><input type="checkbox" name="requires_ack" ${p.requires_ack ? 'checked' : ''}><span><strong>Ask people to confirm they’ve read it</strong> <small>Adds an “I’ve read this” button – good for policy updates</small></span></label>
     ${p.id && p.requires_ack ? '<label class="check-row"><input type="checkbox" name="ask_again"><span><strong>Ask everyone to read it again</strong> <small>Clears who has read it, e.g. after changing a policy</small></span></label>' : ''}`;
-  const wire = (f) => {
+  // The photos/videos on the post being written: [{ id, kind, file_type }] plus uploads in progress.
+  let media = [];
+  let uploading = 0;
+  const wire = (f, p) => {
     const aud = f.querySelector('[name=audience]');
     aud.addEventListener('change', () => { f.querySelector('.news-sites').hidden = aud.value !== 'sites'; });
+    media = [...(p.media ?? [])];
+    uploading = 0;
+    const list = f.querySelector('#media-list');
+    const show = () => {
+      list.innerHTML = media.map((m, i) => `<div class="media-thumb ${m.error ? 'is-failed' : ''}">
+        ${m.pending ? `<span class="media-state">${m.error ? esc(m.error) : 'Uploading…'}</span>`
+          : m.kind === 'video' ? `<video ${srcAttr(m.id)} preload="metadata" muted playsinline></video><span class="media-kind">▶ Video</span>` : `<img ${srcAttr(m.id)} alt="">`}
+        <button type="button" class="media-remove" data-remove="${i}" aria-label="Remove">×</button></div>`).join('');
+      list.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => { media.splice(Number(b.dataset.remove), 1); show(); }));
+      hydrateMedia(list);
+    };
+    show();
+    f.querySelector('#media-file').addEventListener('change', async (e) => {
+      const files = [...e.target.files];
+      e.target.value = '';
+      for (const file of files) {
+        const item = { pending: true };
+        media.push(item);
+        uploading++;
+        show();
+        try {
+          const isVideo = file.type.startsWith('video/');
+          if (!isVideo && !file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name)) throw new Error('Not a photo or video');
+          if (isVideo && file.size > MAX_VIDEO_MB * 1024 * 1024) throw new Error(`Over ${MAX_VIDEO_MB} MB – try a shorter clip`);
+          const ready = isVideo ? file : await shrinkImage(file);
+          const saved = await api('/news/media', { method: 'POST', body: { file_name: ready.name, media_type: ready.type, data: await toBase64(ready) } });
+          Object.assign(item, saved, { pending: false });
+        } catch (err) {
+          item.error = `${file.name}: ${err.message}`;
+        }
+        uploading--;
+        show();
+      }
+    });
   };
   const values = (v, f) => ({
+    media_ids: media.filter((m) => m.id).map((m) => m.id),
     title: v.title, body: v.body, category: v.category, pinned: !!v.pinned, requires_ack: !!v.requires_ack, ask_again: !!v.ask_again,
     all_sites: v.audience === 'all',
     site_ids: [...f.querySelectorAll('[name=site_pick]:checked')].map((c) => Number(c.value)),
@@ -194,9 +304,12 @@ export async function renderNewsSetup(ctx) {
     const { form: f } = openModal({
       title: 'New post', wide: true, submitLabel: 'Post it',
       body: form({}),
-      onSubmit: async (v, f2) => { await api('/news', { method: 'POST', body: values(v, f2) }); toast('Posted – it’s on everyone’s My Brew page'); rerender(); },
+      onSubmit: async (v, f2) => {
+        if (uploading) throw new Error('Wait for the photos and videos to finish uploading');
+        await api('/news', { method: 'POST', body: values(v, f2) }); toast('Posted – it’s on everyone’s My Brew page'); rerender();
+      },
     });
-    wire(f);
+    wire(f, {});
   });
   el.querySelectorAll('tr[data-edit]').forEach((tr) => tr.addEventListener('click', (e) => {
     if (e.target.closest('button')) return;
@@ -209,9 +322,12 @@ export async function renderNewsSetup(ctx) {
       onDanger: async () => {
         await api(`/news/${p.id}`, { method: 'DELETE' }); toast('Post deleted'); rerender();
       },
-      onSubmit: async (v, f2) => { await api(`/news/${p.id}`, { method: 'PUT', body: values(v, f2) }); toast('Saved'); rerender(); },
+      onSubmit: async (v, f2) => {
+        if (uploading) throw new Error('Wait for the photos and videos to finish uploading');
+        await api(`/news/${p.id}`, { method: 'PUT', body: values(v, f2) }); toast('Saved'); rerender();
+      },
     });
-    wire(f);
+    wire(f, p);
   }));
   el.querySelectorAll('[data-reads]').forEach((b) => b.addEventListener('click', async () => {
     const p = posts.find((x) => x.id === Number(b.dataset.reads));
