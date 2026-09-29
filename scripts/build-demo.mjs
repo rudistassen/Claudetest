@@ -23,14 +23,18 @@ const result = await build({
   logLevel: 'warning',
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
-const css = fs.readFileSync(path.join(root, 'public/css/styles.css'), 'utf8');
+// Fonts are inlined too, so the demo stays one file.
+const css = fs.readFileSync(path.join(root, 'public/css/styles.css'), 'utf8')
+  .replace(/url\(\/fonts\/([\w-]+\.woff2)\)/g, (_, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(root, 'public/fonts', f)).toString('base64')})`);
 // The logo band from index.html, with each logo inlined so the demo stays one file.
 const band = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
   .match(/<header class="brand-band"[\s\S]*?<\/header>/)[0]
   .replace(/src="\/img\/([\w-]+\.png)"/g, (_, f) => `src="data:image/png;base64,${fs.readFileSync(path.join(root, 'public/img', f)).toString('base64')}"`);
 
 const favicon = `data:image/svg+xml;base64,${fs.readFileSync(path.join(root, 'public/img/brewview.svg')).toString('base64')}`;
-const html = `<title>BrewView</title>
+const html = `<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrewView</title>
 <link rel="icon" href="${favicon}" type="image/svg+xml">
 <meta name="theme-color" content="#1f5f4a">
 <style>
