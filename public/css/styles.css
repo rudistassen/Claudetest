@@ -962,3 +962,19 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); font-size: 0.92rem;
 }
 @media print { .update-bar { display: none; } }
+
+/* "Your phone is showing the computer version" notice (install.js). Sized up because the page is drawn shrunk. */
+.desktop-hint {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 61; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 1rem 1.5rem; padding: 1.4rem 2rem 1.8rem; background: var(--brand); color: var(--brand-contrast);
+  font-size: 2rem; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+}
+.desktop-hint p { margin: 0; }
+.desktop-hint div { display: flex; gap: 1rem; flex-wrap: wrap; }
+.desktop-hint .btn { font-size: 1.8rem; padding: 0.7rem 1.4rem; border-radius: 14px; }
+.desktop-hint .btn:not(.btn-primary) { background: transparent; color: inherit; border-color: rgba(255, 255, 255, 0.5); }
+.desktop-hint .btn-primary { background: var(--surface); color: var(--brand); }
+@media print { .desktop-hint { display: none; } }
+body.desktop-mode .modal { font-size: 1.9rem; width: 94vw; max-width: none; }
+body.desktop-mode .modal h2 { font-size: 2.2rem; }
+body.desktop-mode .modal h3 { font-size: 0.8em; margin-top: 1em; } body.desktop-mode .modal .small, body.desktop-mode .modal .btn { font-size: 0.9em; }

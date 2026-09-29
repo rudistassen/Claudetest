@@ -57,6 +57,54 @@ async function watchForUpdates() {
   setInterval(() => check(false), 10 * 60 * 1000);
 }
 
+// A phone set to "Desktop site" ignores BrewView's phone layout and draws it as a shrunk-down computer screen.
+// Spot that (a small touch screen showing a page much wider than itself) and explain how to switch it off.
+const DESKTOP_HINT_KEY = 'cafe-ops:desktop-hint-dismissed';
+export function desktopModeOnPhone() {
+  const small = Math.min(screen.width, screen.height);
+  return navigator.maxTouchPoints > 0 && small < 600 && window.innerWidth > small * 1.35;
+}
+
+function desktopModeSteps() {
+  const samsung = /SamsungBrowser/i.test(navigator.userAgent);
+  const inApp = standalone();
+  const chrome = `<ol>
+      ${inApp ? '<li>Open <strong>Chrome</strong> (the browser, not the BrewView app).</li>' : ''}
+      <li>Tap the <strong>⋮</strong> menu (three dots, top right).</li>
+      <li>Tap <strong>Settings</strong>, then <strong>Site settings</strong>, then <strong>Desktop site</strong>.</li>
+      <li>Turn <strong>Desktop site</strong> off.</li>
+      <li>Close BrewView fully (swipe it away from your open apps) and open it again.</li>
+    </ol>`;
+  const samsungSteps = `<ol>
+      ${inApp ? '<li>Open <strong>Samsung Internet</strong> (the browser, not the BrewView app).</li>' : ''}
+      <li>Tap the <strong>☰</strong> menu (bottom right).</li>
+      <li>If you see <strong>Mobile version</strong>, tap it. Otherwise open <strong>Settings</strong> and make sure <strong>Desktop version</strong> is off (look under <strong>Browsing</strong> or <strong>Useful features</strong>).</li>
+      <li>Close BrewView fully (swipe it away from your open apps) and open it again.</li>
+    </ol>`;
+  return `<p>Your phone is set to show websites as they look on a computer, so BrewView appears tiny and you have to zoom in. Switching this off gives you the phone layout.</p>
+    ${samsung ? `<h3>Samsung Internet</h3>${samsungSteps}<h3>If you use Chrome</h3>${chrome}` : `<h3>Chrome</h3>${chrome}<h3>If you use Samsung Internet</h3>${samsungSteps}`}
+    <p class="muted small">On an iPhone: in Safari tap <strong>aA</strong> in the address bar and choose <strong>Request Mobile Website</strong>.</p>`;
+}
+
+export function checkDesktopMode() {
+  if (!desktopModeOnPhone() || document.getElementById('desktop-hint')) return;
+  // Pop-up forms are drawn larger so they can be read without zooming.
+  document.body.classList.add('desktop-mode');
+  try { if (sessionStorage.getItem(DESKTOP_HINT_KEY)) return; } catch { /* storage unavailable */ }
+  const bar = document.createElement('div');
+  bar.id = 'desktop-hint';
+  bar.className = 'desktop-hint';
+  bar.innerHTML = `<p><strong>BrewView looks tiny?</strong> Your phone is showing the computer version.</p>
+    <div><button type="button" class="btn btn-primary" data-how>Show me how to fix it</button>
+    <button type="button" class="btn" data-dismiss>Not now</button></div>`;
+  bar.querySelector('[data-how]').addEventListener('click', () => openModal({ title: 'Get the phone layout', body: desktopModeSteps() }));
+  bar.querySelector('[data-dismiss]').addEventListener('click', () => {
+    bar.remove();
+    try { sessionStorage.setItem(DESKTOP_HINT_KEY, '1'); } catch { /* storage unavailable */ }
+  });
+  document.body.append(bar);
+}
+
 const refresh = () => {
   const s = installState();
   document.querySelectorAll('[data-install]').forEach((el) => { el.hidden = !(s === 'prompt' || s === 'ios'); });
@@ -64,6 +112,7 @@ const refresh = () => {
 };
 
 export function setUpInstall() {
+  checkDesktopMode();
   if (isDemo || !('serviceWorker' in navigator) || !window.isSecureContext) return;
   navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
   watchForUpdates();
