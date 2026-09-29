@@ -103,17 +103,17 @@ function navGroups() {
       ['sales', 'Sales', '£', ['sales.view']],
     ]],
     ['Setup', [
-      ['recipes', 'Recipes', '', RECIPES],
-      ['admin/staff', 'Staff', '', ['staff.manage']],
-      ['admin/permissions', 'Permissions', '', 'admin'],
-      ['admin/locations', 'Locations', '', 'admin'],
-      ['admin/square', 'Square', '', 'admin'],
-      ['admin/email-reports', 'Email reports', '', 'admin'],
-      ['admin/news', 'News', '', ['news.manage']],
-      ['admin/documents', 'Documents', '', ['news.manage']],
-      ['admin/suppliers', 'Suppliers', '', SUPPLIERS],
-      ['admin/products', 'Products', '', SUPPLIERS],
-      ['safety/setup', 'Trail checks', '', ['safety.manage']],
+      ['recipes', 'Recipes', '≡', RECIPES],
+      ['admin/staff', 'Staff', '☺', ['staff.manage']],
+      ['admin/permissions', 'Permissions', '⚿', 'admin'],
+      ['admin/locations', 'Locations', '⌂', 'admin'],
+      ['admin/square', 'Square', '▢', 'admin'],
+      ['admin/email-reports', 'Email reports', '✉', 'admin'],
+      ['admin/news', 'News', '✎', ['news.manage']],
+      ['admin/documents', 'Documents', '❐', ['news.manage']],
+      ['admin/suppliers', 'Suppliers', '⚑', SUPPLIERS],
+      ['admin/products', 'Products', '▥', SUPPLIERS],
+      ['safety/setup', 'Trail checks', '☑', ['safety.manage']],
     ]],
   ].map(([heading, items]) => [heading, items.filter(([, , , who]) => allowed(who))]).filter(([, items]) => items.length);
 }
@@ -140,6 +140,18 @@ const NAV_FOLD_KEY = 'cafe-ops:nav-folded';
 function foldedGroups() {
   try { return new Set(JSON.parse(localStorage.getItem(NAV_FOLD_KEY) ?? '[]')); } catch { return new Set(); }
 }
+
+// Whether the side menu is shrunk to a slim strip of icons (computers and tablets), remembered in this browser.
+// Until someone chooses, it starts slim on smaller screens so pages get the room.
+const NAV_RAIL_KEY = 'cafe-ops:nav-rail';
+function navRail() {
+  try {
+    const saved = localStorage.getItem(NAV_RAIL_KEY);
+    if (saved !== null) return saved === '1';
+  } catch { /* storage unavailable */ }
+  return window.innerWidth < 1100;
+}
+const phoneNav = () => window.matchMedia('(max-width: 800px)').matches;
 
 // The menu item for a page: the longest item path that is the page or a parent of it (recipes/12 → Recipes).
 function activeItem(path, items) {
@@ -234,7 +246,7 @@ function renderShell() {
   const folded = foldedGroups();
   document.getElementById('app').innerHTML = `
     <header class="topbar">
-      <button class="icon-btn menu-toggle" aria-label="Menu">☰</button>
+      <button class="icon-btn menu-toggle" aria-label="Show or hide the menu" title="Show or hide the menu">☰</button>
       <a class="brand" href="#/dashboard" aria-label="BrewView – dashboard">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <div class="loc-picker">
         ${state.multiSite ? sitePicker() : `<span class="loc-name">${PIN}${esc(state.location?.name ?? '')}</span>`}
@@ -244,7 +256,7 @@ function renderShell() {
     <div class="layout">
       <nav class="sidebar">
         ${groups.map(([heading, items]) => {
-          const links = items.map(([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${icon ? `<span class="nav-icon">${icon}</span>` : ''}${label}${p === 'mybrew' ? '<span class="nav-badge" id="news-badge" hidden></span>' : ''}</a>`).join('');
+          const links = items.map(([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}" title="${esc(label)}"><span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>${p === 'mybrew' ? '<span class="nav-badge" id="news-badge" hidden></span>' : ''}</a>`).join('');
           if (!heading) return links;
           // The section holding the current page always stays open.
           const open = !folded.has(heading) || items.some(([p]) => p === active);
@@ -254,11 +266,12 @@ function renderShell() {
           </div>`;
         }).join('')}
         <div class="nav-heading"></div>
-        <a href="#" id="install-app" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span>Install app</a>
-        <a href="#" id="logout">Sign out</a>
+        <a href="#" id="install-app" title="Install app" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
+        <a href="#" id="logout" title="Sign out"><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
       </nav>
       <main id="view"></main>
     </div>`;
+  document.body.classList.toggle('nav-rail', navRail());
   showNewsBadge();
   wireSitePicker((id) => {
     state.locationId = id;
@@ -279,9 +292,15 @@ function renderShell() {
     location.hash = '';
     start();
   });
+  // On phones ☰ slides the menu out; on bigger screens it switches between the full menu and the slim icon strip.
   document.querySelector('.menu-toggle').addEventListener('click', () => {
-    placeNav();
-    document.body.classList.toggle('nav-open');
+    if (phoneNav()) {
+      placeNav();
+      document.body.classList.toggle('nav-open');
+      return;
+    }
+    const rail = document.body.classList.toggle('nav-rail');
+    try { localStorage.setItem(NAV_RAIL_KEY, rail ? '1' : '0'); } catch { /* storage unavailable */ }
   });
   document.querySelector('.sidebar').addEventListener('click', (e) => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
   document.querySelectorAll('.nav-toggle').forEach((b) => b.addEventListener('click', () => {
