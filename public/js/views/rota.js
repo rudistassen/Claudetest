@@ -65,47 +65,63 @@ export async function render(ctx) {
   }
   // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
   const counted = data.shifts.filter((x) => x.state !== 'removed');
-  // "Group by rota group": sub-headings for each group (Kitchen, Front of house…), remembered on this device.
-  const BY_GROUP_KEY = 'cafe-ops:rota-by-group';
-  let byGroup = false;
-  try { byGroup = localStorage.getItem(BY_GROUP_KEY) === '1'; } catch { /* storage unavailable */ }
+  // How the rota is laid out, remembered on this device: by site; site then rota group (Kitchen, Front of house…);
+  // or rota group then site. On a single site's rota the last two both split it by rota group.
+  const LAYOUT_KEY = 'cafe-ops:rota-layout';
+  let layout = 'site';
+  try {
+    layout = localStorage.getItem(LAYOUT_KEY) ?? (localStorage.getItem('cafe-ops:rota-by-group') === '1' ? 'site-group' : 'site');
+  } catch { /* storage unavailable */ }
+  if (!['site', 'site-group', 'group-site'].includes(layout)) layout = 'site';
+  const byGroup = layout !== 'site';
+  const groupName = (u) => u.rota_group ?? '';
+  const groupOrder = (a, b) => (a === '') - (b === '') || a.localeCompare(b);
   const hoursAt = (u, site) => counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0);
-  const withGroups = (people, site) => {
-    if (!byGroup) return people.map((u) => ({ u, site }));
-    const names = [...new Set(people.map((u) => u.rota_group ?? ''))]
-      .sort((a, b) => (a === '') - (b === '') || a.localeCompare(b));
-    return names.flatMap((name) => {
-      const inGroup = people.filter((u) => (u.rota_group ?? '') === name);
-      return [
-        { sub: name || 'No rota group', site, people: inGroup.length, hours: Math.round(inGroup.reduce((t, u) => t + hoursAt(u, site), 0) * 10) / 10 },
-        ...inGroup.map((u) => ({ u, site })),
-      ];
-    });
+  const rate = new Map(data.staff.map((u) => [u.id, u.hourly_rate]));
+  const round1 = (n) => Math.round(n * 10) / 10;
+  // Sub-heading rows: one per rota group (or per site), each followed by its people.
+  const subRows = (people, site, groupId, label) => [
+    { sub: label, site, groupId, people: new Set(people.map((u) => u.id)).size, hours: round1(people.reduce((t, u) => t + hoursAt(u, site), 0)) },
+    ...people.map((u) => ({ u, site, groupId })),
+  ];
+  const byRotaGroup = (people, site, groupId) => [...new Set(people.map(groupName))].sort(groupOrder)
+    .flatMap((name) => subRows(people.filter((u) => groupName(u) === name), site, groupId, name || 'No rota group'));
+  // Everyone rostered at a site that week (its own staff first, then people covering from elsewhere).
+  const sites = state.locations.filter((l) => l.active).sort((a, b) => a.name.localeCompare(b.name));
+  const peopleAt = (site) => {
+    const working = new Set(data.shifts.filter((x) => x.location_id === site.id).map((x) => x.user_id));
+    const people = data.staff.filter((u) => u.location_id === site.id || working.has(u.id));
+    return [...people.filter((p) => p.location_id === site.id), ...people.filter((p) => p.location_id !== site.id)];
   };
+  const summaryOf = (shifts, people) => ({
+    people,
+    hours: round1(shifts.reduce((t, x) => t + x.hours, 0)),
+    // Pay rates are only sent to managers and admins.
+    cost: data.labour_cost !== undefined ? shifts.reduce((t, x) => t + x.hours * (rate.get(x.user_id) ?? 0), 0) : null,
+  });
   const rows = [];
-  if (all) {
-    const sites = state.locations.filter((l) => l.active).sort((a, b) => a.name.localeCompare(b.name));
+  if (all && layout === 'group-site') {
+    // Rota group first, then the sites its people are rostered at.
+    const perSite = sites.map((site) => ({ site, people: peopleAt(site) })).filter((x) => x.people.length);
+    const names = [...new Set(perSite.flatMap((x) => x.people.map(groupName)))].sort(groupOrder);
+    for (const name of names) {
+      const groupId = `rg:${name}`;
+      const members = new Set(data.staff.filter((u) => groupName(u) === name).map((u) => u.id));
+      const shifts = counted.filter((x) => members.has(x.user_id));
+      const inGroup = perSite.map((x) => ({ site: x.site, people: x.people.filter((u) => groupName(u) === name) })).filter((x) => x.people.length);
+      rows.push({ header: name || 'No rota group', groupId, summary: summaryOf(shifts, new Set(inGroup.flatMap((x) => x.people.map((u) => u.id))).size) });
+      for (const { site, people } of inGroup) rows.push(...subRows(people, site.id, groupId, site.name));
+    }
+  } else if (all) {
     for (const site of sites) {
-      const working = new Set(data.shifts.filter((x) => x.location_id === site.id).map((x) => x.user_id));
-      const people = data.staff.filter((u) => u.location_id === site.id || working.has(u.id));
+      const people = peopleAt(site);
       if (!people.length) continue;
-      const siteShifts = counted.filter((x) => x.location_id === site.id);
-      const rate = new Map(data.staff.map((u) => [u.id, u.hourly_rate]));
-      rows.push({
-        header: site.name,
-        siteId: site.id,
-        summary: {
-          people: people.length,
-          hours: Math.round(siteShifts.reduce((t, x) => t + x.hours, 0) * 10) / 10,
-          // Pay rates are only sent to managers and admins.
-          cost: data.labour_cost !== undefined ? siteShifts.reduce((t, x) => t + x.hours * (rate.get(x.user_id) ?? 0), 0) : null,
-        },
-      });
-      // The site's own staff first, then people covering from elsewhere.
-      rows.push(...withGroups([...people.filter((p) => p.location_id === site.id), ...people.filter((p) => p.location_id !== site.id)], site.id));
+      const groupId = String(site.id);
+      rows.push({ header: site.name, groupId, summary: summaryOf(counted.filter((x) => x.location_id === site.id), people.length) });
+      rows.push(...(byGroup ? byRotaGroup(people, site.id, groupId) : people.map((u) => ({ u, site: site.id, groupId }))));
     }
   } else {
-    rows.push(...withGroups(data.staff, siteId));
+    rows.push(...(byGroup ? byRotaGroup(data.staff, siteId, null) : data.staff.map((u) => ({ u, site: siteId, groupId: null }))));
   }
   const rowHours = (u, site) => Math.round(counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
   // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
@@ -129,7 +145,11 @@ export async function render(ctx) {
           <option value="all" ${all ? 'selected' : ''}>All sites</option>
           ${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
         </select>` : ''}
-        <button class="btn ${byGroup ? 'is-on' : ''}" id="by-group" aria-pressed="${byGroup}" title="Show sub-headings for each rota group (set on the Staff page)">Group by rota group</button>
+        <select id="rota-layout" aria-label="View" title="How the rota is grouped (rota groups are set on the Staff page)">
+          ${(all ? [['site', 'View: by site'], ['site-group', 'View: site, then rota group'], ['group-site', 'View: rota group, then site']]
+            : [['site', 'View: everyone'], ['site-group', 'View: by rota group']])
+            .map(([v, l]) => `<option value="${v}" ${(all ? layout : byGroup ? 'site-group' : 'site') === v ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
         ${all ? '<button class="btn" id="collapse-all"></button>' : ''}
         <a class="btn" href="#/rota${qs({ view: 'mine', week })}">My shifts</a>
         <button class="btn" data-week="-7">‹ Prev</button>
@@ -155,16 +175,16 @@ export async function render(ctx) {
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}">${fmtDate(d)}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
-          ${rows.map(({ header, siteId: groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${all ? `data-in-group="${site}"` : ''}>
+          ${rows.map(({ header, groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
             <th colspan="${data.days.length + 2}"><span class="rota-subgroup-name">${esc(sub)}</span>
-              <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group" data-group="${groupId}"><th colspan="${data.days.length + 2}">
-            <button class="rota-group-toggle" aria-expanded="true" data-toggle="${groupId}">
+              <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group ${layout === 'group-site' && all ? 'rota-group-by-rg' : ''}" data-group="${esc(groupId)}"><th colspan="${data.days.length + 2}">
+            <button class="rota-group-toggle" aria-expanded="true" data-toggle="${esc(groupId)}">
               <span class="rota-chevron" aria-hidden="true">▾</span>
               <span class="rota-group-name">${esc(header)}</span>
               <span class="rota-group-meta">${summary.people} ${summary.people === 1 ? 'person' : 'people'} · ${summary.hours} h${summary.cost === null ? '' : ` · ${money(summary.cost)} labour`}</span>
             </button>
           </th></tr>` : `
-            <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${all ? `data-in-group="${site}"` : ''}>
+            <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
               <th><strong>${esc(u.name)}</strong>${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${data.days.map((d) => {
                 const shifts = (byCell.get(cellKey(u.id, site, d)) ?? []).filter((x) => !x.away);
@@ -196,8 +216,8 @@ export async function render(ctx) {
     ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a rota group yet – set one for each person on the Staff page.</p>' : ''}
     ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see.</p>' : ''}`;
 
-  el.querySelector('#by-group').addEventListener('click', () => {
-    try { localStorage.setItem(BY_GROUP_KEY, byGroup ? '0' : '1'); } catch { /* storage unavailable */ }
+  el.querySelector('#rota-layout').addEventListener('change', (e) => {
+    try { localStorage.setItem(LAYOUT_KEY, e.target.value); } catch { /* storage unavailable */ }
     ctx.rerender();
   });
   el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs({ week, site: e.target.value })}`));
@@ -210,8 +230,8 @@ export async function render(ctx) {
   const applyFolds = () => {
     for (const g of groups) {
       const shut = folded.has(g);
-      el.querySelectorAll(`tr[data-in-group="${g}"]`).forEach((tr) => { tr.hidden = shut; });
-      const btn = el.querySelector(`[data-toggle="${g}"]`);
+      el.querySelectorAll('tr[data-in-group]').forEach((tr) => { if (tr.dataset.inGroup === g) tr.hidden = shut; });
+      const btn = [...el.querySelectorAll('[data-toggle]')].find((b) => b.dataset.toggle === g);
       btn.setAttribute('aria-expanded', String(!shut));
       btn.closest('tr').classList.toggle('is-folded', shut);
     }
