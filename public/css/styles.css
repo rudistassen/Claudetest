@@ -666,6 +666,11 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .dash-sales, .dash-labour { white-space: nowrap; }
 .dash-bar { position: relative; display: inline-block; vertical-align: middle; width: 55%; max-width: 220px; height: 10px; margin-right: 0.6rem; background: var(--surface-2); border-radius: 3px; }
 .dash-bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 3px 3px 0; background: var(--series-1); }
+.dash-bars { display: inline-flex; flex-direction: column; gap: 3px; vertical-align: middle; width: 55%; max-width: 220px; margin-right: 0.6rem; }
+.dash-bars .dash-bar { width: 100%; max-width: none; margin: 0; }
+.dash-bar-prev { height: 5px; background: transparent; }
+.dash-bar-prev .fill { background: var(--muted); opacity: 0.55; }
+.dash-vs { font-size: 0.8rem; font-weight: 700; margin-left: 0.3rem; }
 .dash-bar .fill.tone-bg-good { background: var(--good); }
 .dash-bar .fill.tone-bg-warn { background: var(--warn); }
 .dash-bar .fill.tone-bg-bad { background: var(--bad); }
@@ -681,6 +686,8 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
   .dash-table td.num { display: none; }
   .dash-sales, .dash-labour { min-width: 0; white-space: normal; }
   .dash-bar { display: block; width: 100%; max-width: none; margin: 0.25rem 0 0.2rem; }
+  .dash-bars { display: flex; width: 100%; max-width: none; margin: 0.25rem 0 0.3rem; }
+  .dash-bars .dash-bar { margin: 0; }
   .dash-table tfoot tr { border-top: 2px solid var(--border); border-bottom: 0; }
 }
 

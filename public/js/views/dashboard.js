@@ -22,6 +22,14 @@ function versus(now, then, { goodUp = true } = {}) {
   return `<span class="${tone}">${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%</span><br><span class="muted">${money(then)} last week</span>`;
 }
 
+// The change on last week, as a small ▲/▼ percentage (green up, red down).
+function change(now, then) {
+  if (!then) return '';
+  const c = ((now - then) / then) * 100;
+  const tone = Math.abs(c) < 0.5 ? 'muted' : c > 0 ? 'tone-good' : 'tone-bad';
+  return `<span class="dash-vs ${tone}" title="${money(then)} last week">${Math.abs(c) < 0.05 ? '■ 0.0%' : `${c > 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%`}</span>`;
+}
+
 // For a tile: "▲ 4.2% on last week", then what last week had taken by the same time.
 function versusLine(now, then) {
   if (now === null) return '<span class="muted">No sales synced yet today</span>';
@@ -145,10 +153,16 @@ function downloadPdf(state, date) {
 const PERIOD_KEY = 'cafe-ops:dashboard-period';
 const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`;
 
-function bySite(t, period) {
+function bySite(t, period, prev) {
   const labour = (r) => (t.labour_synced && r.labour_pct !== null ? r.labour_pct : r.rostered_labour_pct);
   const rows = [...t.locations].sort((a, b) => b.gross_sales - a.gross_sales);
-  const maxSales = Math.max(1, ...rows.map((r) => r.gross_sales));
+  const maxSales = Math.max(1, ...rows.map((r) => Math.max(r.gross_sales, prev.get(r.id) ?? 0)));
+  const prevTotal = rows.some((r) => prev.get(r.id) !== null && prev.get(r.id) !== undefined) ? rows.reduce((n, r) => n + (prev.get(r.id) ?? 0), 0) : null;
+  // Gross sales (blue) over the same period last week (grey), with the change.
+  const salesCell = (now, then, { bars = true } = {}) => `<td class="dash-sales">
+    ${bars ? `<span class="dash-bars"><span class="dash-bar"><span class="fill" style="width:${(now / maxSales) * 100}%"></span></span>
+      ${then !== null && then !== undefined ? `<span class="dash-bar dash-bar-prev" title="Last week ${money(then)}"><span class="fill" style="width:${(then / maxSales) * 100}%"></span></span>` : ''}</span>` : ''}
+    <strong>${money(now)}</strong> ${change(now, then)}</td>`;
   // Labour bars run to at least twice the target, so the target line sits in a sensible place.
   const scale = Math.max(LABOUR_TARGET * 2, ...rows.map((r) => Math.min(labour(r) ?? 0, 150)));
   const icon = (p) => (p === null || p === undefined ? '' : labourTone(p) === 'good' ? '✓ ' : '⚠ ');
@@ -170,15 +184,15 @@ function bySite(t, period) {
         <thead><tr><th>Site</th><th>Gross sales</th><th class="num">Orders</th><th>Labour % of net sales <small class="inline">(${t.labour_synced ? 'clocked' : 'rostered'} · target ${LABOUR_TARGET}%)</small></th></tr></thead>
         <tbody>${rows.map((r) => `<tr data-site-row="${r.id}" tabindex="0">
           <th>${esc(r.name)}${r.linked ? '' : ' <small class="inline muted">not on Square</small>'}</th>
-          <td class="dash-sales"><span class="dash-bar"><span class="fill" style="width:${(r.gross_sales / maxSales) * 100}%"></span></span><strong>${money(r.gross_sales)}</strong></td>
+          ${salesCell(r.gross_sales, prev.get(r.id))}
           <td class="num">${r.orders}</td>
           ${labourCell(labour(r))}
         </tr>`).join('')}</tbody>
-        ${rows.length > 1 ? `<tfoot><tr><th>All sites</th><td><strong>${money(total.gross_sales)}</strong></td><td class="num">${total.orders}</td>
+        ${rows.length > 1 ? `<tfoot><tr><th>All sites</th>${salesCell(total.gross_sales, prevTotal, { bars: false })}<td class="num">${total.orders}</td>
           <td><strong class="tone-${labourTone(labour(total))}">${icon(labour(total))}${fmtPct(labour(total))}</strong></td></tr></tfoot>` : ''}
       </table></div>
       <p class="muted small">${period === 'today' ? 'So far today' : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
-        Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
+        Grey bars are the same time last week. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
     </section>`;
 }
 
@@ -187,12 +201,14 @@ export async function render({ el, state, navigate, stale, rerender }) {
   let period = 'today';
   try { period = localStorage.getItem(PERIOD_KEY) === 'week' ? 'week' : 'today'; } catch { /* storage unavailable */ }
   const d0 = todayISO();
-  const [data, myShifts, leave, tradeToday, tradeWeek] = await Promise.all([
+  const [data, myShifts, leave, tradeToday, tradeWeek, tradePrevWeek] = await Promise.all([
     api('/dashboard'),
     api('/my-shifts'),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
     seeSales ? api(`/trading?from=${d0}&to=${d0}`) : null,
     seeSales && period === 'week' ? api(`/trading?from=${addDays(d0, -6)}&to=${d0}`) : null,
+    // The week before, up to yesterday a week ago (last week's matching day to this time comes from /dashboard).
+    seeSales && period === 'week' ? api(`/trading?from=${addDays(d0, -13)}&to=${addDays(d0, -8)}`) : null,
   ]);
   if (stale()) return;
   const trade = period === 'week' ? tradeWeek : tradeToday;
@@ -216,6 +232,13 @@ export async function render({ el, state, navigate, stale, rerender }) {
     now: withGross.length ? withGross.reduce((n, l) => n + l.gross_today, 0) : null,
     then: locs.some((l) => l.last_week.gross !== null) ? locs.reduce((n, l) => n + (l.last_week.gross ?? 0), 0) : null,
   };
+  // Each site's gross sales over the same period last week, up to the same time of day.
+  const prevSales = new Map(locs.map((l) => {
+    const sameTime = l.last_week.gross;
+    if (period === 'today') return [l.id, sameTime];
+    const before = tradePrevWeek?.locations.find((x) => x.id === l.id)?.gross_sales ?? 0;
+    return [l.id, sameTime === null && !before ? null : before + (sameTime ?? 0)];
+  }));
   const labourPct = todayTotals ? (tradeToday.labour_synced && todayTotals.labour_pct !== null ? todayTotals.labour_pct : todayTotals.rostered_labour_pct) : null;
 
   el.innerHTML = `
@@ -237,7 +260,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
       <div class="kpi" data-icon="⌫"><span>Wastage, last 7 days</span><strong>${money(totals.wastage)}</strong></div>
       <div class="kpi" data-icon="☺"><span>Staff on shift today</span><strong>${totals.staff}</strong></div>
     </div>` : ''}
-    ${trade?.square_connected ? bySite(trade, period) : ''}
+    ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
     ${myShifts.length ? `
     <section class="card">
@@ -257,6 +280,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
     const clocked = trade.labour_synced && r.clocked_hours > 0;
     attachTip(tr, () => r.name, () => [
       { value: money(r.gross_sales), label: `gross sales · ${r.orders} orders` },
+      ...(prevSales.get(r.id) ? [{ value: money(prevSales.get(r.id)), label: 'gross sales same time last week' }] : []),
       { value: money(r.net_sales), label: 'net sales (ex VAT)' },
       { value: money(clocked ? r.clocked_cost : r.rostered_cost), label: `labour (${clocked ? 'clocked' : 'rostered'}) · ${hrs(clocked ? r.clocked_hours : r.rostered_hours)}` },
       ...(r.sales_per_labour_hour !== null ? [{ value: money(r.sales_per_labour_hour), label: 'sales per labour hour' }] : []),
