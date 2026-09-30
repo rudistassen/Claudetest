@@ -1200,3 +1200,23 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
   text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; }
 .person-link:hover { color: var(--brand); text-decoration-color: currentColor; }
 .day-name .person-link { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Week rota: each site's heading is a bold banner, so sites stand apart clearly. */
+.rota tr.rota-group th {
+  background: linear-gradient(100deg, var(--brand-deep), var(--brand)); color: #fff;
+  padding: 0.75rem 1rem; border-left: 0; border-top: 18px solid var(--surface);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+}
+.rota tr.rota-group .rota-group-toggle { align-items: center; }
+.rota tr.rota-group .rota-group-name { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.rota tr.rota-group .rota-chevron { color: #fff; font-size: 1rem; }
+.rota tr.rota-group .rota-group-meta {
+  margin-left: 0.9rem; padding: 0.25rem 0.8rem; border-radius: 99px;
+  background: var(--surface); color: var(--text); opacity: 1; font-size: 0.85rem; font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.rota tr.rota-group .rota-publish-site { background: var(--surface); color: var(--text); }
+@media print {
+  .rota tr.rota-group th { background: #eee !important; color: #000 !important; box-shadow: none; }
+  .rota tr.rota-group .rota-group-name, .rota tr.rota-group .rota-chevron { color: #000; text-shadow: none; }
+}
