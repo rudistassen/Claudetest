@@ -231,11 +231,11 @@ export async function render({ el, state, navigate, stale, rerender }) {
   const withGross = locs.filter((l) => l.gross_today !== null);
   const gross = {
     now: withGross.length ? withGross.reduce((n, l) => n + l.gross_today, 0) : null,
-    then: locs.some((l) => l.last_week.gross !== null) ? locs.reduce((n, l) => n + (l.last_week.gross ?? 0), 0) : null,
+    then: locs.some((l) => (l.last_week?.gross ?? null) !== null) ? locs.reduce((n, l) => n + (l.last_week?.gross ?? 0), 0) : null,
   };
   // Each site's gross sales over the same period last week, up to the same time of day.
   const prevSales = new Map(locs.map((l) => {
-    const sameTime = l.last_week.gross;
+    const sameTime = l.last_week?.gross ?? null;
     if (period === 'today') return [l.id, sameTime];
     const before = tradePrevWeek?.locations.find((x) => x.id === l.id)?.gross_sales ?? 0;
     return [l.id, sameTime === null && !before ? null : before + (sameTime ?? 0)];
