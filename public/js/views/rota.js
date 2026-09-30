@@ -1,5 +1,6 @@
 import { fmtPct, labourTone } from './sales.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite } from '../lib.js';
+import { shiftHistory } from './rotalog.js';
 
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
@@ -407,7 +408,8 @@ export async function render(ctx) {
           ${field('Unpaid break (mins)', input('break_minutes', s.break_minutes, 'type="number" min="0" step="5"'))}
         </div>
         <input type="hidden" name="position" value="${esc(s.position ?? person?.position ?? '')}">
-        ${field('Notes', textarea('notes', s.notes))}`,
+        ${field('Notes', textarea('notes', s.notes))}
+        ${shift ? '<details class="shift-history"><summary>History of this shift</summary><div id="shift-history" class="muted small">Loading…</div></details>' : ''}`,
       danger: shift ? 'Delete shift' : null,
       onDanger: async () => {
         await api(`/shifts/${shift.id}`, { method: 'DELETE' });
@@ -442,6 +444,12 @@ export async function render(ctx) {
     ['user_id', 'date', 'start_time', 'end_time'].forEach((n) => form[n].addEventListener('change', check));
     check();
     form.querySelector('#publish-one')?.addEventListener('click', () => publishOne(shift));
+    form.querySelector('.shift-history')?.addEventListener('toggle', async (e) => {
+      const box = form.querySelector('#shift-history');
+      if (!e.target.open || box.dataset.loaded) return;
+      box.dataset.loaded = '1';
+      try { box.innerHTML = await shiftHistory(shift.id); box.classList.remove('muted', 'small'); } catch (err) { box.textContent = err.message; }
+    });
   };
   // Publishes one shift as it's saved now (unsaved edits in the window aren't included).
   const publishOne = async (shift) => {

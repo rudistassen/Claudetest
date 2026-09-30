@@ -3,6 +3,7 @@ import { logo } from './logo.js';
 import { install, installState, setUpInstall } from './install.js';
 import * as admin from './views/admin.js';
 import * as breaks from './views/breaks.js';
+import * as rotalog from './views/rotalog.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
 import * as orders from './views/orders.js';
@@ -46,6 +47,7 @@ const ROUTES = [
   [/^safety\/report$/, safety.renderReport, ['safety.report']],
   [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
   [/^rota$/, rota.render, ROTA],
+  [/^rota\/log$/, rotalog.render, ['rota.edit', 'rota.publish']],
   [/^timeoff$/, timeoff.render],
   [/^wastage$/, wastage.render, WASTAGE],
   [/^stock$/, stock.renderList, STOCK],
@@ -89,6 +91,7 @@ function navGroups() {
     ['Team', [
       ['mybrew', 'My Brew', '☕'],
       ['rota', 'Rota', '◷', ROTA],
+      ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
       ['timeoff', 'Time off', '☀'],
     ]],
     ['Trail', [

@@ -3,7 +3,8 @@ import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { availabilityFor, leaveFor, onHoliday } from './leave.js';
 import { dayKey, labourByDay, pct, salesByDay } from '../metrics.js';
 import { bankHoliday } from '../bank-holidays.js';
-import { addDays, badRequest, date, id, notFound, num, round2, shiftHours, str, time, today, weekStart } from '../util.js';
+import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
+import { addDays, badRequest, date, id, notFound, num, oneOf, round2, shiftHours, str, time, today, weekStart, zonedMidnightUTC } from '../util.js';
 
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 
@@ -209,13 +210,26 @@ export function registerRotaRoutes(router, db) {
     });
   });
 
-  // Publish a site (or all sites) for a week, or with { date } just that day.
+  // Unpublished changes at one site in a date range.
+  const pendingAt = (locationId, from, to) => db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id = ? AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`)
+    .get(locationId, from, to).n;
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  // Publish a site (or all sites) for a week, or with { date } just that day. Logged site by site.
   router.post('/rota/publish', requirePerm('rota.publish'), (req, res) => {
     const ids = rotaSites(req, req.body.location_id);
     const day = date(req.body.date, 'date');
-    if (day) return res.json({ published: publishShifts(db, ids, day, day) });
-    const ws = weekStart(date(req.body.week, 'week', { required: true }));
-    res.json({ published: publishShifts(db, ids, ws, addDays(ws, 6)) });
+    const ws = day ? null : weekStart(date(req.body.week, 'week', { required: true }));
+    const [from, to, label] = day ? [day, day, fmtDay(day)] : [ws, addDays(ws, 6), `the week of ${fmtDay(ws)}`];
+    let published = 0;
+    for (const id of ids) {
+      const n = pendingAt(id, from, to);
+      if (!n) continue;
+      publishShifts(db, [id], from, to);
+      logRota(db, req, { action: 'publish', location_id: id, details: `Published ${plural(n, 'change')} for ${label}` });
+      published += n;
+    }
+    res.json({ published });
   });
 
   // Publish one shift on its own: staff see it (or stop seeing it, if it was removed) straight away.
@@ -224,8 +238,11 @@ export function registerRotaRoutes(router, db) {
     if (!s) throw notFound('Shift');
     assertLocation(req, s.location_id);
     if (s.pub_location_id && s.pub_location_id !== s.location_id) assertLocation(req, s.pub_location_id);
-    if (s.removed) db.prepare('DELETE FROM shifts WHERE id = ?').run(s.id);
-    else db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS} WHERE id = ?`).run(s.id);
+    tx(db, () => {
+      if (s.removed) db.prepare('DELETE FROM shifts WHERE id = ?').run(s.id);
+      else db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS} WHERE id = ?`).run(s.id);
+      logRota(db, req, { action: 'publish_shift', location_id: s.location_id, shift: s, details: `${s.removed ? 'Published the removal of' : 'Published'} ${shiftText(s)}` });
+    });
     res.json({ published: 1, removed: !!s.removed });
   });
 
@@ -237,11 +254,43 @@ export function registerRotaRoutes(router, db) {
     const args = [...ids, ws, addDays(ws, 6)];
     const n = db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE ${where} AND (${UNPUBLISHED})`).get(...args).n;
     tx(db, () => {
+      for (const id of ids) {
+        const here = pendingAt(id, ws, addDays(ws, 6));
+        if (here) logRota(db, req, { action: 'discard', location_id: id, details: `Discarded ${plural(here, 'unpublished change')} for the week of ${fmtDay(ws)}` });
+      }
       db.prepare(`DELETE FROM shifts WHERE ${where} AND pub_date IS NULL`).run(...args);
       db.prepare(`UPDATE shifts SET location_id = pub_location_id, user_id = pub_user_id, date = pub_date, start_time = pub_start_time,
         end_time = pub_end_time, break_minutes = pub_break_minutes, removed = 0 WHERE ${where}`).run(...args);
     });
     res.json({ discarded: n });
+  });
+
+  // The change log (Team → Rota changes): newest first, for the dates the changes were made. Filter by site, the
+  // person whose shift it was, the kind of change, or one shift (?shift_id=, for its history).
+  router.get('/rota/log', requirePerm('rota.edit', 'rota.publish'), (req, res) => {
+    const shiftId = req.query.shift_id ? Number(req.query.shift_id) : null;
+    const to = date(req.query.to, 'to') ?? today();
+    const from = date(req.query.from, 'from') ?? addDays(to, -13);
+    if (from > to) throw badRequest('from must be before to');
+    const sqlTime = (d) => zonedMidnightUTC(d).replace('T', ' ').slice(0, 19);
+    const ids = rotaSites(req, req.query.location_id || 'all');
+    const where = [`location_id IN (${ids.map(() => '?').join(', ')})`];
+    const args = [...ids];
+    if (shiftId) { where.push('shift_id = ?'); args.push(shiftId); }
+    else { where.push('at >= ? AND at < ?'); args.push(sqlTime(from), sqlTime(addDays(to, 1))); }
+    if (req.query.staff_id) { where.push('staff_id = ?'); args.push(Number(req.query.staff_id)); }
+    if (req.query.action) {
+      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy']);
+      // "Published" covers publishing a whole rota and a single shift.
+      if (kind === 'publish') where.push(`action IN ('publish', 'publish_shift')`);
+      else { where.push('action = ?'); args.push(kind); }
+    }
+    const LIMIT = 1000;
+    const rows = db.prepare(`SELECT * FROM rota_log WHERE ${where.join(' AND ')} ORDER BY at DESC, id DESC LIMIT ${LIMIT + 1}`).all(...args);
+    // People to filter by: anyone who appears in the log for these sites.
+    const people = db.prepare(`SELECT DISTINCT staff_id AS id, staff_name AS name FROM rota_log
+      WHERE staff_id IS NOT NULL AND location_id IN (${ids.map(() => '?').join(', ')}) ORDER BY staff_name`).all(...ids);
+    res.json({ from, to, entries: rows.slice(0, LIMIT), more: rows.length > LIMIT, people });
   });
 
   // Your own upcoming shifts, as published.
@@ -266,9 +315,13 @@ export function registerRotaRoutes(router, db) {
   router.post('/shifts', requirePerm('rota.edit'), (req, res) => {
     const s = shiftBody(req);
     assertNoClash(s, 0);
-    const r = db.prepare(`INSERT INTO shifts (location_id, user_id, date, start_time, end_time, break_minutes, position, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(s.location_id, s.user_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes);
+    const r = tx(db, () => {
+      const ins = db.prepare(`INSERT INTO shifts (location_id, user_id, date, start_time, end_time, break_minutes, position, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(s.location_id, s.user_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes);
+      logRota(db, req, { action: 'add', location_id: s.location_id, shift: { ...s, id: ins.lastInsertRowid }, details: shiftText(s) });
+      return ins;
+    });
     res.status(201).json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(r.lastInsertRowid));
   });
 
@@ -283,16 +336,26 @@ export function registerRotaRoutes(router, db) {
     const existing = loadShift(req);
     const s = shiftBody(req);
     assertNoClash(s, existing.id);
-    db.prepare(`UPDATE shifts SET location_id = ?, user_id = ?, date = ?, start_time = ?, end_time = ?, break_minutes = ?, position = ?, notes = ?, removed = 0 WHERE id = ?`)
-      .run(s.location_id, s.user_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes, existing.id);
+    const changes = shiftChanges(db, existing, s);
+    tx(db, () => {
+      db.prepare(`UPDATE shifts SET location_id = ?, user_id = ?, date = ?, start_time = ?, end_time = ?, break_minutes = ?, position = ?, notes = ?, removed = 0 WHERE id = ?`)
+        .run(s.location_id, s.user_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes, existing.id);
+      if (changes.length) {
+        logRota(db, req, { action: 'change', location_id: s.location_id, shift: { ...s, id: existing.id }, details: `${shiftText(s)} — ${changes.join('; ')}` });
+      }
+    });
     res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(existing.id));
   });
 
   // A shift staff have never seen is deleted; a published one is marked removed until the rota is published.
   router.delete('/shifts/:id', requirePerm('rota.edit'), (req, res) => {
     const shift = loadShift(req);
-    if (shift.pub_date === null) db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
-    else db.prepare('UPDATE shifts SET removed = 1 WHERE id = ?').run(shift.id);
+    tx(db, () => {
+      if (shift.pub_date === null) db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
+      else db.prepare('UPDATE shifts SET removed = 1 WHERE id = ?').run(shift.id);
+      logRota(db, req, { action: 'remove', location_id: shift.location_id, shift,
+        details: `${shiftText(shift)}${shift.pub_date === null ? ' (never published)' : ' (staff see it until the rota is published)'}` });
+    });
     res.json({ ok: true });
   });
 
@@ -300,7 +363,10 @@ export function registerRotaRoutes(router, db) {
     const shift = loadShift(req);
     assertNoClash(shift, shift.id);
     if (onHoliday(db, shift.user_id, shift.date)) throw badRequest('They are on holiday that day');
-    db.prepare('UPDATE shifts SET removed = 0 WHERE id = ?').run(shift.id);
+    tx(db, () => {
+      db.prepare('UPDATE shifts SET removed = 0 WHERE id = ?').run(shift.id);
+      logRota(db, req, { action: 'restore', location_id: shift.location_id, shift, details: shiftText(shift) });
+    });
     res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(shift.id));
   });
 
@@ -325,11 +391,19 @@ export function registerRotaRoutes(router, db) {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
       let copied = 0;
       let skipped = 0;
+      const bySite = new Map(ids.map((id) => [id, { copied: 0, skipped: 0 }]));
       for (const s of source) {
         const next = { ...s, date: addDays(s.date, offset) };
-        if (findClash(next, 0) || onHoliday(db, s.user_id, next.date)) { skipped++; continue; }
+        const site = bySite.get(s.location_id);
+        if (findClash(next, 0) || onHoliday(db, s.user_id, next.date)) { skipped++; if (site) site.skipped++; continue; }
         insert.run(s.location_id, s.user_id, next.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes);
         copied++;
+        if (site) site.copied++;
+      }
+      for (const [id, n] of bySite) {
+        if (!n.copied && !n.skipped && !req.body.replace) continue;
+        logRota(db, req, { action: 'copy', location_id: id,
+          details: `Copied ${plural(n.copied, 'shift')} from the week of ${fmtDay(from)} to the week of ${fmtDay(to)}${req.body.replace ? ', replacing that week' : ''}${n.skipped ? ` (${n.skipped} skipped: already booked or on holiday)` : ''}` });
       }
       return { copied, skipped };
     });

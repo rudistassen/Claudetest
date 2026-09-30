@@ -254,6 +254,25 @@ CREATE TABLE IF NOT EXISTS timecards (
 );
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
+-- The rota's change log (Team → Rota changes). Names are copied in as they were at the time.
+CREATE TABLE IF NOT EXISTS rota_log (
+  id INTEGER PRIMARY KEY,
+  at TEXT NOT NULL DEFAULT (datetime('now')),
+  actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  actor_name TEXT NOT NULL,
+  action TEXT NOT NULL,
+  location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+  location_name TEXT,
+  shift_id INTEGER,
+  staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  staff_name TEXT,
+  shift_date TEXT,
+  hours REAL,
+  details TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_rota_log_at ON rota_log(at);
+CREATE INDEX IF NOT EXISTS idx_rota_log_shift ON rota_log(shift_id);
+
 -- Breaks taken during a clock-in (from Square). A break still running has no end_at.
 CREATE TABLE IF NOT EXISTS timecard_breaks (
   id INTEGER PRIMARY KEY,

@@ -1181,3 +1181,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .break-pill { display: inline-block; margin: 0.05rem 0; padding: 0.05rem 0.5rem; border-radius: 99px; background: var(--surface-2); font-size: 0.82rem; white-space: nowrap; }
 .break-pill.is-paid { background: var(--good-soft); color: var(--good); }
 .kpi small { display: block; color: var(--muted); font-size: 0.78rem; }
+
+/* Rota changes (audit log) */
+.log-badge { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 99px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; background: var(--surface-2); }
+.log-add { background: var(--good-soft); color: var(--good); }
+.log-change { background: var(--warn-soft); color: var(--warn); }
+.log-remove { background: var(--bad-soft); color: var(--bad); }
+.log-publish { background: var(--brand-soft); color: var(--brand-deep); }
+.rota-log .log-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rota-log td small { display: block; }
+.shift-history { margin-top: 0.6rem; }
+.shift-history summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+.log-list { list-style: none; margin: 0.5rem 0 0; padding: 0; max-height: 220px; overflow-y: auto; }
+.log-list li { padding: 0.4rem 0; border-top: 1px solid var(--border); }
