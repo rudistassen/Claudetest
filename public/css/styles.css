@@ -1295,3 +1295,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .chip-muted { background: var(--surface-2); color: var(--muted); }
 .clock-missing { margin-top: 0.3rem; }
 .clock-missing li { opacity: 0.95; }
+
+/* Invoices: the shared invoice inbox. */
+.inbox-card summary { cursor: pointer; }
+.inbox-card code { font-size: 0.85em; background: var(--surface-2); padding: 0.05rem 0.35rem; border-radius: 5px; }
+.inbox-site { max-width: 420px; }
+.inbox-list td small { display: block; }

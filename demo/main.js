@@ -21,6 +21,8 @@ import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { registerNewsRoutes } from '../src/routes/news.js';
 import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { registerBreakRoutes } from '../src/routes/breaks.js';
+import { registerInvoiceInboxRoutes, setSetting } from '../src/invoice-inbox.js';
+import { memoryMailbox } from '../src/mailbox.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
@@ -115,7 +117,21 @@ async function boot() {
   registerTradingRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, demoMailer, { demo: true });
-  registerInvoiceRoutes(api, db, demoInvoiceReader(db));
+  const invoiceReader = demoInvoiceReader(db);
+  registerInvoiceRoutes(api, db, invoiceReader);
+  // A pretend shared inbox with a few emails waiting, so "Check now" under Invoices can be tried.
+  const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+  const fakePdf = btoa('%PDF-1.4 demo invoice %%EOF');
+  setSetting(db, 'invoice_inbox_since', ago(120));
+  registerInvoiceInboxRoutes(api, db, { reader: invoiceReader, mailbox: memoryMailbox([
+    { id: 'demo-1', subject: 'Invoice INV-20931 – Harbour', from: 'accounts@hearthbakery.example', fromName: 'Hearth Bakery', to: ['invoices@example.com'], receivedAt: ago(95), preview: 'Please find attached our invoice.',
+      attachments: [{ name: 'INV-20931.pdf', contentType: 'application/pdf', size: 48213, isInline: false, data: fakePdf }] },
+    { id: 'demo-2', subject: 'Your weekly statement', from: 'billing@metro.example', fromName: 'Metro Wholesale', to: ['invoices@example.com'], receivedAt: ago(40), preview: 'Invoice for delivery to Old Town attached.',
+      attachments: [{ name: 'metro-invoice.pdf', contentType: 'application/pdf', size: 90211, isInline: false, data: fakePdf },
+        { name: 'logo.png', contentType: 'image/png', size: 4096, isInline: true, data: btoa('png') }] },
+    { id: 'demo-3', subject: 'Re: delivery times', from: 'orders@originroasters.example', fromName: 'Origin Coffee Roasters', to: ['invoices@example.com'], receivedAt: ago(10), preview: 'Thanks – see our updated delivery times.',
+      attachments: [{ name: 'signature.png', contentType: 'image/png', size: 3000, isInline: true, data: btoa('png') }] },
+  ], 'invoices@brewandbarrel.example') });
   registerNewsRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);

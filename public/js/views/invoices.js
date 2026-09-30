@@ -39,7 +39,7 @@ function setupHelp(data) {
 export async function renderList(ctx) {
   const { el, state, query, stale, navigate } = ctx;
   const status = query.status === 'confirmed' ? 'confirmed' : 'review';
-  const data = await api(`/invoices${qs({ status })}`);
+  const [data, inbox] = await Promise.all([api(`/invoices${qs({ status })}`), api('/invoice-inbox').catch(() => null)]);
   if (stale()) return;
 
   el.innerHTML = `
@@ -57,7 +57,7 @@ export async function renderList(ctx) {
       ${data.invoices.length ? `<div class="table-wrap"><table>
         <thead><tr><th>Supplier</th><th>Invoice</th><th>Date</th>${state.multiSite ? '<th>Site</th>' : ''}<th>Lines</th><th class="num">Total</th><th>${status === 'review' ? 'Uploaded' : 'Confirmed'}</th></tr></thead>
         <tbody>${data.invoices.map((i) => `<tr class="clickable" data-open="${i.id}">
-          <td><strong>${esc(i.supplier_name ?? 'Unknown supplier')}</strong>${i.new_supplier ? ' <span class="badge badge-sent">New supplier</span>' : ''}</td>
+          <td><strong>${esc(i.supplier_name ?? 'Unknown supplier')}</strong>${i.new_supplier ? ' <span class="badge badge-sent">New supplier</span>' : ''}${i.source === 'email' ? ' <span class="badge" title="Arrived in the invoice inbox">✉ Emailed</span>' : ''}</td>
           <td>${esc(i.invoice_number ?? '–')}</td>
           <td>${i.invoice_date ? fmtDate(i.invoice_date) : '–'}</td>
           ${state.multiSite ? `<td>${esc(i.location_name)}</td>` : ''}
@@ -65,7 +65,9 @@ export async function renderList(ctx) {
           <td class="num">${i.total === null ? '–' : money(i.total)}</td>
           <td class="small muted">${fmtDateTime(status === 'review' ? i.created_at : i.confirmed_at)}</td></tr>`).join('')}</tbody>
       </table></div>` : `<div class="empty">${status === 'review' ? 'No invoices waiting to be checked.' : 'No confirmed invoices yet.'}</div>`}
-    </section>`;
+    </section>
+    ${inbox ? inboxCard(inbox, state) : ''}`;
+  wireInbox(ctx);
 
   el.querySelectorAll('[data-open]').forEach((tr) => tr.addEventListener('click', () => navigate(`invoices/${tr.dataset.open}`)));
   if (!data.ready) return;
@@ -78,6 +80,63 @@ export async function renderList(ctx) {
     el.classList.remove('is-dropping');
     if (e.dataTransfer.files.length) openUpload(ctx, [...e.dataTransfer.files]);
   };
+}
+
+// --- The shared invoice inbox (Microsoft 365) ---
+
+const EMAIL_STATUS = { imported: ['Added', 'badge-received'], skipped: ['Skipped', ''], failed: ['Couldn’t read', 'badge-cancelled'] };
+
+function inboxCard(inbox, state) {
+  if (!inbox.configured) {
+    return `<details class="card inbox-card"><summary><strong>✉ Invoice inbox</strong> <span class="muted small">– have emailed invoices added automatically</span></summary>
+      <p>Invoices emailed to a shared Microsoft 365 inbox (for example <em>invoices@yourcompany.co.uk</em>) can be read and added here on their own, every few minutes.
+      To switch it on, an admin registers Brewly in Microsoft Entra with permission to read that mailbox, then adds these settings in Railway:</p>
+      <ul class="small"><li><code>MS_TENANT_ID</code>, <code>MS_CLIENT_ID</code>, <code>MS_CLIENT_SECRET</code> – from the app registration</li>
+        <li><code>INVOICE_MAILBOX</code> – the shared inbox’s email address</li></ul>
+      <p class="muted small">Brewly only reads the mailbox – it never sends, moves or deletes emails.</p></details>`;
+  }
+  const sites = state.locations.filter((l) => l.active);
+  return `<section class="card inbox-card">
+    <div class="card-head"><h2>✉ Invoice inbox</h2>
+      <button class="btn btn-small" id="inbox-check" ${inbox.reader_ready ? '' : 'disabled'}>Check now</button></div>
+    <p class="small">Invoices emailed to <strong>${esc(inbox.mailbox)}</strong> are read and added above to check, every few minutes.
+      ${inbox.last_check ? `Last checked ${fmtDateTime(inbox.last_check.replace('T', ' ').slice(0, 19))}.` : 'Not checked yet.'}</p>
+    ${inbox.last_error ? `<p class="notice notice-warn">${esc(inbox.last_error)}</p>` : ''}
+    ${!inbox.reader_ready ? '<p class="notice">Invoice reading needs ANTHROPIC_API_KEY before emailed invoices can be read.</p>' : ''}
+    ${state.isAdmin && sites.length > 1 ? `<label class="field inbox-site"><span>Emailed invoices go to</span>
+      <select id="inbox-site">${sites.map((l) => `<option value="${l.id}" ${l.id === (inbox.default_site_id ?? sites[0].id) ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
+      <small>…unless a site’s name is in the email’s subject or first lines (e.g. “Invoice – Harbour”). You can change the site on each invoice too.</small></label>` : ''}
+    ${inbox.recent.length ? `<h3>Recent emails</h3><div class="table-wrap"><table class="inbox-list">
+      <thead><tr><th>Received</th><th>From</th><th>Subject</th><th>Result</th></tr></thead>
+      <tbody>${inbox.recent.map((m) => `<tr>
+        <td class="small">${m.received_at ? fmtDateTime(m.received_at.replace('T', ' ').slice(0, 19)) : '–'}</td>
+        <td>${esc(m.from_name ?? m.from_address ?? '')}</td>
+        <td>${esc(m.subject ?? '')}</td>
+        <td><span class="badge ${EMAIL_STATUS[m.status]?.[1] ?? ''}">${EMAIL_STATUS[m.status]?.[0] ?? esc(m.status)}</span>
+          ${m.invoice_ids.map((id) => `<a href="#/invoices/${id}" class="small">open</a>`).join(' ')}
+          ${m.detail ? `<small class="muted">${esc(m.detail)}</small>` : ''}</td></tr>`).join('')}</tbody>
+    </table></div>` : '<p class="muted small">No emails with invoices yet – only emails that arrive from now on are read.</p>'}
+  </section>`;
+}
+
+function wireInbox(ctx) {
+  const { el } = ctx;
+  el.querySelector('#inbox-check')?.addEventListener('click', async (e) => {
+    const b = e.target;
+    b.disabled = true;
+    b.textContent = 'Checking…';
+    try {
+      const r = await api('/invoice-inbox/check', { method: 'POST' });
+      toast(r.error ? r.error : r.invoices ? `${r.invoices} invoice${r.invoices === 1 ? '' : 's'} added from the inbox` : 'No new invoices in the inbox', r.error ? 'error' : 'ok');
+      ctx.rerender();
+    } catch (err) { showError(err); b.disabled = false; b.textContent = 'Check now'; }
+  });
+  el.querySelector('#inbox-site')?.addEventListener('change', async (e) => {
+    try {
+      await api('/invoice-inbox', { method: 'PUT', body: { default_site_id: Number(e.target.value) } });
+      toast('Saved');
+    } catch (err) { showError(err); }
+  });
 }
 
 function openUpload(ctx, dropped = []) {
@@ -200,7 +259,9 @@ export async function renderInvoice(ctx) {
     ${inv.warnings.map((w) => `<p class="notice notice-warn">⚠ ${esc(w.text)}${w.id ? ` – <a href="#/invoices/${w.id}">open it</a>` : ''}</p>`).join('')}
     <div class="invoice-layout">
       <section class="card invoice-doc"><div id="doc" class="loading">Loading the invoice…</div>
-        <p class="small muted">${esc(inv.file_name ?? '')} · uploaded by ${esc(inv.created_by_name ?? '')} ${fmtDateTime(inv.created_at)}</p></section>
+        <p class="small muted">${esc(inv.file_name ?? '')} · ${inv.source === 'email'
+          ? `emailed by ${esc(inv.email_from ?? 'unknown sender')}${inv.email_subject ? ` (“${esc(inv.email_subject)}”)` : ''}, added`
+          : `uploaded by ${esc(inv.created_by_name ?? '')}`} ${fmtDateTime(inv.created_at)}</p></section>
       <section class="card invoice-form">
         <div class="row">
           <label class="field"><span>Supplier</span>${supplierSelect()}${recognisedFrom}</label>

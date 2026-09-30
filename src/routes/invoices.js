@@ -5,7 +5,7 @@ import { tx } from '../db.js';
 import { badRequest, date, forbidden, id, notFound, num, round2, str } from '../util.js';
 
 export const MAX_INVOICE_BYTES = 10 * 1024 * 1024;
-const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+export const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 // --- Recognising suppliers and products ---
 
@@ -79,18 +79,51 @@ export function matchLine(db, supplierId, line) {
 
 // Real Node Buffers on the server; plain bytes in the standalone (in-browser) demo.
 const realBuffer = typeof Buffer !== 'undefined' && typeof Buffer.isBuffer === 'function';
-const fromBase64 = (b64) => (realBuffer ? Buffer.from(b64, 'base64') : Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+export const fromBase64 = (b64) => (realBuffer ? Buffer.from(b64, 'base64') : Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 const asBody = (bytes) => (realBuffer ? Buffer.from(bytes) : bytes);
 
 const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? round2(v) : null);
 const qtyOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 1000) / 1000 : null);
 const dateOrNull = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
 
+/**
+ * Saves an invoice that's been read (see invoice-reader.js): matches the supplier and each line to products, and
+ * stores the file with it for checking. email: { from, subject } when it came in by email. Returns its id.
+ */
+export function saveReadInvoice(db, { locationId, read, fileName, mediaType, bytes, userId = null, email = null }) {
+  const supplier = matchSupplier(db, read.supplier);
+  const lines = (Array.isArray(read.lines) ? read.lines : []).filter((l) => l && String(l.description ?? '').trim());
+  const invoiceId = tx(db, () => {
+    const r = db.prepare(`INSERT INTO invoices (location_id, supplier_id, supplier_name, supplier_details, invoice_number, invoice_date, due_date,
+        subtotal, vat, total, file_name, file_type, file, extracted, notes, created_by, source, email_from, email_subject)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      locationId, supplier.supplier_id, read.supplier?.name ?? null, JSON.stringify(read.supplier ?? {}),
+      str(read.invoice_number, 'invoice_number', { max: 100 }), dateOrNull(read.invoice_date), dateOrNull(read.due_date),
+      numOrNull(read.subtotal), numOrNull(read.vat), numOrNull(read.total), fileName, mediaType, bytes, JSON.stringify(read),
+      [read.notes, read.order_reference ? `Order reference: ${read.order_reference}` : null].filter(Boolean).join(' · ') || null, userId,
+      email ? 'email' : 'upload', email?.from ?? null, email?.subject ?? null);
+    const ins = db.prepare(`INSERT INTO invoice_lines (invoice_id, line_no, description, sku, quantity, unit, unit_price, line_total, vat_rate, product_id, match, update_cost)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    lines.forEach((l, i) => {
+      const m = matchLine(db, supplier.supplier_id, l);
+      const product = m.product_id ? db.prepare('SELECT unit_cost FROM products WHERE id = ?').get(m.product_id) : null;
+      const price = numOrNull(l.unit_price);
+      // Offer to update the cost when the price moved, unless it moved so much the units probably differ.
+      const change = product && price !== null && product.unit_cost > 0 ? Math.abs(price - product.unit_cost) / product.unit_cost : null;
+      ins.run(r.lastInsertRowid, i + 1, String(l.description).trim().slice(0, 300), l.sku ? String(l.sku).slice(0, 60) : null, qtyOrNull(l.quantity),
+        l.unit ? String(l.unit).slice(0, 30) : null, price, numOrNull(l.line_total), numOrNull(l.vat_rate), m.product_id, m.match,
+        change !== null && change > 0.001 && change <= 0.5 ? 1 : 0);
+    });
+    return r.lastInsertRowid;
+  });
+  return { invoiceId, supplierMatch: supplier.how };
+}
+
 export function registerInvoiceRoutes(router, db, reader) {
   const load = (req) => {
     const inv = db.prepare(`SELECT i.id, i.location_id, i.supplier_id, i.supplier_name, i.supplier_details, i.invoice_number, i.invoice_date,
         i.due_date, i.subtotal, i.vat, i.total, i.status, i.file_name, i.file_type, i.notes, i.created_at, i.confirmed_at,
-        l.name AS location_name, s.name AS matched_supplier_name, cu.name AS created_by_name, co.name AS confirmed_by_name
+        i.source, i.email_from, i.email_subject, l.name AS location_name, s.name AS matched_supplier_name, cu.name AS created_by_name, co.name AS confirmed_by_name
       FROM invoices i JOIN locations l ON l.id = i.location_id LEFT JOIN suppliers s ON s.id = i.supplier_id
       LEFT JOIN users cu ON cu.id = i.created_by LEFT JOIN users co ON co.id = i.confirmed_by WHERE i.id = ?`).get(Number(req.params.id));
     if (!inv) throw notFound('Invoice');
@@ -121,7 +154,7 @@ export function registerInvoiceRoutes(router, db, reader) {
     if (!ids.length) return res.json({ ready: !!reader, demo: !!reader?.demo, invoices: [] });
     const status = req.query.status === 'confirmed' ? 'confirmed' : 'review';
     const rows = db.prepare(`SELECT i.id, i.location_id, l.name AS location_name, i.supplier_id, COALESCE(s.name, i.supplier_name) AS supplier_name,
-        i.supplier_id IS NULL AS new_supplier, i.invoice_number, i.invoice_date, i.total, i.status, i.created_at, i.confirmed_at,
+        i.supplier_id IS NULL AS new_supplier, i.invoice_number, i.invoice_date, i.total, i.status, i.created_at, i.confirmed_at, i.source,
         (SELECT COUNT(*) FROM invoice_lines il WHERE il.invoice_id = i.id) AS line_count,
         (SELECT COUNT(*) FROM invoice_lines il WHERE il.invoice_id = i.id AND il.product_id IS NULL) AS unmatched
       FROM invoices i JOIN locations l ON l.id = i.location_id LEFT JOIN suppliers s ON s.id = i.supplier_id
@@ -146,31 +179,8 @@ export function registerInvoiceRoutes(router, db, reader) {
 
     const read = await reader.read({ media_type: mediaType, data });
     if (read.is_invoice === false) throw badRequest('That doesn’t look like a supplier invoice. Check you picked the right file.');
-    const supplier = matchSupplier(db, read.supplier);
-    const lines = (Array.isArray(read.lines) ? read.lines : []).filter((l) => l && String(l.description ?? '').trim());
-    const invoiceId = tx(db, () => {
-      const r = db.prepare(`INSERT INTO invoices (location_id, supplier_id, supplier_name, supplier_details, invoice_number, invoice_date, due_date,
-          subtotal, vat, total, file_name, file_type, file, extracted, notes, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        locationId, supplier.supplier_id, read.supplier?.name ?? null, JSON.stringify(read.supplier ?? {}),
-        str(read.invoice_number, 'invoice_number', { max: 100 }), dateOrNull(read.invoice_date), dateOrNull(read.due_date),
-        numOrNull(read.subtotal), numOrNull(read.vat), numOrNull(read.total), fileName, mediaType, bytes, JSON.stringify(read),
-        [read.notes, read.order_reference ? `Order reference: ${read.order_reference}` : null].filter(Boolean).join(' · ') || null, req.user.id);
-      const ins = db.prepare(`INSERT INTO invoice_lines (invoice_id, line_no, description, sku, quantity, unit, unit_price, line_total, vat_rate, product_id, match, update_cost)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-      lines.forEach((l, i) => {
-        const m = matchLine(db, supplier.supplier_id, l);
-        const product = m.product_id ? db.prepare('SELECT unit_cost FROM products WHERE id = ?').get(m.product_id) : null;
-        const price = numOrNull(l.unit_price);
-        // Offer to update the cost when the price moved, unless it moved so much the units probably differ.
-        const change = product && price !== null && product.unit_cost > 0 ? Math.abs(price - product.unit_cost) / product.unit_cost : null;
-        ins.run(r.lastInsertRowid, i + 1, String(l.description).trim().slice(0, 300), l.sku ? String(l.sku).slice(0, 60) : null, qtyOrNull(l.quantity),
-          l.unit ? String(l.unit).slice(0, 30) : null, price, numOrNull(l.line_total), numOrNull(l.vat_rate), m.product_id, m.match,
-          change !== null && change > 0.001 && change <= 0.5 ? 1 : 0);
-      });
-      return r.lastInsertRowid;
-    });
-    res.status(201).json({ ...withLines(load({ ...req, params: { id: invoiceId } })), supplier_match: supplier.how });
+    const { invoiceId, supplierMatch } = saveReadInvoice(db, { locationId, read, fileName, mediaType, bytes, userId: req.user.id });
+    res.status(201).json({ ...withLines(load({ ...req, params: { id: invoiceId } })), supplier_match: supplierMatch });
   });
 
   router.get('/invoices/:id', requirePerm('orders.manage'), (req, res) => res.json(withLines(load(req))));

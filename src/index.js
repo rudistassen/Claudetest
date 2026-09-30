@@ -6,6 +6,8 @@ import { createApp, publicDir } from './server.js';
 import { appVersion } from './app-version.js';
 import { brevoMailer, emailConfig } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
+import { graphMailbox, mailboxConfig } from './mailbox.js';
+import { startInvoiceInbox } from './invoice-inbox.js';
 import { startReportScheduler } from './reports.js';
 import { SquareClient, squareConfig, startAutoSync, syncSales } from './square.js';
 import { addDays, today } from './util.js';
@@ -72,5 +74,13 @@ const invoiceReader = invoiceReaderFromEnv();
 if (invoiceReader) console.log(`Invoice reading switched on (${invoiceReader.model}).`);
 
 const port = Number(process.env.PORT) || 3000;
+// The shared invoice inbox (Microsoft 365): emailed invoices are read and added automatically.
+const inboxSettings = mailboxConfig();
+const mailbox = inboxSettings ? graphMailbox(inboxSettings) : null;
+if (mailbox && invoiceReader) {
+  console.log(`Invoice inbox connected (${inboxSettings.address}); checking every ${inboxSettings.minutes} minutes.`);
+  startInvoiceInbox(db, { mailbox, reader: invoiceReader, minutes: inboxSettings.minutes });
+} else if (mailbox) console.log('Invoice inbox is set up, but needs ANTHROPIC_API_KEY to read invoices.');
+
 const version = appVersion(publicDir);
-createApp(db, { square, mailer, invoiceReader, version }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, mailbox, version }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));

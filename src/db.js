@@ -254,6 +254,26 @@ CREATE TABLE IF NOT EXISTS timecards (
 );
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
+-- Simple app-wide settings (key → value), e.g. the invoice inbox's default site.
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
+-- Emails seen in the shared invoice inbox, so each is only imported once (see invoice-inbox.js).
+CREATE TABLE IF NOT EXISTS invoice_emails (
+  message_id TEXT PRIMARY KEY,
+  received_at TEXT,
+  from_address TEXT,
+  from_name TEXT,
+  subject TEXT,
+  status TEXT NOT NULL,
+  invoice_ids TEXT,
+  detail TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- The rota's change log (Team → Rota changes). Names are copied in as they were at the time.
 CREATE TABLE IF NOT EXISTS rota_log (
   id INTEGER PRIMARY KEY,
@@ -489,6 +509,10 @@ const MIGRATIONS = [
   ['square_sync_log', 'timecards', 'ALTER TABLE square_sync_log ADD COLUMN timecards INTEGER'],
   // Whether the clock-in's breaks were saved (clock-ins synced before breaks were kept don't have them).
   ['timecards', 'breaks_synced', 'ALTER TABLE timecards ADD COLUMN breaks_synced INTEGER NOT NULL DEFAULT 0'],
+  // Invoices that arrived by email (see invoice-inbox.js): who sent them and the subject.
+  ['invoices', 'source', "ALTER TABLE invoices ADD COLUMN source TEXT NOT NULL DEFAULT 'upload'"],
+  ['invoices', 'email_from', 'ALTER TABLE invoices ADD COLUMN email_from TEXT'],
+  ['invoices', 'email_subject', 'ALTER TABLE invoices ADD COLUMN email_subject TEXT'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],
