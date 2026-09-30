@@ -1,5 +1,6 @@
 import { attachTip } from '../charts.js';
 import { addDays, api, esc, fmtDate, fmtDateTime, money, toast, todayISO } from '../lib.js';
+import { breakLine } from './breaks.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
 function progress(done, due) {
@@ -60,7 +61,8 @@ function card(loc, state, data) {
           ${loc.clock_ins.length
             ? `<ul class="shift-list clock-list">${loc.clock_ins.map((c) => `<li><strong>${esc(c.name)}</strong>
                 <span class="muted">${c.start}–${c.end ?? 'now'}</span>
-                <span class="clock-hours">${c.end ? '' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}</span></li>`).join('')}</ul>
+                <span class="clock-hours">${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}</span>
+                ${breakLine(c)}</li>`).join('')}</ul>
               <p class="small muted">${duration(loc.clock_ins.reduce((n, c) => n + c.hours, 0))} in total</p>`
             : '<p class="muted">Nobody has clocked in yet</p>'}
         </div>` : `

@@ -249,7 +249,19 @@ describe('Square integration', () => {
     await syncSales(db, square.client, { from: y, to: d });
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM timecards').get().n, 2, 're-syncing replaces rather than duplicates');
 
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM timecard_breaks').get().n, 1, 'breaks are kept, once');
+
     const manager = await login('manager1@cafe.local');
+    // Reporting → Breaks: the 30 minute unpaid break on an 8½ hour shift is fine; the 2 hour clock-in needs none.
+    const breaks = (await manager(`/breaks?from=${y}&to=${d}`)).data;
+    assert.equal(breaks.totals.shifts, 2);
+    assert.equal(breaks.totals.breaks, 1);
+    assert.equal(breaks.totals.flagged, 0);
+    const tc1 = breaks.rows.find((r) => r.id === 'tc1');
+    assert.deepEqual(tc1.breaks.map((b) => [b.start, b.end, b.minutes, b.paid]), [['11:00', '11:30', 30, false]]);
+    assert.equal(tc1.break_flag, null);
+    assert.equal((await (await login('staff1@cafe.local'))(`/breaks?from=${y}&to=${d}`)).status, 403, 'staff can’t see everyone’s breaks');
+
     const report = (await manager(`/trading?from=${y}&to=${d}`)).data;
     assert.equal(report.labour_synced, true);
     assert.equal(report.totals.clocked_hours, 10);

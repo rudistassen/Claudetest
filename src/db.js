@@ -254,6 +254,17 @@ CREATE TABLE IF NOT EXISTS timecards (
 );
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
+-- Breaks taken during a clock-in (from Square). A break still running has no end_at.
+CREATE TABLE IF NOT EXISTS timecard_breaks (
+  id INTEGER PRIMARY KEY,
+  timecard_id TEXT NOT NULL REFERENCES timecards(id) ON DELETE CASCADE,
+  start_at TEXT NOT NULL,
+  end_at TEXT,
+  is_paid INTEGER NOT NULL DEFAULT 0,
+  name TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_timecard_breaks_card ON timecard_breaks(timecard_id);
+
 -- Shared food-safety checks switched off at one site (the site may have its own version instead).
 CREATE TABLE IF NOT EXISTS safety_task_exclusions (
   task_id INTEGER NOT NULL REFERENCES safety_tasks(id) ON DELETE CASCADE,
@@ -457,6 +468,8 @@ const MIGRATIONS = [
   ['users', 'rota_group', 'ALTER TABLE users ADD COLUMN rota_group TEXT'],
   ['users', 'permission_set_id', 'ALTER TABLE users ADD COLUMN permission_set_id INTEGER REFERENCES permission_sets(id) ON DELETE SET NULL'],
   ['square_sync_log', 'timecards', 'ALTER TABLE square_sync_log ADD COLUMN timecards INTEGER'],
+  // Whether the clock-in's breaks were saved (clock-ins synced before breaks were kept don't have them).
+  ['timecards', 'breaks_synced', 'ALTER TABLE timecards ADD COLUMN breaks_synced INTEGER NOT NULL DEFAULT 0'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],

@@ -86,6 +86,13 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
         <td style="${num}">${s.daily.done} / ${s.daily.due}${s.daily.fails ? ` <span style="color:#b3261e">⚠ ${s.daily.fails}</span>` : ''}</td></tr>`).join('')}
     </table>`;
 
+  // Breaks under each person, and the long shifts that didn't get a proper one.
+  const flagged = (people) => people.filter((c) => c.break_flag);
+  const breakHtml = (c) => {
+    const parts = (c.breaks ?? []).map((b) => `${b.start}–${b.end ?? 'now'}${b.paid ? ' paid' : ''}`);
+    const flag = c.break_flag ? ` <span style="color:#b3261e;font-weight:600">⚠ ${c.break_flag === 'none' ? 'no break' : 'short break'}</span>` : '';
+    return parts.length || flag ? `<br><span style="font-size:12px;color:#777">${parts.length ? `Break ${parts.join(', ')}` : ''}</span>${flag}` : '';
+  };
   const siteBlock = (s) => {
     const people = s.clock_ins ?? null;
     return `
@@ -97,9 +104,10 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
         Labour <strong>${money(s.labour_cost_today)}</strong> ${change(s.labour_cost_today, s.last_week.labour_cost, { goodUp: false }).html}
         ${s.labour_pct_today === null ? '' : `<span style="color:${pctColour(s.labour_pct_today)}">(${pctText(s.labour_pct_today)} of sales)</span>`}</p>` : ''}
       ${people && data.labour_synced ? `
+      ${flagged(people).length ? `<p style="margin:6px 0;padding:6px 10px;border-radius:6px;background:#fbe3e1;color:#b3261e;font-size:14px">⚠ ${flagged(people).length} ${flagged(people).length === 1 ? 'shift' : 'shifts'} over 6 hours without a 20-minute break: ${flagged(people).map((c) => esc(c.name)).join(', ')}</p>` : ''}
       <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-top:6px">Clocked in (${people.length})</div>
       ${people.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:4px 0 6px">
-        ${people.map((c) => `<tr><td style="padding:3px 0;font-size:14px;border-bottom:1px dashed #e5e5e5"><strong>${esc(c.name)}</strong> <span style="color:#777">${c.start}–${c.end ?? 'still in'}</span></td>
+        ${people.map((c) => `<tr><td style="padding:3px 0;font-size:14px;border-bottom:1px dashed #e5e5e5"><strong>${esc(c.name)}</strong> <span style="color:#777">${c.start}–${c.end ?? 'still in'}</span>${breakHtml(c)}</td>
           <td style="padding:3px 0;font-size:14px;text-align:right;white-space:nowrap;border-bottom:1px dashed #e5e5e5">${duration(c.hours)}</td></tr>`).join('')}
         <tr><td style="padding:4px 0;font-size:12px;color:#777">Total</td><td style="padding:4px 0;font-size:12px;color:#777;text-align:right">${duration(people.reduce((n, c) => n + c.hours, 0))}</td></tr>
       </table>` : '<p style="margin:4px 0 8px;font-size:14px;color:#777">Nobody clocked in</p>'}` : `
@@ -137,7 +145,8 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
       `== ${s.name} ==`,
       ...(seeSales ? [`Gross ${money(s.gross_today)} ${change(s.gross_today, s.last_week.gross).text}`, `Net ${money(s.sales_today)} ${change(s.sales_today, s.last_week.net).text}`,
         `Labour ${money(s.labour_cost_today)} (${pctText(s.labour_pct_today)} of sales)`] : []),
-      ...(s.clock_ins && data.labour_synced ? [`Clocked in: ${s.clock_ins.map((c) => `${c.name} ${c.start}-${c.end ?? 'still in'} (${duration(c.hours)})`).join('; ') || 'nobody'}`] : []),
+      ...(s.clock_ins && data.labour_synced ? [`Clocked in: ${s.clock_ins.map((c) => `${c.name} ${c.start}-${c.end ?? 'still in'} (${duration(c.hours)}${c.breaks?.length ? `, break ${c.breaks.map((b) => `${b.start}-${b.end ?? 'now'}${b.paid ? ' paid' : ''}`).join(', ')}` : ''})`).join('; ') || 'nobody'}`] : []),
+      ...(s.clock_ins && flagged(s.clock_ins).length ? [`Over 6 hours without a 20-minute break: ${flagged(s.clock_ins).map((c) => c.name).join(', ')}`] : []),
       `Daily Trail checks ${s.daily.done}/${s.daily.due}, weekly ${s.weekly.done}/${s.weekly.due}. Wastage (7 days) ${money(s.wastage_7d)}`, '',
     ]),
     ...(url ? [url] : []),

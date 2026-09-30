@@ -2,6 +2,7 @@ import { api, chooseSite, esc, isDemo, qs, showError } from './lib.js';
 import { logo } from './logo.js';
 import { install, installState, setUpInstall } from './install.js';
 import * as admin from './views/admin.js';
+import * as breaks from './views/breaks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
 import * as orders from './views/orders.js';
@@ -58,6 +59,7 @@ const ROUTES = [
   [/^sales$/, sales.render, ['sales.view']],
   [/^trading$/, trading.render, ['sales.view']],
   [/^trading\/heatmap$/, trading.renderHeatmap, ['sales.view']],
+  [/^breaks$/, breaks.render, ['sales.view', 'staff.manage']],
   [/^orders$/, orders.renderList, ['orders.manage']],
   [/^orders\/new$/, orders.renderNew, ['orders.manage']],
   [/^orders\/(\d+)$/, orders.renderOrder, ['orders.manage']],
@@ -102,6 +104,7 @@ function navGroups() {
     ['Reporting', [
       ['trading', 'Trading', '◔', ['sales.view']],
       ['sales', 'Sales', '£', ['sales.view']],
+      ['breaks', 'Breaks', '☕', ['sales.view', 'staff.manage']],
     ]],
     ['Setup', [
       ['recipes', 'Recipes', '≡', RECIPES],

@@ -98,14 +98,27 @@ function timecardFor(shift, now) {
   const startAt = at(shift.date, inAt);
   if (noShow || startAt > now) return null;
   const endAt = at(shift.date, outAt);
-  const breakStart = at(shift.date, start + Math.floor((end - start) / 2));
-  const breakEnd = at(shift.date, start + Math.floor((end - start) / 2) + (shift.break_minutes || 0));
+  // Breaks: usually a 20–30 minute unpaid break mid-shift (the rota's, if it sets one), sometimes a paid
+  // 10-minute tea break too, and now and then a long shift where the break was missed or cut short.
+  const long = end - start > 6 * 60;
+  const pick = r();
+  const usual = shift.break_minutes || (long ? 20 + Math.floor(r() * 3) * 5 : 0);
+  const mainMinutes = long && pick < 0.06 ? 0 : long && pick < 0.14 ? 12 : usual;
+  const mid = start + Math.floor((end - start) / 2);
+  const planned = [];
+  if (mainMinutes) planned.push({ from: mid, to: mid + mainMinutes, paid: false, name: 'Lunch' });
+  if (long && r() < 0.3) planned.push({ from: start + 120, to: start + 130, paid: true, name: 'Tea break' });
+  const breaks = planned
+    .map((b) => ({ start_at: at(shift.date, b.from), end_at: at(shift.date, b.to), is_paid: b.paid, name: b.name }))
+    .filter((b) => b.start_at <= now)
+    .map((b) => (b.end_at <= now ? b : { ...b, end_at: undefined }))
+    .sort((x, y) => x.start_at.localeCompare(y.start_at));
   const user = team.find((u) => u.id === shift.user_id);
   return {
     id: `TC_${shift.id}_${shift.date}`, location_id: shift.square_location_id, team_member_id: `TM_${shift.user_id}`,
     start_at: startAt, end_at: endAt <= now ? endAt : undefined, status: endAt <= now ? 'CLOSED' : 'OPEN',
     wage: { title: 'Team member', hourly_rate: { amount: Math.round((user?.hourly_rate ?? 0) * 100), currency: 'GBP' } },
-    breaks: shift.break_minutes && breakStart <= now ? [{ start_at: breakStart, ...(breakEnd <= now ? { end_at: breakEnd } : {}), is_paid: false }] : [],
+    breaks,
   };
 }
 

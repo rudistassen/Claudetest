@@ -16,7 +16,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
  * hour of the day, by site and by person.
  */
 // Date range and sites for a report: admins see every site unless they pick one.
-function reportScope(db, req, defaultDays) {
+export function reportScope(db, req, defaultDays) {
   const to = date(req.query.to, 'to') ?? today();
   const from = date(req.query.from, 'from') ?? addDays(to, -(defaultDays - 1));
   if (from > to) throw badRequest('from must be before to');

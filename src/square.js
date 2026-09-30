@@ -183,6 +183,12 @@ export function summariseTimecard(tc, tz = BUSINESS_TZ, now = Date.now()) {
     start_at: new Date(tc.start_at).toISOString(),
     end_at: tc.end_at ? new Date(tc.end_at).toISOString() : null,
     unpaid_break_minutes: round2(unpaid),
+    breaks: (tc.breaks ?? []).filter((b) => b.start_at).map((b) => ({
+      start_at: new Date(b.start_at).toISOString(),
+      end_at: b.end_at ? new Date(b.end_at).toISOString() : null,
+      is_paid: !!b.is_paid,
+      name: b.name ?? null,
+    })),
     hourly_rate: rate === undefined || rate === null ? null : rate / 100,
     status: tc.status ?? (tc.end_at ? 'CLOSED' : 'OPEN'),
   };
@@ -292,11 +298,16 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
 
       if (labour.error) return;
       saveTeamMembers(db, labour.members);
+      db.prepare(`DELETE FROM timecard_breaks WHERE timecard_id IN (SELECT id FROM timecards WHERE date BETWEEN ? AND ? AND location_id IN (${inList}))`).run(from, to, ...ids);
       db.prepare(`DELETE FROM timecards WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`).run(from, to, ...ids);
-      const insCard = db.prepare(`INSERT OR REPLACE INTO timecards (id, location_id, team_member_id, user_id, date, start_at, end_at, unpaid_break_minutes, hourly_rate, status)
-        VALUES (?, ?, ?, (SELECT user_id FROM square_team_members WHERE id = ?), ?, ?, ?, ?, ?, ?)`);
+      const insCard = db.prepare(`INSERT OR REPLACE INTO timecards (id, location_id, team_member_id, user_id, date, start_at, end_at, unpaid_break_minutes, hourly_rate, status, breaks_synced)
+        VALUES (?, ?, ?, (SELECT user_id FROM square_team_members WHERE id = ?), ?, ?, ?, ?, ?, ?, 1)`);
+      const clearBreaks = db.prepare('DELETE FROM timecard_breaks WHERE timecard_id = ?');
+      const insBreak = db.prepare('INSERT INTO timecard_breaks (timecard_id, start_at, end_at, is_paid, name) VALUES (?, ?, ?, ?, ?)');
       for (const t of timecards) {
+        clearBreaks.run(t.id);
         insCard.run(t.id, t.location_id, t.team_member_id, t.team_member_id, t.date, t.start_at, t.end_at, t.unpaid_break_minutes, t.hourly_rate, t.status);
+        for (const b of t.breaks ?? []) insBreak.run(t.id, b.start_at, b.end_at, b.is_paid ? 1 : 0, b.name);
       }
     });
 

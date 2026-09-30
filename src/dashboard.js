@@ -1,4 +1,5 @@
 import { nowMinutes, pct, rotaByDay, timecardsFor } from './metrics.js';
+import { breakInfo, breaksFor } from './breaks.js';
 import { addDays, BUSINESS_TZ, round2, today, weekStart, zonedMidnightUTC } from './util.js';
 
 /** The checks a site does: shared checks (unless switched off there) plus the site's own. */
@@ -60,12 +61,14 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       labour_pct_today: todaySales && labourToday ? pct(labourToday, todaySales.net_sales) : null,
     };
   };
-  // Who clocked in at a site (from Square), with how long they've worked.
+  // Who clocked in at a site (from Square), with how long they've worked and the breaks they've taken.
+  const breaksToday = seeClockIns ? breaksFor(db, cardsToday.map((t) => t.id)) : new Map();
   const clockIns = (locationId) => cardsToday.filter((t) => t.location_id === locationId).map((t) => ({
     name: t.name,
     start: timeFormat.format(new Date(t.start)),
     end: t.end_at ? timeFormat.format(new Date(t.end)) : null,
     hours: Math.round(t.hours * 100) / 100,
+    ...breakInfo(t, breaksToday.get(t.id), dayEnd),
   }));
 
   const cards = locations.map((loc) => {

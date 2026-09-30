@@ -1173,3 +1173,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 
 /* Permissions: the fixed Admin column. */
 .perm-matrix .perm-admin { background: color-mix(in srgb, var(--brand) 6%, transparent); }
+
+/* Breaks (dashboard clock-in list and Reporting → Breaks). */
+.clock-list li { flex-wrap: wrap; }
+.clock-breaks { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; margin-top: 0.1rem; }
+.badge-on-break { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.break-pill { display: inline-block; margin: 0.05rem 0; padding: 0.05rem 0.5rem; border-radius: 99px; background: var(--surface-2); font-size: 0.82rem; white-space: nowrap; }
+.break-pill.is-paid { background: var(--good-soft); color: var(--good); }
+.kpi small { display: block; color: var(--muted); font-size: 0.78rem; }
