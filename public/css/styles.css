@@ -1249,3 +1249,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
     0 10px 16px -6px rgba(10, 30, 55, 0.6);
   border-radius: 12px;
 }
+
+/* Reporting → Rota costs */
+.rota-costs tbody th, .rota-costs tfoot th { text-align: left; font-weight: 600; white-space: nowrap; }
+.rota-costs tbody th small.bank-hol { display: block; color: var(--warn); font-size: 0.72rem; font-weight: 700; }
+.rota-costs td small { font-size: 0.75rem; }
+.rota-costs tfoot tr th, .rota-costs tfoot tr td { border-top: 2px solid var(--border); font-weight: 700; }

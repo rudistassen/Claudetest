@@ -4,6 +4,7 @@ import { install, installState, setUpInstall } from './install.js';
 import * as admin from './views/admin.js';
 import * as breaks from './views/breaks.js';
 import * as rotalog from './views/rotalog.js';
+import * as rotacosts from './views/rotacosts.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
 import * as orders from './views/orders.js';
@@ -62,6 +63,7 @@ const ROUTES = [
   [/^trading$/, trading.render, ['sales.view']],
   [/^trading\/heatmap$/, trading.renderHeatmap, ['sales.view']],
   [/^breaks$/, breaks.render, ['sales.view', 'staff.manage']],
+  [/^rota-costs$/, rotacosts.render, ['sales.view']],
   [/^orders$/, orders.renderList, ['orders.manage']],
   [/^orders\/new$/, orders.renderNew, ['orders.manage']],
   [/^orders\/(\d+)$/, orders.renderOrder, ['orders.manage']],
@@ -107,6 +109,7 @@ function navGroups() {
     ['Reporting', [
       ['trading', 'Trading', '◔', ['sales.view']],
       ['sales', 'Sales', '£', ['sales.view']],
+      ['rota-costs', 'Rota costs', '⚖', ['sales.view']],
       ['breaks', 'Breaks', '☕', ['sales.view', 'staff.manage']],
     ]],
     ['Setup', [

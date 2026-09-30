@@ -1,7 +1,7 @@
 import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { availabilityFor, leaveFor, onHoliday } from './leave.js';
-import { dayKey, labourByDay, pct, salesByDay } from '../metrics.js';
+import { dayKey, labourByDay, pct, rotaByDay, salesByDay } from '../metrics.js';
 import { bankHoliday } from '../bank-holidays.js';
 import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
 import { addDays, badRequest, date, id, notFound, num, oneOf, round2, shiftHours, str, time, today, weekStart, zonedMidnightUTC } from '../util.js';
@@ -50,7 +50,69 @@ export function salesForecast(db, locationIds, weekStartDate) {
 
 // Rota publishing: editors change a draft (the shifts table, where removed marks a published shift deleted in the
 // draft) and staff see only what was last published (the published_shifts view). See db.js.
+// The labour cost we aim for, as a share of net sales.
+export const LABOUR_TARGET_PCT = 30;
+
 export function registerRotaRoutes(router, db) {
+  /**
+   * Reporting → Rota costs: for a week, each site's rota cost against a labour budget of 30% of its forecast
+   * sales (the average for each weekday over recent weeks, bank holidays left out). Uses the rota as it stands,
+   * including changes not yet published; ?published=1 uses what staff can see.
+   */
+  router.get('/reports/rota-costs', requirePerm('sales.view'), (req, res) => {
+    const ws = weekStart(date(req.query.week, 'week') ?? today());
+    const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+    const locations = reportLocations(req, req.query.location_id);
+    const ids = locations.map((l) => l.id);
+    const published = req.query.published === '1';
+    const rota = rotaByDay(db, ids, ws, addDays(ws, 6), { draft: !published });
+    const forecast = salesForecast(db, ids, ws);
+    const actual = salesByDay(db, ids, ws, addDays(ws, 6));
+    const share = LABOUR_TARGET_PCT / 100;
+    const line = (hours, cost, fc, sales) => ({
+      hours: round2(hours),
+      cost: round2(cost),
+      forecast: fc === null ? null : round2(fc),
+      budget: fc === null ? null : round2(fc * share),
+      difference: fc === null ? null : round2(cost - fc * share),
+      labour_pct: fc ? pct(cost, fc) : null,
+      actual_sales: sales === null ? null : round2(sales),
+    });
+    const sites = locations.map((l) => {
+      const perDay = days.map((d, i) => {
+        const r = rota.get(dayKey(l.id, d)) ?? { hours: 0, cost: 0 };
+        const f = forecast.sites[l.id]?.[i];
+        const a = actual.get(dayKey(l.id, d));
+        return { date: d, bank_holiday: bankHoliday(d), ...line(r.hours, r.cost, f ? f.avg : null, a ? a.net_sales : null) };
+      });
+      const sum = (k) => perDay.reduce((n, x) => n + (x[k] ?? 0), 0);
+      const hasForecast = perDay.some((x) => x.forecast !== null);
+      const hasActual = perDay.some((x) => x.actual_sales !== null);
+      return { id: l.id, name: l.name, days: perDay, ...line(sum('hours'), sum('cost'), hasForecast ? sum('forecast') : null, hasActual ? sum('actual_sales') : null) };
+    });
+    const total = (k) => sites.reduce((n, x) => n + (x[k] ?? 0), 0);
+    const anyForecast = sites.some((x) => x.forecast !== null);
+    const anyActual = sites.some((x) => x.actual_sales !== null);
+    const byDay = days.map((d, i) => {
+      const t = (k) => sites.reduce((n, x) => n + (x.days[i][k] ?? 0), 0);
+      const withFc = sites.some((x) => x.days[i].forecast !== null);
+      const withSales = sites.some((x) => x.days[i].actual_sales !== null);
+      return { date: d, bank_holiday: bankHoliday(d), ...line(t('hours'), t('cost'), withFc ? t('forecast') : null, withSales ? t('actual_sales') : null) };
+    });
+    res.json({
+      week: ws,
+      target_pct: LABOUR_TARGET_PCT,
+      published,
+      forecast_weeks: forecast.weeks,
+      forecast_from: forecast.from,
+      forecast_to: forecast.to,
+      unpublished: db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id IN (${ids.map(() => '?').join(', ')}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`).get(...ids, ws, addDays(ws, 6)).n,
+      sites,
+      days: byDay,
+      totals: line(total('hours'), total('cost'), anyForecast ? total('forecast') : null, anyActual ? total('actual_sales') : null),
+    });
+  });
+
   const select = (table) => `
     SELECT s.*, u.name AS user_name, l.name AS location_name
     FROM ${table} s JOIN users u ON u.id = s.user_id JOIN locations l ON l.id = s.location_id`;
