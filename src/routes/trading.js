@@ -113,7 +113,7 @@ export function registerTradingRoutes(router, db, square) {
     const clocked = clockedByDay(cards);
 
     const summary = (locIds, dates) => {
-      const t = { net: 0, orders: 0, rotaHours: 0, rotaCost: 0, clockHours: 0, clockCost: 0 };
+      const t = { net: 0, gross: 0, orders: 0, rotaHours: 0, rotaCost: 0, clockHours: 0, clockCost: 0 };
       // Labour % and sales per labour hour only use days that have both sales and labour, so an unsynced
       // day or a missing rota doesn't read as 0% or 100%+.
       const both = { clockNet: 0, clockCost: 0, clockHours: 0, rotaNet: 0, rotaCost: 0 };
@@ -124,6 +124,7 @@ export function registerTradingRoutes(router, db, square) {
           const r = rota.get(k);
           const c = clocked.get(k);
           t.net += s?.net_sales ?? 0;
+          t.gross += s?.gross_sales ?? 0;
           t.orders += s?.orders ?? 0;
           t.rotaHours += r?.hours ?? 0;
           t.rotaCost += r?.cost ?? 0;
@@ -142,6 +143,7 @@ export function registerTradingRoutes(router, db, square) {
       }
       return {
         net_sales: round2(t.net),
+        gross_sales: round2(t.gross),
         orders: t.orders,
         avg_spend: t.orders ? round2(t.net / t.orders) : null,
         rostered_hours: round1(t.rotaHours),

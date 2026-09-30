@@ -269,7 +269,7 @@ main { flex: 1; min-width: 0; padding: 1rem 1.25rem 2.5rem; }
 .site-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .site-grid p { margin: 0; }
 .span-2 { grid-column: span 2; }
-.site-money { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; padding-bottom: 0.4rem; }
+.site-money { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; padding-bottom: 0.4rem; }
 .site-money p { margin: 0; }
 .site-money .stat { font-size: 1.15rem; }
 .site-compare { margin: 0 0 0.9rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }

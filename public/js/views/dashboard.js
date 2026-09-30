@@ -65,15 +65,10 @@ function card(loc, state, data) {
           <p class="small">${versus(loc.gross_today, lw.gross)}</p>
         </div>
         <div>
-          <h3>Net sales</h3>
-          <p class="stat">${loc.sales_today === null ? '<span class="muted">–</span>' : money(loc.sales_today)}</p>
-          <p class="small">${versus(loc.sales_today, lw.net)}</p>
-        </div>
-        <div>
           <h3>Labour cost</h3>
           <p class="stat">${money(loc.labour_cost_today)}</p>
           <p class="small">${versus(loc.labour_cost_today, lw.labour_cost, { goodUp: false })}</p>
-          <p class="small tone-${labourTone(loc.labour_pct_today)}">${fmtPct(loc.labour_pct_today)} of sales${loc.labour_basis === 'rostered' ? ' (rota)' : ''}</p>
+          <p class="small tone-${labourTone(loc.labour_pct_today)}">${fmtPct(loc.labour_pct_today)} of net sales${loc.labour_basis === 'rostered' ? ' (rota)' : ''}</p>
         </div>
       </div>
       <p class="small muted site-compare">Today so far vs ${fmtDate(data.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })} at the same time</p>` : ''}
@@ -152,8 +147,8 @@ const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits:
 
 function bySite(t, period) {
   const labour = (r) => (t.labour_synced && r.labour_pct !== null ? r.labour_pct : r.rostered_labour_pct);
-  const rows = [...t.locations].sort((a, b) => b.net_sales - a.net_sales);
-  const maxSales = Math.max(1, ...rows.map((r) => r.net_sales));
+  const rows = [...t.locations].sort((a, b) => b.gross_sales - a.gross_sales);
+  const maxSales = Math.max(1, ...rows.map((r) => r.gross_sales));
   // Labour bars run to at least twice the target, so the target line sits in a sensible place.
   const scale = Math.max(LABOUR_TARGET * 2, ...rows.map((r) => Math.min(labour(r) ?? 0, 150)));
   const icon = (p) => (p === null || p === undefined ? '' : labourTone(p) === 'good' ? '✓ ' : '⚠ ');
@@ -172,18 +167,18 @@ function bySite(t, period) {
         </div>
       </header>
       <div class="table-wrap"><table class="dash-table">
-        <thead><tr><th>Site</th><th>Net sales (ex VAT)</th><th class="num">Orders</th><th>Labour % of sales <small class="inline">(${t.labour_synced ? 'clocked' : 'rostered'} · target ${LABOUR_TARGET}%)</small></th></tr></thead>
+        <thead><tr><th>Site</th><th>Gross sales</th><th class="num">Orders</th><th>Labour % of net sales <small class="inline">(${t.labour_synced ? 'clocked' : 'rostered'} · target ${LABOUR_TARGET}%)</small></th></tr></thead>
         <tbody>${rows.map((r) => `<tr data-site-row="${r.id}" tabindex="0">
           <th>${esc(r.name)}${r.linked ? '' : ' <small class="inline muted">not on Square</small>'}</th>
-          <td class="dash-sales"><span class="dash-bar"><span class="fill" style="width:${(r.net_sales / maxSales) * 100}%"></span></span><strong>${money(r.net_sales)}</strong></td>
+          <td class="dash-sales"><span class="dash-bar"><span class="fill" style="width:${(r.gross_sales / maxSales) * 100}%"></span></span><strong>${money(r.gross_sales)}</strong></td>
           <td class="num">${r.orders}</td>
           ${labourCell(labour(r))}
         </tr>`).join('')}</tbody>
-        ${rows.length > 1 ? `<tfoot><tr><th>All sites</th><td><strong>${money(total.net_sales)}</strong></td><td class="num">${total.orders}</td>
+        ${rows.length > 1 ? `<tfoot><tr><th>All sites</th><td><strong>${money(total.gross_sales)}</strong></td><td class="num">${total.orders}</td>
           <td><strong class="tone-${labourTone(labour(total))}">${icon(labour(total))}${fmtPct(labour(total))}</strong></td></tr></tfoot>` : ''}
       </table></div>
       <p class="muted small">${period === 'today' ? 'So far today' : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
-        Labour % only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
+        Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
     </section>`;
 }
 
@@ -261,7 +256,8 @@ export async function render({ el, state, navigate, stale, rerender }) {
     const r = trade.locations.find((l) => l.id === Number(tr.dataset.siteRow));
     const clocked = trade.labour_synced && r.clocked_hours > 0;
     attachTip(tr, () => r.name, () => [
-      { value: money(r.net_sales), label: `net sales · ${r.orders} orders` },
+      { value: money(r.gross_sales), label: `gross sales · ${r.orders} orders` },
+      { value: money(r.net_sales), label: 'net sales (ex VAT)' },
       { value: money(clocked ? r.clocked_cost : r.rostered_cost), label: `labour (${clocked ? 'clocked' : 'rostered'}) · ${hrs(clocked ? r.clocked_hours : r.rostered_hours)}` },
       ...(r.sales_per_labour_hour !== null ? [{ value: money(r.sales_per_labour_hour), label: 'sales per labour hour' }] : []),
       ...(r.avg_spend !== null ? [{ value: money(r.avg_spend), label: 'average spend' }] : []),
