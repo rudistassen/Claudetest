@@ -274,6 +274,32 @@ CREATE TABLE IF NOT EXISTS invoice_emails (
   processed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Google reviews for each site (see google-reviews.js). Google only lets copies be kept for a while, so reviews
+-- no longer shown on Google are dropped after 30 days, and so are old rating snapshots.
+CREATE TABLE IF NOT EXISTS google_reviews (
+  id TEXT PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  author TEXT,
+  author_url TEXT,
+  author_photo TEXT,
+  rating INTEGER,
+  text TEXT,
+  published_at TEXT,
+  review_url TEXT,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_google_reviews_location ON google_reviews(location_id, published_at);
+
+-- Each site's Google rating once a day, to show whether it's going up or down.
+CREATE TABLE IF NOT EXISTS google_ratings (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  rating REAL,
+  review_count INTEGER,
+  PRIMARY KEY (location_id, date)
+);
+
 -- The rota's change log (Team → Rota changes). Names are copied in as they were at the time.
 CREATE TABLE IF NOT EXISTS rota_log (
   id INTEGER PRIMARY KEY,
@@ -498,6 +524,8 @@ CREATE TABLE IF NOT EXISTS square_sync_log (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // The site's place on Google Maps, for its reviews.
+  ['locations', 'google_place_id', 'ALTER TABLE locations ADD COLUMN google_place_id TEXT'],
   ['locations', 'square_location_id', 'ALTER TABLE locations ADD COLUMN square_location_id TEXT'],
   // How a product is measured in recipes, e.g. a 4L bottle of milk = 4000 ml.
   ['products', 'recipe_unit', 'ALTER TABLE products ADD COLUMN recipe_unit TEXT'],

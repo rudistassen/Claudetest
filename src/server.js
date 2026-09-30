@@ -17,6 +17,7 @@ import { registerNewsRoutes } from './routes/news.js';
 import { registerDocumentRoutes } from './routes/documents.js';
 import { registerBreakRoutes } from './routes/breaks.js';
 import { registerInvoiceInboxRoutes } from './invoice-inbox.js';
+import { registerReviewRoutes } from './google-reviews.js';
 import { HttpError } from './util.js';
 
 export const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -30,8 +31,9 @@ export function trustProxy(env) {
 // mailer: sends the emailed reports (see email.js), or null when email isn't set up.
 // invoiceReader: reads uploaded supplier invoices (see invoice-reader.js), or null when it isn't set up.
 // mailbox: the shared invoice inbox (see mailbox.js), or null when it isn't connected.
+// places: Google Maps, for each site's rating and reviews (see google-reviews.js), or null when it isn't set up.
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, version = null } = {}) {
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, places = null, version = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Behind a hosting platform's proxy (Railway, Render, …) trust one hop, so HTTPS and visitors' addresses are seen.
@@ -68,6 +70,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);
   registerInvoiceInboxRoutes(api, db, { mailbox, reader: invoiceReader });
+  registerReviewRoutes(api, db, places);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
   app.use('/api', api);
 

@@ -8,6 +8,7 @@ import { brevoMailer, emailConfig } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
 import { graphMailbox, mailboxConfig } from './mailbox.js';
 import { startInvoiceInbox } from './invoice-inbox.js';
+import { googlePlaces, placesConfig, startReviewSync } from './google-reviews.js';
 import { startReportScheduler } from './reports.js';
 import { SquareClient, squareConfig, startAutoSync, syncSales } from './square.js';
 import { addDays, today } from './util.js';
@@ -82,5 +83,13 @@ if (mailbox && invoiceReader) {
   startInvoiceInbox(db, { mailbox, reader: invoiceReader, minutes: inboxSettings.minutes });
 } else if (mailbox) console.log('Invoice inbox is set up, but needs ANTHROPIC_API_KEY to read invoices.');
 
+// Google reviews for each site.
+const placesSettings = placesConfig();
+const places = placesSettings ? googlePlaces(placesSettings.key) : null;
+if (places) {
+  console.log(`Google reviews switched on; checking every ${placesSettings.hours} hours.`);
+  startReviewSync(db, places, { hours: placesSettings.hours });
+}
+
 const version = appVersion(publicDir);
-createApp(db, { square, mailer, invoiceReader, mailbox, version }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, mailbox, places, version }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));

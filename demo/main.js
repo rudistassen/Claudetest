@@ -23,6 +23,8 @@ import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { registerBreakRoutes } from '../src/routes/breaks.js';
 import { registerInvoiceInboxRoutes, setSetting } from '../src/invoice-inbox.js';
 import { memoryMailbox } from '../src/mailbox.js';
+import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
+import { demoPlaces } from './google-reviews.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
@@ -135,6 +137,14 @@ async function boot() {
   registerNewsRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);
+  // Pretend Google Maps listings: every site but one is linked, with a rating from a month ago to compare against.
+  const reviewSites = db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY id').all();
+  const places = demoPlaces(reviewSites);
+  reviewSites.slice(0, -1).forEach((s, i) => db.prepare('UPDATE locations SET google_place_id = ? WHERE id = ?').run(places.places[i].place_id, s.id));
+  await syncReviews(db, places);
+  reviewSites.slice(0, -1).forEach((s, i) => db.prepare('INSERT INTO google_ratings (location_id, date, rating, review_count) VALUES (?, ?, ?, ?)')
+    .run(s.id, addDays(today(), -28), Math.round((places.places[i].rating - [0.1, 0, 0.2, -0.1, 0.1, 0, 0.1][i % 7]) * 10) / 10, places.places[i].count - 4 - i));
+  registerReviewRoutes(api, db, places);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
 
   const realFetch = window.fetch.bind(window);
