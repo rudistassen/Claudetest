@@ -1255,3 +1255,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .rota-costs tbody th small.bank-hol { display: block; color: var(--warn); font-size: 0.72rem; font-weight: 700; }
 .rota-costs td small { font-size: 0.75rem; }
 .rota-costs tfoot tr th, .rota-costs tfoot tr td { border-top: 2px solid var(--border); font-weight: 700; }
+/* …in aquamarine, with dark teal lettering so the site name stays easy to read. */
+.rota tr.rota-group th {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 45%, rgba(0, 0, 0, 0.03) 55%, rgba(0, 60, 50, 0.14) 100%),
+    linear-gradient(100deg, #3ccfae, #7fe8cf);
+  color: #07352d;
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -8px 0 rgba(0, 80, 65, 0.3),
+    inset 9px 0 0 rgba(0, 80, 65, 0.28),
+    inset -3px 0 0 rgba(0, 80, 65, 0.15),
+    0 10px 16px -6px rgba(0, 80, 65, 0.45);
+}
+.rota tr.rota-group .rota-group-name { color: #07352d; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45); }
+.rota tr.rota-group .rota-chevron { color: #07352d; text-shadow: none; }
