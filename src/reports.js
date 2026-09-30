@@ -93,6 +93,17 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
     const flag = c.break_flag ? ` <span style="color:#b3261e;font-weight:600">⚠ ${c.break_flag === 'none' ? 'no break' : 'short break'}</span>` : '';
     return parts.length || flag ? `<br><span style="font-size:12px;color:#777">${parts.length ? `Break ${parts.join(', ')}` : ''}</span>${flag}` : '';
   };
+  // Clock-ins against the rota: late in, late out, not on the rota; and rostered people who didn't clock in.
+  const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`);
+  const attendanceNotes = (c) => [
+    c.late_minutes ? `late in ${mins(c.late_minutes)}` : null,
+    c.over_minutes ? (c.end ? `out ${mins(c.over_minutes)} after shift` : `${mins(c.over_minutes)} past shift end`) : null,
+    c.not_on_rota ? 'not on the rota' : null,
+  ].filter(Boolean);
+  const attendanceHtml = (c) => {
+    const notes = attendanceNotes(c);
+    return notes.length ? `<br><span style="font-size:12px;color:#a15c00;font-weight:600">${c.rota ? `<span style="color:#777;font-weight:400">Rota ${c.rota}</span> · ` : ''}${notes.join(' · ')}</span>` : '';
+  };
   const siteBlock = (s) => {
     const people = s.clock_ins ?? null;
     return `
@@ -107,10 +118,11 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
       ${flagged(people).length ? `<p style="margin:6px 0;padding:6px 10px;border-radius:6px;background:#fbe3e1;color:#b3261e;font-size:14px">⚠ ${flagged(people).length} ${flagged(people).length === 1 ? 'shift' : 'shifts'} over 6 hours without a 20-minute break: ${flagged(people).map((c) => esc(c.name)).join(', ')}</p>` : ''}
       <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-top:6px">Clocked in (${people.length})</div>
       ${people.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:4px 0 6px">
-        ${people.map((c) => `<tr><td style="padding:3px 0;font-size:14px;border-bottom:1px dashed #e5e5e5"><strong>${esc(c.name)}</strong> <span style="color:#777">${c.start}–${c.end ?? 'still in'}</span>${breakHtml(c)}</td>
+        ${people.map((c) => `<tr><td style="padding:3px 0;font-size:14px;border-bottom:1px dashed #e5e5e5"><strong>${esc(c.name)}</strong> <span style="color:#777">${c.start}–${c.end ?? 'still in'}</span>${attendanceHtml(c)}${breakHtml(c)}</td>
           <td style="padding:3px 0;font-size:14px;text-align:right;white-space:nowrap;border-bottom:1px dashed #e5e5e5">${duration(c.hours)}</td></tr>`).join('')}
         <tr><td style="padding:4px 0;font-size:12px;color:#777">Total</td><td style="padding:4px 0;font-size:12px;color:#777;text-align:right">${duration(people.reduce((n, c) => n + c.hours, 0))}</td></tr>
-      </table>` : '<p style="margin:4px 0 8px;font-size:14px;color:#777">Nobody clocked in</p>'}` : `
+      </table>` : '<p style="margin:4px 0 8px;font-size:14px;color:#777">Nobody clocked in</p>'}
+      ${s.not_clocked_in?.length ? `<p style="margin:4px 0 8px;font-size:14px;color:#b3261e">${s.not_clocked_in.map((m) => `<strong>${esc(m.name)}</strong> (rota ${m.rota}) ${m.shift_over ? 'didn’t clock in' : `hasn’t clocked in – ${mins(m.late_minutes)} late`}`).join('<br>')}</p>` : ''}` : `
       <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-top:6px">On the rota (${s.shifts_today.length})</div>
       <p style="margin:4px 0 8px;font-size:14px">${s.shifts_today.length ? s.shifts_today.map((x) => `${esc(x.name)} ${x.start_time}–${x.end_time}`).join(' · ') : '<span style="color:#777">Nobody rostered</span>'}</p>`}
       <p style="margin:8px 0 0;font-size:14px;color:#333">Wastage (7 days) <strong>${money(s.wastage_7d)}</strong>
@@ -147,6 +159,8 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
         `Labour ${money(s.labour_cost_today)} (${pctText(s.labour_pct_today)} of sales)`] : []),
       ...(s.clock_ins && data.labour_synced ? [`Clocked in: ${s.clock_ins.map((c) => `${c.name} ${c.start}-${c.end ?? 'still in'} (${duration(c.hours)}${c.breaks?.length ? `, break ${c.breaks.map((b) => `${b.start}-${b.end ?? 'now'}${b.paid ? ' paid' : ''}`).join(', ')}` : ''})`).join('; ') || 'nobody'}`] : []),
       ...(s.clock_ins && flagged(s.clock_ins).length ? [`Over 6 hours without a 20-minute break: ${flagged(s.clock_ins).map((c) => c.name).join(', ')}`] : []),
+      ...(s.clock_ins ?? []).filter((c) => attendanceNotes(c).length).map((c) => `${c.name}: ${attendanceNotes(c).join(', ')}${c.rota ? ` (rota ${c.rota})` : ''}`),
+      ...(s.not_clocked_in ?? []).map((m) => `${m.name} (rota ${m.rota}) ${m.shift_over ? 'didn’t clock in' : `hasn’t clocked in – ${mins(m.late_minutes)} late`}`),
       `Daily Trail checks ${s.daily.done}/${s.daily.due}, weekly ${s.weekly.done}/${s.weekly.due}. Wastage (7 days) ${money(s.wastage_7d)}`, '',
     ]),
     ...(url ? [url] : []),

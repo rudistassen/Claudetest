@@ -1,5 +1,6 @@
 import { nowMinutes, pct, rotaByDay, timecardsFor } from './metrics.js';
 import { breakInfo, breaksFor } from './breaks.js';
+import { attendance } from './attendance.js';
 import { addDays, BUSINESS_TZ, round2, today, weekStart, zonedMidnightUTC } from './util.js';
 
 /** The checks a site does: shared checks (unless switched off there) plus the site's own. */
@@ -63,12 +64,15 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
   };
   // Who clocked in at a site (from Square), with how long they've worked and the breaks they've taken.
   const breaksToday = seeClockIns ? breaksFor(db, cardsToday.map((t) => t.id)) : new Map();
-  const clockIns = (locationId) => cardsToday.filter((t) => t.location_id === locationId).map((t) => ({
+  // …and each compared with their shift on the published rota (late in, late out, not on the rota).
+  const attendanceAt = (locationId) => attendance(db, locationId, d, cardsToday, dayEnd);
+  const clockIns = (locationId, att) => cardsToday.filter((t) => t.location_id === locationId).map((t) => ({
     name: t.name,
     start: timeFormat.format(new Date(t.start)),
     end: t.end_at ? timeFormat.format(new Date(t.end)) : null,
     hours: Math.round(t.hours * 100) / 100,
     ...breakInfo(t, breaksToday.get(t.id), dayEnd),
+    ...(att.byCard.get(t.id) ?? {}),
   }));
 
   const cards = locations.map((loc) => {
@@ -100,7 +104,11 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       orders_draft: orders.find((o) => o.status === 'draft')?.n ?? 0,
       orders_sent: orders.find((o) => o.status === 'sent')?.n ?? 0,
       ...(seeSales ? salesSummary(loc.id) : {}),
-      ...(seeClockIns ? { clock_ins: clockIns(loc.id) } : {}),
+      ...(seeClockIns ? (() => {
+        const att = attendanceAt(loc.id);
+        // People missing from their shift only matter once Square clock-ins are coming through.
+        return { clock_ins: clockIns(loc.id, att), not_clocked_in: labourSynced ? att.missing : [] };
+      })() : {}),
     };
   });
   return { date: d, week_start: ws, compare_date: lastWeek, full_day: fullDay, labour_synced: labourSynced, locations: cards };
