@@ -23,13 +23,6 @@ function versus(now, then, { goodUp = true } = {}) {
 
 const siteInitials = (name) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 
-// The sites as a row of round "stories" along the top; a red letter means a check failed there this week.
-const stories = (locs) => `<div class="card stories" aria-label="Sites">${locs.map((l) => `
-  <button type="button" class="story ${l.daily?.fails || l.weekly?.fails ? 'story-alert' : ''}" data-open="${l.id}" title="Open ${esc(l.name)}">
-    <span class="ring"><span>${esc(siteInitials(l.name))}</span></span>
-    <span class="story-name">${esc(l.name)}</span>
-  </button>`).join('')}</div>`;
-
 function card(loc, state, data) {
   const staff = loc.shifts_today;
   const lw = loc.last_week;
@@ -200,10 +193,9 @@ export async function render({ el, state, navigate, stale, rerender }) {
       <h1>${state.multiSite ? 'All sites' : esc(state.location?.name ?? 'Dashboard')}</h1>
       <div class="actions">
         <span class="muted">${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-        <button class="btn" id="dash-pdf">Download PDF</button>
+        <button class="btn dash-pdf" id="dash-pdf">Download PDF</button>
       </div>
     </div>
-    ${state.multiSite && locs.length > 1 ? stories(locs) : ''}
     <p class="print-only print-meta">BrewView dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     <div class="kpis">

@@ -1118,16 +1118,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .user-btn .avatar { box-shadow: none; }
 .user-btn .ring > .avatar { border-width: 2px; width: 28px; height: 28px; font-size: 0.66rem; }
 
-/* A row of round "stories" for the sites (dashboard). */
-.stories { display: flex; gap: 1.1rem; overflow-x: auto; padding: 0.9rem 1rem 0.8rem; margin-bottom: 1rem; scrollbar-width: none; }
-.stories::-webkit-scrollbar { display: none; }
-.story { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; width: 74px; flex-shrink: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; }
-.story .ring { padding: 3px; transition: transform 0.15s; }
-.story:hover .ring { transform: scale(1.05); }
-.story .ring > span { width: 60px; height: 60px; font-size: 1rem; border-width: 3px; }
-.story-name { max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; }
-.story-alert .ring > span { color: var(--bad); }
-
 /* My Brew profile, laid out like a profile page: picture, name and a row of counts. */
 .my-profile { grid-template-columns: auto 1fr; }
 .my-profile .ring { padding: 3px; }
@@ -1173,7 +1163,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
   body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
   #toasts { bottom: calc(72px + env(safe-area-inset-bottom)); }
   .update-bar { bottom: calc(76px + env(safe-area-inset-bottom)); }
-  .stories { margin-left: -0.7rem; margin-right: -0.7rem; border-left: 0; border-right: 0; border-radius: 0; }
 }
 
 @media (max-width: 640px) {
@@ -1182,7 +1171,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 }
 @media print {
   body { background: #fff; padding-bottom: 0; }
-  .tabbar, .stories { display: none !important; }
+  .tabbar { display: none !important; }
   .kpi-feature { border: 1px solid #ccc; background: none; }
   .kpi[data-icon]::after { display: none; }
 }
@@ -1196,3 +1185,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 
 /* A page's own site drop-down. */
 .site-pick { font-weight: 600; max-width: 240px; }
+
+/* PDFs are for computers; phones leave the dashboard's Download PDF button out. */
+@media (max-width: 800px) { .dash-pdf { display: none; } }
