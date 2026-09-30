@@ -831,17 +831,11 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 
 /* My Brew */
 .my-greeting { margin: 0.2rem 0 0; }
-.mybrew { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); gap: 1rem; align-items: start; }
+/* My Brew is one column, like a feed: your next shifts, then the news, then company documents. */
+.mybrew { max-width: 760px; }
+.mybrew-news { margin-bottom: 1rem; }
 .mybrew .card { margin: 0 0 1rem; }
 .mybrew h2 { font-size: 1.05rem; margin: 0 0 0.6rem; }
-.my-profile { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.9rem; align-items: center; }
-.my-profile h2 { margin: 0; }
-.my-profile p { margin: 0; }
-.my-avatar { width: 3.2rem; height: 3.2rem; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--brand-contrast); font-weight: 700; font-size: 1.1rem; }
-.my-details { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.8rem; margin: 0.8rem 0 0.4rem; font-size: 0.9rem; }
-.my-details dt { color: var(--muted); }
-.my-details dd { margin: 0; overflow-wrap: anywhere; }
-.my-links { grid-column: 1 / -1; font-size: 0.85rem; }
 .my-shift-list { list-style: none; margin: 0 0 0.5rem; padding: 0; }
 .my-shift-list li { display: grid; grid-template-columns: 6.5rem auto 1fr; gap: 0.5rem; align-items: baseline; padding: 0.4rem 0.5rem; border-radius: 8px; }
 .my-shift-list li:nth-child(odd) { background: var(--surface-2); }
@@ -869,7 +863,7 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 .news-sites { margin: -0.3rem 0 0.8rem; }
 .reads-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 .reads-cols h3 { font-size: 0.95rem; }
-@media (max-width: 900px) { .mybrew { grid-template-columns: 1fr; } .reads-cols { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .reads-cols { grid-template-columns: 1fr; } }
 
 /* News photos and videos */
 .news-media { display: grid; gap: 0.4rem; margin: 0.2rem 0 0.8rem; }
@@ -1118,13 +1112,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .user-btn .avatar { box-shadow: none; }
 .user-btn .ring > .avatar { border-width: 2px; width: 28px; height: 28px; font-size: 0.66rem; }
 
-/* My Brew profile, laid out like a profile page: picture, name and a row of counts. */
-.my-profile { grid-template-columns: auto 1fr; }
-.my-profile .ring { padding: 3px; }
-.my-profile .ring > .my-avatar { width: 4.4rem; height: 4.4rem; border-width: 3px; background: var(--surface-2); color: var(--text); font-size: 1.3rem; }
-.my-stats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); margin: 0.6rem 0 0.2rem; padding: 0.6rem 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: center; }
-.my-stats strong { display: block; font-size: 1.1rem; }
-.my-stats span { font-size: 0.78rem; color: var(--muted); }
 
 /* News posts as a feed: who posted it at the top, the picture edge to edge, then the words. */
 .news-post { border-radius: 12px; padding: 0; overflow: hidden; }
@@ -1175,7 +1162,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
   .kpi-feature { border: 1px solid #ccc; background: none; }
   .kpi[data-icon]::after { display: none; }
 }
-.my-stats p { margin: 0; }
 .news-post > .news-tag-row { margin-bottom: 0.4rem; }
 .news-post > h3 { margin: 0.1rem 1rem 0.35rem; }
 .topbar .demo-pill { background: var(--surface-2); color: var(--muted); }

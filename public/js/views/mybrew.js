@@ -1,4 +1,4 @@
-import { api, esc, field, fmtDate, fmtDateTime, input, isDemo, money, openModal, select, showError, textarea, toast, todayISO } from '../lib.js';
+import { api, esc, field, fmtDate, fmtDateTime, input, isDemo, openModal, select, showError, textarea, toast, todayISO } from '../lib.js';
 
 // --- Photos and short videos on posts ---
 
@@ -119,16 +119,12 @@ function greeting() {
 
 export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
-  const [shifts, leave, news, docs] = await Promise.all([api('/my-shifts'), api('/leave/mine'), api('/news'), api('/documents')]);
+  const [shifts, news, docs] = await Promise.all([api('/my-shifts'), api('/news'), api('/documents')]);
   if (stale()) return;
   const u = state.user;
   const today = todayISO();
-  const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
-  const sites = u.role === 'admin' || u.all_sites ? 'All sites' : state.locations.map((l) => l.name).join(', ');
   const next = shifts.slice(0, 6);
   const weekHours = shifts.filter((s) => s.date < addDaysISO(today, 7)).reduce((t, s) => t + (s.hours ?? 0), 0);
-  const upcomingLeave = leave.requests.filter((r) => r.status === 'approved' && r.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
-  const pending = leave.requests.filter((r) => r.status === 'pending').length;
   const toRead = news.filter((p) => p.requires_ack && !p.read).length;
   let filter = 'all';
 
@@ -154,26 +150,6 @@ export async function renderMyBrew(ctx) {
     </div>
     ${toRead ? `<p class="notice">📌 <strong>${toRead} ${toRead === 1 ? 'update needs' : 'updates need'}</strong> you to confirm you’ve read ${toRead === 1 ? 'it' : 'them'} – see the news below.</p>` : ''}
     <div class="mybrew">
-      <aside class="mybrew-side">
-        <section class="card my-profile">
-          <span class="ring" aria-hidden="true"><span class="my-avatar">${esc(initials(u.name))}</span></span>
-          <div>
-            <h2>${esc(u.name)}</h2>
-            <p class="muted">${esc([u.rota_group, u.access_name ?? u.role].filter(Boolean).join(' · '))}</p>
-          </div>
-          <div class="my-stats">
-            <p><strong>${shifts.length}</strong><span>shift${shifts.length === 1 ? '' : 's'} coming up</span></p>
-            <p><strong>${Math.round(weekHours * 10) / 10}</strong><span>hours this week</span></p>
-            <p><strong>${leave.booked_this_year}</strong><span>holiday days</span></p>
-          </div>
-          <dl class="my-details">
-            ${u.location_id ? `<dt>Home site</dt><dd>${esc(siteName(u.location_id))}</dd>` : ''}
-            <dt>Sites</dt><dd>${esc(sites)}</dd>
-            <dt>Email</dt><dd>${esc(u.email)}</dd>
-            ${u.hourly_rate ? `<dt>Pay rate</dt><dd>${money(u.hourly_rate)} an hour</dd>` : ''}
-          </dl>
-          <p class="my-links"><a href="#/account">Change password</a> · <a href="#/timeoff">Availability</a></p>
-        </section>
         <section class="card my-shifts-card">
           <h2>Your next shifts</h2>
           ${next.length ? `<ul class="my-shift-list">${next.map((s) => `<li class="${s.date === today ? 'is-today' : ''}">
@@ -184,23 +160,7 @@ export async function renderMyBrew(ctx) {
             : '<p class="muted">No shifts on the rota for the next two weeks.</p>'}
           <a class="small" href="#/rota?view=mine">All my shifts →</a>
         </section>
-        <section class="card">
-          <h2>Holiday</h2>
-          <p><strong>${leave.booked_this_year}</strong> day${leave.booked_this_year === 1 ? '' : 's'} booked in ${leave.year}</p>
-          ${upcomingLeave ? `<p class="small">Next: ${fmtDate(upcomingLeave.start_date)}${upcomingLeave.end_date !== upcomingLeave.start_date ? ` – ${fmtDate(upcomingLeave.end_date)}` : ''}</p>` : ''}
-          ${pending ? `<p class="small muted">${pending} request${pending === 1 ? '' : 's'} waiting for approval</p>` : ''}
-          <a class="small" href="#/timeoff">Request holiday →</a>
-        </section>
-        <section class="card my-docs">
-          <h2>Company documents</h2>
-          ${docs.length > 6 ? '<input type="search" id="doc-search" placeholder="Find a document…" aria-label="Find a document">' : ''}
-          ${docs.length ? Object.entries(DOC_CATEGORIES).filter(([k]) => docs.some((d) => d.category === k)).map(([k, label]) => `
-            <div class="doc-group"><h3>${label}</h3>
-              <ul class="doc-list">${docs.filter((d) => d.category === k).map(docItem).join('')}</ul></div>`).join('')
-            : '<p class="muted small">No documents shared yet.</p>'}
-        </section>
-      </aside>
-      <section class="mybrew-news">
+        <section class="mybrew-news">
         <div class="news-head">
           <h2>News</h2>
           <div class="seg" role="group" aria-label="Show">
@@ -210,7 +170,15 @@ export async function renderMyBrew(ctx) {
           </div>
         </div>
         ${news.length ? news.map(post).join('') : '<div class="card empty">No news yet.</div>'}
-      </section>
+        </section>
+        <section class="card my-docs">
+          <h2>Company documents</h2>
+          ${docs.length > 6 ? '<input type="search" id="doc-search" placeholder="Find a document…" aria-label="Find a document">' : ''}
+          ${docs.length ? Object.entries(DOC_CATEGORIES).filter(([k]) => docs.some((d) => d.category === k)).map(([k, label]) => `
+            <div class="doc-group"><h3>${label}</h3>
+              <ul class="doc-list">${docs.filter((d) => d.category === k).map(docItem).join('')}</ul></div>`).join('')
+            : '<p class="muted small">No documents shared yet.</p>'}
+        </section>
     </div>`;
 
   // Long posts are shortened with "Read more".
