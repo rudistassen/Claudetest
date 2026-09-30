@@ -1,8 +1,8 @@
-// BrewView's service worker: makes the app installable and quick to open. Everything is fetched fresh from the
+// Brewly's service worker: makes the app installable and quick to open. Everything is fetched fresh from the
 // server first, so updates show straight away; the saved copy is only used when there's no connection.
 // Data (/api) is never saved here.
-const CACHE = 'brewview-v4';
-const SHELL = ['/', '/css/styles.css', '/js/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/img/brewview.svg'];
+const CACHE = 'brewly-v5';
+const SHELL = ['/', '/css/styles.css', '/js/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/img/brewly.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
@@ -29,7 +29,7 @@ self.addEventListener('fetch', (e) => {
       const saved = await caches.match(req.mode === 'navigate' ? '/' : req);
       if (saved) return saved;
       if (req.mode === 'navigate') {
-        return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>BrewView</title><body style="font-family:sans-serif;padding:2rem;color:#1f5f4a"><h1>BrewView</h1><p>You’re offline. Check your connection and try again.</p></body>', { headers: { 'Content-Type': 'text/html' } });
+        return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brewly</title><body style="font-family:sans-serif;padding:2rem;color:#1f5f4a"><h1>Brewly</h1><p>You’re offline. Check your connection and try again.</p></body>', { headers: { 'Content-Type': 'text/html' } });
       }
       throw new Error('offline');
     }

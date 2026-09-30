@@ -116,7 +116,7 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:12px 4px">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fff;border-radius:12px"><tr><td style="padding:0">
     <div style="background:#1f5c4a;color:#fff;padding:14px 16px;border-radius:12px 12px 0 0">
-      <div style="font-size:13px;opacity:.85">BrewView · ${esc(name)}</div>
+      <div style="font-size:13px;opacity:.85">Brewly · ${esc(name)}</div>
       <div style="font-size:21px;font-weight:700;margin-top:2px">${heading}</div>
       <div style="font-size:13px;opacity:.85;margin-top:2px">${esc(scope)} · ${upTo}</div>
     </div>
@@ -124,13 +124,13 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
       ${summary}
       ${table}
       ${sites.map(siteBlock).join('')}
-      ${url ? `<p style="margin:18px 0 6px"><a href="${esc(url)}" style="display:inline-block;background:#1f5c4a;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600">Open BrewView</a></p>` : ''}
-      <p style="margin:14px 0 18px;font-size:12px;color:#888">Figures are as of the last Square sync. You get this email because an admin added you to “${esc(name)}” in BrewView (Setup → Email reports).</p>
+      ${url ? `<p style="margin:18px 0 6px"><a href="${esc(url)}" style="display:inline-block;background:#1f5c4a;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600">Open Brewly</a></p>` : ''}
+      <p style="margin:14px 0 18px;font-size:12px;color:#888">Figures are as of the last Square sync. You get this email because an admin added you to “${esc(name)}” in Brewly (Setup → Email reports).</p>
     </div>
   </td></tr></table></td></tr></table></body></html>`;
 
   const text = [
-    `BrewView · ${name}`, heading, `${scope} · ${upTo}`, '',
+    `Brewly · ${name}`, heading, `${scope} · ${upTo}`, '',
     ...(tot ? [`Gross sales ${money(tot.gross)} ${change(tot.gross, tot.lwGross).text}`, `Net sales ${money(tot.net)} ${change(tot.net, tot.lwNet).text}`,
       `Labour ${money(tot.labour)} (${pctText(totPct)} of sales)`, `Changes are ${compare}.`, ''] : []),
     ...sites.flatMap((s) => [

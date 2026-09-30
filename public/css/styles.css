@@ -141,11 +141,9 @@ small { display: block; color: var(--muted); font-size: 0.8rem; }
 .brand { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.1rem; }
 .logo { display: inline-flex; align-items: center; gap: 0.45rem; --logo-accent: #e1306c; }
 .logo-mark { flex-shrink: 0; display: block; }
-.logo-word { font-weight: 800; letter-spacing: -0.01em; }
-.logo-word span { font-weight: 500; color: var(--logo-accent); }
+.logo-word { font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
 .login-logo { margin: 0 0 0.25rem; color: var(--brand); font-size: 1.7rem; }
 .login-logo .logo { --logo-accent: #c8902a; }
-.login-logo .logo-word span { color: var(--brand); opacity: 0.75; }
 .topbar-gap { margin-left: auto; }
 .topbar .menu-toggle { color: inherit; margin: -0.2rem -0.3rem; font-size: 1.3rem; border-radius: 6px; }
 .topbar .menu-toggle:hover { background: var(--surface-2); }
@@ -1045,7 +1043,6 @@ main > :nth-child(n+4) { animation-delay: 0.09s; }
 
 .brand-band { border-bottom: 1px solid var(--border); background: var(--surface); }
 .brand .logo-word { font-weight: 800; letter-spacing: -0.03em; }
-.brand .logo-word span { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 /* Section label above each page title (Team, Trail, …). */
 body { --section-ink: var(--muted); }
@@ -1103,7 +1100,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .modal { border-radius: 12px; }
 .login-wrap { background: none; }
 .login-wrap .login { border: 1px solid var(--border); border-radius: 12px; box-shadow: none; }
-.login-logo .logo-word span { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; opacity: 1; }
 
 /* Profile pictures with the gradient ring, as used for people and sites. */
 .ring { display: inline-grid; place-items: center; padding: 2px; border-radius: 50%; background: var(--gradient); flex-shrink: 0; }
@@ -1167,7 +1163,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .topbar .demo-pill { background: var(--surface-2); color: var(--muted); }
 /* The company logos are dark ink, so their strip stays white in dark mode too. */
 .brand-band { background: #ffffff; border-bottom-color: #dbdbdb; }
-.login-logo { color: var(--text); }
+.login h1.login-logo { color: var(--text); }
 
 /* A page's own site drop-down. */
 .site-pick { font-weight: 600; max-width: 240px; }

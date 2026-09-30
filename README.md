@@ -1,4 +1,4 @@
-# BrewView
+# Brewly
 
 One web app for running a multi-site cafe business. It works on desktops, tablets and phones, so staff can use it on a tablet behind the counter and managers can use it from anywhere.
 
@@ -75,35 +75,35 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 
 ## Connecting Square
 
-1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "BrewView").
+1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "Brewly").
 2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders, locations, team members and timecards (the token needs `ORDERS_READ`, `MERCHANT_PROFILE_READ`, `EMPLOYEES_READ` and `TIMECARDS_READ`). Treat it like a password.
-3. Start BrewView with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
-4. In BrewView go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
+3. Start Brewly with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
+4. In Brewly go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
 5. Click **Import sales** to backfill history (up to 92 days per run). After that, sales and clock-ins refresh automatically every 30 minutes. The first automatic run backfills the last 28 days.
 6. To use your Square team as your staff list, go to **Setup → Staff → Import from Square**. It shows what will change before anything is saved. Everyone in Square Team is added, or updated if already here (matched by email, then name). Their hourly rate comes from their pay in Square. New people's home site comes from their assigned Square locations (or where they usually clock in); after that the home site is yours to change on the Staff page, and importing again keeps it. Tick **Deactivate staff who aren't in Square** to switch off everyone else, such as the demo staff; they keep their history, and the admin running the import stays active. New people get a random password, so set one (click their name) if they need to sign in. Run it again any time to pick up changes.
 7. Once your sites are linked and your staff imported, **Setup → Square → Remove what isn't in Square** deletes the sites not linked to Square and the staff not in your Square team (for example the demo data), with their rotas and records. It lists what will go first, never removes you, moves anyone in Square whose home site is removed to a site you keep, and saves a copy of the database as `data/cafe-before-cleanup-<date>.db` before deleting.
-8. Staff clock in and out on Square (Square Team / Timecards). Each Square team member is matched to a BrewView user by **email address**, then by name, so use the same email in both. If the token can't read timecards, sales still sync and the reason is shown on the Trading page and in the sync history.
+8. Staff clock in and out on Square (Square Team / Timecards). Each Square team member is matched to a Brewly user by **email address**, then by name, so use the same email in both. If the token can't read timecards, sales still sync and the reason is shown on the Trading page and in the sync history.
 
 How the numbers are worked out:
 - **Net sales** = line-item totals after discounts, minus VAT (UK Square prices include VAT), minus itemised returns. Tips and service charges are excluded. Only `COMPLETED` orders are counted, and each is assigned to a business day by its close time in UK time.
 - **Labour %** = rostered hours × each person's hourly rate ÷ net sales. For today it only counts hours worked up to now, and days with no Square sales are left out. The colours are green at 30% or below and amber up to 35%. Change `LABOUR_TARGET` in `public/js/views/sales.js` if your target differs.
-- **Clocked labour** = paid hours on each Square timecard (unpaid breaks removed; still-open timecards count up to now) × the wage set on the job in Square, or the person's hourly rate in BrewView if Square has none. Each timecard counts on the day it started.
+- **Clocked labour** = paid hours on each Square timecard (unpaid breaks removed; still-open timecards count up to now) × the wage set on the job in Square, or the person's hourly rate in Brewly if Square has none. Each timecard counts on the day it started.
 - **Sales per labour hour** = net sales ÷ clocked hours, on days that have both. **Staff on the clock** by hour is paid clocked hours in that hour, averaged over the days with sales.
 - Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
 
 ## Installing the app
 
-BrewView can be installed as an app (a Progressive Web App) – an icon on the home screen or in the computer's apps, opening full screen. It's the same website underneath, so it updates itself whenever the site does.
+Brewly can be installed as an app (a Progressive Web App) – an icon on the home screen or in the computer's apps, opening full screen. It's the same website underneath, so it updates itself whenever the site does.
 
 - **iPhone / iPad:** open the site in Safari → **Share** → **Add to Home Screen**.
 - **Android:** in Chrome, tap **Install app** (or ⋮ → **Install app**).
-- **Windows / Mac:** in Chrome or Edge, click the install icon in the address bar, or **Install app** at the bottom of the menu in BrewView.
+- **Windows / Mac:** in Chrome or Edge, click the install icon in the address bar, or **Install app** at the bottom of the menu in Brewly.
 
 **Your account** shows the right steps for the device you're on. Installing needs the site on https (Railway provides it); the app needs a connection to work and says so when it's offline.
 
 ## Supplier invoices
 
-**Stock and Ordering → Invoices** reads supplier invoices for you. Upload a PDF (or a photo of a paper invoice) – several at once, or drag them onto the page – and BrewView reads the supplier, invoice number, dates, every line (description, code, quantity, price, total) and the totals, whatever the supplier's layout. It then:
+**Stock and Ordering → Invoices** reads supplier invoices for you. Upload a PDF (or a photo of a paper invoice) – several at once, or drag them onto the page – and Brewly reads the supplier, invoice number, dates, every line (description, code, quantity, price, total) and the totals, whatever the supplier's layout. It then:
 
 - recognises the **supplier** (by name, or their email address's domain), or offers to add them;
 - matches each **line to your products** – by what you matched it to last time for that supplier, then the supplier's product code, then the name, then the closest similar name – and says how sure it is;
@@ -117,7 +117,7 @@ Invoices are read by Claude (Anthropic's AI model, `claude-opus-5-5`), which cos
 1. Sign up at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, and create a key under **API keys**.
 2. Set `ANTHROPIC_API_KEY` to the key in the app's environment (Railway → Variables) and deploy. Create the key **inside a workspace** (Console → Workspaces → your workspace → API keys); a key made at organisation level also needs `ANTHROPIC_WORKSPACE_ID` set to the workspace's ID. Optional: `INVOICE_MODEL` to use a different Claude model.
 
-The uploaded file is sent to Anthropic to be read and stored in BrewView's database with the invoice.
+The uploaded file is sent to Anthropic to be read and stored in Brewly's database with the invoice.
 
 ## Email reports
 
@@ -128,7 +128,7 @@ Email goes through [Brevo](https://www.brevo.com) (free for up to 300 emails a d
 1. Sign up at brevo.com.
 2. Under **Senders, domains & dedicated IPs → Senders**, add the address emails should come from and confirm it from the email Brevo sends.
 3. Under **SMTP & API → API keys**, generate a key.
-4. Set `BREVO_API_KEY` (the key) and `EMAIL_FROM` (the sender address) in the app's environment (Railway → Variables), and deploy. Optional: `EMAIL_FROM_NAME` (default "BrewView") and `APP_URL` (your BrewView address, for an "Open BrewView" button; on Railway it's found automatically).
+4. Set `BREVO_API_KEY` (the key) and `EMAIL_FROM` (the sender address) in the app's environment (Railway → Variables), and deploy. Optional: `EMAIL_FROM_NAME` (default "Brewly") and `APP_URL` (your Brewly address, for an "Open Brewly" button; on Railway it's found automatically).
 
 ## Standalone demo
 

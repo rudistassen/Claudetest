@@ -95,7 +95,7 @@ export function planImport(db, { headers, rows, heading_line: headingLine = 1 })
   if (!Array.isArray(headers) || !Array.isArray(rows)) throw badRequest('Nothing to import');
   if (rows.length > MAX_IMPORT_ROWS) throw badRequest(`Import at most ${MAX_IMPORT_ROWS} rows at a time`);
   const keys = mapHeaders(headers);
-  if (!keys.includes('name')) throw badRequest('The file needs a “Name” column (the product name). Download the template to see the columns BrewView understands.');
+  if (!keys.includes('name')) throw badRequest('The file needs a “Name” column (the product name). Download the template to see the columns Brewly understands.');
 
   const products = db.prepare('SELECT p.*, s.name AS supplier_name FROM products p LEFT JOIN suppliers s ON s.id = p.supplier_id').all();
   const suppliers = new Map(db.prepare('SELECT id, name FROM suppliers').all().map((s) => [norm(s.name), s]));

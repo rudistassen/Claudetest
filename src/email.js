@@ -4,7 +4,7 @@
 // Set in the environment:
 //   BREVO_API_KEY   the API key from Brevo (SMTP & API → API keys)
 //   EMAIL_FROM      the sender address, verified in Brevo (Senders, domains & dedicated IPs → Senders)
-//   EMAIL_FROM_NAME optional, defaults to "BrewView"
+//   EMAIL_FROM_NAME optional, defaults to "Brewly"
 
 import { cleanEnv } from './seed.js';
 import { HttpError } from './util.js';
@@ -13,7 +13,7 @@ export function emailConfig(env = process.env) {
   const apiKey = cleanEnv(env.BREVO_API_KEY);
   const from = cleanEnv(env.EMAIL_FROM);
   if (!apiKey || !from) return null;
-  return { apiKey, from, fromName: cleanEnv(env.EMAIL_FROM_NAME) || 'BrewView' };
+  return { apiKey, from, fromName: cleanEnv(env.EMAIL_FROM_NAME) || 'Brewly' };
 }
 
 /** A mailer: { from, send({ to, name, subject, html, text }) }. */
@@ -45,5 +45,5 @@ export function brevoMailer(config, fetchImpl = fetch) {
 /** Keeps emails instead of sending them (tests and the demo). */
 export function memoryMailer() {
   const sent = [];
-  return { from: 'reports@brewview.demo', sent, async send(email) { sent.push(email); } };
+  return { from: 'reports@brewly.demo', sent, async send(email) { sent.push(email); } };
 }

@@ -31,7 +31,7 @@ const TEAM = [
     assigned_locations: { assignment_type: 'EXPLICIT_LOCATIONS', location_ids: ['SQ_ELSEWHERE', 'SQ_HIGH'] },
     wage_setting: { job_assignments: [{ job_title: 'Barista', pay_type: 'HOURLY', hourly_rate: { amount: 1221, currency: 'GBP' } }] } },
   { id: 'TM_4', given_name: 'Sam', family_name: 'Noemail', status: 'ACTIVE', assigned_locations: { assignment_type: 'ALL_CURRENT_AND_FUTURE_LOCATIONS' } },
-  // Same email as TM_3, which Square allows but BrewView can't.
+  // Same email as TM_3, which Square allows but Brewly can't.
   { id: 'TM_5', given_name: 'Priya', family_name: 'Twin', email_address: 'Priya@Example.com', status: 'ACTIVE' },
   { id: 'TM_6', given_name: 'Rudi', family_name: 'Owner', email_address: 'owner@example.com', status: 'ACTIVE', is_owner: true },
 ];
@@ -410,7 +410,7 @@ describe('staff from Square', () => {
     assert.equal((await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'staff1@cafe.local', password: DEMO_PASSWORD }) })).status, 401);
     assert.equal((await admin('/auth/me')).status, 200, 'the admin who ran it stays signed in');
 
-    // A home site changed in BrewView is kept when importing again, even though Square assigns them elsewhere.
+    // A home site changed in Brewly is kept when importing again, even though Square assigns them elsewhere.
     const kiosk = db.prepare(`SELECT id FROM locations WHERE square_location_id = 'SQ_NEW'`).get().id;
     const moved = await admin(`/users/${priya.id}`, { method: 'PUT', body: { name: 'Priya Shah', email: 'priya@example.com', role: 'staff', location_id: kiosk, position: 'Barista', hourly_rate: 12.21 } });
     assert.equal(moved.data.location_id, kiosk);

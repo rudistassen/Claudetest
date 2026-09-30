@@ -54,7 +54,7 @@ export function exportProducts(products, allergenLabels) {
   const label = new Map(allergenLabels);
   const rows = products.map((p) => [p.name, p.sku ?? '', p.category ?? '', p.unit ?? '', p.supplier_name ?? '', p.unit_cost ?? 0, p.par_level ?? 0,
     p.recipe_unit ?? '', p.units_per_pack ?? 1, (p.allergens ?? '').split(',').filter(Boolean).map((k) => label.get(k) ?? k).join(', '), p.active ? 'yes' : 'no']);
-  downloadFile(`BrewView products ${new Date().toISOString().slice(0, 10)}.csv`, toCsv([TEMPLATE_HEADERS, ...rows]));
+  downloadFile(`Brewly products ${new Date().toISOString().slice(0, 10)}.csv`, toCsv([TEMPLATE_HEADERS, ...rows]));
 }
 
 function loadXlsx() {
@@ -117,7 +117,7 @@ export function openProductImport(ctx) {
       <div id="import-preview"></div>
       <details class="small muted import-help"><summary>How it works</summary>
         <ul>
-          <li>Products already in BrewView are matched by <strong>SKU</strong>, then by <strong>name</strong>, and updated. Anything else is added as new.</li>
+          <li>Products already in Brewly are matched by <strong>SKU</strong>, then by <strong>name</strong>, and updated. Anything else is added as new.</li>
           <li>A blank cell leaves that detail as it is. Nothing is deleted – to stop using a product, put <strong>no</strong> in the Active column.</li>
           <li>A supplier that isn’t set up yet is added for you.</li>
           <li>Allergens: the names separated by commas, e.g. <em>Milk, Gluten, Soya</em>. Put <em>none</em> to clear them.</li>
@@ -176,7 +176,7 @@ export function openProductImport(ctx) {
 
   form.querySelector('#template').addEventListener('click', (e) => {
     e.preventDefault();
-    downloadFile('BrewView products template.csv', toCsv([TEMPLATE_HEADERS, ...TEMPLATE_EXAMPLES]));
+    downloadFile('Brewly products template.csv', toCsv([TEMPLATE_HEADERS, ...TEMPLATE_EXAMPLES]));
   });
   form.querySelector('#import-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];

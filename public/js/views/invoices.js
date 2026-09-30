@@ -26,11 +26,11 @@ function setupHelp(data) {
   return `
     <section class="card email-setup">
       <h2>First, switch on invoice reading (one-off, about 5 minutes)</h2>
-      <p>BrewView uses <strong>Claude</strong>, an AI model from Anthropic, to read invoices – any supplier’s layout, PDFs or photos. It costs roughly <strong>5–10p per invoice</strong>, paid to Anthropic.</p>
+      <p>Brewly uses <strong>Claude</strong>, an AI model from Anthropic, to read invoices – any supplier’s layout, PDFs or photos. It costs roughly <strong>5–10p per invoice</strong>, paid to Anthropic.</p>
       <ol>
         <li>Go to <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> and sign up (or sign in).</li>
         <li>Under <strong>Billing</strong>, add a card and some credit (£5 goes a long way).</li>
-        <li>Under <strong>API keys</strong>, click <strong>Create key</strong>, name it “BrewView” and copy it (it starts with <code>sk-ant-</code>).</li>
+        <li>Under <strong>API keys</strong>, click <strong>Create key</strong>, name it “Brewly” and copy it (it starts with <code>sk-ant-</code>).</li>
         <li>In Railway, open your app → <strong>Variables</strong>, add <code>ANTHROPIC_API_KEY</code> = the key, then click <strong>Deploy</strong>.</li>
       </ol>
     </section>`;

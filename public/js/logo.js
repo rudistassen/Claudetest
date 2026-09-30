@@ -1,4 +1,4 @@
-// The BrewView logo: a cup with a rising bar chart for steam – what's brewing, at a glance.
+// The Brewly logo: a cup with a rising bar chart for steam – what's brewing, at a glance.
 // The cup takes the text colour (currentColor); the bars use --logo-accent.
 export const logoMark = (size = 28) => `<svg class="logo-mark" width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
   <rect x="8.2" y="9" width="3.2" height="4" rx="1" fill="var(--logo-accent, #e2b04a)"/>
@@ -8,4 +8,4 @@ export const logoMark = (size = 28) => `<svg class="logo-mark" width="${size}" h
   <path d="M25 17.2h1.6a3.4 3.4 0 0 1 0 6.8H24.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
 </svg>`;
 
-export const logo = (size = 28) => `<span class="logo">${logoMark(size)}<span class="logo-word">Brew<span>View</span></span></span>`;
+export const logo = (size = 28) => `<span class="logo">${logoMark(size)}<span class="logo-word">Brewly</span></span>`;

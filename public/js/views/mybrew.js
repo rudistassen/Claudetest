@@ -131,8 +131,8 @@ export async function renderMyBrew(ctx) {
   const post = (p) => `
     <article class="news-post ${p.pinned ? 'is-pinned' : ''} ${p.requires_ack && !p.read ? 'needs-read' : ''}" data-post="${p.id}" data-category="${p.category}">
       <header class="post-head">
-        <span class="ring ${p.requires_ack && !p.read ? '' : 'is-seen'}" aria-hidden="true"><span>${esc(initials(p.author || 'BrewView'))}</span></span>
-        <span class="post-who"><strong>${esc(p.author || 'BrewView')}</strong>
+        <span class="ring ${p.requires_ack && !p.read ? '' : 'is-seen'}" aria-hidden="true"><span>${esc(initials(p.author || 'Brewly'))}</span></span>
+        <span class="post-who"><strong>${esc(p.author || 'Brewly')}</strong>
           <span class="muted">${fmtDate(p.created_at.slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}${p.updated_at ? ' · updated' : ''}</span></span>
         ${p.pinned ? '<span class="news-pin" title="Pinned">📌 Pinned</span>' : ''}
       </header>

@@ -73,4 +73,4 @@ if (invoiceReader) console.log(`Invoice reading switched on (${invoiceReader.mod
 
 const port = Number(process.env.PORT) || 3000;
 const version = appVersion(publicDir);
-createApp(db, { square, mailer, invoiceReader, version }).listen(port, () => console.log(`BrewView running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, version }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));

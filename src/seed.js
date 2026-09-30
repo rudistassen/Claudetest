@@ -246,7 +246,7 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
   // A few posts for the My Brew news feed.
   const admin = db.prepare(`SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1`).get()?.id ?? null;
   const post = db.prepare(`INSERT INTO news_posts (title, body, category, pinned, requires_ack, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`);
-  post.run('Updated allergen policy', 'We’ve updated how we label allergens on the counter.\n\n• Every cake and pastry label now lists all 14 allergens it contains.\n• If a customer asks about allergens, always check the recipe in BrewView – never guess.\n• Report any labelling mistakes to your manager straight away.\n\nPlease read the full policy and tap “I’ve read this” below.', 'policy', 1, 1, admin, '-2 days');
+  post.run('Updated allergen policy', 'We’ve updated how we label allergens on the counter.\n\n• Every cake and pastry label now lists all 14 allergens it contains.\n• If a customer asks about allergens, always check the recipe in Brewly – never guess.\n• Report any labelling mistakes to your manager straight away.\n\nPlease read the full policy and tap “I’ve read this” below.', 'policy', 1, 1, admin, '-2 days');
   post.run('Christmas rota requests', 'Holiday requests for 20 December – 2 January need to be in by 31 October. Use Time off → Request holiday.', 'reminder', 0, 0, admin, '-5 days');
-  post.run('Welcome to BrewView', 'This is your My Brew page: your shifts, your holiday and news from the team, all in one place.', 'announcement', 0, 0, admin, '-9 days');
+  post.run('Welcome to Brewly', 'This is your My Brew page: your shifts, your holiday and news from the team, all in one place.', 'announcement', 0, 0, admin, '-9 days');
 }

@@ -200,7 +200,7 @@ function renderShell() {
   document.getElementById('app').innerHTML = `
     <header class="topbar">
       <button class="icon-btn menu-toggle" aria-label="Menu" title="Menu">☰</button>
-      <a class="brand" href="#/dashboard" aria-label="BrewView – dashboard">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
+      <a class="brand" href="#/dashboard" aria-label="Brewly – dashboard">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <nav class="topnav" aria-label="Main menu">
         ${groups.map(([heading, items]) => {
           if (!heading) return items.map(([p, label]) => `<a href="#/${p}" class="topnav-btn ${active === p ? 'is-active' : ''}">${label}</a>`).join('');
@@ -404,8 +404,8 @@ async function start() {
     // No connection (e.g. the installed app opened offline): say so, rather than asking them to sign in again.
     if (!navigator.onLine || err instanceof TypeError) {
       document.getElementById('app').innerHTML = `<div class="login-wrap"><div class="card login offline-card">
-        <h1 class="login-logo" aria-label="BrewView">${logo(40)}</h1>
-        <p><strong>You’re offline.</strong> BrewView needs an internet connection – check your Wi-Fi or mobile data.</p>
+        <h1 class="login-logo" aria-label="Brewly">${logo(40)}</h1>
+        <p><strong>You’re offline.</strong> Brewly needs an internet connection – check your Wi-Fi or mobile data.</p>
         <button class="btn btn-primary btn-block" id="retry">Try again</button></div></div>`;
       document.getElementById('retry').addEventListener('click', start);
       window.addEventListener('online', start, { once: true });
