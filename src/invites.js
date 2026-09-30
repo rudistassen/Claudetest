@@ -4,6 +4,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { hashPassword, requirePerm, startSession, validatePassword } from './auth.js';
 import { appUrl } from './reports.js';
+import { squareTeamUrl } from './square-staff.js';
 import { badRequest, forbidden, HttpError, id, str } from './util.js';
 
 const LIFETIME = { invite: '+14 days', reset: '+2 hours' };
@@ -118,8 +119,9 @@ export function registerPasswordRoutes(router, db, mailer) {
 }
 
 /** Staff page: send invites (or copy an invite link to send another way). */
-export function registerInviteRoutes(router, db, mailer, { demo = false } = {}) {
-  router.get('/invites/settings', requirePerm('staff.manage'), (_req, res) => res.json({ email_ready: !!mailer }));
+export function registerInviteRoutes(router, db, mailer, { demo = false, square = null } = {}) {
+  // What the Staff page can offer: emailed invites, and adding people to Square.
+  router.get('/invites/settings', requirePerm('staff.manage'), (_req, res) => res.json({ email_ready: !!mailer, square_ready: !!square, square_team_url: square ? squareTeamUrl(square.config.environment) : null }));
 
   // Managers can invite the staff they manage (not admins); admins can invite anyone.
   const invitable = (req, userId) => {

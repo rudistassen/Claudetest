@@ -96,6 +96,41 @@ export class SquareClient {
     } while (cursor);
   }
 
+  async createTeamMember(teamMember, idempotencyKey) {
+    return (await this.request('POST', '/v2/team-members', { idempotency_key: idempotencyKey, team_member: teamMember })).team_member;
+  }
+
+  async updateTeamMember(id, teamMember) {
+    return (await this.request('PUT', `/v2/team-members/${encodeURIComponent(id)}`, { team_member: teamMember })).team_member;
+  }
+
+  async getTeamMember(id) {
+    return (await this.request('GET', `/v2/team-members/${encodeURIComponent(id)}`)).team_member;
+  }
+
+  async listJobs() {
+    const jobs = [];
+    let cursor;
+    do {
+      const page = await this.request('GET', `/v2/team-members/jobs${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
+      jobs.push(...(page.jobs ?? []));
+      cursor = page.cursor;
+    } while (cursor);
+    return jobs;
+  }
+
+  async createJob(title, idempotencyKey) {
+    return (await this.request('POST', '/v2/team-members/jobs', { idempotency_key: idempotencyKey, job: { title, is_tip_eligible: true } })).job;
+  }
+
+  async getWageSetting(id) {
+    return (await this.request('GET', `/v2/team-members/${encodeURIComponent(id)}/wage-setting`)).wage_setting ?? null;
+  }
+
+  async updateWageSetting(id, wageSetting) {
+    return (await this.request('PUT', `/v2/team-members/${encodeURIComponent(id)}/wage-setting`, { wage_setting: wageSetting })).wage_setting;
+  }
+
   // Yields each team member's pay for each job (older accounts without wage settings on the team member).
   async *listTeamMemberWages() {
     let cursor;

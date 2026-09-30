@@ -1,12 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { ACCESS_FIELDS, ACCESS_JOIN, PUBLIC_USER_FIELDS, assertLocation, hashPassword, requireAdmin, requirePerm, validatePassword, withPermissions } from '../auth.js';
 import { tx } from '../db.js';
+import { trySquarePush } from '../square-staff.js';
 import { ALL_PERMISSIONS, cleanPermissions, parsePermissions, PERMISSION_AREAS, roleForPermissions } from '../permissions.js';
 import { badRequest, bool, forbidden, id, notFound, num, oneOf, str } from '../util.js';
 
 const ROLES = ['admin', 'manager', 'staff'];
 
-export function registerAdminRoutes(router, db) {
+// square: { config, client } when Square is connected; staff changes are then copied to Square (see square-staff.js).
+export function registerAdminRoutes(router, db, square = null) {
   // --- Locations ---
 
   router.get('/locations', (req, res) => {
@@ -58,7 +60,8 @@ export function registerAdminRoutes(router, db) {
   router.get('/users', requirePerm('staff.manage'), (req, res) => {
     const locationId = id(req.query.location_id, 'location_id');
     if (locationId) assertLocation(req, locationId);
-    const sql = `SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, l.name AS location_name, u.last_login_at, u.invited_at FROM users u ${ACCESS_JOIN}
+    const sql = `SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, l.name AS location_name, u.last_login_at, u.invited_at,
+      (SELECT id FROM square_team_members st WHERE st.user_id = u.id LIMIT 1) AS square_member_id FROM users u ${ACCESS_JOIN}
       LEFT JOIN locations l ON l.id = u.location_id`;
     let rows = locationId
       ? db.prepare(`${sql} WHERE u.location_id = ? ORDER BY u.active DESC, u.name`).all(locationId)
@@ -146,7 +149,8 @@ export function registerAdminRoutes(router, db) {
   }
 
   const userOut = (userId) => ({
-    ...withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, u.last_login_at, u.invited_at FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(userId)),
+    ...withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, u.last_login_at, u.invited_at,
+      (SELECT id FROM square_team_members st WHERE st.user_id = u.id LIMIT 1) AS square_member_id FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(userId)),
     site_ids: db.prepare('SELECT location_id FROM user_sites WHERE user_id = ?').all(userId).map((r) => r.location_id),
   });
   const saveSites = (userId, u) => {
@@ -155,7 +159,7 @@ export function registerAdminRoutes(router, db) {
     for (const siteId of u.site_ids) if (siteId !== u.location_id) ins.run(userId, siteId);
   };
 
-  router.post('/users', requirePerm('staff.manage'), (req, res) => {
+  router.post('/users', requirePerm('staff.manage'), async (req, res) => {
     const u = userBody(req);
     // No password: they choose their own from an invite.
     const password = req.body.password ? validatePassword(req.body.password) : randomBytes(24).toString('hex');
@@ -166,10 +170,11 @@ export function registerAdminRoutes(router, db) {
       saveSites(r.lastInsertRowid, u);
       return r.lastInsertRowid;
     });
-    res.status(201).json(userOut(userId));
+    const pushed = bool(req.body.add_to_square) ? await trySquarePush(db, square, Number(userId), { create: true }) : null;
+    res.status(201).json({ ...userOut(userId), square_sync: pushed });
   });
 
-  router.put('/users/:id', requirePerm('staff.manage'), (req, res) => {
+  router.put('/users/:id', requirePerm('staff.manage'), async (req, res) => {
     const userId = Number(req.params.id);
     const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
     if (!existing) throw notFound('User');
@@ -186,13 +191,15 @@ export function registerAdminRoutes(router, db) {
       db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(validatePassword(req.body.password)), userId);
     }
     if (!u.active || req.body.password) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
-    res.json(userOut(userId));
+    // Copied to Square when they're linked there (or added now, if asked).
+    const pushed = await trySquarePush(db, square, userId, { create: bool(req.body.add_to_square) });
+    res.json({ ...userOut(userId), square_sync: pushed?.status === 'not_linked' ? null : pushed });
   });
 
   // Bulk edit: the same change for several people at once – their role, home site, access, hourly rate or whether
   // they're active. Each person goes through the same checks as editing them one at a time; if anyone can't be
   // changed, nobody is.
-  router.post('/users/bulk', requirePerm('staff.manage'), (req, res) => {
+  router.post('/users/bulk', requirePerm('staff.manage'), async (req, res) => {
     const ids = [...new Set((Array.isArray(req.body.ids) ? req.body.ids : []).map((x) => id(x, 'ids')))];
     if (!ids.length) throw badRequest('Choose at least one person');
     if (ids.length > 500) throw badRequest('Edit at most 500 people at a time');
@@ -224,7 +231,15 @@ export function registerAdminRoutes(router, db) {
       if (!u.active) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
       return userId;
     }));
-    res.json({ updated: updated.length });
+    // Copied to Square for everyone linked there.
+    const squareErrors = [];
+    let squareUpdated = 0;
+    for (const userId of updated) {
+      const r = await trySquarePush(db, square, userId);
+      if (r?.status === 'error') squareErrors.push(`${db.prepare('SELECT name FROM users WHERE id = ?').get(userId).name}: ${r.error}`);
+      else if (r?.status === 'updated') squareUpdated++;
+    }
+    res.json({ updated: updated.length, square_updated: squareUpdated, square_errors: squareErrors });
   });
   const setByRole = (role) => db.prepare('SELECT * FROM permission_sets WHERE built_in = ?').get(role);
 

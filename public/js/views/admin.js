@@ -179,7 +179,8 @@ function openBulkStaff(ctx, people, { roles, locOptions, access }) {
       if (v.active !== KEEP) changes.active = v.active === '1';
       if (!Object.keys(changes).length) throw new Error('Choose at least one thing to change');
       const r = await api('/users/bulk', { method: 'POST', body: { ids: people.map((p) => p.id), changes } });
-      toast(`Updated ${r.updated} ${r.updated === 1 ? 'person' : 'people'}`);
+      toast(`Updated ${r.updated} ${r.updated === 1 ? 'person' : 'people'}${r.square_updated ? ` – ${r.square_updated} also updated in Square` : ''}`);
+      if (r.square_errors?.length) setTimeout(() => toast(`Not updated in Square: ${r.square_errors.join('; ')}`, 'error'), 2600);
       ctx.rerender();
     },
   });
@@ -189,7 +190,7 @@ function openBulkStaff(ctx, people, { roles, locOptions, access }) {
 }
 
 // The form for a staff member's details, shared by the Staff page and the rota (where admins can click a name).
-function staffEditor(state, rows, perms) {
+function staffEditor(state, rows, perms, settings = {}) {
   const locOptions = state.locations.map((l) => [l.id, l.name]);
   // Admin, or a permission set. People who aren't admins can only hand out sets they're allowed to.
   const staffSet = perms.sets.find((s) => s.built_in === 'staff');
@@ -228,24 +229,27 @@ function staffEditor(state, rows, perms) {
         ${field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"'))}
       </div>
       <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
+      ${squareBox(u, settings)}
       ${u.id ? inviteBox(u) : ''}
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password (optional)', input('password', '', 'type="password" minlength="8" autocomplete="new-password"'), { hint: u.id ? 'At least 8 characters' : 'Leave blank and send them an invite, so they choose their own' })}
       ${activeBox(u.active)}`;
-  const save = (v, row, formEl) => {
+  const save = async (v, row, formEl) => {
     v.site_ids = [...formEl.querySelectorAll('input[name=site_pick]:checked')].map((i) => Number(i.value));
     delete v.site_pick;
     if (v.all_sites === undefined) delete v.site_ids;
-    return row ? api(`/users/${row.id}`, { method: 'PUT', body: v }) : api('/users', { method: 'POST', body: v });
+    const saved = await (row ? api(`/users/${row.id}`, { method: 'PUT', body: v }) : api('/users', { method: 'POST', body: v }));
+    squareToast(saved, settings);
+    return saved;
   };
   return { locOptions, accessOptions, rotaGroups, form, save };
 }
 
 /** Opens a staff member's details to edit, from anywhere (the rota's names, for admins). */
 export async function openStaffEditor(ctx, userId) {
-  const [rows, perms] = await Promise.all([api('/users'), api('/permissions')]);
+  const [rows, perms, settings] = await Promise.all([api('/users'), api('/permissions'), api('/invites/settings')]);
   const person = rows.find((r) => r.id === userId);
   if (!person) { toast('That staff member couldn’t be found', 'error'); return; }
-  const editor = staffEditor(ctx.state, rows, perms);
+  const editor = staffEditor(ctx.state, rows, perms, settings);
   openModal({
     title: `Edit ${person.name}`,
     body: editor.form(person),
@@ -271,7 +275,7 @@ export async function renderStaff(ctx) {
   if (ctx.stale()) return;
   const status = JOIN_STATUS.some(([k]) => k === ctx.query.status) ? ctx.query.status : '';
   const rows = status ? everyone.filter((u) => u.active && joinStatus(u).key === status) : everyone;
-  const editor = staffEditor(state, everyone, perms);
+  const editor = staffEditor(state, everyone, perms, invites);
   const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
   const sitesLabel = (u) => {
     if (u.role === 'admin' || u.all_sites) return 'All sites';
@@ -302,6 +306,7 @@ export async function renderStaff(ctx) {
       { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
       { label: 'Active', value: (r) => yesNo(r.active) },
       { label: 'Brewly', value: (r) => joinStatus(r).label, html: (r) => joinBadge(r) },
+      ...(invites.square_ready ? [{ label: 'Square', value: (r) => (r.square_member_id ? 'Linked' : '–') }] : []),
     ],
     form: editor.form,
     save: async (v, row, form) => {
@@ -327,6 +332,29 @@ export async function renderStaff(ctx) {
     ${notInvited.length && invites.email_ready ? `<button class="btn btn-small" id="invite-rest">Invite ${notInvited.length} ${notInvited.length === 1 ? 'person' : 'people'} not invited yet</button>` : ''}
   </div>`);
   ctx.el.querySelector('#invite-rest')?.addEventListener('click', () => sendInvites(ctx, notInvited));
+}
+
+// Square: linked people's changes are copied there; new people can be added to Square as they're added here.
+function squareBox(u, settings) {
+  if (!settings.square_ready) return '';
+  const team = settings.square_team_url ? `<a href="${esc(settings.square_team_url)}" target="_blank" rel="noopener">Square team page ↗</a>` : 'the Square Dashboard';
+  if (u.square_member_id) {
+    return `<p class="square-box small"><strong>✓ Linked to Square</strong> – changes to their name, email, home site, pay and whether they’re active are copied to Square when you save. Set their POS passcode on ${team}.</p>`;
+  }
+  return `<label class="check-row square-box"><input type="checkbox" name="add_to_square" ${u.id ? '' : 'checked'}>
+    <span><strong>${u.id ? 'Add to Square' : 'Also add to Square'}</strong>
+    <small>Adds them to your Square team (or links them, if they’re already there with this email) with their home site and pay. You then set their POS passcode on ${team}.</small></span></label>`;
+}
+
+function squareToast(saved, settings) {
+  const r = saved?.square_sync;
+  if (!r) return;
+  const later = (m, kind) => setTimeout(() => toast(m, kind), 2600);
+  if (r.status === 'error') later(`Saved in Brewly, but Square didn’t accept the change: ${r.error}`, 'error');
+  else if (r.status === 'created') later(`${saved.name} added to Square – now set their POS passcode in the Square Dashboard.`);
+  else if (r.status === 'linked') later(`${saved.name} was already in Square, so they’re now linked.`);
+  else if (r.status === 'owner') later('The Square account owner can only be changed in Square itself.');
+  if (r.warning) setTimeout(() => toast(r.warning, 'error'), 5200);
 }
 
 // Whether someone has signed in to Brewly yet.

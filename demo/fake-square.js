@@ -129,11 +129,14 @@ function page(items, q, key, size) {
 
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-export async function fakeSquareFetch(url, init = {}) {
-  const path = new URL(url).pathname;
-  if (path === '/v2/locations') return json(200, { locations: SQUARE_LOCATIONS });
-  if (path === '/v2/team-members/search') {
-    const members = team.map((u) => {
+// Team members added or changed from Brewly (Setup → Staff), on top of the ones made from the demo's staff.
+const addedMembers = [];
+const memberEdits = new Map();
+const wageSettings = new Map();
+const jobs = [{ id: 'JOB_BARISTA', title: 'Barista' }, { id: 'JOB_MANAGER', title: 'Manager' }];
+
+function teamMembers() {
+  const base = team.map((u) => {
       const [given, ...rest] = u.name.split(' ');
       return {
         id: `TM_${u.id}`, given_name: given, family_name: rest.join(' '), email_address: u.email, status: 'ACTIVE', is_owner: u.role === 'admin',
@@ -143,7 +146,42 @@ export async function fakeSquareFetch(url, init = {}) {
         wage_setting: { job_assignments: [{ job_title: u.position || 'Team member', pay_type: 'HOURLY', hourly_rate: { amount: Math.round(u.hourly_rate * 100), currency: 'GBP' } }] },
       };
     });
-    return json(200, page(members, JSON.parse(init.body), 'team_members', 200));
+  return [...base, ...addedMembers].map((m) => ({ ...m, ...memberEdits.get(m.id), ...(wageSettings.has(m.id) ? { wage_setting: wageSettings.get(m.id) } : {}) }));
+}
+
+function teamWrite(path, method, body) {
+  if (path === '/v2/team-members/jobs') {
+    if (method === 'GET') return json(200, { jobs });
+    const job = { id: `JOB_${jobs.length + 1}`, title: body.job.title };
+    jobs.push(job);
+    return json(200, { job });
+  }
+  if (path === '/v2/team-members' && method === 'POST') {
+    const m = { id: `TM_NEW_${addedMembers.length + 1}`, status: 'ACTIVE', is_owner: false, ...body.team_member };
+    if (m.email_address && teamMembers().some((x) => x.email_address?.toLowerCase() === m.email_address.toLowerCase())) {
+      return json(400, { errors: [{ code: 'INVALID_VALUE', detail: 'A team member with this email address already exists' }] });
+    }
+    addedMembers.push(m);
+    return json(200, { team_member: m });
+  }
+  const [, id, wage] = path.match(/^\/v2\/team-members\/([^/]+)(\/wage-setting)?$/) ?? [];
+  const member = id && teamMembers().find((m) => m.id === decodeURIComponent(id));
+  if (!member) return null;
+  if (wage) {
+    if (method === 'PUT') wageSettings.set(member.id, { ...body.wage_setting, team_member_id: member.id });
+    return json(200, { wage_setting: wageSettings.get(member.id) ?? { team_member_id: member.id, ...member.wage_setting } });
+  }
+  if (method === 'PUT') memberEdits.set(member.id, { ...memberEdits.get(member.id), ...body.team_member });
+  return json(200, { team_member: teamMembers().find((m) => m.id === member.id) });
+}
+
+export async function fakeSquareFetch(url, init = {}) {
+  const path = new URL(url).pathname;
+  if (path === '/v2/locations') return json(200, { locations: SQUARE_LOCATIONS });
+  if (path === '/v2/team-members/search') return json(200, page(teamMembers(), JSON.parse(init.body), 'team_members', 200));
+  if (path.startsWith('/v2/team-members')) {
+    const r = teamWrite(path, init.method ?? 'GET', init.body ? JSON.parse(init.body) : {});
+    if (r) return r;
   }
   if (path === '/v2/labor/shifts/search' || path === '/v2/labor/timecards/search') {
     const q = JSON.parse(init.body);

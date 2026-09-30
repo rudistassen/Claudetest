@@ -111,8 +111,8 @@ async function boot() {
   registerAuthRoutes(api, db);
   registerPasswordRoutes(api, db, demoMailer);
   api.use(requireAuth);
-  registerInviteRoutes(api, db, demoMailer, { demo: true });
-  registerAdminRoutes(api, db);
+  registerInviteRoutes(api, db, demoMailer, { demo: true, square });
+  registerAdminRoutes(api, db, square);
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);

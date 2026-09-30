@@ -57,8 +57,8 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerAuthRoutes(api, db);
   registerPasswordRoutes(api, db, mailer);
   api.use(requireAuth);
-  registerInviteRoutes(api, db, mailer);
-  registerAdminRoutes(api, db);
+  registerInviteRoutes(api, db, mailer, { square });
+  registerAdminRoutes(api, db, square);
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
