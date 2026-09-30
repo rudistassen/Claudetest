@@ -91,3 +91,39 @@ test('a clock-in can be moved to another site: changed in Square, in Brewly and 
   const unlinked = db.prepare('SELECT id FROM locations WHERE square_location_id IS NULL AND active = 1 LIMIT 1').get().id;
   assert.equal((await admin('/timecards/TC1/location', { method: 'PUT', body: { location_id: unlinked } })).status, 400);
 });
+
+test('moving clock-ins is its own permission: in the Manager set, not Staff, and added to existing Manager sets', async () => {
+  const sets = Object.fromEntries(db.prepare('SELECT built_in, permissions FROM permission_sets WHERE built_in IS NOT NULL').all().map((s) => [s.built_in, JSON.parse(s.permissions)]));
+  assert.ok(sets.manager.includes('timecards.move'));
+  assert.ok(!sets.staff.includes('timecards.move'));
+
+  // A manager whose set doesn't have it can't move clock-ins, even though they manage staff.
+  const manager = db.prepare(`SELECT id, location_id FROM users WHERE role = 'manager' AND location_id = ? LIMIT 1`).get(siteA);
+  db.prepare('UPDATE users SET all_sites = 1 WHERE id = ?').run(manager.id);
+  const custom = db.prepare(`INSERT INTO permission_sets (name, description, permissions) VALUES ('Supervisor', '', ?)`)
+    .run(JSON.stringify(sets.manager.filter((p) => p !== 'timecards.move'))).lastInsertRowid;
+  db.prepare('UPDATE users SET permission_set_id = ? WHERE id = ?').run(custom, manager.id);
+  const email = db.prepare('SELECT email FROM users WHERE id = ?').get(manager.id).email;
+  let call = await login(email);
+  assert.equal((await call('/timecards/TC1/location', { method: 'PUT', body: { location_id: siteA } })).status, 403);
+  db.prepare('UPDATE users SET permission_set_id = NULL WHERE id = ?').run(manager.id);
+  call = await login(email);
+  assert.equal((await call('/timecards/TC1/location', { method: 'PUT', body: { location_id: siteA } })).status, 200, 'with the Manager set they can');
+
+  // Databases from before this permission existed: the Manager set gets it, other sets don't.
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(join(tmpdir(), 'brewly-'));
+  const file = join(dir, 'old.db');
+  let old = openDb(file);
+  old.prepare(`UPDATE permission_sets SET permissions = '["staff.manage"]'`).run();
+  old.exec('PRAGMA user_version = 2');
+  old.close();
+  old = openDb(file);
+  const after = Object.fromEntries(old.prepare('SELECT built_in, permissions FROM permission_sets').all().map((s) => [s.built_in, JSON.parse(s.permissions)]));
+  assert.ok(after.manager.includes('timecards.move'));
+  assert.ok(!after.staff.includes('timecards.move'));
+  old.close();
+  rmSync(dir, { recursive: true, force: true });
+});

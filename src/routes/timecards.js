@@ -24,14 +24,14 @@ function writable(tc, squareLocationId) {
 }
 
 export function registerTimecardRoutes(router, db, square) {
-  router.put('/timecards/:id/location', requirePerm('staff.manage'), async (req, res) => {
+  router.put('/timecards/:id/location', requirePerm('timecards.move'), async (req, res) => {
     if (!square) throw badRequest('Square isn’t connected, so clock-ins can’t be changed');
     const card = db.prepare(`SELECT t.*, COALESCE(u.name, m.name) AS person FROM timecards t LEFT JOIN users u ON u.id = t.user_id
       LEFT JOIN square_team_members m ON m.id = t.team_member_id WHERE t.id = ?`).get(String(req.params.id));
     if (!card) throw notFound('Clock-in');
     const to = id(req.body?.location_id, 'Site', { required: true });
     if (to === card.location_id) throw badRequest('It’s already at that site');
-    // They need to manage staff at both the site it's at and the one it's moving to.
+    // They need access to both the site it's at and the one it's moving to.
     for (const siteId of [card.location_id, to]) {
       if (!req.user.site_ids.includes(siteId)) throw forbidden('You can only move clock-ins between sites you manage');
     }

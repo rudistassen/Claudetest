@@ -660,6 +660,16 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 2');
   }
+  if (version < 3) {
+    // Moving clock-ins between sites was added: only the built-in Manager set gets it (admins can do everything).
+    for (const ps of db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in = 'manager'`).all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (!perms.includes('timecards.move')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...perms, 'timecards.move']), ps.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 3');
+  }
   ensureDefaultSets(db);
   return db;
 }

@@ -36,6 +36,7 @@ export const PERMISSION_AREAS = [
   ]],
   ['Staff', [
     ['staff.manage', 'Add and edit staff at their site, and see pay rates'],
+    ['timecards.move', 'Move a clock-in to another site they manage (changes the timecard in Square too)'],
   ]],
   ['My Brew news & documents', [
     ['news.manage', 'Post staff news and policy updates, see who has read them, and share company documents'],

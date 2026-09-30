@@ -12,8 +12,8 @@ export const breakText = (b) => `${b.start}–${b.end ?? 'now'} · ${mins(b.minu
 export const breakFlag = (c) => (c.break_flag
   ? `<span class="chip chip-strong" title="Worked over 6 hours without a 20-minute break">⚠ ${FLAG[c.break_flag]}</span>` : '');
 
-/** Whether this person can move clock-ins between sites (they manage staff, at more than one site). */
-export const canMoveClockIns = (state) => state.can('staff.manage') && state.multiSite;
+/** Whether this person can move clock-ins between sites (the "Move clock-ins" permission, and more than one site). */
+export const canMoveClockIns = (state) => state.can('timecards.move') && state.multiSite;
 
 /** A "Change site" button for a clock-in; wire it up with wireMoveClockIn. */
 export const moveButton = (c, locationId) => `<button type="button" class="link-btn move-card" data-move-card="${esc(c.id)}"
