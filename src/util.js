@@ -119,6 +119,13 @@ function tzOffsetMs(utcMs, tz) {
   return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second) - utcMs;
 }
 
+/** UTC instant (ms) of a local date and "HH:MM" time in time zone tz. */
+export function zonedTimeUTC(iso, hhmm, tz = TZ) {
+  const guess = Date.parse(`${iso}T${hhmm}:00Z`);
+  const first = guess - tzOffsetMs(guess, tz);
+  return guess - tzOffsetMs(first, tz);
+}
+
 // UTC instant (RFC 3339) of local midnight at the start of iso in time zone tz.
 export function zonedMidnightUTC(iso, tz = TZ) {
   const guess = Date.parse(`${iso}T00:00:00Z`);

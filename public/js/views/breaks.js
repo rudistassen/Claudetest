@@ -41,6 +41,83 @@ export function wireMoveClockIn(el, ctx) {
   }));
 }
 
+/** Whether this person can add, change and remove breaks on clock-ins. */
+export const canEditBreaks = (state) => state.can('timecards.breaks');
+
+/** The links shown with a clock-in for people allowed to change it ("Breaks", "Change site"). */
+export function clockInActions(state, c, locationId) {
+  const links = [];
+  if (canEditBreaks(state)) {
+    links.push(`<button type="button" class="link-btn move-card" data-edit-breaks="${esc(c.id)}" data-who="${esc(c.name)}">Breaks</button>`);
+  }
+  if (canMoveClockIns(state)) links.push(moveButton(c, locationId));
+  return links.join('');
+}
+
+/** Wires up the links made by clockInActions inside el. */
+export function wireClockInActions(el, ctx) {
+  wireMoveClockIn(el, ctx);
+  el.querySelectorAll('[data-edit-breaks]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openBreaksEditor(ctx, b.dataset.editBreaks, b.dataset.who);
+  }));
+}
+
+const durationLabel = (iso) => {
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?/.exec(iso ?? '');
+  const total = m ? Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0) : 0;
+  return total ? mins(total) : '';
+};
+
+async function openBreaksEditor(ctx, cardId, who) {
+  let data;
+  try {
+    data = await api(`/timecards/${encodeURIComponent(cardId)}/breaks`);
+  } catch (err) { toast(err.message, 'error'); return; }
+  const typeOptions = (selected) => data.break_types.map((t) => `<option value="${esc(t.id)}" ${t.id === selected ? 'selected' : ''}>${esc(t.name)}${durationLabel(t.expected_duration) ? ` · ${durationLabel(t.expected_duration)}` : ''} · ${t.is_paid ? 'paid' : 'unpaid'}</option>`).join('');
+  const row = (b = {}) => `<div class="break-edit" data-id="${esc(b.id ?? '')}">
+    <label class="field"><span>Kind of break</span><select data-type>${typeOptions(b.break_type_id ?? data.break_types[0]?.id)}
+      ${b.break_type_id && !data.break_types.some((t) => t.id === b.break_type_id) ? `<option value="${esc(b.break_type_id)}" selected>${esc(b.name ?? 'Break')}</option>` : ''}</select></label>
+    <label class="field"><span>Start</span><input type="time" data-start value="${esc(b.start ?? '')}" required></label>
+    <label class="field"><span>End</span><input type="time" data-end value="${esc(b.end ?? '')}" ${b.id && !b.end ? 'placeholder="still on break"' : 'required'}></label>
+    <button type="button" class="icon-btn" data-remove aria-label="Remove this break" title="Remove this break">×</button>
+  </div>`;
+  const { form } = openModal({
+    title: `${who}’s breaks`,
+    submitLabel: 'Save breaks',
+    wide: true,
+    body: `<p>${esc(who)} clocked in ${esc(data.start)}–${esc(data.end ?? 'now')}${data.open ? ' (still clocked in)' : ''}.</p>
+      ${data.break_types.length ? '' : '<p class="notice">No kinds of break are set up for this site in Square yet. Add them in the Square Dashboard (Staff → Settings → Breaks), then come back.</p>'}
+      <div class="break-rows">${data.breaks.map(row).join('')}</div>
+      <p class="muted small break-none" ${data.breaks.length ? 'hidden' : ''}>No breaks on this clock-in.</p>
+      ${data.break_types.length ? '<button type="button" class="btn btn-small" data-add>+ Add break</button>' : ''}
+      <p class="muted small">Saving changes the timecard in Square too, so unpaid breaks come off their pay. It’s recorded under Team → Rota changes.</p>`,
+    onSubmit: async () => {
+      const breaks = [...form.querySelectorAll('.break-edit')].map((r) => ({
+        ...(r.dataset.id ? { id: r.dataset.id } : {}),
+        break_type_id: r.querySelector('[data-type]').value,
+        start: r.querySelector('[data-start]').value,
+        end: r.querySelector('[data-end]').value || null,
+      }));
+      const r = await api(`/timecards/${encodeURIComponent(cardId)}/breaks`, { method: 'PUT', body: { breaks } });
+      toast(r.changed ? `Breaks saved: ${r.changes.join('; ')}` : 'No changes to save');
+      ctx.rerender();
+    },
+  });
+  const rows = form.querySelector('.break-rows');
+  const tidy = () => { form.querySelector('.break-none').hidden = !!rows.children.length; };
+  rows.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-remove]')) return;
+    e.target.closest('.break-edit').remove();
+    tidy();
+  });
+  form.querySelector('[data-add]')?.addEventListener('click', () => {
+    rows.insertAdjacentHTML('beforeend', row());
+    rows.lastElementChild.querySelector('[data-start]').focus();
+    tidy();
+  });
+}
+
 /** The breaks line under a person on the dashboard's clocked-in list. */
 export function breakLine(c) {
   if (!c.breaks_known) return c.break_minutes ? `<span class="clock-breaks muted small">Breaks ${mins(c.break_minutes)}</span>` : '';
@@ -55,7 +132,6 @@ export async function render(ctx) {
   const scope = siteScope(state, query.scope);
   const onlyFlags = query.flags === '1';
   const data = await api(`/breaks${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`);
-  const canMove = canMoveClockIns(state);
   if (stale()) return;
   const t = data.totals;
   const rows = onlyFlags ? data.rows.filter((r) => r.break_flag) : data.rows;
@@ -86,7 +162,7 @@ export async function render(ctx) {
           <td>${fmtDate(r.date)}</td>
           <td><strong>${esc(r.name)}</strong></td>
           ${allSites ? `<td>${esc(r.location_name)}</td>` : ''}
-          <td>${r.start}–${r.end ?? 'now'}${canMove ? ` ${moveButton(r, r.location_id)}` : ''}</td>
+          <td>${r.start}–${r.end ?? 'now'} ${clockInActions(state, r, r.location_id)}</td>
           <td class="num">${mins(r.worked_minutes)}</td>
           <td>${r.breaks_known ? (r.breaks.length ? r.breaks.map((b) => `<span class="break-pill ${b.paid ? 'is-paid' : ''}">${breakText(b)}</span>`).join(' ') : '<span class="muted">None</span>') : '<span class="muted">Not known</span>'}${r.on_break ? ' <span class="badge badge-sent">On break</span>' : ''}</td>
           <td class="num">${mins(r.break_minutes)}</td>
@@ -96,7 +172,7 @@ export async function render(ctx) {
       <p class="muted small">From Square clock-ins: staff start and end a break on the Square till or app. Adults working more than 6 hours should get one unbroken break of at least 20 minutes.</p>
     </section>`;
 
-  wireMoveClockIn(el, ctx);
+  wireClockInActions(el, ctx);
   el.querySelector('#range').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target;

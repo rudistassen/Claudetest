@@ -151,6 +151,18 @@ export class SquareClient {
     return (await this.request('GET', `${path}/${encodeURIComponent(id)}`))[key];
   }
 
+  // The kinds of break set up for a Square location (name, expected length, paid or not).
+  async listBreakTypes(locationId) {
+    const types = [];
+    let cursor;
+    do {
+      const page = await this.request('GET', `/v2/labor/break-types?location_id=${encodeURIComponent(locationId)}&limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+      types.push(...(page.break_types ?? []));
+      cursor = page.cursor;
+    } while (cursor);
+    return types;
+  }
+
   async updateTimecard(id, timecard) {
     const [path, key] = this.labourPath();
     return (await this.request('PUT', `${path}/${encodeURIComponent(id)}`, { [key]: timecard }))[key];

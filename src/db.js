@@ -670,6 +670,16 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 3');
   }
+  if (version < 4) {
+    // Editing clock-in breaks was added: only the built-in Manager set gets it.
+    for (const ps of db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in = 'manager'`).all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (!perms.includes('timecards.breaks')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...perms, 'timecards.breaks']), ps.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 4');
+  }
   ensureDefaultSets(db);
   return db;
 }

@@ -109,7 +109,7 @@ function timecardFor(shift, now) {
   if (mainMinutes) planned.push({ from: mid, to: mid + mainMinutes, paid: false, name: 'Lunch' });
   if (long && r() < 0.3) planned.push({ from: start + 120, to: start + 130, paid: true, name: 'Tea break' });
   const breaks = planned
-    .map((b) => ({ start_at: at(shift.date, b.from), end_at: at(shift.date, b.to), is_paid: b.paid, name: b.name }))
+    .map((b, i) => ({ id: `BR_${shift.id}_${shift.date}_${i}`, break_type_id: b.paid ? 'BT_TEA' : 'BT_LUNCH', start_at: at(shift.date, b.from), end_at: at(shift.date, b.to), is_paid: b.paid, name: b.name }))
     .filter((b) => b.start_at <= now)
     .map((b) => (b.end_at <= now ? b : { ...b, end_at: undefined }))
     .sort((x, y) => x.start_at.localeCompare(y.start_at));
@@ -123,8 +123,15 @@ function timecardFor(shift, now) {
 }
 
 // Clock-ins moved to another site from Brewly (timecard id → Square location id).
+// …and ones whose breaks were changed (timecard id → changes).
 const movedCards = new Map();
-const withMove = (t) => (t && movedCards.has(t.id) ? { ...t, location_id: movedCards.get(t.id) } : t);
+const withMove = (t) => (t && movedCards.has(t.id) ? { ...t, ...movedCards.get(t.id) } : t);
+const BREAK_TYPES = [
+  { id: 'BT_LUNCH', break_name: 'Lunch', expected_duration: 'PT30M', is_paid: false },
+  { id: 'BT_SHORT', break_name: 'Short break', expected_duration: 'PT20M', is_paid: false },
+  { id: 'BT_TEA', break_name: 'Tea break', expected_duration: 'PT10M', is_paid: true },
+];
+let breakIds = 0;
 
 function page(items, q, key, size) {
   const offset = Number(q.cursor ?? 0);
@@ -187,6 +194,10 @@ export async function fakeSquareFetch(url, init = {}) {
     const r = teamWrite(path, init.method ?? 'GET', init.body ? JSON.parse(init.body) : {});
     if (r) return r;
   }
+  if (path === '/v2/labor/break-types') {
+    const loc = new URL(url).searchParams.get('location_id');
+    return json(200, { break_types: BREAK_TYPES.map((t) => ({ ...t, id: t.id, location_id: loc })) });
+  }
   const one = path.match(/^\/v2\/labor\/(shifts|timecards)\/([^/]+)$/);
   if (one && one[2] !== 'search') {
     const now = new Date().toISOString();
@@ -194,7 +205,9 @@ export async function fakeSquareFetch(url, init = {}) {
     if (!card) return json(404, { errors: [{ code: 'NOT_FOUND', detail: 'Timecard not found' }] });
     const key = one[1] === 'shifts' ? 'shift' : 'timecard';
     if ((init.method ?? 'GET') === 'PUT') {
-      movedCards.set(card.id, JSON.parse(init.body)[key].location_id);
+      const sent = JSON.parse(init.body)[key];
+      const breaks = (sent.breaks ?? []).map((b) => ({ ...b, id: b.id ?? `BR_NEW_${++breakIds}` }));
+      movedCards.set(card.id, { location_id: sent.location_id, breaks });
       return json(200, { [key]: withMove(card) });
     }
     return json(200, { [key]: card });

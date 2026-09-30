@@ -1365,3 +1365,13 @@ p.square-box { background: var(--good-soft); border-color: transparent; }
 /* "Change site" on a clock-in */
 .link-btn.move-card { font-size: 0.78rem; font-weight: 600; margin: 0 0 0 0.4rem; }
 @media print { .move-card { display: none !important; } }
+/* Editing a clock-in's breaks */
+.break-edit { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 0.6rem; align-items: end; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+.break-edit .field { margin-bottom: 0.4rem; }
+.break-edit .icon-btn { margin-bottom: 0.5rem; }
+.break-rows + .break-none { margin-top: 0; }
+@media (max-width: 600px) {
+  .break-edit { grid-template-columns: 1fr 1fr auto; }
+  .break-edit .field:first-child { grid-column: 1 / -1; }
+}
+.break-edit select, .break-edit input { height: 2.5rem; box-sizing: border-box; }

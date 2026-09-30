@@ -342,7 +342,7 @@ export function registerRotaRoutes(router, db) {
     else { where.push('at >= ? AND at < ?'); args.push(sqlTime(from), sqlTime(addDays(to, 1))); }
     if (req.query.staff_id) { where.push('staff_id = ?'); args.push(Number(req.query.staff_id)); }
     if (req.query.action) {
-      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy', 'timecard_site']);
+      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy', 'timecard_site', 'timecard_breaks']);
       // "Published" covers publishing a whole rota and a single shift.
       if (kind === 'publish') where.push(`action IN ('publish', 'publish_shift')`);
       else { where.push('action = ?'); args.push(kind); }
