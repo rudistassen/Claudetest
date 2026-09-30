@@ -22,6 +22,16 @@ function versus(now, then, { goodUp = true } = {}) {
   return `<span class="${tone}">${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%</span><br><span class="muted">${money(then)} last week</span>`;
 }
 
+// For a tile: "▲ 4.2% on last week", then what last week had taken by the same time.
+function versusLine(now, then) {
+  if (now === null) return '<span class="muted">No sales synced yet today</span>';
+  if (!then) return '<span class="muted">Nothing to compare last week</span>';
+  const change = ((now - then) / then) * 100;
+  const tone = Math.abs(change) < 0.5 ? 'muted' : change > 0 ? 'tone-good' : 'tone-bad';
+  return `<span class="${tone}">${Math.abs(change) < 0.05 ? '■ 0.0%' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%`}</span> <span class="muted">on last week</span><br>
+    <span class="muted">${money(then)} by this time last week</span>`;
+}
+
 const siteInitials = (name) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 
 const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`);
@@ -205,6 +215,12 @@ export async function render({ el, state, navigate, stale, rerender }) {
   // Today's sales and labour % for the whole group, matching the by-site panel and the Trading page.
   const hasSales = !!tradeToday && tradeToday.square_connected;
   const todayTotals = tradeToday?.totals;
+  // Gross sales so far today against the same weekday last week up to the same time.
+  const withGross = locs.filter((l) => l.gross_today !== null);
+  const gross = {
+    now: withGross.length ? withGross.reduce((n, l) => n + l.gross_today, 0) : null,
+    then: locs.some((l) => l.last_week.gross !== null) ? locs.reduce((n, l) => n + (l.last_week.gross ?? 0), 0) : null,
+  };
   const labourPct = todayTotals ? (tradeToday.labour_synced && todayTotals.labour_pct !== null ? todayTotals.labour_pct : todayTotals.rostered_labour_pct) : null;
 
   el.innerHTML = `
@@ -218,7 +234,8 @@ export async function render({ el, state, navigate, stale, rerender }) {
     <p class="print-only print-meta">Brewly dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     <div class="kpis">
-      ${hasSales ? `<div class="kpi kpi-feature" data-icon="£"><span>Sales today (ex VAT)</span><strong>${money(todayTotals.net_sales)}</strong></div>
+      ${hasSales ? `<div class="kpi kpi-feature" data-icon="£"><span>Gross sales today</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
+        <small class="kpi-vs">${versusLine(gross.now, gross.then)}</small></div>
       <div class="kpi kpi-${labourTone(labourPct)}" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
       <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
       <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks</span><strong>${totals.fails}</strong></div>

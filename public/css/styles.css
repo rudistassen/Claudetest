@@ -1350,3 +1350,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .invite-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .square-box { margin: 0 0 0.8rem; padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-radius: 10px; }
 p.square-box { background: var(--good-soft); border-color: transparent; }
+/* Dashboard: gross sales tile's change on last week */
+.kpi .kpi-vs span { display: inline; font-size: inherit; text-transform: none; letter-spacing: 0; font-weight: 700; color: inherit; }
+.kpi .kpi-vs span.muted { font-weight: 400; color: var(--muted); }
+.kpi .kpi-vs span.tone-good { color: var(--good); }
+.kpi .kpi-vs span.tone-bad { color: var(--bad); }
