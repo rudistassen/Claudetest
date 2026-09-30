@@ -186,16 +186,8 @@ function openBulkStaff(ctx, people, { roles, locOptions, access }) {
   pick.addEventListener('change', () => { typed.hidden = pick.value !== '__new'; if (!typed.hidden) typed.focus(); });
 }
 
-export async function renderStaff(ctx) {
-  const { state } = ctx;
-  // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
-  const scope = siteScope(state, ctx.query.scope);
-  const [rows, square, perms] = await Promise.all([
-    api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
-    state.isAdmin ? api('/square/status') : null,
-    api('/permissions'),
-  ]);
-  if (ctx.stale()) return;
+// The form for a staff member's details, shared by the Staff page and the rota (where admins can click a name).
+function staffEditor(state, rows, perms) {
   const locOptions = state.locations.map((l) => [l.id, l.name]);
   // Admin, or a permission set. People who aren't admins can only hand out sets they're allowed to.
   const staffSet = perms.sets.find((s) => s.built_in === 'staff');
@@ -206,12 +198,6 @@ export async function renderStaff(ctx) {
   const accessValue = (u) => (u.role === 'admin' ? 'admin' : u.access_set_id ?? staffSet?.id ?? '');
   // Sites: every site (the default), or their home site plus the ones ticked. People who only have some sites
   // themselves can only give out those.
-  const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
-  const sitesLabel = (u) => {
-    if (u.role === 'admin' || u.all_sites) return 'All sites';
-    const ids = [...new Set([u.location_id, ...(u.site_ids ?? [])].filter(Boolean))];
-    return ids.length === 1 ? siteName(ids[0]) : `${ids.length} sites`;
-  };
   const canGiveAll = state.isAdmin || !!state.user.all_sites;
   const sitesField = (u) => {
     const isNew = !u.id;
@@ -227,25 +213,7 @@ export async function renderStaff(ctx) {
   };
   // Roles already in use, plus a few common ones, to pick from.
   const rotaGroups = [...new Set([...rows.map((r) => r.rota_group).filter(Boolean), 'Management', 'Front of house', 'Kitchen', 'Bar'])].sort((a, b) => a.localeCompare(b));
-  listPage(ctx, {
-    title: state.multiSite ? 'Staff' : `Staff · ${state.location?.name ?? ''}`,
-    rows,
-    search: true,
-    bulk: { label: 'Edit selected', run: (people) => openBulkStaff(ctx, people, { roles: rotaGroups, locOptions, access: accessOptions({}) }) },
-    addLabel: 'Add staff member',
-    extraActions: `${state.isAdmin && square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
-      ${siteFilter(state, scope)}`,
-    columns: [
-      { label: 'Name', key: 'name' },
-      { label: 'Email', key: 'email' },
-      { label: 'Access', value: (r) => r.access_name ?? '' },
-      { label: 'Sites', value: sitesLabel },
-      { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
-      { label: 'Role', value: (r) => r.rota_group ?? '' },
-      { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
-      { label: 'Active', value: (r) => yesNo(r.active) },
-    ],
-    form: (u) => `
+  const form = (u) => `
       <div class="row">${field('Name', input('name', u.name, 'required'))}${field('Email (used to sign in)', input('email', u.email, 'type="email" required'))}</div>
       <div class="row">
         ${field('Access', select('permission_set_id', accessOptions(u), accessValue(u)), { hint: state.isAdmin ? 'Set up what each option allows under Setup → Permissions' : '' })}
@@ -259,12 +227,72 @@ export async function renderStaff(ctx) {
       </div>
       <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password', input('password', '', `type="password" minlength="8" autocomplete="new-password" ${u.id ? '' : 'required'}`), { hint: 'At least 8 characters' })}
-      ${activeBox(u.active)}`,
+      ${activeBox(u.active)}`;
+  const save = (v, row, formEl) => {
+    v.site_ids = [...formEl.querySelectorAll('input[name=site_pick]:checked')].map((i) => Number(i.value));
+    delete v.site_pick;
+    if (v.all_sites === undefined) delete v.site_ids;
+    return row ? api(`/users/${row.id}`, { method: 'PUT', body: v }) : api('/users', { method: 'POST', body: v });
+  };
+  return { locOptions, accessOptions, rotaGroups, form, save };
+}
+
+/** Opens a staff member's details to edit, from anywhere (the rota's names, for admins). */
+export async function openStaffEditor(ctx, userId) {
+  const [rows, perms] = await Promise.all([api('/users'), api('/permissions')]);
+  const person = rows.find((r) => r.id === userId);
+  if (!person) { toast('That staff member couldn’t be found', 'error'); return; }
+  const editor = staffEditor(ctx.state, rows, perms);
+  openModal({
+    title: `Edit ${person.name}`,
+    body: editor.form(person),
+    wide: true,
+    onSubmit: async (v, form) => {
+      await editor.save(v, person, form);
+      toast('Saved');
+      ctx.rerender();
+    },
+  });
+}
+
+export async function renderStaff(ctx) {
+  const { state } = ctx;
+  // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
+  const scope = siteScope(state, ctx.query.scope);
+  const [rows, square, perms] = await Promise.all([
+    api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
+    state.isAdmin ? api('/square/status') : null,
+    api('/permissions'),
+  ]);
+  if (ctx.stale()) return;
+  const editor = staffEditor(state, rows, perms);
+  const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
+  const sitesLabel = (u) => {
+    if (u.role === 'admin' || u.all_sites) return 'All sites';
+    const ids = [...new Set([u.location_id, ...(u.site_ids ?? [])].filter(Boolean))];
+    return ids.length === 1 ? siteName(ids[0]) : `${ids.length} sites`;
+  };
+  listPage(ctx, {
+    title: state.multiSite ? 'Staff' : `Staff · ${state.location?.name ?? ''}`,
+    rows,
+    search: true,
+    bulk: { label: 'Edit selected', run: (people) => openBulkStaff(ctx, people, { roles: editor.rotaGroups, locOptions: editor.locOptions, access: editor.accessOptions({}) }) },
+    addLabel: 'Add staff member',
+    extraActions: `${state.isAdmin && square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
+      ${siteFilter(state, scope)}`,
+    columns: [
+      { label: 'Name', key: 'name' },
+      { label: 'Email', key: 'email' },
+      { label: 'Access', value: (r) => r.access_name ?? '' },
+      { label: 'Sites', value: sitesLabel },
+      { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
+      { label: 'Role', value: (r) => r.rota_group ?? '' },
+      { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
+      { label: 'Active', value: (r) => yesNo(r.active) },
+    ],
+    form: editor.form,
     save: async (v, row, form) => {
-      v.site_ids = [...form.querySelectorAll('input[name=site_pick]:checked')].map((i) => Number(i.value));
-      delete v.site_pick;
-      if (v.all_sites === undefined) delete v.site_ids;
-      const saved = row ? await api(`/users/${row.id}`, { method: 'PUT', body: v }) : await api('/users', { method: 'POST', body: v });
+      const saved = await editor.save(v, row, form);
       // On a single site's list, say where someone went if their home site changed.
       if (scope !== 'all' && saved.location_id && saved.location_id !== state.locationId) {
         const site = state.locations.find((l) => l.id === saved.location_id)?.name ?? 'another site';

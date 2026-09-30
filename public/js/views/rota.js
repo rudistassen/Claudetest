@@ -1,6 +1,7 @@
 import { fmtPct, labourTone } from './sales.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite } from '../lib.js';
 import { shiftHistory } from './rotalog.js';
+import { openStaffEditor } from './admin.js';
 
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
@@ -169,6 +170,10 @@ export async function render(ctx) {
     return `${whole((f))}<small class="tone-${labourTone(p)}">${fmtPct(p)}</small>`;
   };
   const bankHol = (d) => data.bank_holidays?.[d];
+  // Admins can click a name to open that person's staff details.
+  const personName = (userId, name, tag = 'span') => (state.isAdmin
+    ? `<button type="button" class="person-link" data-person="${userId}" title="Edit ${esc(name)}’s details">${esc(name)}</button>`
+    : `<${tag}>${esc(name)}</${tag}>`);
   const fcNote = fc ? `Forecast = each day’s average sales over the last ${fc.weeks} weeks (bank holidays and closed days left out); labour % = the rota’s cost ÷ that forecast.` : '';
 
   // --- Day view: just the shifts on one day, site by site: each person's name and a card with their times ---
@@ -202,7 +207,7 @@ export async function render(ctx) {
             const u = person(x.user_id);
             const from = u && u.location_id !== id && u.location_name ? `Covering from ${u.location_name}` : '';
             return `<li class="day-person ${x.state && x.state !== 'published' ? `is-${x.state}` : ''}">
-              <span class="day-name">${esc(x.user_name)}</span>
+              <span class="day-name">${personName(x.user_id, x.user_name)}</span>
               <button class="day-card ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
                 title="${esc([shiftTitle(x), from].filter(Boolean).join(' · ') || `${x.start_time}–${x.end_time}`)}">
                 <span>${x.start_time}–${x.end_time}</span>${TAGS[x.state] ? `<em class="shift-tag">${TAGS[x.state]}</em>` : ''}</button>
@@ -296,7 +301,7 @@ export async function render(ctx) {
           </th></tr>
           ${fc && siteOfGroup(groupId) ? `<tr class="rota-forecast" data-in-group="${esc(groupId)}"><th>Forecast · labour %</th>${data.days.map((d) => `<td class="num">${fcCell([siteOfGroup(groupId)], d)}</td>`).join('')}<td></td></tr>` : ''}` : `
             <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
-              <th><strong>${esc(u.name)}</strong>${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
+              <th>${personName(u.id, u.name, 'strong')}${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${data.days.map((d) => {
                 const shifts = (byCell.get(cellKey(u.id, site, d)) ?? []).filter((x) => !x.away);
                 const off = !!holidayOn(u.id, d, 'approved');
@@ -461,6 +466,10 @@ export async function render(ctx) {
     } catch (err) { showError(err); }
   };
 
+  el.querySelectorAll('[data-person]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openStaffEditor(ctx, Number(b.dataset.person)).catch(showError);
+  }));
   el.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const shift = data.shifts.find((s) => s.id === Number(b.dataset.shift));
