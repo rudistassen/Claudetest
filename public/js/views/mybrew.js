@@ -119,7 +119,7 @@ function greeting() {
 
 export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
-  const [shifts, news, docs] = await Promise.all([api('/my-shifts'), api('/news'), api('/documents')]);
+  const [shifts, news] = await Promise.all([api('/my-shifts'), api('/news')]);
   if (stale()) return;
   const u = state.user;
   const today = todayISO();
@@ -171,14 +171,6 @@ export async function renderMyBrew(ctx) {
         </div>
         ${news.length ? news.map(post).join('') : '<div class="card empty">No news yet.</div>'}
         </section>
-        <section class="card my-docs">
-          <h2>Company documents</h2>
-          ${docs.length > 6 ? '<input type="search" id="doc-search" placeholder="Find a document…" aria-label="Find a document">' : ''}
-          ${docs.length ? Object.entries(DOC_CATEGORIES).filter(([k]) => docs.some((d) => d.category === k)).map(([k, label]) => `
-            <div class="doc-group"><h3>${label}</h3>
-              <ul class="doc-list">${docs.filter((d) => d.category === k).map(docItem).join('')}</ul></div>`).join('')
-            : '<p class="muted small">No documents shared yet.</p>'}
-        </section>
     </div>`;
 
   // Long posts are shortened with "Read more".
@@ -192,12 +184,6 @@ export async function renderMyBrew(ctx) {
     }
   });
   wireGallery(el);
-  wireDocLinks(el);
-  el.querySelector('#doc-search')?.addEventListener('input', (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    el.querySelectorAll('.doc-list li').forEach((li) => { li.hidden = !!q && !li.textContent.toLowerCase().includes(q); });
-    el.querySelectorAll('.doc-group').forEach((g) => { g.hidden = ![...g.querySelectorAll('li')].some((li) => !li.hidden); });
-  });
   el.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => {
     filter = b.dataset.filter;
     el.querySelectorAll('[data-filter]').forEach((x) => x.classList.toggle('is-on', x === b));
@@ -456,4 +442,28 @@ export async function renderDocumentsSetup(ctx) {
     });
     wire(f);
   }));
+}
+
+// Company documents (handbooks, policies, …) shared with this person, opened from the menu under their initials.
+export async function renderDocuments(ctx) {
+  const { el, stale } = ctx;
+  const docs = await api('/documents');
+  if (stale()) return;
+  el.innerHTML = `
+    <div class="page-head"><h1>Company documents</h1></div>
+    <div class="mybrew">
+      <section class="card my-docs">
+        ${docs.length > 6 ? '<input type="search" id="doc-search" placeholder="Find a document…" aria-label="Find a document">' : ''}
+          ${docs.length ? Object.entries(DOC_CATEGORIES).filter(([k]) => docs.some((d) => d.category === k)).map(([k, label]) => `
+            <div class="doc-group"><h3>${label}</h3>
+              <ul class="doc-list">${docs.filter((d) => d.category === k).map(docItem).join('')}</ul></div>`).join('')
+            : '<p class="muted small">No documents shared yet.</p>'}
+        </section>
+    </div>`;
+  wireDocLinks(el);
+  el.querySelector('#doc-search')?.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    el.querySelectorAll('.doc-list li').forEach((li) => { li.hidden = !!q && !li.textContent.toLowerCase().includes(q); });
+    el.querySelectorAll('.doc-group').forEach((g) => { g.hidden = ![...g.querySelectorAll('li')].some((li) => !li.hidden); });
+  });
 }

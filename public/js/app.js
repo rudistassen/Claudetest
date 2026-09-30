@@ -75,6 +75,7 @@ const ROUTES = [
   [/^invoices\/(\d+)$/, invoices.renderInvoice, ['orders.manage']],
   [/^admin\/email-reports$/, reports.renderEmailReports, 'admin'],
   [/^account$/, admin.renderAccount],
+  [/^documents$/, mybrew.renderDocuments],
 ];
 
 const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(...who));
@@ -223,6 +224,7 @@ function renderShell() {
           <p class="topnav-heading">${esc(state.user.name)}</p>
           <div class="topnav-links">
             <a href="#/account" class="${path === 'account' ? 'active' : ''}"><span class="nav-icon">☺</span><span class="nav-label">My account</span></a>
+            <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
             <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
             <a href="#" id="logout" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
           </div>
@@ -242,6 +244,7 @@ function renderShell() {
           </div>`;
         }).join('')}
         <div class="nav-heading"></div>
+        <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
         <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
         <a href="#" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
       </nav>
