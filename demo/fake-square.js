@@ -122,6 +122,10 @@ function timecardFor(shift, now) {
   };
 }
 
+// Clock-ins moved to another site from Brewly (timecard id → Square location id).
+const movedCards = new Map();
+const withMove = (t) => (t && movedCards.has(t.id) ? { ...t, location_id: movedCards.get(t.id) } : t);
+
 function page(items, q, key, size) {
   const offset = Number(q.cursor ?? 0);
   return { [key]: items.slice(offset, offset + size), ...(offset + size < items.length ? { cursor: String(offset + size) } : {}) };
@@ -183,13 +187,25 @@ export async function fakeSquareFetch(url, init = {}) {
     const r = teamWrite(path, init.method ?? 'GET', init.body ? JSON.parse(init.body) : {});
     if (r) return r;
   }
+  const one = path.match(/^\/v2\/labor\/(shifts|timecards)\/([^/]+)$/);
+  if (one && one[2] !== 'search') {
+    const now = new Date().toISOString();
+    const card = rotaShifts.map((s) => withMove(timecardFor(s, now))).find((t) => t?.id === decodeURIComponent(one[2]));
+    if (!card) return json(404, { errors: [{ code: 'NOT_FOUND', detail: 'Timecard not found' }] });
+    const key = one[1] === 'shifts' ? 'shift' : 'timecard';
+    if ((init.method ?? 'GET') === 'PUT') {
+      movedCards.set(card.id, JSON.parse(init.body)[key].location_id);
+      return json(200, { [key]: withMove(card) });
+    }
+    return json(200, { [key]: card });
+  }
   if (path === '/v2/labor/shifts/search' || path === '/v2/labor/timecards/search') {
     const q = JSON.parse(init.body);
     const { start_at: start, end_at: end } = q.query.filter.start;
     const now = new Date().toISOString();
     const cards = rotaShifts
-      .filter((s) => q.query.filter.location_ids.includes(s.square_location_id))
-      .map((s) => timecardFor(s, now))
+      .map((s) => withMove(timecardFor(s, now)))
+      .filter((t) => t && q.query.filter.location_ids.includes(t.location_id))
       .filter((t) => t && t.start_at >= start && t.start_at < end)
       .sort((a, b) => a.start_at.localeCompare(b.start_at));
     return json(200, page(cards, q, path.endsWith('timecards/search') ? 'timecards' : 'shifts', 200));

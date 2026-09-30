@@ -21,6 +21,7 @@ import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { registerNewsRoutes } from '../src/routes/news.js';
 import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { registerBreakRoutes } from '../src/routes/breaks.js';
+import { registerTimecardRoutes } from '../src/routes/timecards.js';
 import { registerInvoiceInboxRoutes, setSetting } from '../src/invoice-inbox.js';
 import { memoryMailbox } from '../src/mailbox.js';
 import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
@@ -140,6 +141,7 @@ async function boot() {
   registerNewsRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);
+  registerTimecardRoutes(api, db, square);
   // Pretend Google Maps listings: every site but one is linked, with a rating from a month ago to compare against.
   const reviewSites = db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY id').all();
   const places = demoPlaces(reviewSites);

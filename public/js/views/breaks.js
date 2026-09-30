@@ -1,4 +1,4 @@
-import { api, esc, fmtDate, money, qs, siteFilter, siteScope, todayISO, addDays } from '../lib.js';
+import { api, esc, fmtDate, money, openModal, qs, siteFilter, siteScope, toast, todayISO, addDays } from '../lib.js';
 
 // Breaks taken during Square clock-ins: shown on the dashboard, and as a report under Reporting → Breaks.
 
@@ -11,6 +11,35 @@ export const breakText = (b) => `${b.start}–${b.end ?? 'now'} · ${mins(b.minu
 /** The warning tag for a long shift without a proper break, or ''. */
 export const breakFlag = (c) => (c.break_flag
   ? `<span class="chip chip-strong" title="Worked over 6 hours without a 20-minute break">⚠ ${FLAG[c.break_flag]}</span>` : '');
+
+/** Whether this person can move clock-ins between sites (they manage staff, at more than one site). */
+export const canMoveClockIns = (state) => state.can('staff.manage') && state.multiSite;
+
+/** A "Change site" button for a clock-in; wire it up with wireMoveClockIn. */
+export const moveButton = (c, locationId) => `<button type="button" class="link-btn move-card" data-move-card="${esc(c.id)}"
+  data-loc="${locationId}" data-who="${esc(c.name)}" data-when="${esc(`${c.start}–${c.end ?? 'now'}`)}">Change site</button>`;
+
+/** Opens "Change site" for the buttons made by moveButton inside el. */
+export function wireMoveClockIn(el, ctx) {
+  el.querySelectorAll('[data-move-card]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const from = Number(b.dataset.loc);
+    const sites = ctx.state.locations.filter((l) => l.active && l.id !== from);
+    const fromName = ctx.state.locations.find((l) => l.id === from)?.name ?? 'this site';
+    openModal({
+      title: `Move ${b.dataset.who}’s clock-in`,
+      submitLabel: 'Move clock-in',
+      body: `<p>${esc(b.dataset.who)} clocked in at <strong>${esc(fromName)}</strong> (${esc(b.dataset.when)}). Which site were they actually working at?</p>
+        <label class="field"><span>Site</span><select name="location_id" required>${sites.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></label>
+        <p class="muted small">This changes the timecard in Square too, so payroll and each site’s labour costs match. It’s recorded under Team → Rota changes.</p>`,
+      onSubmit: async (v) => {
+        const r = await api(`/timecards/${encodeURIComponent(b.dataset.moveCard)}/location`, { method: 'PUT', body: { location_id: Number(v.location_id) } });
+        toast(`Clock-in moved to ${r.location_name}`);
+        ctx.rerender();
+      },
+    });
+  }));
+}
 
 /** The breaks line under a person on the dashboard's clocked-in list. */
 export function breakLine(c) {
@@ -26,6 +55,7 @@ export async function render(ctx) {
   const scope = siteScope(state, query.scope);
   const onlyFlags = query.flags === '1';
   const data = await api(`/breaks${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`);
+  const canMove = canMoveClockIns(state);
   if (stale()) return;
   const t = data.totals;
   const rows = onlyFlags ? data.rows.filter((r) => r.break_flag) : data.rows;
@@ -56,7 +86,7 @@ export async function render(ctx) {
           <td>${fmtDate(r.date)}</td>
           <td><strong>${esc(r.name)}</strong></td>
           ${allSites ? `<td>${esc(r.location_name)}</td>` : ''}
-          <td>${r.start}–${r.end ?? 'now'}</td>
+          <td>${r.start}–${r.end ?? 'now'}${canMove ? ` ${moveButton(r, r.location_id)}` : ''}</td>
           <td class="num">${mins(r.worked_minutes)}</td>
           <td>${r.breaks_known ? (r.breaks.length ? r.breaks.map((b) => `<span class="break-pill ${b.paid ? 'is-paid' : ''}">${breakText(b)}</span>`).join(' ') : '<span class="muted">None</span>') : '<span class="muted">Not known</span>'}${r.on_break ? ' <span class="badge badge-sent">On break</span>' : ''}</td>
           <td class="num">${mins(r.break_minutes)}</td>
@@ -66,6 +96,7 @@ export async function render(ctx) {
       <p class="muted small">From Square clock-ins: staff start and end a break on the Square till or app. Adults working more than 6 hours should get one unbroken break of at least 20 minutes.</p>
     </section>`;
 
+  wireMoveClockIn(el, ctx);
   el.querySelector('#range').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target;

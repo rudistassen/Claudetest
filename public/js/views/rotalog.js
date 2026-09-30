@@ -12,8 +12,9 @@ export const ACTIONS = {
   publish: ['Published rota', 'log-publish'],
   discard: ['Discarded changes', 'log-remove'],
   copy: ['Copied week', 'log-change'],
+  timecard_site: ['Clock-in moved', 'log-change'],
 };
-const FILTERS = [['', 'All changes'], ['add', 'Added'], ['change', 'Changed'], ['remove', 'Removed'], ['restore', 'Put back'], ['publish', 'Published'], ['discard', 'Discarded'], ['copy', 'Copied week']];
+const FILTERS = [['', 'All changes'], ['add', 'Added'], ['change', 'Changed'], ['remove', 'Removed'], ['restore', 'Put back'], ['publish', 'Published'], ['discard', 'Discarded'], ['copy', 'Copied week'], ['timecard_site', 'Clock-ins moved']];
 
 const when = (at) => new Date(`${at.replace(' ', 'T')}Z`);
 const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' });

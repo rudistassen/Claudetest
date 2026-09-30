@@ -1,6 +1,6 @@
 import { attachTip } from '../charts.js';
 import { addDays, api, esc, fmtDate, fmtDateTime, money, toast, todayISO } from '../lib.js';
-import { breakLine } from './breaks.js';
+import { breakLine, canMoveClockIns, moveButton, wireMoveClockIn } from './breaks.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
 function progress(done, due) {
@@ -88,6 +88,7 @@ function card(loc, state, data) {
             ? `<ul class="shift-list clock-list">${loc.clock_ins.map((c) => `<li><strong>${esc(c.name)}</strong>
                 <span class="muted">${c.start}–${c.end ?? 'now'}</span>
                 <span class="clock-hours">${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}</span>
+                ${canMoveClockIns(state) ? moveButton(c, loc.id) : ''}
                 ${rotaLine(c)}
                 ${breakLine(c)}</li>`).join('')}</ul>
               <p class="small muted">${duration(loc.clock_ins.reduce((n, c) => n + c.hours, 0))} in total</p>`
@@ -270,6 +271,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
     <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
+  wireMoveClockIn(el, { state, rerender });
   el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
     try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }
     rerender();

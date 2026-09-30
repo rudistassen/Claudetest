@@ -67,6 +67,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
   // …and each compared with their shift on the published rota (late in, late out, not on the rota).
   const attendanceAt = (locationId) => attendance(db, locationId, d, cardsToday, dayEnd);
   const clockIns = (locationId, att) => cardsToday.filter((t) => t.location_id === locationId).map((t) => ({
+    id: t.id,
     name: t.name,
     start: timeFormat.format(new Date(t.start)),
     end: t.end_at ? timeFormat.format(new Date(t.end)) : null,

@@ -16,6 +16,7 @@ import { registerInvoiceRoutes } from './routes/invoices.js';
 import { registerNewsRoutes } from './routes/news.js';
 import { registerDocumentRoutes } from './routes/documents.js';
 import { registerBreakRoutes } from './routes/breaks.js';
+import { registerTimecardRoutes } from './routes/timecards.js';
 import { registerInvoiceInboxRoutes } from './invoice-inbox.js';
 import { registerReviewRoutes } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from './invites.js';
@@ -72,6 +73,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerNewsRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);
+  registerTimecardRoutes(api, db, square);
   registerInvoiceInboxRoutes(api, db, { mailbox, reader: invoiceReader });
   registerReviewRoutes(api, db, places);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));

@@ -141,6 +141,21 @@ export class SquareClient {
     } while (cursor);
   }
 
+  // One clock-in (timecard; "shift" in older API versions).
+  labourPath() {
+    return this.config.version >= TIMECARDS_VERSION ? ['/v2/labor/timecards', 'timecard'] : ['/v2/labor/shifts', 'shift'];
+  }
+
+  async getTimecard(id) {
+    const [path, key] = this.labourPath();
+    return (await this.request('GET', `${path}/${encodeURIComponent(id)}`))[key];
+  }
+
+  async updateTimecard(id, timecard) {
+    const [path, key] = this.labourPath();
+    return (await this.request('PUT', `${path}/${encodeURIComponent(id)}`, { [key]: timecard }))[key];
+  }
+
   // Yields every clock-in (timecard) that started in [startAt, endAt) at the given Square locations.
   async *searchTimecards({ locationIds, startAt, endAt }) {
     const [path, key] = this.config.version >= TIMECARDS_VERSION

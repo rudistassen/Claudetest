@@ -1362,3 +1362,6 @@ p.square-box { background: var(--good-soft); border-color: transparent; }
 .kpi .kpi-vs span.muted { font-weight: 400; color: var(--muted); }
 .kpi .kpi-vs span.tone-good { color: var(--good); }
 .kpi .kpi-vs span.tone-bad { color: var(--bad); }
+/* "Change site" on a clock-in */
+.link-btn.move-card { font-size: 0.78rem; font-weight: 600; margin: 0 0 0 0.4rem; }
+@media print { .move-card { display: none !important; } }
