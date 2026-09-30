@@ -594,16 +594,18 @@ export async function renderPermissions(ctx) {
       <h1>Permissions</h1>
       <div class="actions"><button class="btn btn-primary" id="add">+ New permission set</button></div>
     </div>
-    <p class="muted">Give each person a permission set on the Staff page. They can do what their set allows, at their home site.
-      <strong>Admins</strong> can do everything at every site, so they don’t need a set. Only admins can give someone access to manage staff.</p>
+    <p class="muted">Give each person a permission set on the Staff page (their <strong>Access</strong>). They can do what their set allows, at their sites.
+      <strong>Admin</strong> is everything, at every site, including the admin-only pages (Permissions, Locations, Square and Email reports): to make someone an admin, choose
+      “Admin – everything, every site” as their Access on the Staff page. Only admins can do that.</p>
     <section class="card">
       <div class="table-wrap"><table class="perm-matrix">
-        <thead><tr><th></th>${sets.map((s) => `<th class="perm-set">
+        <thead><tr><th></th><th class="perm-set perm-admin"><strong>Admin</strong>
+          <small>${data.admins ?? 0} ${data.admins === 1 ? 'person' : 'people'} · built in · everything</small></th>${sets.map((s) => `<th class="perm-set">
           <button class="link-btn" data-edit="${s.id}">${esc(s.name)}</button>
           <small>${s.people} ${s.people === 1 ? 'person' : 'people'}${s.built_in ? ' · built in' : ''}</small></th>`).join('')}</tr></thead>
         <tbody>${areas.map((a) => `
-          <tr class="perm-area-row"><th colspan="${sets.length + 1}">${esc(a.area)}</th></tr>
-          ${a.permissions.map((p) => `<tr><th scope="row">${esc(p.label)}</th>${sets.map((s) => (s.permissions.includes(p.key)
+          <tr class="perm-area-row"><th colspan="${sets.length + 2}">${esc(a.area)}</th></tr>
+          ${a.permissions.map((p) => `<tr><th scope="row">${esc(p.label)}</th><td class="perm-yes perm-admin"><span aria-hidden="true">✓</span><span class="sr-only">Yes</span></td>${sets.map((s) => (s.permissions.includes(p.key)
             ? '<td class="perm-yes"><span aria-hidden="true">✓</span><span class="sr-only">Yes</span></td>'
             : '<td class="perm-no"><span aria-hidden="true">–</span><span class="sr-only">No</span></td>')).join('')}</tr>`).join('')}`).join('')}
         </tbody>

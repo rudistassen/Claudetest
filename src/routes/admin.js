@@ -236,6 +236,7 @@ export function registerAdminRoutes(router, db) {
       WHERE u.active = 1 AND u.role != 'admin' GROUP BY 1`).all();
     const count = new Map(people.map((r) => [r.set_id, r.n]));
     res.json({
+      admins: db.prepare("SELECT COUNT(*) AS n FROM users WHERE active = 1 AND role = 'admin'").get().n,
       areas: PERMISSION_AREAS.map(([area, perms]) => ({ area, permissions: perms.map(([key, label]) => ({ key, label })) })),
       sets: db.prepare('SELECT * FROM permission_sets ORDER BY built_in IS NULL, name').all().map((ps) => {
         const perms = permsOf(ps);

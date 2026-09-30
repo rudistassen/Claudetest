@@ -1174,3 +1174,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 
 /* PDFs are for computers; phones leave the dashboard's Download PDF button out. */
 @media (max-width: 800px) { .dash-pdf { display: none; } }
+
+/* Permissions: the fixed Admin column. */
+.perm-matrix .perm-admin { background: color-mix(in srgb, var(--brand) 6%, transparent); }
