@@ -35,3 +35,12 @@ export function scryptSync(password, salt, len) {
 export function timingSafeEqual(a, b) {
   return String(a) === String(b);
 }
+
+// Only used to look up emailed password links; a stand-in hash is fine in the demo.
+export function createHash() {
+  let input = '';
+  return {
+    update(s) { input += String(s); return this; },
+    digest() { return scryptSync(input, 'hash', 32).toString(); },
+  };
+}

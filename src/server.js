@@ -18,6 +18,7 @@ import { registerDocumentRoutes } from './routes/documents.js';
 import { registerBreakRoutes } from './routes/breaks.js';
 import { registerInvoiceInboxRoutes } from './invoice-inbox.js';
 import { registerReviewRoutes } from './google-reviews.js';
+import { registerInviteRoutes, registerPasswordRoutes } from './invites.js';
 import { HttpError } from './util.js';
 
 export const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -54,7 +55,9 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   const api = express.Router();
   api.get('/version', (_req, res) => res.set('Cache-Control', 'no-store').json({ version }));
   registerAuthRoutes(api, db);
+  registerPasswordRoutes(api, db, mailer);
   api.use(requireAuth);
+  registerInviteRoutes(api, db, mailer);
   registerAdminRoutes(api, db);
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);

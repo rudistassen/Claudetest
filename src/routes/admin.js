@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { ACCESS_FIELDS, ACCESS_JOIN, PUBLIC_USER_FIELDS, assertLocation, hashPassword, requireAdmin, requirePerm, validatePassword, withPermissions } from '../auth.js';
 import { tx } from '../db.js';
 import { ALL_PERMISSIONS, cleanPermissions, parsePermissions, PERMISSION_AREAS, roleForPermissions } from '../permissions.js';
@@ -57,7 +58,7 @@ export function registerAdminRoutes(router, db) {
   router.get('/users', requirePerm('staff.manage'), (req, res) => {
     const locationId = id(req.query.location_id, 'location_id');
     if (locationId) assertLocation(req, locationId);
-    const sql = `SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, l.name AS location_name FROM users u ${ACCESS_JOIN}
+    const sql = `SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, l.name AS location_name, u.last_login_at, u.invited_at FROM users u ${ACCESS_JOIN}
       LEFT JOIN locations l ON l.id = u.location_id`;
     let rows = locationId
       ? db.prepare(`${sql} WHERE u.location_id = ? ORDER BY u.active DESC, u.name`).all(locationId)
@@ -145,7 +146,7 @@ export function registerAdminRoutes(router, db) {
   }
 
   const userOut = (userId) => ({
-    ...withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(userId)),
+    ...withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, u.last_login_at, u.invited_at FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(userId)),
     site_ids: db.prepare('SELECT location_id FROM user_sites WHERE user_id = ?').all(userId).map((r) => r.location_id),
   });
   const saveSites = (userId, u) => {
@@ -156,7 +157,8 @@ export function registerAdminRoutes(router, db) {
 
   router.post('/users', requirePerm('staff.manage'), (req, res) => {
     const u = userBody(req);
-    const password = validatePassword(req.body.password);
+    // No password: they choose their own from an invite.
+    const password = req.body.password ? validatePassword(req.body.password) : randomBytes(24).toString('hex');
     const userId = tx(db, () => {
       const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, rota_group, hourly_rate, active, permission_set_id, all_sites)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)

@@ -25,6 +25,7 @@ import { registerInvoiceInboxRoutes, setSetting } from '../src/invoice-inbox.js'
 import { memoryMailbox } from '../src/mailbox.js';
 import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
 import { demoPlaces } from './google-reviews.js';
+import { registerInviteRoutes, registerPasswordRoutes } from '../src/invites.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
@@ -108,7 +109,9 @@ async function boot() {
   api.use((req, _res, next) => { req.db = db; next(); });
   api.use(loadUser(db));
   registerAuthRoutes(api, db);
+  registerPasswordRoutes(api, db, demoMailer);
   api.use(requireAuth);
+  registerInviteRoutes(api, db, demoMailer, { demo: true });
   registerAdminRoutes(api, db);
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);
@@ -159,6 +162,9 @@ async function boot() {
       headers: { cookie: Object.entries(cookies).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('; ') },
       params: {},
       secure: false,
+      protocol: 'https',
+      ip: 'demo',
+      get: (h) => (String(h).toLowerCase() === 'host' ? 'brewly.demo' : undefined),
     };
     const res = {
       statusCode: 200,

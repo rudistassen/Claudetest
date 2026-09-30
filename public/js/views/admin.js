@@ -1,7 +1,7 @@
 import { loadLocations } from '../app.js';
 import { exportProducts, openProductImport } from './product-import.js';
 import { installCard, wireInstallCard } from '../install.js';
-import { api, confirmDialog, esc, isDemo, field, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast, siteScope, siteFilter } from '../lib.js';
+import { api, confirmDialog, esc, isDemo, field, fmtDate, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast, siteScope, siteFilter } from '../lib.js';
 
 const yesNo = (v) => (v ? 'Yes' : 'No');
 const activeBox = (v) => field('Active', `<input type="checkbox" name="active" ${v === undefined || v ? 'checked' : ''}>`, { className: 'field-inline' });
@@ -24,6 +24,7 @@ function listPage(ctx, { title, rows, columns, canEdit = true, addLabel, form, s
       <span class="muted small" id="list-count"></span>
       ${selectable ? `<span class="bulk-bar" id="bulk-bar" hidden><strong id="bulk-n"></strong>
         <button class="btn btn-primary btn-small" id="bulk-run">${esc(bulk.label)}</button>
+        ${(bulk.more ?? []).map((m, i) => `<button class="btn btn-small" data-bulk-more="${i}">${esc(m.label)}</button>`).join('')}
         <button class="btn btn-ghost btn-small" id="bulk-clear">Clear</button></span>` : ''}
     </div>` : ''}
     <section class="card">
@@ -73,6 +74,7 @@ function listPage(ctx, { title, rows, columns, canEdit = true, addLabel, form, s
     });
     el.querySelector('#bulk-clear').addEventListener('click', () => { el.querySelectorAll('[data-pick]').forEach((c) => { c.checked = false; }); refreshBulk(); });
     el.querySelector('#bulk-run').addEventListener('click', () => bulk.run(picked()));
+    el.querySelectorAll('[data-bulk-more]').forEach((b) => b.addEventListener('click', () => bulk.more[Number(b.dataset.bulkMore)].run(picked())));
   }
   const open = (row) => openModal({
     title: row ? `Edit ${row.name ?? row.title}` : addLabel,
@@ -109,7 +111,7 @@ function openSquareImport(ctx) {
       const r = await api('/square/import-staff', { method: 'POST', body: { deactivate_others: !!v.deactivate_others } });
       toast(`Staff imported: ${r.created} added, ${r.updated} updated, ${r.deactivated} deactivated`);
       if (r.need_password.length) {
-        setTimeout(() => toast(`New staff need a password before they can sign in: click their name to set one.`), 2700);
+        setTimeout(() => toast('New staff need an invite before they can sign in: tick them and choose “Invite selected”.'), 2700);
       }
       ctx.rerender();
     },
@@ -226,7 +228,8 @@ function staffEditor(state, rows, perms) {
         ${field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"'))}
       </div>
       <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
-      ${field(u.id ? 'New password (leave blank to keep)' : 'Password', input('password', '', `type="password" minlength="8" autocomplete="new-password" ${u.id ? '' : 'required'}`), { hint: 'At least 8 characters' })}
+      ${u.id ? inviteBox(u) : ''}
+      ${field(u.id ? 'New password (leave blank to keep)' : 'Password (optional)', input('password', '', 'type="password" minlength="8" autocomplete="new-password"'), { hint: u.id ? 'At least 8 characters' : 'Leave blank and send them an invite, so they choose their own' })}
       ${activeBox(u.active)}`;
   const save = (v, row, formEl) => {
     v.site_ids = [...formEl.querySelectorAll('input[name=site_pick]:checked')].map((i) => Number(i.value));
@@ -259,13 +262,16 @@ export async function renderStaff(ctx) {
   const { state } = ctx;
   // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
   const scope = siteScope(state, ctx.query.scope);
-  const [rows, square, perms] = await Promise.all([
+  const [everyone, square, perms, invites] = await Promise.all([
     api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
     state.isAdmin ? api('/square/status') : null,
     api('/permissions'),
+    api('/invites/settings'),
   ]);
   if (ctx.stale()) return;
-  const editor = staffEditor(state, rows, perms);
+  const status = JOIN_STATUS.some(([k]) => k === ctx.query.status) ? ctx.query.status : '';
+  const rows = status ? everyone.filter((u) => u.active && joinStatus(u).key === status) : everyone;
+  const editor = staffEditor(state, everyone, perms);
   const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
   const sitesLabel = (u) => {
     if (u.role === 'admin' || u.all_sites) return 'All sites';
@@ -276,10 +282,16 @@ export async function renderStaff(ctx) {
     title: state.multiSite ? 'Staff' : `Staff · ${state.location?.name ?? ''}`,
     rows,
     search: true,
-    bulk: { label: 'Edit selected', run: (people) => openBulkStaff(ctx, people, { roles: editor.rotaGroups, locOptions: editor.locOptions, access: editor.accessOptions({}) }) },
+    bulk: {
+      label: 'Edit selected',
+      run: (people) => openBulkStaff(ctx, people, { roles: editor.rotaGroups, locOptions: editor.locOptions, access: editor.accessOptions({}) }),
+      more: [{ label: 'Invite selected', run: (people) => sendInvites(ctx, people) }],
+    },
     addLabel: 'Add staff member',
     extraActions: `${state.isAdmin && square?.configured ? '<button class="btn" id="import-square">Import from Square</button>' : ''}
-      ${siteFilter(state, scope)}`,
+      ${siteFilter(state, scope)}
+      <select id="join-filter" aria-label="Who has joined"><option value="">Everyone</option>
+        ${JOIN_STATUS.map(([k, label]) => `<option value="${k}" ${k === status ? 'selected' : ''}>${label}</option>`).join('')}</select>`,
     columns: [
       { label: 'Name', key: 'name' },
       { label: 'Email', key: 'email' },
@@ -289,6 +301,7 @@ export async function renderStaff(ctx) {
       { label: 'Role', value: (r) => r.rota_group ?? '' },
       { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
       { label: 'Active', value: (r) => yesNo(r.active) },
+      { label: 'Brewly', value: (r) => joinStatus(r).label, html: (r) => joinBadge(r) },
     ],
     form: editor.form,
     save: async (v, row, form) => {
@@ -301,6 +314,81 @@ export async function renderStaff(ctx) {
     },
   });
   ctx.el.querySelector('#import-square')?.addEventListener('click', () => openSquareImport(ctx));
+  ctx.el.querySelector('#join-filter').addEventListener('change', (e) => ctx.navigate(`admin/staff${qs({ scope: ctx.query.scope, status: e.target.value || undefined })}`));
+
+  // Who has joined Brewly, and inviting everyone who hasn't been invited yet.
+  const active = everyone.filter((u) => u.active);
+  const count = (k) => active.filter((u) => joinStatus(u).key === k).length;
+  const notInvited = active.filter((u) => joinStatus(u).key === 'none' && u.id !== state.user.id);
+  ctx.el.querySelector('.page-head').insertAdjacentHTML('afterend', `<div class="join-summary card">
+    <div><strong>${count('joined')}</strong> of ${active.length} have joined Brewly
+      <span class="muted">· ${count('invited')} invited, not signed in yet · ${count('none')} not invited</span></div>
+    ${invites.email_ready ? '' : '<p class="muted small">Email isn’t set up yet, so invites can’t be emailed – open a person and use “Copy invite link” to send it by text or WhatsApp.</p>'}
+    ${notInvited.length && invites.email_ready ? `<button class="btn btn-small" id="invite-rest">Invite ${notInvited.length} ${notInvited.length === 1 ? 'person' : 'people'} not invited yet</button>` : ''}
+  </div>`);
+  ctx.el.querySelector('#invite-rest')?.addEventListener('click', () => sendInvites(ctx, notInvited));
+}
+
+// Whether someone has signed in to Brewly yet.
+const JOIN_STATUS = [['none', 'Not invited'], ['invited', 'Invited, not joined'], ['joined', 'Joined']];
+const shortDay = (sql) => fmtDate(String(sql).slice(0, 10), { day: 'numeric', month: 'short' });
+export function joinStatus(u) {
+  if (u.last_login_at) return { key: 'joined', label: `Joined · last seen ${shortDay(u.last_login_at)}`, tone: 'pass' };
+  if (u.invited_at) return { key: 'invited', label: `Invited ${shortDay(u.invited_at)}`, tone: 'sent' };
+  return { key: 'none', label: 'Not invited', tone: 'draft' };
+}
+const joinBadge = (u) => { const s = joinStatus(u); return `<span class="badge badge-${s.tone}">${esc(s.label)}</span>`; };
+
+function inviteBox(u) {
+  const s = joinStatus(u);
+  return `<div class="invite-box" data-user="${u.id}">
+    <div><span class="muted small">Brewly</span> ${joinBadge(u)}</div>
+    <div class="invite-actions">
+      <button type="button" class="btn btn-small" data-invite-email>${s.key === 'none' ? 'Email an invite' : 'Email a new invite'}</button>
+      <button type="button" class="btn btn-small btn-ghost" data-invite-link>Copy invite link</button>
+    </div>
+    <small class="muted">They choose their own password from the link. ${s.key === 'joined' ? 'They’ve already signed in, so they only need this if they’re locked out.' : ''}</small>
+  </div>`;
+}
+
+// Invites from a person's details (buttons are inside the edit dialog).
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-invite-email], [data-invite-link]');
+  if (!b) return;
+  const userId = Number(b.closest('[data-user]').dataset.user);
+  b.disabled = true;
+  try {
+    if (b.matches('[data-invite-link]')) {
+      const { link } = await api('/users/invite', { method: 'POST', body: { ids: [userId], link_only: true } });
+      try { await navigator.clipboard.writeText(link); toast('Invite link copied – paste it into a text or WhatsApp. It works for 14 days.'); } catch { window.prompt('Copy this invite link (it works for 14 days):', link); }
+    } else {
+      const r = await api('/users/invite', { method: 'POST', body: { ids: [userId] } });
+      toast(inviteSummary(r), r.sent.length ? 'ok' : 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
+  b.disabled = false;
+});
+
+function inviteSummary(r) {
+  const parts = [];
+  if (r.sent.length) parts.push(`Invite sent to ${r.sent.length === 1 ? r.sent[0].name : `${r.sent.length} people`}`);
+  if (r.skipped.length) parts.push(`${r.skipped.length} skipped (${[...new Set(r.skipped.map((s) => s.reason))].join(', ')}: ${r.skipped.map((s) => s.name).join(', ')})`);
+  if (r.failed.length) parts.push(`${r.failed.length} failed: ${r.failed[0].reason}`);
+  return parts.join('. ') || 'Nobody to invite';
+}
+
+async function sendInvites(ctx, people) {
+  const list = people.filter((p) => p.active);
+  if (!list.length) { toast('Nobody active to invite', 'error'); return; }
+  const again = list.filter((p) => joinStatus(p).key !== 'none').length;
+  const ok = await confirmDialog(`Email an invite to join Brewly to ${list.length === 1 ? list[0].name : `${list.length} people`}?${again ? ` ${again} of them ${again === 1 ? 'has' : 'have'} been invited or joined before – their old links will stop working.` : ''} Each person gets a link to choose their own password.`,
+    { title: 'Send invites', confirmLabel: `Send ${list.length} invite${list.length === 1 ? '' : 's'}` });
+  if (!ok) return;
+  try {
+    const r = await api('/users/invite', { method: 'POST', body: { ids: list.map((p) => p.id) } });
+    toast(inviteSummary(r), r.failed.length && !r.sent.length ? 'error' : 'ok');
+    ctx.rerender();
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 export async function renderLocations(ctx) {

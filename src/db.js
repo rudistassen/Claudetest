@@ -254,6 +254,19 @@ CREATE TABLE IF NOT EXISTS timecards (
 );
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
+-- Links emailed to staff to choose a password: an invite, or a reset when they've forgotten it (see invites.js).
+-- Only a hash of each link's secret is kept.
+CREATE TABLE IF NOT EXISTS password_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('invite', 'reset')),
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_password_tokens_user ON password_tokens(user_id);
+
 -- Simple app-wide settings (key → value), e.g. the invoice inbox's default site.
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
@@ -524,6 +537,14 @@ CREATE TABLE IF NOT EXISTS square_sync_log (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // When each person last signed in (for the Staff page's "who's joined" status). People already signed in on
+  // a device count as signed in.
+  ['users', 'last_login_at', (db) => {
+    db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT');
+    db.exec(`UPDATE users SET last_login_at = (SELECT datetime(MAX(expires_at), '-30 days') FROM sessions s WHERE s.user_id = users.id)`);
+  }],
+  // When they were last sent an invite to Brewly.
+  ['users', 'invited_at', 'ALTER TABLE users ADD COLUMN invited_at TEXT'],
   // The site's place on Google Maps, for its reviews.
   ['locations', 'google_place_id', 'ALTER TABLE locations ADD COLUMN google_place_id TEXT'],
   ['locations', 'square_location_id', 'ALTER TABLE locations ADD COLUMN square_location_id TEXT'],

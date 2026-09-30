@@ -142,6 +142,23 @@ function checkLoginLimit(keys, now) {
   }
 }
 
+/** Signs someone in on this device (a cookie lasting 30 days) and returns them as the app sees them. */
+export function startSession(db, req, res, userId) {
+  const token = randomBytes(32).toString('hex');
+  db.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', ?))`)
+    .run(token, userId, `+${SESSION_DAYS} days`);
+  db.prepare(`DELETE FROM sessions WHERE expires_at <= datetime('now')`).run();
+  db.prepare(`UPDATE users SET last_login_at = datetime('now') WHERE id = ?`).run(userId);
+  res.cookie(COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure,
+    maxAge: SESSION_DAYS * 24 * 3600 * 1000,
+    path: '/',
+  });
+  return withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(userId));
+}
+
 export function registerAuthRoutes(router, db) {
   router.post('/auth/login', (req, res) => {
     const email = str(req.body?.email, 'email', { required: true });
@@ -155,18 +172,7 @@ export function registerAuthRoutes(router, db) {
       throw new HttpError(401, 'Incorrect email or password');
     }
     loginFails.delete(keys[1][0]);
-    const token = randomBytes(32).toString('hex');
-    db.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime('now', ?))`)
-      .run(token, user.id, `+${SESSION_DAYS} days`);
-    db.prepare(`DELETE FROM sessions WHERE expires_at <= datetime('now')`).run();
-    res.cookie(COOKIE, token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: req.secure,
-      maxAge: SESSION_DAYS * 24 * 3600 * 1000,
-      path: '/',
-    });
-    res.json({ user: withPermissions(db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM users u ${ACCESS_JOIN} WHERE u.id = ?`).get(user.id)) });
+    res.json({ user: startSession(db, req, res, user.id) });
   });
 
   router.post('/auth/logout', (req, res) => {

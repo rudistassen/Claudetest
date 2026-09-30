@@ -8,6 +8,7 @@ import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
+import { renderSetPassword } from './views/password.js';
 import * as orders from './views/orders.js';
 import * as recipes from './views/recipes.js';
 import * as rota from './views/rota.js';
@@ -366,8 +367,9 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopMe
 let routeSeq = 0;
 
 export async function route() {
-  if (!state.user) return;
   const { path, query } = parseHash();
+  if (path === 'set-password') return start();
+  if (!state.user) return;
   renderShell();
   const el = document.getElementById('view');
   const match = ROUTES.map(([re, view, role]) => ({ m: path.match(re), view, role })).find((r) => r.m);
@@ -410,6 +412,17 @@ export async function loadLocations() {
 }
 
 async function start() {
+  // An invite or password reset link: choose a password first (even if someone else is signed in on this device).
+  const link = parseHash();
+  if (link.path === 'set-password') {
+    renderSetPassword(document.getElementById('app'), link.query.token, async (user, invite) => {
+      state.user = user;
+      history.replaceState(null, '', `${location.pathname}${location.search}#/${invite ? 'mybrew' : ''}`);
+      await loadLocations();
+      route();
+    });
+    return;
+  }
   try {
     state.user = (await api('/auth/me')).user;
   } catch (err) {
