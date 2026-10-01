@@ -1,5 +1,5 @@
 import { attachTip } from '../charts.js';
-import { addDays, api, esc, fmtDate, fmtDateTime, money, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, money, toast, todayISO } from '../lib.js';
 import { breakLine, clockInActions, wireClockInActions } from './breaks.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
@@ -87,8 +87,7 @@ function card(loc, state, data) {
           ${loc.clock_ins.length
             ? `<ul class="shift-list clock-list">${loc.clock_ins.map((c) => `<li><strong>${esc(c.name)}</strong>
                 <span class="muted">${c.start}–${c.end ?? 'now'}</span>
-                <span class="clock-hours">${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}</span>
-                ${clockInActions(state, c, loc.id)}
+                <span class="clock-hours">${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}${clockInActions(state, c, loc.id)}</span>
                 ${rotaLine(c)}
                 ${breakLine(c)}</li>`).join('')}</ul>
               <p class="small muted">${duration(loc.clock_ins.reduce((n, c) => n + c.hours, 0))} in total</p>`
@@ -103,30 +102,15 @@ function card(loc, state, data) {
             ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(s.name)}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
             : '<p class="muted">Nobody rostered</p>'}
         </div>`}
-        <div>
-          <h3>Wastage (7 days)</h3>
-          <p class="stat">${money(loc.wastage_7d)}</p>
-        </div>
-        <div>
-          <h3>Stock take</h3>
-          <p>${loc.stock_take_in_progress
-            ? `<a href="#/stock/${loc.stock_take_in_progress}" data-site="${loc.id}">Count in progress →</a>`
-            : loc.last_stock_take ? `Last: ${fmtDateTime(loc.last_stock_take)}` : '<span class="muted">None yet</span>'}</p>
-        </div>
         ${state.can('orders.manage') ? `
         <div class="span-2">
           <h3>Orders</h3>
           <p>${loc.orders_draft} draft · ${loc.orders_sent} awaiting delivery</p>
         </div>` : ''}
-        <div class="site-checks">
+        <div class="site-checks span-2">
           <h3>Daily Trail checks</h3>
           ${progress(loc.daily.done, loc.daily.due)}
           ${loc.daily.fails ? `<p class="alert-text">⚠ ${loc.daily.fails} failed check(s) today</p>` : ''}
-        </div>
-        <div class="site-checks">
-          <h3>Weekly Trail checks</h3>
-          ${progress(loc.weekly.done, loc.weekly.due)}
-          ${loc.weekly.fails ? `<p class="alert-text">⚠ ${loc.weekly.fails} failed this week</p>` : ''}
         </div>
       </div>
     </section>`;
@@ -218,12 +202,11 @@ export async function render({ el, state, navigate, stale, rerender }) {
   const totals = locs.reduce((t, l) => ({
     dailyDone: t.dailyDone + l.daily.done,
     dailyDue: t.dailyDue + l.daily.due,
-    fails: t.fails + l.daily.fails + l.weekly.fails,
-    wastage: t.wastage + l.wastage_7d,
+    fails: t.fails + l.daily.fails,
     staff: t.staff + l.shifts_today.length,
     sales: t.sales + (l.sales_today ?? 0),
     labour: t.labour + (l.labour_cost_today ?? 0),
-  }), { dailyDone: 0, dailyDue: 0, fails: 0, wastage: 0, staff: 0, sales: 0, labour: 0 });
+  }), { dailyDone: 0, dailyDue: 0, fails: 0, staff: 0, sales: 0, labour: 0 });
   // Today's sales and labour % for the whole group, matching the by-site panel and the Trading page.
   const hasSales = !!tradeToday && tradeToday.square_connected;
   const todayTotals = tradeToday?.totals;
@@ -257,8 +240,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
         <small class="kpi-vs">${versusLine(gross.now, gross.then)}</small></div>
       <div class="kpi kpi-${labourTone(labourPct)}" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
       <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
-      <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks</span><strong>${totals.fails}</strong></div>
-      <div class="kpi" data-icon="⌫"><span>Wastage, last 7 days</span><strong>${money(totals.wastage)}</strong></div>
+      <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks today</span><strong>${totals.fails}</strong></div>
       <div class="kpi" data-icon="☺"><span>Staff on shift today</span><strong>${totals.staff}</strong></div>
     </div>` : ''}
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}

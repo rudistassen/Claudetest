@@ -51,7 +51,7 @@ export function clockInActions(state, c, locationId) {
     links.push(`<button type="button" class="link-btn move-card" data-edit-breaks="${esc(c.id)}" data-who="${esc(c.name)}">Breaks</button>`);
   }
   if (canMoveClockIns(state)) links.push(moveButton(c, locationId));
-  return links.join('');
+  return links.length ? `<span class="clock-actions">${links.join('')}</span>` : '';
 }
 
 /** Wires up the links made by clockInActions inside el. */

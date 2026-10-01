@@ -1382,3 +1382,5 @@ p.square-box { background: var(--good-soft); border-color: transparent; }
 .shift-ghost { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; margin: 0; opacity: 0.95; box-shadow: var(--shadow-lift); transform-origin: top left; cursor: grabbing; }
 body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
 [data-drop].drop-over { outline: 2px dashed var(--brand); outline-offset: -3px; background: var(--brand-soft) !important; }
+.clock-actions { display: inline-flex; gap: 0.5rem; white-space: nowrap; margin-left: 0.4rem; }
+.clock-actions .link-btn.move-card { margin: 0; }
