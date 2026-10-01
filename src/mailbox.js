@@ -6,6 +6,22 @@ const GRAPH = 'https://graph.microsoft.com/v1.0';
 
 export class MailboxError extends Error {}
 
+export const MAILBOX_VARIABLES = ['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET', 'INVOICE_MAILBOX'];
+
+/**
+ * Which of the inbox's settings Brewly can see (names only, never values), for the Invoices page while it isn't
+ * connected: [{ name, status: 'ok' | 'missing' | 'empty' | 'misnamed', found? }]. "misnamed" is a variable that's
+ * nearly right, e.g. lower case or with a space, and found is the name it was given.
+ */
+export function mailboxSetup(env = globalThis.process?.env ?? {}) {
+  const simplify = (k) => k.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  return MAILBOX_VARIABLES.map((name) => {
+    if (env[name] !== undefined) return { name, status: cleanEnv(env[name]) ? 'ok' : 'empty' };
+    const found = Object.keys(env).find((k) => simplify(k) === name);
+    return found ? { name, status: 'misnamed', found } : { name, status: 'missing' };
+  });
+}
+
 export function mailboxConfig(env = process.env) {
   const tenant = cleanEnv(env.MS_TENANT_ID);
   const clientId = cleanEnv(env.MS_CLIENT_ID);

@@ -3,6 +3,7 @@
 import { requireAdmin, requirePerm } from './auth.js';
 import { FILE_TYPES, fromBase64, MAX_INVOICE_BYTES, norm, saveReadInvoice } from './routes/invoices.js';
 import { badRequest, notFound } from './util.js';
+import { mailboxSetup } from './mailbox.js';
 
 const KEY = { site: 'invoice_inbox_site', since: 'invoice_inbox_since', lastCheck: 'invoice_inbox_last_check', lastError: 'invoice_inbox_last_error' };
 const MAX_ATTEMPTS = 3;
@@ -123,6 +124,7 @@ export function startInvoiceInbox(db, { mailbox, reader, minutes = 10, log = con
 export function registerInvoiceInboxRoutes(router, db, { mailbox, reader }) {
   const status = () => ({
     configured: !!mailbox,
+    ...(mailbox ? {} : { setup: mailboxSetup() }),
     mailbox: mailbox?.address ?? null,
     reader_ready: !!reader,
     since: getSetting(db, KEY.since),

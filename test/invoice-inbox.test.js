@@ -103,3 +103,15 @@ test('Microsoft 365: signs in, reads only new emails with attachments, and expla
   graphStatus = 403;
   await assert.rejects(box.listNew('2026-01-02T00:00:00Z'), /Mail\.Read application permission/);
 });
+
+test('while the inbox is not connected, Brewly says which settings it can and can’t see (names only)', async () => {
+  const { mailboxSetup } = await import('../src/mailbox.js');
+  const setup = mailboxSetup({ MS_TENANT_ID: 'abc', 'MS_CLIENT_ID ': 'def', ms_client_secret: 'secret!', INVOICE_MAILBOX: '  ' });
+  assert.deepEqual(setup, [
+    { name: 'MS_TENANT_ID', status: 'ok' },
+    { name: 'MS_CLIENT_ID', status: 'misnamed', found: 'MS_CLIENT_ID ' },
+    { name: 'MS_CLIENT_SECRET', status: 'misnamed', found: 'ms_client_secret' },
+    { name: 'INVOICE_MAILBOX', status: 'empty' },
+  ]);
+  assert.ok(!JSON.stringify(setup).includes('secret!'), 'values are never included');
+});

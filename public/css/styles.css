@@ -1384,3 +1384,4 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
 [data-drop].drop-over { outline: 2px dashed var(--brand); outline-offset: -3px; background: var(--brand-soft) !important; }
 .clock-actions { display: inline-flex; gap: 0.5rem; white-space: nowrap; margin-left: 0.4rem; }
 .clock-actions .link-btn.move-card { margin: 0; }
+.inbox-setup ul { margin: 0.4rem 0; padding-left: 1.1rem; } .inbox-setup li { margin: 0.15rem 0; }

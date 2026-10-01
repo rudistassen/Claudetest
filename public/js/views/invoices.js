@@ -86,13 +86,27 @@ export async function renderList(ctx) {
 
 const EMAIL_STATUS = { imported: ['Added', 'badge-received'], skipped: ['Skipped', ''], failed: ['Couldn’t read', 'badge-cancelled'] };
 
+// What Brewly can see of the inbox settings in Railway (names only), so a missing or misspelt one stands out.
+function setupChecklist(setup) {
+  if (!setup?.some((v) => v.status !== 'missing')) return '';
+  const line = (v) => {
+    if (v.status === 'ok') return `<li class="tone-good">✓ <code>${esc(v.name)}</code> found</li>`;
+    if (v.status === 'empty') return `<li class="tone-bad">✗ <code>${esc(v.name)}</code> is there but empty – paste its value in again</li>`;
+    if (v.status === 'misnamed') return `<li class="tone-bad">✗ <code>${esc(v.name)}</code> not found – there’s one called <code>${esc(v.found)}</code>${/\s/.test(v.found) ? ' (it has a space in it)' : v.found !== v.found.toUpperCase() ? ' (it needs capital letters)' : ''}; rename it to exactly <code>${esc(v.name)}</code></li>`;
+    return `<li class="tone-bad">✗ <code>${esc(v.name)}</code> not found – add it in Railway → Variables</li>`;
+  };
+  return `<div class="notice inbox-setup"><strong>Nearly there – Brewly can see some of the settings:</strong><ul>${setup.map(line).join('')}</ul>
+    <span class="small">After changing Variables in Railway, click <strong>Deploy</strong> (or <strong>Apply changes</strong>) and wait a couple of minutes.</span></div>`;
+}
+
 function inboxCard(inbox, state) {
   if (!inbox.configured) {
-    return `<details class="card inbox-card"><summary><strong>✉ Invoice inbox</strong> <span class="muted small">– have emailed invoices added automatically</span></summary>
+    return `<details class="card inbox-card" ${inbox.setup?.some((v) => v.status !== 'missing') ? 'open' : ''}><summary><strong>✉ Invoice inbox</strong> <span class="muted small">– have emailed invoices added automatically</span></summary>
       <p>Invoices emailed to a shared Microsoft 365 inbox (for example <em>invoices@yourcompany.co.uk</em>) can be read and added here on their own, every few minutes.
       To switch it on, an admin registers Brewly in Microsoft Entra with permission to read that mailbox, then adds these settings in Railway:</p>
       <ul class="small"><li><code>MS_TENANT_ID</code>, <code>MS_CLIENT_ID</code>, <code>MS_CLIENT_SECRET</code> – from the app registration</li>
         <li><code>INVOICE_MAILBOX</code> – the shared inbox’s email address</li></ul>
+      ${setupChecklist(inbox.setup)}
       <p class="muted small">Brewly only reads the mailbox – it never sends, moves or deletes emails.</p></details>`;
   }
   const sites = state.locations.filter((l) => l.active);

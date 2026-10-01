@@ -6,7 +6,7 @@ import { createApp, publicDir } from './server.js';
 import { appVersion } from './app-version.js';
 import { brevoMailer, emailConfig } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
-import { graphMailbox, mailboxConfig } from './mailbox.js';
+import { graphMailbox, mailboxConfig, mailboxSetup } from './mailbox.js';
 import { startInvoiceInbox } from './invoice-inbox.js';
 import { googlePlaces, placesConfig, startReviewSync } from './google-reviews.js';
 import { startReportScheduler } from './reports.js';
@@ -82,6 +82,13 @@ if (mailbox && invoiceReader) {
   console.log(`Invoice inbox connected (${inboxSettings.address}); checking every ${inboxSettings.minutes} minutes.`);
   startInvoiceInbox(db, { mailbox, reader: invoiceReader, minutes: inboxSettings.minutes });
 } else if (mailbox) console.log('Invoice inbox is set up, but needs ANTHROPIC_API_KEY to read invoices.');
+else {
+  // Some of the inbox settings are there but not all: say which (names only), to help spot a typo.
+  const setup = mailboxSetup();
+  if (setup.some((v) => v.status !== 'missing')) {
+    console.log(`Invoice inbox not connected – ${setup.filter((v) => v.status !== 'ok').map((v) => `${v.name} ${v.status === 'misnamed' ? `(found "${v.found}" instead)` : v.status}`).join(', ')}.`);
+  }
+}
 
 // Google reviews for each site.
 const placesSettings = placesConfig();
