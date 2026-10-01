@@ -388,6 +388,8 @@ export async function render(ctx) {
   // Admins can put anyone on at any site; managers only run their own site.
   // Any site this person can access (admins: every site).
   const siteOptions = state.locations.filter((l) => l.active).map((l) => [l.id, l.name]);
+  // Each site's most used shift times, fetched once per page.
+  const commonTimes = new Map();
   const shiftModal = (shift, defaults = {}) => {
     const s = shift ?? { start_time: '07:00', end_time: '15:00', break_minutes: 30, ...defaults };
     const person = data.staff.find((u) => u.id === s.user_id);
@@ -407,8 +409,9 @@ export async function render(ctx) {
         <div class="row">
           ${field('Start', input('start_time', s.start_time, 'type="time" required'))}
           ${field('End', input('end_time', s.end_time, 'type="time" required'))}
-          ${field('Unpaid break (mins)', input('break_minutes', s.break_minutes, 'type="number" min="0" step="5"'))}
         </div>
+        <div class="time-presets" hidden><span class="muted small">Most used here:</span></div>
+        ${field('Unpaid break (mins)', input('break_minutes', s.break_minutes, 'type="number" min="0" step="5"'))}
         <input type="hidden" name="position" value="${esc(s.position ?? person?.position ?? '')}">
         ${field('Notes', textarea('notes', s.notes))}
         ${shift ? '<details class="shift-history"><summary>History of this shift</summary><div id="shift-history" class="muted small">Loading…</div></details>' : ''}`,
@@ -445,6 +448,37 @@ export async function render(ctx) {
     };
     ['user_id', 'date', 'start_time', 'end_time'].forEach((n) => form[n].addEventListener('change', check));
     check();
+    // Quick times: the site's most used shift times over the last 4 weeks; clicking one fills in the times and break.
+    const presets = form.querySelector('.time-presets');
+    const showPresets = async () => {
+      const siteNow = Number(form.location_id.value || site);
+      let times = commonTimes.get(siteNow);
+      if (!times) {
+        try { times = await api(`/rota/common-times?location_id=${siteNow}`); } catch { times = []; }
+        commonTimes.set(siteNow, times);
+      }
+      if (!form.isConnected || Number(form.location_id.value || site) !== siteNow) return;
+      presets.querySelectorAll('button').forEach((b) => b.remove());
+      presets.insertAdjacentHTML('beforeend', times.map((t) => `<button type="button" class="chip-btn" data-start="${t.start_time}" data-end="${t.end_time}" data-break="${t.break_minutes}"
+        title="Used ${t.count} time${t.count === 1 ? '' : 's'} in the last 4 weeks${t.break_minutes ? `, usually with a ${t.break_minutes}-minute break` : ''}">${t.start_time}–${t.end_time}</button>`).join(''));
+      presets.hidden = !times.length;
+      mark();
+    };
+    // The button matching the times entered is highlighted.
+    const mark = () => presets.querySelectorAll('button').forEach((b) => b.classList.toggle('is-on', b.dataset.start === form.start_time.value && b.dataset.end === form.end_time.value));
+    presets.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      form.start_time.value = b.dataset.start;
+      form.end_time.value = b.dataset.end;
+      form.break_minutes.value = b.dataset.break;
+      mark();
+      check();
+    });
+    form.start_time.addEventListener('input', mark);
+    form.end_time.addEventListener('input', mark);
+    form.location_id.addEventListener('change', showPresets);
+    showPresets();
     form.querySelector('#publish-one')?.addEventListener('click', () => publishOne(shift));
     form.querySelector('.shift-history')?.addEventListener('toggle', async (e) => {
       const box = form.querySelector('#shift-history');

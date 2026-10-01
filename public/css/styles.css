@@ -1385,3 +1385,8 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
 .clock-actions { display: inline-flex; gap: 0.5rem; white-space: nowrap; margin-left: 0.4rem; }
 .clock-actions .link-btn.move-card { margin: 0; }
 .inbox-setup ul { margin: 0.4rem 0; padding-left: 1.1rem; } .inbox-setup li { margin: 0.15rem 0; }
+/* Shift window: quick times */
+.time-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: -0.3rem 0 0.8rem; }
+.chip-btn { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 99px; padding: 0.3rem 0.75rem; font: inherit; font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.chip-btn:hover { border-color: var(--brand); }
+.chip-btn.is-on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-deep); }

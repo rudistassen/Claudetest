@@ -162,6 +162,29 @@ export function registerRotaRoutes(router, db) {
     return [resolveLocation(req, raw)];
   }
 
+  /**
+   * The shift window's quick times: a site's five most used shift times over the last 4 weeks (each with the
+   * break it usually has), most used first.
+   */
+  router.get('/rota/common-times', requirePerm('rota.edit'), (req, res) => {
+    const locationId = resolveLocation(req, req.query.location_id);
+    const rows = db.prepare(`SELECT start_time, end_time, break_minutes, COUNT(*) AS n FROM draft_shifts
+      WHERE location_id = ? AND date BETWEEN ? AND ? GROUP BY start_time, end_time, break_minutes`)
+      .all(locationId, addDays(today(), -27), today());
+    const byTime = new Map();
+    for (const r of rows) {
+      const k = `${r.start_time}|${r.end_time}`;
+      const t = byTime.get(k) ?? { start_time: r.start_time, end_time: r.end_time, count: 0, breaks: [] };
+      t.count += r.n;
+      t.breaks.push(r);
+      byTime.set(k, t);
+    }
+    res.json([...byTime.values()]
+      .sort((a, b) => b.count - a.count || a.start_time.localeCompare(b.start_time))
+      .slice(0, 5)
+      .map(({ breaks, ...t }) => ({ ...t, break_minutes: breaks.sort((a, b) => b.n - a.n)[0].break_minutes ?? 0 })));
+  });
+
   router.get('/rota', requirePerm('rota.view', 'rota.edit'), (req, res) => {
     const all = req.query.location_id === 'all';
     const ids = rotaSites(req, req.query.location_id);
