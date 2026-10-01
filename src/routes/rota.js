@@ -350,7 +350,7 @@ export function registerRotaRoutes(router, db) {
     res.json({ discarded: n });
   });
 
-  // The change log (Team → Rota changes): newest first, for the dates the changes were made. Filter by site, the
+  // The change log (Rota → Rota changes): newest first, for the dates the changes were made. Filter by site, the
   // person whose shift it was, the kind of change, or one shift (?shift_id=, for its history).
   router.get('/rota/log', requirePerm('rota.edit', 'rota.publish'), (req, res) => {
     const shiftId = req.query.shift_id ? Number(req.query.shift_id) : null;

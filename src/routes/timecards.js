@@ -1,6 +1,6 @@
 // Moving a clock-in (Square timecard) to another site, for when someone clocked in on the wrong site's till.
 // The change is made in Square, so Square, payroll and Brewly's labour figures all agree, and it's recorded
-// under Team → Rota changes. Breaks can be added, changed or removed the same way.
+// under Rota → Rota changes. Breaks can be added, changed or removed the same way.
 import { requirePerm } from '../auth.js';
 import { summariseTimecard } from '../square.js';
 import { BUSINESS_TZ, badRequest, forbidden, HttpError, id, localDate, notFound, zonedTimeUTC } from '../util.js';

@@ -313,7 +313,7 @@ CREATE TABLE IF NOT EXISTS google_ratings (
   PRIMARY KEY (location_id, date)
 );
 
--- The rota's change log (Team → Rota changes). Names are copied in as they were at the time.
+-- The rota's change log (Rota → Rota changes). Names are copied in as they were at the time.
 CREATE TABLE IF NOT EXISTS rota_log (
   id INTEGER PRIMARY KEY,
   at TEXT NOT NULL DEFAULT (datetime('now')),
