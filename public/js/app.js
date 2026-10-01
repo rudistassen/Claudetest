@@ -92,9 +92,8 @@ const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(..
 // The side menu: Dashboard, then headed groups. Items someone can't use are hidden, and so is a group left empty.
 function navGroups() {
   return [
-    [null, [['dashboard', 'Dashboard', '▦']]],
-    ['Team', [
-      ['mybrew', 'My Brew', '☕'],
+    [null, [['dashboard', 'Dashboard', '▦'], ['mybrew', 'My Brew', '☕']]],
+    ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
       ['timeoff', 'Time off', '☀'],
@@ -133,7 +132,7 @@ function navGroups() {
 }
 
 // Each menu section's colour.
-const NAV_TONES = { Team: 'team', Trail: 'trail', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
+const NAV_TONES = { Rota: 'team', Trail: 'trail', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
 
 // The number of news posts waiting for this person to confirm they've read them, shown on My Brew in the menu.
 let newsUnread = { count: 0, at: 0, user: null };
@@ -216,7 +215,7 @@ function renderShell() {
       <a class="brand" href="#/dashboard" aria-label="Brewly – dashboard">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <nav class="topnav" aria-label="Main menu">
         ${groups.map(([heading, items]) => {
-          if (!heading) return items.map(([p, label]) => `<a href="#/${p}" class="topnav-btn ${active === p ? 'is-active' : ''}">${label}</a>`).join('');
+          if (!heading) return items.map(([p, label]) => `<a href="#/${p}" class="topnav-btn ${active === p ? 'is-active' : ''}">${label}${p === 'mybrew' ? '<span class="nav-dot" data-news-dot hidden></span>' : ''}</a>`).join('');
           const here = items.some(([p]) => p === active);
           const hasNews = items.some(([p]) => p === 'mybrew');
           return `<div class="topnav-group" data-tone="${NAV_TONES[heading] ?? ''}">

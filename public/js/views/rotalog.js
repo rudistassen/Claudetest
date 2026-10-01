@@ -1,7 +1,7 @@
 import { addDays, api, esc, fmtDate, qs, siteFilter, siteScope, todayISO } from '../lib.js';
 import { downloadFile, toCsv } from './product-import.js';
 
-// Team → Rota changes: an audit log of who added, changed, removed or published shifts, and when.
+// Rota → Rota changes: an audit log of who added, changed, removed or published shifts, and when.
 
 export const ACTIONS = {
   add: ['Added', 'log-add'],

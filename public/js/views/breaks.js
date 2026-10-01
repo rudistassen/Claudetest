@@ -31,7 +31,7 @@ export function wireMoveClockIn(el, ctx) {
       submitLabel: 'Move clock-in',
       body: `<p>${esc(b.dataset.who)} clocked in at <strong>${esc(fromName)}</strong> (${esc(b.dataset.when)}). Which site were they actually working at?</p>
         <label class="field"><span>Site</span><select name="location_id" required>${sites.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></label>
-        <p class="muted small">This changes the timecard in Square too, so payroll and each site’s labour costs match. It’s recorded under Team → Rota changes.</p>`,
+        <p class="muted small">This changes the timecard in Square too, so payroll and each site’s labour costs match. It’s recorded under Rota → Rota changes.</p>`,
       onSubmit: async (v) => {
         const r = await api(`/timecards/${encodeURIComponent(b.dataset.moveCard)}/location`, { method: 'PUT', body: { location_id: Number(v.location_id) } });
         toast(`Clock-in moved to ${r.location_name}`);
@@ -91,7 +91,7 @@ async function openBreaksEditor(ctx, cardId, who) {
       <div class="break-rows">${data.breaks.map(row).join('')}</div>
       <p class="muted small break-none" ${data.breaks.length ? 'hidden' : ''}>No breaks on this clock-in.</p>
       ${data.break_types.length ? '<button type="button" class="btn btn-small" data-add>+ Add break</button>' : ''}
-      <p class="muted small">Saving changes the timecard in Square too, so unpaid breaks come off their pay. It’s recorded under Team → Rota changes.</p>`,
+      <p class="muted small">Saving changes the timecard in Square too, so unpaid breaks come off their pay. It’s recorded under Rota → Rota changes.</p>`,
     onSubmit: async () => {
       const breaks = [...form.querySelectorAll('.break-edit')].map((r) => ({
         ...(r.dataset.id ? { id: r.dataset.id } : {}),
