@@ -1444,12 +1444,18 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
 :root { --prev-bar: #a3a8b0; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --prev-bar: #6b717a; } }
 :root[data-theme="dark"] { --prev-bar: #6b717a; }
-.dash-hero { display: grid; grid-template-columns: minmax(220px, 1fr) 3fr; gap: 0.75rem; margin-bottom: 0.75rem; }
+.dash-hero { display: grid; grid-template-columns: minmax(220px, 1fr) 3fr; grid-template-rows: auto auto; gap: 0.75rem; margin-bottom: 0.75rem; }
+.dash-hourly { grid-column: 2; grid-row: 1 / span 2; }
 .dash-hero .kpi { margin: 0; }
 .dash-hourly { margin: 0; padding: 0.8rem 1rem 0.4rem; min-width: 0; }
 .dash-hourly-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.2rem 1rem; }
 .dash-hourly-head h2 { font-size: 0.9rem; font-weight: 600; margin: 0 0 0.3rem; }
 .dash-hourly-head .chart-legend { margin: 0 0 0.3rem; }
 .chart-legend i.chart-legend-bar { width: 10px; height: 10px; border-radius: 3px; }
-@media (max-width: 700px) { .dash-hero { grid-template-columns: 1fr; gap: 0.5rem; margin-bottom: 0.5rem; } }
-@media print { .dash-hero { grid-template-columns: 1fr 3fr; } }
+@media (max-width: 700px) {
+  /* Phones: gross sales and labour side by side, the chart full width underneath. */
+  .dash-hero { grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .dash-hourly { grid-column: 1 / -1; grid-row: auto; }
+  .dash-hero .kpi-vs br { display: none; }
+}
+@media print { .dash-hero { grid-template-columns: 1fr 3fr; } .dash-hourly { grid-column: 2; grid-row: 1 / span 2; } }

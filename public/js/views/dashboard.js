@@ -279,6 +279,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
     ${hasSales ? `<div class="dash-hero">
       <div class="kpi kpi-feature" data-icon="£"><span>Gross sales today</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
         <small class="kpi-vs">${versusLine(gross.now, gross.then)}</small></div>
+      <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong><small>of net sales so far</small></div>
       <section class="card dash-hourly">
         <header class="dash-hourly-head"><h2>Gross sales by hour</h2>
           <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>Today</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week</span></div></header>
@@ -286,7 +287,6 @@ export async function render({ el, state, navigate, stale, rerender }) {
       </section>
     </div>` : ''}
     <div class="kpis">
-      ${hasSales ? `<div class="kpi kpi-${labourTone(labourPct)}" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
       <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
       <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks today</span><strong>${totals.fails}</strong></div>
       ${clockedInNow === null ? '' : `<div class="kpi" data-icon="☺"><span>Clocked in now</span><strong>${clockedInNow}</strong><small>of ${totals.staff} on today’s rota</small></div>`}
