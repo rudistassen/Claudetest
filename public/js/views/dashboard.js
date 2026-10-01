@@ -249,6 +249,9 @@ export async function render({ el, state, navigate, stale, rerender }) {
   // Today's sales and labour % for the whole group, matching the by-site panel and the Trading page.
   const hasSales = !!tradeToday && tradeToday.square_connected;
   const todayTotals = tradeToday?.totals;
+  // Everyone clocked in right now across the sites (from Square), or null when clock-ins aren't available.
+  const clockedInNow = data.labour_synced && locs.some((l) => l.clock_ins)
+    ? locs.reduce((n, l) => n + (l.clock_ins ?? []).filter((c) => !c.end).length, 0) : null;
   // Gross sales so far today against the same weekday last week up to the same time.
   const withGross = locs.filter((l) => l.gross_today !== null);
   const gross = {
@@ -280,7 +283,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
       <div class="kpi kpi-${labourTone(labourPct)}" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
       <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
       <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks today</span><strong>${totals.fails}</strong></div>
-      <div class="kpi" data-icon="☺"><span>Staff on shift today</span><strong>${totals.staff}</strong></div>
+      ${clockedInNow === null ? '' : `<div class="kpi" data-icon="☺"><span>Clocked in now</span><strong>${clockedInNow}</strong><small>of ${totals.staff} on today’s rota</small></div>`}
     </div>` : ''}
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
     ${locs.some((l) => l.roster) ? whosIn(locs, data) : ''}
