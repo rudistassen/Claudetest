@@ -151,6 +151,46 @@ export function barChart(container, opts) {
 }
 
 /**
+ * Two bars side by side per x (e.g. today and the same day last week), on one y-axis, with a 2px gap between
+ * the pair and one tooltip per x listing both.
+ * opts: { data, label(d), title(d), series: [{ name, value(d), color }] (2), fmt(v), fmtAxis(v), height, ariaLabel }
+ */
+export function pairedBarChart(container, opts) {
+  const { data, series, height = 220 } = opts;
+  mount(container, () => {
+    const max = Math.max(0, ...data.flatMap((d) => series.map((s) => s.value(d) ?? 0)));
+    const { svg, plotW, y } = frame(container, height, max, opts.fmtAxis ?? opts.fmt);
+    svg.setAttribute('aria-label', opts.ariaLabel ?? '');
+    const band = plotW / Math.max(1, data.length);
+    const bw = Math.max(2, Math.min(18, (band * 0.78 - 2) / 2));
+    const xAt = (i) => PAD.left + band * i + band / 2;
+    const base = y(0);
+    data.forEach((d, i) => {
+      const bars = series.map((s, k) => {
+        const v = s.value(d) ?? 0;
+        const x = k === 0 ? xAt(i) - bw - 1 : xAt(i) + 1;
+        return svgEl('path', { d: barPath(x, y(v), bw, base), class: 'chart-bar', fill: s.color });
+      });
+      const hit = svgEl('rect', { x: PAD.left + band * i, y: PAD.top, width: band, height: base - PAD.top, class: 'chart-hit', tabindex: 0 });
+      hit.setAttribute('aria-label', `${opts.title(d)}: ${series.map((s) => `${s.name} ${opts.fmt(s.value(d) ?? 0)}`).join(', ')}`);
+      const on = (e) => {
+        bars.forEach((b) => b.classList.add('is-hot'));
+        const r = hit.getBoundingClientRect();
+        showTip(opts.title(d), series.map((s) => ({ value: opts.fmt(s.value(d) ?? 0), label: s.name, color: s.color })), e.clientX ?? r.left + r.width / 2, e.clientY ?? r.top + 20);
+      };
+      const off = () => { bars.forEach((b) => b.classList.remove('is-hot')); hideTip(); };
+      hit.addEventListener('pointermove', on);
+      hit.addEventListener('pointerleave', off);
+      hit.addEventListener('focus', on);
+      hit.addEventListener('blur', off);
+      svg.append(...bars, hit);
+    });
+    xLabels(svg, data.map(opts.label), xAt, height, plotW);
+    container.replaceChildren(svg);
+  });
+}
+
+/**
  * Multi-series line chart on one y-axis, with a crosshair that snaps to the nearest x and a tooltip listing
  * every series. Gaps (null values) break the line.
  * opts: { data, label(d), title(d), series: [{ name, value(d), color }], fmt(v), reference?: { value }, height }

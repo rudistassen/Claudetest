@@ -1,4 +1,4 @@
-import { attachTip } from '../charts.js';
+import { attachTip, pairedBarChart } from '../charts.js';
 import { addDays, api, esc, fmtDate, isDemo, money, siteColour, toast, todayISO } from '../lib.js';
 import { breakLine, clockInActions, wireClockInActions } from './breaks.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
@@ -276,10 +276,17 @@ export async function render({ el, state, navigate, stale, rerender }) {
     </div>
     <p class="print-only print-meta">Brewly dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
-    <div class="kpis">
-      ${hasSales ? `<div class="kpi kpi-feature" data-icon="£"><span>Gross sales today</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
+    ${hasSales ? `<div class="dash-hero">
+      <div class="kpi kpi-feature" data-icon="£"><span>Gross sales today</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
         <small class="kpi-vs">${versusLine(gross.now, gross.then)}</small></div>
-      <div class="kpi kpi-${labourTone(labourPct)}" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
+      <section class="card dash-hourly">
+        <header class="dash-hourly-head"><h2>Gross sales by hour</h2>
+          <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>Today</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week</span></div></header>
+        <div id="hourly-chart" class="chart-box"><div class="loading">Loading…</div></div>
+      </section>
+    </div>` : ''}
+    <div class="kpis">
+      ${hasSales ? `<div class="kpi kpi-${labourTone(labourPct)}" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong></div>` : ''}
       <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
       <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks today</span><strong>${totals.fails}</strong></div>
       ${clockedInNow === null ? '' : `<div class="kpi" data-icon="☺"><span>Clocked in now</span><strong>${clockedInNow}</strong><small>of ${totals.staff} on today’s rota</small></div>`}
@@ -296,6 +303,29 @@ export async function render({ el, state, navigate, stale, rerender }) {
     <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
+  // Gross sales by hour: today next to the same weekday last week.
+  const chartBox = el.querySelector('#hourly-chart');
+  if (chartBox) {
+    api(`/trading/hourly-compare?date=${d0}`).then((h) => {
+      if (stale() || !chartBox.isConnected) return;
+      if (!h.hours.length) { chartBox.innerHTML = '<p class="muted small">No sales synced yet today.</p>'; return; }
+      const hh = (n) => String(n).padStart(2, '0');
+      const whole = (v) => (v >= 1000 ? `£${(v / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })}k` : `£${Math.round(v)}`);
+      pairedBarChart(chartBox, {
+        data: h.hours,
+        label: (x) => hh(x.hour),
+        title: (x) => `${hh(x.hour)}:00–${hh(x.hour + 1)}:00`,
+        series: [
+          { name: 'today', value: (x) => x.today, color: 'var(--series-1)' },
+          { name: `${fmtDate(h.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })}`, value: (x) => x.last_week, color: 'var(--prev-bar)' },
+        ],
+        fmt: money,
+        fmtAxis: whole,
+        height: 190,
+        ariaLabel: 'Gross sales by hour, today and the same day last week',
+      });
+    }).catch(() => { if (chartBox.isConnected) chartBox.innerHTML = '<p class="muted small">Couldn’t load the hourly chart.</p>'; });
+  }
   wireClockInActions(el, { state, rerender });
   el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
     try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }

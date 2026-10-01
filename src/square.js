@@ -322,9 +322,9 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
       d.tips += s.tips;
       if (s.isSale) d.orders += 1;
       const hk = `${dk}|${s.hour}`;
-      const h = hourly.get(hk) ?? { location_id: locationId, date: s.date, hour: s.hour, net: 0, orders: 0 };
+      const h = hourly.get(hk) ?? { location_id: locationId, date: s.date, hour: s.hour, net: 0, gross: 0, orders: 0 };
       if (s.isSale) h.orders += 1;
-      for (const l of s.lines) h.net += l.net;
+      for (const l of s.lines) { h.net += l.net; h.gross += l.gross; }
       hourly.set(hk, h);
       for (const l of s.lines) {
         d.net += l.net;
@@ -355,8 +355,8 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
       const insItem = db.prepare(`INSERT INTO sales_items (location_id, date, item_key, catalog_object_id, name, variation_name, quantity, net_sales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
       for (const it of items.values()) insItem.run(it.location_id, it.date, it.key, it.catalog_object_id, it.name, it.variation_name, round2(it.quantity), round2(it.net));
       db.prepare(`DELETE FROM sales_hourly WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`).run(from, to, ...ids);
-      const insHour = db.prepare(`INSERT INTO sales_hourly (location_id, date, hour, net_sales, orders) VALUES (?, ?, ?, ?, ?)`);
-      for (const h of hourly.values()) insHour.run(h.location_id, h.date, h.hour, round2(h.net), h.orders);
+      const insHour = db.prepare(`INSERT INTO sales_hourly (location_id, date, hour, net_sales, gross_sales, orders) VALUES (?, ?, ?, ?, ?, ?)`);
+      for (const h of hourly.values()) insHour.run(h.location_id, h.date, h.hour, round2(h.net), round2(h.gross), h.orders);
 
       if (labour.error) return;
       saveTeamMembers(db, labour.members);

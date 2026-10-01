@@ -27,6 +27,39 @@ export function reportScope(db, req, defaultDays) {
 
 export function registerTradingRoutes(router, db, square) {
   /**
+   * Gross sales by hour for one day (default today) next to the same weekday the week before, for the
+   * dashboard's chart. Hours synced before gross was kept per hour are estimated from net, using that day's
+   * gross-to-net ratio.
+   */
+  router.get('/trading/hourly-compare', requirePerm('sales.view'), (req, res) => {
+    const day = date(req.query.date, 'date') ?? today();
+    const before = addDays(day, -7);
+    const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
+    const inList = ids.map(() => '?').join(', ');
+    const ratio = new Map(db.prepare(`SELECT location_id, date, gross_sales, net_sales FROM sales_daily
+      WHERE date IN (?, ?) AND location_id IN (${inList})`).all(day, before, ...ids)
+      .map((r) => [`${r.location_id}|${r.date}`, r.net_sales ? r.gross_sales / r.net_sales : 1]));
+    const byHour = new Map();
+    for (const r of db.prepare(`SELECT location_id, date, hour, net_sales, gross_sales FROM sales_hourly
+      WHERE date IN (?, ?) AND location_id IN (${inList})`).all(day, before, ...ids)) {
+      const gross = r.gross_sales ?? r.net_sales * (ratio.get(`${r.location_id}|${r.date}`) ?? 1);
+      const h = byHour.get(r.hour) ?? { hour: r.hour, today: 0, last_week: 0 };
+      if (r.date === day) h.today += gross; else h.last_week += gross;
+      byHour.set(r.hour, h);
+    }
+    const hours = [...byHour.values()].filter((h) => h.today || h.last_week).sort((a, b) => a.hour - b.hour);
+    // Every hour from the first to the last with sales, so quiet hours show as gaps.
+    const filled = [];
+    if (hours.length) {
+      for (let h = hours[0].hour; h <= hours[hours.length - 1].hour; h++) {
+        const v = byHour.get(h) ?? { hour: h, today: 0, last_week: 0 };
+        filled.push({ hour: h, today: round2(v.today), last_week: round2(v.last_week) });
+      }
+    }
+    res.json({ date: day, compare_date: before, hours: filled });
+  });
+
+  /**
    * Labour % by day of the week and hour of the day: labour cost ÷ net sales in each slot, added up over the
    * period. Only site-days with Square sales count, so closed or unsynced days don't skew it.
    */
