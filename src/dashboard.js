@@ -75,6 +75,34 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
     ...breakInfo(t, breaksToday.get(t.id), dayEnd),
     ...(att.byCard.get(t.id) ?? {}),
   }));
+  // Everyone on the published rota at a site today, each with where they are now: 'due' (not started yet),
+  // 'in', 'on_break', 'done' (clocked out), 'late' (shift started, not clocked in), 'missed' (shift over, never
+  // clocked in), 'elsewhere' (clocked in at another site) or 'rota' (no Square clock-ins to compare with).
+  // Then anyone who clocked in here without a shift ('extra').
+  const siteName = new Map(locations.map((l) => [l.id, l.name]));
+  const roster = (locationId, att) => {
+    const out = att.shifts.map((s) => {
+      const t = att.cardForShift.get(s.id);
+      const base = { name: s.name, rota: `${s.start_time}–${s.end_time}` };
+      if (t) {
+        const status = t.end_at ? 'done' : breakInfo(t, breaksToday.get(t.id), dayEnd).on_break ? 'on_break' : 'in';
+        const late = att.byCard.get(t.id)?.late_minutes ?? 0;
+        return { ...base, status, clock: `${timeFormat.format(new Date(t.start))}–${t.end_at ? timeFormat.format(new Date(t.end)) : 'now'}`, late_minutes: late };
+      }
+      if (!labourSynced) return { ...base, status: 'rota' };
+      if (att.clockedIn.has(s.user_id)) {
+        const other = cardsToday.find((c) => c.user_id === s.user_id && c.location_id !== locationId);
+        if (other) return { ...base, status: 'elsewhere', where: siteName.get(other.location_id) ?? 'another site' };
+      }
+      if (s.start > dayEnd) return { ...base, status: 'due' };
+      return { ...base, status: s.end <= dayEnd ? 'missed' : 'late', late_minutes: Math.floor((Math.min(dayEnd, s.end) - s.start) / 60000) };
+    });
+    for (const t of cardsToday) {
+      if (t.location_id !== locationId || !att.byCard.get(t.id)?.not_on_rota) continue;
+      out.push({ name: t.name, rota: null, status: 'extra', clock: `${timeFormat.format(new Date(t.start))}–${t.end_at ? timeFormat.format(new Date(t.end)) : 'now'}` });
+    }
+    return out;
+  };
 
   const cards = locations.map((loc) => {
     const tasks = tasksAt(db, loc.id);
@@ -108,7 +136,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       ...(seeClockIns ? (() => {
         const att = attendanceAt(loc.id);
         // People missing from their shift only matter once Square clock-ins are coming through.
-        return { clock_ins: clockIns(loc.id, att), not_clocked_in: labourSynced ? att.missing : [] };
+        return { clock_ins: clockIns(loc.id, att), not_clocked_in: labourSynced ? att.missing : [], roster: roster(loc.id, att) };
       })() : {}),
     };
   });

@@ -1390,3 +1390,26 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
 .chip-btn { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 99px; padding: 0.3rem 0.75rem; font: inherit; font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
 .chip-btn:hover { border-color: var(--brand); }
 .chip-btn.is-on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-deep); }
+
+/* Dashboard: who's in today */
+.whos-in-table td:last-child { width: 100%; }
+.roster { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.roster-chip { display: inline-flex; flex-direction: column; gap: 0.05rem; padding: 0.3rem 0.6rem; border-radius: 8px; border: 1px solid var(--border); border-left-width: 4px; background: var(--surface); font-size: 0.8rem; line-height: 1.25; min-width: 7.5rem; }
+.roster-name { font-weight: 700; }
+.roster-meta { display: flex; flex-wrap: wrap; gap: 0 0.4rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.roster-meta em { font-style: normal; font-weight: 600; }
+.roster-chip.is-in { border-left-color: var(--good); }
+.roster-chip.is-in em { color: var(--good); }
+.roster-chip.is-break { border-left-color: var(--accent); }
+.roster-chip.is-break em { color: var(--accent); }
+.roster-chip.is-done { border-left-color: var(--border); opacity: 0.75; }
+.roster-chip.is-due { border-left-color: var(--border); border-style: dashed; border-left-style: solid; }
+.roster-chip.is-late { border-left-color: var(--bad); background: var(--bad-soft); }
+.roster-chip.is-late em { color: var(--bad); }
+.roster-chip.is-other { border-left-color: var(--warn); background: var(--warn-soft); }
+.roster-chip.is-other em { color: var(--warn); }
+/* On phones: the counts side by side, and everyone's chips across the full width. */
+table.stacked.whos-in-table tr { grid-template-columns: repeat(3, 1fr); }
+table.stacked.whos-in-table td:last-child { grid-column: 1 / -1; margin-top: 0.3rem; }
+table.stacked.whos-in-table td:last-child::before { display: none; }
+@media (max-width: 700px) { .roster-chip { flex: 1 1 9.5rem; min-width: 0; } }

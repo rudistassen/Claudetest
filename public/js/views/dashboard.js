@@ -22,6 +22,47 @@ function versus(now, then, { goodUp = true } = {}) {
   return `<span class="${tone}">${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%</span><br><span class="muted">${money(then)} last week</span>`;
 }
 
+// "Who's in today": for each site, everyone on today's rota and where they are now, then anyone clocked in
+// without a shift.
+const ROSTER = {
+  in: ['In', 'is-in'], on_break: ['On break', 'is-break'], done: ['Finished', 'is-done'], due: ['Due', 'is-due'],
+  late: ['Not in', 'is-late'], missed: ['Didn’t clock in', 'is-late'], elsewhere: ['Elsewhere', 'is-other'],
+  extra: ['Not on rota', 'is-other'], rota: ['', 'is-due'],
+};
+function rosterChip(p) {
+  const [label, tone] = ROSTER[p.status] ?? ['', ''];
+  const detail = p.status === 'in' || p.status === 'on_break' || p.status === 'done' || p.status === 'extra'
+    ? `${p.clock}${p.late_minutes ? ` · ${mins(p.late_minutes)} late` : ''}`
+    : p.status === 'late' ? `${mins(p.late_minutes)} late`
+      : p.status === 'elsewhere' ? `at ${p.where}`
+        : '';
+  return `<li class="roster-chip ${tone}" title="${esc([p.rota ? `Rota ${p.rota}` : 'Not on the rota', label, detail].filter(Boolean).join(' · '))}">
+    <span class="roster-name">${esc(p.name)}</span>
+    <span class="roster-meta">${p.rota ? `<span>${p.rota}</span>` : ''}${label ? `<em>${label}${detail ? ` · ${esc(detail)}` : ''}</em>` : ''}</span></li>`;
+}
+function whosIn(locs, data) {
+  const count = (list, ...st) => list.filter((p) => st.includes(p.status)).length;
+  const rows = locs.filter((l) => l.roster);
+  const all = rows.flatMap((l) => l.roster);
+  return `<section class="card whos-in">
+    <header class="card-head"><h2>Who’s in today</h2>
+      <span class="muted small">${count(all, 'in', 'on_break', 'done', 'late', 'missed', 'due', 'elsewhere', 'rota')} on the rota · ${count(all, 'in', 'on_break', 'extra')} clocked in now</span></header>
+    <div class="table-wrap"><table class="whos-in-table">
+      <thead><tr><th>Site</th><th class="num">Rota’d</th><th class="num">In now</th><th class="num">Not in</th><th>People</th></tr></thead>
+      <tbody>${rows.map((l) => {
+        const r = l.roster;
+        const notIn = count(r, 'late', 'missed');
+        return `<tr><th>${esc(l.name)}</th>
+          <td class="num">${r.filter((p) => p.status !== 'extra').length}</td>
+          <td class="num">${count(r, 'in', 'on_break', 'extra')}</td>
+          <td class="num ${notIn ? 'tone-bad' : ''}">${notIn}</td>
+          <td>${r.length ? `<ul class="roster">${r.map(rosterChip).join('')}</ul>` : '<span class="muted">Nobody on the rota</span>'}</td></tr>`;
+      }).join('')}</tbody>
+    </table></div>
+    ${data.labour_synced ? '' : '<p class="muted small">Clock-ins come from Square once it’s connected; until then this shows the rota only.</p>'}
+  </section>`;
+}
+
 // The change on last week, as a small ▲/▼ percentage (green up, red down).
 function change(now, then) {
   if (!then) return '';
@@ -239,6 +280,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
       <div class="kpi" data-icon="☺"><span>Staff on shift today</span><strong>${totals.staff}</strong></div>
     </div>` : ''}
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
+    ${locs.some((l) => l.roster) ? whosIn(locs, data) : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
     ${myShifts.length ? `
     <section class="card">
