@@ -102,11 +102,6 @@ function card(loc, state, data) {
             ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(s.name)}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
             : '<p class="muted">Nobody rostered</p>'}
         </div>`}
-        ${state.can('orders.manage') ? `
-        <div class="span-2">
-          <h3>Orders</h3>
-          <p>${loc.orders_draft} draft · ${loc.orders_sent} awaiting delivery</p>
-        </div>` : ''}
         <div class="site-checks span-2">
           <h3>Daily Trail checks</h3>
           ${progress(loc.daily.done, loc.daily.due)}
