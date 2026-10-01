@@ -1478,3 +1478,21 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
 .dash-date input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .dash-date input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
 @media print { .dash-date-caret, #dash-today { display: none; } }
+/* Who's in today: folds away to its heading, and each site to its own heading, until tapped. */
+details.whos-in > summary, details.whos-in-site > summary { cursor: pointer; list-style: none; }
+details.whos-in > summary::-webkit-details-marker, details.whos-in-site > summary::-webkit-details-marker { display: none; }
+details.whos-in > summary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.2rem 1rem; }
+details.whos-in > summary h2::before, details.whos-in-site > summary strong::before {
+  content: "▸"; display: inline-block; width: 1.1em; color: var(--muted); transition: transform 0.15s;
+}
+details.whos-in[open] > summary h2::before, details.whos-in-site[open] > summary strong::before { transform: rotate(90deg); }
+details.whos-in:not([open]) > summary { margin-bottom: -1.1rem; border-bottom: 0; border-radius: var(--radius); }
+details.whos-in-site > summary { margin-bottom: 0; }
+details.whos-in-site[open] > summary { margin-bottom: 0.15rem; }
+.whos-in-grid { align-items: start; }
+@media (max-width: 700px) { details.whos-in:not([open]) > summary { margin-bottom: -0.75rem; } }
+@media print { details.whos-in > summary h2::before, details.whos-in-site > summary strong::before { display: none; } }
+.whos-in .whos-in-grid { grid-template-columns: 1fr; gap: 0.4rem; }
+details.whos-in > summary h2::before, details.whos-in-site > summary strong::before { text-align: center; transform-origin: 50% 55%; }
+details.whos-in-site[open] { padding-bottom: 0.4rem; }
+.whos-in .whos-in-table { max-width: 720px; }

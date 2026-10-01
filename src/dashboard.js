@@ -108,7 +108,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
         const status = t.end_at ? 'done' : breakInfo(t, breaksToday.get(t.id), dayEnd).on_break ? 'on_break' : 'in';
         out.push({ name: t.name, rota: info.rota ?? null, rota_site: siteName.get(rotaSite) ?? 'another site', status, clock, late_minutes: info.late_minutes ?? 0 });
       } else {
-        out.push({ name: t.name, rota: null, status: 'extra', clock });
+        out.push({ name: t.name, rota: null, status: 'extra', clock, clocked_out: !!t.end_at });
       }
     }
     return out;

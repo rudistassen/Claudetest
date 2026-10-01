@@ -47,25 +47,29 @@ function rosterRow(p) {
 }
 function whosIn(locs, data) {
   const count = (list, ...st) => list.filter((p) => st.includes(p.status)).length;
+  // Clocked in right now: in or on a break, or not on the rota and not clocked out yet.
+  const inNow = (list) => list.filter((p) => p.status === 'in' || p.status === 'on_break' || (p.status === 'extra' && !p.clocked_out)).length;
   // On this site's rota (not covering from another site's rota, and not clocked in without a shift).
   const rotad = (list) => list.filter((p) => p.status !== 'extra' && !p.rota_site).length;
   const rows = locs.filter((l) => l.roster);
   const all = rows.flatMap((l) => l.roster);
-  return `<section class="card whos-in">
-    <header class="card-head"><h2>${shown.isToday ? 'Who’s in today' : `Who was in · ${esc(dayWord())}`}</h2>
-      <span class="muted small">${rotad(all)} on the rota · ${count(all, 'in', 'on_break', 'extra')} clocked in now · ${count(all, 'late', 'missed')} not in</span></header>
+  const notInAll = count(all, 'late', 'missed');
+  // Folded away to just its heading (and each site to its own heading); tap to open.
+  return `<details class="card whos-in">
+    <summary class="card-head"><h2>${shown.isToday ? 'Who’s in today' : `Who was in · ${esc(dayWord())}`}</h2>
+      <span class="muted small">${rotad(all)} on the rota · ${shown.isToday ? `${inNow(all)} clocked in now` : `${all.filter((p) => p.clock).length} clocked in`}${notInAll ? ` · <span class="tone-bad">${notInAll} not in</span>` : ''}</span></summary>
     <div class="whos-in-grid">${rows.map((l) => {
       const r = l.roster;
       const notIn = count(r, 'late', 'missed');
-      return `<div class="whos-in-site" style="--site: ${siteColour(l.name, l.id)}">
-        <p class="whos-in-site-head"><strong>${esc(l.name)}</strong>
-          <span class="muted">${rotad(r)} rota’d · ${count(r, 'in', 'on_break', 'extra')} in${notIn ? ` · <span class="tone-bad">${notIn} not in</span>` : ''}</span></p>
+      return `<details class="whos-in-site" style="--site: ${siteColour(l.name, l.id)}">
+        <summary class="whos-in-site-head"><strong>${esc(l.name)}</strong>
+          <span class="muted">${rotad(r)} rota’d · ${shown.isToday ? `${inNow(r)} in` : `${r.filter((p) => p.clock).length} clocked in`}${notIn ? ` · <span class="tone-bad">${notIn} not in</span>` : ''}</span></summary>
         ${r.length ? `<table class="whos-in-table"><thead><tr><th>Person</th><th>Rota</th><th>Clocked</th><th>Status</th></tr></thead>
           <tbody>${r.map(rosterRow).join('')}</tbody></table>` : `<p class="muted small">Nobody on the rota ${dayWord()}</p>`}
-      </div>`;
+      </details>`;
     }).join('')}</div>
     ${data.labour_synced ? '' : '<p class="muted small">Clock-ins come from Square once it’s connected; until then this shows the rota only.</p>'}
-  </section>`;
+  </details>`;
 }
 
 // The change on last week, as a small ▲/▼ percentage (green up, red down).
