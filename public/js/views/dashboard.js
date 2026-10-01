@@ -72,6 +72,16 @@ function change(now, then) {
   return `<span class="dash-vs ${tone}" title="${money(then)} last week">${Math.abs(c) < 0.05 ? '■ 0.0%' : `${c > 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%`}</span>`;
 }
 
+// For the labour tile: the change in percentage points on last week by this time. Lower labour is good (green).
+function labourVersus(now, then) {
+  if (now === null || now === undefined) return '<span class="muted">of net sales so far</span>';
+  if (then === null || then === undefined) return '<span class="muted">of net sales · nothing to compare last week</span>';
+  const d = Math.round((now - then) * 10) / 10;
+  const tone = Math.abs(d) < 0.5 ? 'muted' : d > 0 ? 'tone-bad' : 'tone-good';
+  return `<span class="${tone}">${d === 0 ? '■ 0.0 pts' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)} pts`}</span> <span class="muted">on last week</span><br>
+    <span class="muted">${then.toFixed(1)}% by this time last week</span>`;
+}
+
 // For a tile: "▲ 4.2% on last week", then what last week had taken by the same time.
 function versusLine(now, then) {
   if (now === null) return '<span class="muted">No sales synced yet today</span>';
@@ -264,6 +274,11 @@ export async function render({ el, state, navigate, stale, rerender }) {
     const before = tradePrevWeek?.locations.find((x) => x.id === l.id)?.gross_sales ?? 0;
     return [l.id, sameTime === null && !before ? null : before + (sameTime ?? 0)];
   }));
+  // Labour % by this time on the same day last week, worked out the same way (labour cost ÷ net sales, only
+  // counting sites that had both).
+  const lwSites = locs.filter((l) => l.last_week?.net > 0 && l.last_week?.labour_cost > 0);
+  const lwNet = lwSites.reduce((n, l) => n + l.last_week.net, 0);
+  const labourLastWeek = lwNet ? Math.round((lwSites.reduce((n, l) => n + l.last_week.labour_cost, 0) / lwNet) * 1000) / 10 : null;
   const labourPct = todayTotals ? (tradeToday.labour_synced && todayTotals.labour_pct !== null ? todayTotals.labour_pct : todayTotals.rostered_labour_pct) : null;
 
   el.innerHTML = `
@@ -279,7 +294,8 @@ export async function render({ el, state, navigate, stale, rerender }) {
     ${hasSales ? `<div class="dash-hero">
       <div class="kpi kpi-feature" data-icon="£"><span>Gross sales today</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
         <small class="kpi-vs">${versusLine(gross.now, gross.then)}</small></div>
-      <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong><small>of net sales so far</small></div>
+      <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong>
+        <small class="kpi-vs">${labourVersus(labourPct, labourLastWeek)}</small></div>
       <section class="card dash-hourly">
         <header class="dash-hourly-head"><h2>Gross sales by hour</h2>
           <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>Today</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week</span></div></header>
