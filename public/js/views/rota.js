@@ -206,7 +206,7 @@ export async function render(ctx) {
           ${list.map((x) => {
             const u = person(x.user_id);
             const from = u && u.location_id !== id && u.location_name ? `Covering from ${u.location_name}` : '';
-            return `<li class="day-person ${x.state && x.state !== 'published' ? `is-${x.state}` : ''}">
+            return `<li class="day-person ${x.state && x.state !== 'published' ? `is-${x.state}` : ''}" ${canEdit ? `data-drop data-user="${x.user_id}" data-date="${day}" data-site="${id}"` : ''}>
               <span class="day-name">${personName(x.user_id, x.user_name)}</span>
               <button class="day-card ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
                 title="${esc([shiftTitle(x), from].filter(Boolean).join(' · ') || `${x.start_time}–${x.end_time}`)}">
@@ -243,7 +243,7 @@ export async function render(ctx) {
       ${withShifts.length ? withShifts.map(siteBlock).join('') : `<div class="card empty">Nobody is on the rota ${day === today ? 'today' : 'this day'}.</div>`}
       ${canEdit && without.length && withShifts.length ? `<p class="muted small">No shifts at ${without.map((x) => `${esc(x.name)} <button class="link-btn" data-add-site="${x.id}">+ Add</button>`).join(' · ')}</p>` : ''}
       ${canEdit && !withShifts.length && without.length ? `<p>${without.map((x) => `<button class="btn btn-small" data-add-site="${x.id}">+ Add a shift at ${esc(x.name)}</button>`).join(' ')}</p>` : ''}
-      ${canEdit ? '<p class="muted small">You’re seeing the draft rota. Tap a shift to change it, or to publish just that shift.</p>' : ''}`;
+      ${canEdit ? '<p class="muted small">You’re seeing the draft rota. Tap a shift to change it, or to publish just that shift. Drag a shift onto someone else to give it to them (press and hold first on a phone).</p>' : ''}`;
   };
 
   const siteSelect = state.multiSite ? `<select id="rota-site" aria-label="Site">
@@ -308,7 +308,7 @@ export async function render(ctx) {
                 // On their home site's row: a day spent covering elsewhere is greyed out and says where.
                 const away = site === u.location_id ? coverAway.get(`${u.id}|${d}`) ?? [] : [];
                 const covering = away.length > 0 && !shifts.length;
-                return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''} ${covering ? 'is-covering' : ''}" data-user="${u.id}" data-date="${d}" data-site="${site}">
+                return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''} ${covering ? 'is-covering' : ''}" ${canEdit ? 'data-drop' : ''} data-user="${u.id}" data-date="${d}" data-site="${site}">
                   ${cellNotes(u.id, d)}
                   ${away.map((x) => `<span class="cover-away" title="Covering at ${esc(x.location_name)} ${x.start_time}–${x.end_time}">Covering at ${esc(x.location_name)}<small>${x.start_time}–${x.end_time}</small></span>`).join('')}
                   ${shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
@@ -333,7 +333,7 @@ export async function render(ctx) {
     ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is covering at another site.</p>' : ''}
     ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a role yet – set one for each person on the Staff page.</p>' : ''}
     ${fcNote ? `<p class="muted small">${fcNote}</p>` : ''}
-    ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see.</p>' : ''}`;
+    ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see. Drag a shift onto another person or day to move it – hold Ctrl (⌥ on a Mac) as you drop to copy it instead. On a phone, press and hold a shift first.</p>' : ''}`;
 
   el.querySelector('#rota-layout')?.addEventListener('change', (e) => {
     try { localStorage.setItem(LAYOUT_KEY, e.target.value); } catch { /* storage unavailable */ }
@@ -466,6 +466,37 @@ export async function render(ctx) {
     } catch (err) { showError(err); }
   };
 
+  // Drag a shift onto another person (or day) to move it there; hold Ctrl/⌥ as you drop to copy it.
+  if (canEdit) {
+    enableShiftDrag(el, {
+      shiftFor: (id) => data.shifts.find((s) => s.id === id),
+      onDrop: async (shift, target, copy) => {
+        const to = { user_id: Number(target.dataset.user), date: target.dataset.date, location_id: Number(target.dataset.site) };
+        if (!copy && to.user_id === shift.user_id && to.date === shift.date && to.location_id === shift.location_id) return;
+        const name = data.staff.find((u) => u.id === to.user_id)?.name ?? 'them';
+        if (holidayOn(to.user_id, to.date, 'approved')) { toast(`${name} is on holiday that day`, 'error'); return; }
+        const body = { ...to, start_time: shift.start_time, end_time: shift.end_time, break_minutes: shift.break_minutes, position: shift.position, notes: shift.notes };
+        try {
+          if (copy) await api('/shifts', { method: 'POST', body });
+          else await api(`/shifts/${shift.id}`, { method: 'PUT', body });
+        } catch (err) { showError(err); return; }
+        const who = to.user_id === shift.user_id ? '' : ` to ${name}`;
+        const when = to.date === shift.date ? '' : ` on ${fmtDate(to.date)}`;
+        toast(`${copy ? 'Copied' : 'Moved'} the ${shift.start_time}–${shift.end_time} shift${who}${when}`);
+        // The same gentle warnings as the shift window: a day they've asked off, or outside their usual hours.
+        const a = availOn(to.user_id, to.date);
+        let warning = '';
+        if (holidayOn(to.user_id, to.date, 'pending')) warning = `${name} has asked for holiday that day.`;
+        else if (a?.status === 'none') warning = `${name} isn’t usually available on ${WEEKDAY_NAMES[weekdayOf(to.date)]}.`;
+        else if (a?.status === 'some' && (shift.start_time < a.from_time || shift.end_time > a.to_time)) {
+          warning = `${name} is usually only available ${a.from_time}–${a.to_time} on ${WEEKDAY_NAMES[weekdayOf(to.date)]}.`;
+        }
+        if (warning) setTimeout(() => toast(warning, 'error'), 2400);
+        ctx.rerender();
+      },
+    });
+  }
+
   el.querySelectorAll('[data-person]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
     openStaffEditor(ctx, Number(b.dataset.person)).catch(showError);
@@ -583,4 +614,116 @@ async function renderMine(ctx, week) {
     ctx.navigate(`rota${qs({ view: 'mine', week: offset ? addDays(week, offset) : undefined })}`);
   }));
   el.querySelector('#print').addEventListener('click', () => window.print());
+}
+
+/**
+ * Drag and drop for shifts, with a mouse or a finger. A mouse drag starts once the pointer moves a little; on a
+ * touch screen, press and hold a shift first (so swiping still scrolls). Drop targets have data-drop, data-user,
+ * data-date and data-site. A click straight after a drag doesn't open the shift.
+ */
+function enableShiftDrag(el, { shiftFor, onDrop }) {
+  let drag = null;
+  let suppressClick = false;
+  const HOLD_MS = 350;
+  const scroller = el.querySelector('.rota-scroll');
+
+  const cleanup = () => {
+    if (!drag) return;
+    clearTimeout(drag.timer);
+    drag.ghost?.remove();
+    drag.btn.classList.remove('is-dragging');
+    drag.over?.classList.remove('drop-over');
+    document.body.classList.remove('rota-dragging');
+    drag = null;
+  };
+  const begin = () => {
+    const r = drag.btn.getBoundingClientRect();
+    const ghost = drag.btn.cloneNode(true);
+    ghost.className = `${drag.btn.className} shift-ghost`;
+    ghost.style.width = `${r.width}px`;
+    document.body.append(ghost);
+    drag.ghost = ghost;
+    drag.dx = drag.x - r.left;
+    drag.dy = drag.y - r.top;
+    drag.active = true;
+    drag.btn.classList.add('is-dragging');
+    document.body.classList.add('rota-dragging');
+    if (drag.touch && navigator.vibrate) navigator.vibrate(15);
+    place(drag.x, drag.y);
+  };
+  const place = (x, y) => {
+    drag.ghost.style.transform = `translate(${x - drag.dx}px, ${y - drag.dy}px)`;
+    const target = document.elementFromPoint(x, y)?.closest('[data-drop]');
+    const ok = target && el.contains(target) ? target : null;
+    if (ok !== drag.over) {
+      drag.over?.classList.remove('drop-over');
+      ok?.classList.add('drop-over');
+      drag.over = ok;
+    }
+    // Scroll when dragging near the edges.
+    if (y < 70) window.scrollBy(0, -14);
+    else if (y > innerHeight - 70) window.scrollBy(0, 14);
+    if (scroller) {
+      const s = scroller.getBoundingClientRect();
+      if (x < s.left + 50) scroller.scrollLeft -= 14;
+      else if (x > s.right - 50) scroller.scrollLeft += 14;
+    }
+  };
+
+  el.querySelectorAll('[data-shift]').forEach((btn) => {
+    const shift = shiftFor(Number(btn.dataset.shift));
+    if (!shift || shift.state === 'removed') return;
+    btn.classList.add('is-draggable');
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || drag) return;
+      const touch = e.pointerType !== 'mouse';
+      drag = { btn, shift, x: e.clientX, y: e.clientY, touch, active: false, over: null };
+      if (touch) drag.timer = setTimeout(() => { if (drag && !drag.active) begin(); }, HOLD_MS);
+    });
+    // No browser text selection or "save image" menu while holding a shift.
+    btn.addEventListener('contextmenu', (e) => { if (drag) e.preventDefault(); });
+  });
+
+  const onMove = (e) => {
+    if (!drag) return;
+    const moved = Math.hypot(e.clientX - drag.x, e.clientY - drag.y);
+    if (!drag.active) {
+      if (drag.touch) { if (moved > 8) cleanup(); return; }
+      if (moved < 6) return;
+      begin();
+    }
+    place(e.clientX, e.clientY);
+  };
+  const onUp = (e) => {
+    if (!drag) return;
+    const { active, over, shift } = drag;
+    cleanup();
+    if (!active) return;
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 0);
+    if (over) onDrop(shift, over, e.ctrlKey || e.altKey || e.metaKey);
+  };
+  // While dragging with a finger, stop the page scrolling instead.
+  const onTouchMove = (e) => { if (drag?.active) e.preventDefault(); };
+  const onKey = (e) => { if (e.key === 'Escape' && drag) { cleanup(); suppressClick = true; setTimeout(() => { suppressClick = false; }, 0); } };
+  const onClick = (e) => { if (suppressClick) { e.stopPropagation(); e.preventDefault(); } };
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+  document.addEventListener('pointercancel', cleanup);
+  document.addEventListener('touchmove', onTouchMove, { passive: false });
+  document.addEventListener('keydown', onKey);
+  el.addEventListener('click', onClick, true);
+  // Stop listening once the page is redrawn or replaced (its content is swapped out).
+  const stop = new MutationObserver(() => {
+    stop.disconnect();
+    cleanup();
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', cleanup);
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('keydown', onKey);
+    el.removeEventListener('click', onClick, true);
+  });
+  stop.observe(el, { childList: true });
 }
