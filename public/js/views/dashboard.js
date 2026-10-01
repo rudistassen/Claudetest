@@ -31,16 +31,14 @@ const ROSTER = {
 };
 function rosterRow(p) {
   const [label, tone] = ROSTER[p.status] ?? ['', ''];
-  const [inAt, outAt] = p.clock ? p.clock.split('–') : [null, null];
   const note = p.status === 'late' ? `${mins(p.late_minutes)} late`
     : p.status === 'elsewhere' ? esc(p.where)
-      : p.late_minutes ? `${mins(p.late_minutes)} late in` : '';
+      : p.late_minutes ? `${mins(p.late_minutes)} late` : '';
   return `<tr class="roster-row ${tone}">
-    <td class="cell-title"><strong>${esc(p.name)}</strong></td>
-    <td data-label="Rota">${p.rota ? p.rota.replace('–', '–<wbr>') : '<span class="muted">–</span>'}</td>
-    <td data-label="Clocked in">${inAt ?? '<span class="muted">–</span>'}</td>
-    <td data-label="Clocked out">${outAt === 'now' ? '<span class="muted">now</span>' : outAt ?? '<span class="muted">–</span>'}</td>
-    <td data-label="Status"><span class="roster-status">${label}</span>${note ? ` <small class="muted">${note}</small>` : ''}</td>
+    <td>${esc(p.name)}</td>
+    <td>${p.rota ?? '<span class="muted">–</span>'}</td>
+    <td>${p.clock ? p.clock.replace('–now', '–<span class="muted">now</span>') : '<span class="muted">–</span>'}</td>
+    <td><span class="roster-status">${label}</span>${note ? ` <span class="muted">${note}</span>` : ''}</td>
   </tr>`;
 }
 function whosIn(locs, data) {
@@ -50,18 +48,16 @@ function whosIn(locs, data) {
   return `<section class="card whos-in">
     <header class="card-head"><h2>Who’s in today</h2>
       <span class="muted small">${all.filter((p) => p.status !== 'extra').length} on the rota · ${count(all, 'in', 'on_break', 'extra')} clocked in now · ${count(all, 'late', 'missed')} not in</span></header>
-    <div class="table-wrap"><table class="whos-in-table">
-      <thead><tr><th>Person</th><th>Rota</th><th><span class="wide-only">Clocked </span>in</th><th><span class="wide-only">Clocked </span>out</th><th>Status</th></tr></thead>
-      ${rows.map((l) => {
-        const r = l.roster;
-        const notIn = count(r, 'late', 'missed');
-        return `<tbody>
-          <tr class="whos-in-site"><th colspan="5">${esc(l.name)}
-            <span class="muted small">${r.filter((p) => p.status !== 'extra').length} rota’d · ${count(r, 'in', 'on_break', 'extra')} in now${notIn ? ` · <span class="tone-bad">${notIn} not in</span>` : ''}</span></th></tr>
-          ${r.length ? r.map(rosterRow).join('') : '<tr><td colspan="5" class="muted">Nobody on the rota today</td></tr>'}
-        </tbody>`;
-      }).join('')}
-    </table></div>
+    <div class="whos-in-grid">${rows.map((l) => {
+      const r = l.roster;
+      const notIn = count(r, 'late', 'missed');
+      return `<div class="whos-in-site">
+        <p class="whos-in-site-head"><strong>${esc(l.name)}</strong>
+          <span class="muted">${r.filter((p) => p.status !== 'extra').length} rota’d · ${count(r, 'in', 'on_break', 'extra')} in${notIn ? ` · <span class="tone-bad">${notIn} not in</span>` : ''}</span></p>
+        ${r.length ? `<table class="whos-in-table"><thead><tr><th>Person</th><th>Rota</th><th>Clocked</th><th>Status</th></tr></thead>
+          <tbody>${r.map(rosterRow).join('')}</tbody></table>` : '<p class="muted small">Nobody on the rota today</p>'}
+      </div>`;
+    }).join('')}</div>
     ${data.labour_synced ? '' : '<p class="muted small">Clock-ins come from Square once it’s connected; until then this shows the rota only.</p>'}
   </section>`;
 }
