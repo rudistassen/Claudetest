@@ -282,9 +282,6 @@ export async function render(ctx) {
         ${data.can_publish ? `<button class="btn btn-primary" id="publish">Publish ${all ? 'all sites' : 'this week'}</button>` : ''}
       </span>
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
-    <p class="muted">Week commencing ${fmtDate(week, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-      · ${data.total_hours} hours${data.labour_cost !== undefined ? ` · labour cost ${money(data.labour_cost)}` : ''}
-      ${data.week_sales ? ` · sales to date ${money(data.week_sales)} · labour <span class="tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</span> of sales to date` : ''}</p>
     <div class="table-wrap rota-scroll">
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: undefined, day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}</th>`).join('')}<th>Hours</th></tr></thead>
