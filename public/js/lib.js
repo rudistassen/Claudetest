@@ -228,3 +228,18 @@ export function sitePicker(state) {
     ${sites.map((l) => `<option value="${l.id}" ${l.id === state.locationId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
   </select>`;
 }
+
+// Each site's colour, from its brand: Common pink, Brew (& Barrel) dark green, Buddy's olive green, Buddy's
+// Bakery dark olive green, Omnibus orange. Any other site gets one of a few distinct colours, by its id.
+const BRAND_COLOURS = [
+  [/buddy'?s?\s*bakery|bakery/i, '#4b5320'],
+  [/buddy/i, '#7a8a2e'],
+  [/common/i, '#d63384'],
+  [/omnibus/i, '#e8730c'],
+  [/brew/i, '#1e5631'],
+];
+const OTHER_COLOURS = ['#0f766e', '#4f46e5', '#b45309', '#0369a1', '#7c3aed', '#be123c', '#475569'];
+export function siteColour(name = '', id = 0) {
+  const n = String(name).replace(/[’`]/g, "'");
+  return BRAND_COLOURS.find(([re]) => re.test(n))?.[1] ?? OTHER_COLOURS[Math.abs(Number(id) || 0) % OTHER_COLOURS.length];
+}

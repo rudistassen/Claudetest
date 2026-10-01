@@ -1,5 +1,5 @@
 import { attachTip } from '../charts.js';
-import { addDays, api, esc, fmtDate, money, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, money, siteColour, toast, todayISO } from '../lib.js';
 import { breakLine, clockInActions, wireClockInActions } from './breaks.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
@@ -53,7 +53,7 @@ function whosIn(locs, data) {
     <div class="whos-in-grid">${rows.map((l) => {
       const r = l.roster;
       const notIn = count(r, 'late', 'missed');
-      return `<div class="whos-in-site">
+      return `<div class="whos-in-site" style="--site: ${siteColour(l.name, l.id)}">
         <p class="whos-in-site-head"><strong>${esc(l.name)}</strong>
           <span class="muted">${rotad(r)} rota’d · ${count(r, 'in', 'on_break', 'extra')} in${notIn ? ` · <span class="tone-bad">${notIn} not in</span>` : ''}</span></p>
         ${r.length ? `<table class="whos-in-table"><thead><tr><th>Person</th><th>Rota</th><th>Clocked</th><th>Status</th></tr></thead>
@@ -102,7 +102,7 @@ function card(loc, state, data) {
   const lw = loc.last_week;
   const clocked = loc.clock_ins && data.labour_synced;
   return `
-    <section class="card site-card">
+    <section class="card site-card" style="--site: ${siteColour(loc.name, loc.id)}">
       <header class="card-head">
         <h2 data-initials="${esc(siteInitials(loc.name))}">${esc(loc.name)}</h2>
         ${state.multiSite ? `<button class="btn btn-small" data-open="${loc.id}">Open site</button>` : ''}
@@ -204,7 +204,7 @@ function bySite(t, period, prev) {
       </header>
       <div class="table-wrap"><table class="dash-table">
         <thead><tr><th>Site</th><th>Gross sales</th><th class="num">Orders</th><th>Labour % of net sales <small class="inline">(${t.labour_synced ? 'clocked' : 'rostered'} · target ${LABOUR_TARGET}%)</small></th></tr></thead>
-        <tbody>${rows.map((r) => `<tr data-site-row="${r.id}" tabindex="0">
+        <tbody>${rows.map((r) => `<tr data-site-row="${r.id}" tabindex="0" style="--site: ${siteColour(r.name, r.id)}">
           <th>${esc(r.name)}${r.linked ? '' : ' <small class="inline muted">not on Square</small>'}</th>
           ${salesCell(r.gross_sales, prev.get(r.id))}
           <td class="num">${r.orders}</td>

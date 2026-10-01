@@ -1416,3 +1416,25 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
 .whos-in-site { min-width: 0; }
 .whos-in-table td:last-child { white-space: normal; }
 .whos-in-table td:first-child { min-width: 6.5rem; }
+
+/* Less white: a soft grey page behind white cards with a gentle shadow, so sections stand apart. */
+:root:not([data-theme="dark"]) { --bg: #eceef2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #000000; } }
+.card, .kpi { box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 6px rgba(16, 24, 40, 0.04); border-color: color-mix(in srgb, var(--border) 70%, transparent); }
+/* Dashboard section headings get a light band. */
+.dash-sites > .card-head, .whos-in > .card-head {
+  margin: -1.1rem -1.1rem 0.9rem; padding: 0.7rem 1.1rem; border-bottom: 1px solid var(--border);
+  background: var(--surface-2); border-radius: var(--radius) var(--radius) 0 0;
+}
+@media (max-width: 700px) {
+  .dash-sites > .card-head, .whos-in > .card-head { margin: -0.75rem -0.8rem 0.75rem; padding: 0.6rem 0.8rem; }
+}
+
+/* Each site's own colour (set as --site on the element) on the dashboard. */
+.site-card { border-top: 5px solid var(--site, var(--border)); }
+.site-card > .card-head { background: color-mix(in srgb, var(--site, var(--surface-2)) 10%, var(--surface)); }
+.site-card > .card-head h2::before { background: var(--site, var(--surface-2)); color: #fff; border-color: var(--surface); }
+.dash-table tbody th { position: relative; padding-left: 1.4rem; }
+.dash-table tbody tr[style] th::before { content: ""; position: absolute; left: 0.45rem; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 3px; background: var(--site); }
+.dash-table tbody tr[style] .dash-sales .dash-bar:not(.dash-bar-prev) .fill { background: var(--site); }
+.whos-in-site-head { background: color-mix(in srgb, var(--site, var(--surface-2)) 13%, var(--surface)); border-left: 4px solid var(--site, var(--border)); }
