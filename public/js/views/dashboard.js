@@ -11,11 +11,15 @@ function progress(done, due) {
 }
 
 // "4h 05m" from hours.
+// The day the dashboard is showing: today (so far, the default) or a whole earlier day picked from the date menu.
+const shown = { isToday: true, day: '' };
+const dayWord = () => (shown.isToday ? 'today' : fmtDate(shown.day, { weekday: 'short', day: 'numeric', month: 'short' }));
+
 const duration = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; };
 
 // Today so far against the same weekday last week up to the same time. Up is good for sales; labour is neutral.
 function versus(now, then, { goodUp = true } = {}) {
-  if (now === null || now === undefined) return '<span class="muted">No sales synced today</span>';
+  if (now === null || now === undefined) return `<span class="muted">No sales synced ${shown.isToday ? 'today' : 'for this day'}</span>`;
   if (!then) return `<span class="muted">${then === null ? 'Nothing to compare' : '£0'} last week</span>`;
   const change = ((now - then) / then) * 100;
   const tone = !goodUp || Math.abs(change) < 0.5 ? '' : (change > 0) === goodUp ? 'tone-good' : 'tone-bad';
@@ -48,7 +52,7 @@ function whosIn(locs, data) {
   const rows = locs.filter((l) => l.roster);
   const all = rows.flatMap((l) => l.roster);
   return `<section class="card whos-in">
-    <header class="card-head"><h2>Who’s in today</h2>
+    <header class="card-head"><h2>${shown.isToday ? 'Who’s in today' : `Who was in · ${esc(dayWord())}`}</h2>
       <span class="muted small">${rotad(all)} on the rota · ${count(all, 'in', 'on_break', 'extra')} clocked in now · ${count(all, 'late', 'missed')} not in</span></header>
     <div class="whos-in-grid">${rows.map((l) => {
       const r = l.roster;
@@ -57,7 +61,7 @@ function whosIn(locs, data) {
         <p class="whos-in-site-head"><strong>${esc(l.name)}</strong>
           <span class="muted">${rotad(r)} rota’d · ${count(r, 'in', 'on_break', 'extra')} in${notIn ? ` · <span class="tone-bad">${notIn} not in</span>` : ''}</span></p>
         ${r.length ? `<table class="whos-in-table"><thead><tr><th>Person</th><th>Rota</th><th>Clocked</th><th>Status</th></tr></thead>
-          <tbody>${r.map(rosterRow).join('')}</tbody></table>` : '<p class="muted small">Nobody on the rota today</p>'}
+          <tbody>${r.map(rosterRow).join('')}</tbody></table>` : `<p class="muted small">Nobody on the rota ${dayWord()}</p>`}
       </div>`;
     }).join('')}</div>
     ${data.labour_synced ? '' : '<p class="muted small">Clock-ins come from Square once it’s connected; until then this shows the rota only.</p>'}
@@ -79,17 +83,17 @@ function labourVersus(now, then) {
   const d = Math.round((now - then) * 10) / 10;
   const tone = Math.abs(d) < 0.5 ? 'muted' : d > 0 ? 'tone-bad' : 'tone-good';
   return `<span class="${tone}">${d === 0 ? '■ 0.0 pts' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)} pts`}</span> <span class="muted">on last week</span><br>
-    <span class="muted">${then.toFixed(1)}% by this time last week</span>`;
+    <span class="muted">${then.toFixed(1)}% ${shown.isToday ? 'by this time last week' : 'the same day last week'}</span>`;
 }
 
 // For a tile: "▲ 4.2% on last week", then what last week had taken by the same time.
 function versusLine(now, then) {
-  if (now === null) return '<span class="muted">No sales synced yet today</span>';
+  if (now === null) return `<span class="muted">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}</span>`;
   if (!then) return '<span class="muted">Nothing to compare last week</span>';
   const change = ((now - then) / then) * 100;
   const tone = Math.abs(change) < 0.5 ? 'muted' : change > 0 ? 'tone-good' : 'tone-bad';
   return `<span class="${tone}">${Math.abs(change) < 0.05 ? '■ 0.0%' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%`}</span> <span class="muted">on last week</span><br>
-    <span class="muted">${money(then)} by this time last week</span>`;
+    <span class="muted">${money(then)} ${shown.isToday ? 'by this time last week' : 'the same day last week'}</span>`;
 }
 
 const siteInitials = (name) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
@@ -131,11 +135,11 @@ function card(loc, state, data) {
           <p class="small tone-${labourTone(loc.labour_pct_today)}">${fmtPct(loc.labour_pct_today)} of net sales${loc.labour_basis === 'rostered' ? ' (rota)' : ''}</p>
         </div>
       </div>
-      <p class="small muted site-compare">Today so far vs ${fmtDate(data.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })} at the same time</p>` : ''}
+      <p class="small muted site-compare">${shown.isToday ? 'Today so far' : 'The whole day'} vs ${fmtDate(data.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })}${shown.isToday ? ' at the same time' : ''}</p>` : ''}
       <div class="site-grid">
         ${clocked ? `
         <div class="span-2">
-          <h3>Clocked in today (${loc.clock_ins.length})</h3>
+          <h3>Clocked in ${dayWord()} (${loc.clock_ins.length})</h3>
           ${loc.clock_ins.length
             ? `<ul class="shift-list clock-list">${loc.clock_ins.map((c) => `<li><strong>${esc(c.name)}</strong>
                 <span class="muted">${c.start}–${c.end ?? 'now'}</span>
@@ -149,7 +153,7 @@ function card(loc, state, data) {
               <span class="clock-hours"><span class="chip chip-strong">${m.shift_over ? 'Didn’t clock in' : `Not clocked in · ${mins(m.late_minutes)} late`}</span></span></li>`).join('')}</ul>` : ''}
         </div>` : `
         <div class="span-2">
-          <h3>On shift today (${staff.length})</h3>
+          <h3>On shift ${dayWord()} (${staff.length})</h3>
           ${staff.length
             ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(s.name)}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
             : '<p class="muted">Nobody rostered</p>'}
@@ -157,7 +161,7 @@ function card(loc, state, data) {
         <div class="site-checks span-2">
           <h3>Daily Trail checks</h3>
           ${progress(loc.daily.done, loc.daily.due)}
-          ${loc.daily.fails ? `<p class="alert-text">⚠ ${loc.daily.fails} failed check(s) today</p>` : ''}
+          ${loc.daily.fails ? `<p class="alert-text">⚠ ${loc.daily.fails} failed check(s) ${dayWord()}</p>` : ''}
         </div>
       </div>
     </section>`;
@@ -206,10 +210,10 @@ function bySite(t, period, prev) {
   return `
     <section class="card dash-sites">
       <header class="card-head">
-        <h2>Sales &amp; labour by site<span class="print-only"> · ${period === 'week' ? 'last 7 days' : 'today'}</span></h2>
+        <h2>Sales &amp; labour by site<span class="print-only"> · ${period === 'week' ? '7 days' : dayWord()}</span></h2>
         <div class="seg" role="group" aria-label="Period">
-          <button class="${period === 'today' ? 'is-on' : ''}" data-period="today">Today</button>
-          <button class="${period === 'week' ? 'is-on' : ''}" data-period="week">Last 7 days</button>
+          <button class="${period === 'today' ? 'is-on' : ''}" data-period="today">${shown.isToday ? 'Today' : 'This day'}</button>
+          <button class="${period === 'week' ? 'is-on' : ''}" data-period="week">${shown.isToday ? 'Last 7 days' : '7 days to here'}</button>
         </div>
       </header>
       <div class="table-wrap"><table class="dash-table">
@@ -223,18 +227,22 @@ function bySite(t, period, prev) {
         ${rows.length > 1 ? `<tfoot><tr><th>All sites</th>${salesCell(total.gross_sales, prevTotal, { bars: false })}<td class="num">${total.orders}</td>
           <td><strong class="tone-${labourTone(labour(total))}">${icon(labour(total))}${fmtPct(labour(total))}</strong></td></tr></tfoot>` : ''}
       </table></div>
-      <p class="muted small">${period === 'today' ? 'So far today' : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
+      <p class="muted small">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
         Grey bars are the same time last week. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
     </section>`;
 }
 
-export async function render({ el, state, navigate, stale, rerender }) {
+export async function render({ el, state, navigate, stale, rerender, query = {} }) {
   const seeSales = state.can('sales.view');
   let period = 'today';
   try { period = localStorage.getItem(PERIOD_KEY) === 'week' ? 'week' : 'today'; } catch { /* storage unavailable */ }
-  const d0 = todayISO();
+  const today = todayISO();
+  // Always today unless a day is picked (?date=), so coming back to the dashboard shows today again.
+  const d0 = /^\d{4}-\d{2}-\d{2}$/.test(query.date ?? '') && query.date < today ? query.date : today;
+  shown.isToday = d0 === today;
+  shown.day = d0;
   const [data, myShifts, leave, security, tradeToday, tradeWeek, tradePrevWeek] = await Promise.all([
-    api('/dashboard'),
+    api(`/dashboard${shown.isToday ? '' : `?date=${d0}`}`),
     api('/my-shifts'),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
     state.isAdmin && !isDemo ? api('/admin/security').catch(() => null) : null,
@@ -259,8 +267,10 @@ export async function render({ el, state, navigate, stale, rerender }) {
   const hasSales = !!tradeToday && tradeToday.square_connected;
   const todayTotals = tradeToday?.totals;
   // Everyone clocked in right now across the sites (from Square), or null when clock-ins aren't available.
+  // (On an earlier day: everyone who clocked in that day.)
+  const inNow = (c) => !shown.isToday || !c.end;
   const clockedInNow = data.labour_synced && locs.some((l) => l.clock_ins)
-    ? locs.reduce((n, l) => n + (l.clock_ins ?? []).filter((c) => !c.end).length, 0) : null;
+    ? locs.reduce((n, l) => n + (l.clock_ins ?? []).filter(inNow).length, 0) : null;
   // Gross sales so far today against the same weekday last week up to the same time.
   const withGross = locs.filter((l) => l.gross_today !== null);
   const gross = {
@@ -285,27 +295,31 @@ export async function render({ el, state, navigate, stale, rerender }) {
     <div class="page-head">
       <h1>${state.multiSite ? 'All sites' : esc(state.location?.name ?? 'Dashboard')}</h1>
       <div class="actions">
-        <span class="muted">${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+        ${shown.isToday ? '' : '<button class="btn btn-small" id="dash-today">Back to today</button>'}
+        <label class="dash-date" title="Choose a day">
+          <span>${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><span class="dash-date-caret" aria-hidden="true">▾</span>
+          <input type="date" id="dash-date" value="${d0}" max="${today}" aria-label="Show the dashboard for a day">
+        </label>
         <button class="btn dash-pdf" id="dash-pdf">Download PDF</button>
       </div>
     </div>
     <p class="print-only print-meta">Brewly dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     ${hasSales ? `<div class="dash-hero">
-      <div class="kpi kpi-feature" data-icon="£"><span>Gross sales today</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
+      <div class="kpi kpi-feature" data-icon="£"><span>Gross sales ${shown.isToday ? 'today' : ''}</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
         <small class="kpi-vs">${versusLine(gross.now, gross.then)}</small></div>
-      <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour today</span><strong>${fmtPct(labourPct)}</strong>
+      <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour ${shown.isToday ? 'today' : ''}</span><strong>${fmtPct(labourPct)}</strong>
         <small class="kpi-vs">${labourVersus(labourPct, labourLastWeek)}</small></div>
       <section class="card dash-hourly">
         <header class="dash-hourly-head"><h2>Gross sales by hour</h2>
-          <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>Today</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week</span></div></header>
+          <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>${shown.isToday ? 'Today' : esc(dayWord())}</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week</span></div></header>
         <div id="hourly-chart" class="chart-box"><div class="loading">Loading…</div></div>
       </section>
     </div>` : ''}
     <div class="kpis">
       <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
-      <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks today</span><strong>${totals.fails}</strong></div>
-      ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>Clocked in now</span><strong>${clockedInNow}</strong><small>of ${totals.staff} on today’s rota · <u>see who</u></small></button>`}
+      <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks ${shown.isToday ? 'today' : ''}</span><strong>${totals.fails}</strong></div>
+      ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>${shown.isToday ? 'Clocked in now' : 'Clocked in'}</span><strong>${clockedInNow}</strong><small>${shown.isToday ? `of ${totals.staff} on today’s rota` : `${totals.staff} on the rota`} · <u>see who</u></small></button>`}
     </div>` : ''}
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
     ${locs.some((l) => l.roster) ? whosIn(locs, data) : ''}
@@ -319,19 +333,28 @@ export async function render({ el, state, navigate, stale, rerender }) {
     <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
+  // The date menu: pick an earlier day; today goes back to the live dashboard.
+  const datePick = el.querySelector('#dash-date');
+  datePick.addEventListener('click', () => { try { datePick.showPicker(); } catch { /* older browsers open it themselves */ } });
+  datePick.addEventListener('change', () => {
+    const v = datePick.value;
+    if (!v) return;
+    navigate(v >= today ? 'dashboard' : `dashboard?date=${v}`);
+  });
+  el.querySelector('#dash-today')?.addEventListener('click', () => navigate('dashboard'));
   // "Clocked in now": who's clocked in, site by site.
   el.querySelector('#clocked-in-now')?.addEventListener('click', () => {
-    const sites = locs.map((l) => ({ l, people: (l.clock_ins ?? []).filter((c) => !c.end) })).filter((x) => x.people.length);
+    const sites = locs.map((l) => ({ l, people: (l.clock_ins ?? []).filter(inNow) })).filter((x) => x.people.length);
     openModal({
-      title: `Clocked in now (${clockedInNow})`,
+      title: shown.isToday ? `Clocked in now (${clockedInNow})` : `Clocked in · ${dayWord()} (${clockedInNow})`,
       body: sites.length ? sites.map(({ l, people }) => `<div class="clocked-site" style="--site: ${siteColour(l.name, l.id)}">
-          <h3>${esc(l.name)} <span class="muted">${people.length} in</span></h3>
+          <h3>${esc(l.name)} <span class="muted">${people.length}${shown.isToday ? ' in' : ''}</span></h3>
           <ul class="clocked-list">${people.sort((a, b) => a.start.localeCompare(b.start)).map((c) => `<li>
             <strong>${esc(c.name)}</strong>
-            <span class="muted">since ${c.start}${c.rota ? ` · rota ${c.rota}` : c.not_on_rota ? ' · not on the rota' : ''}</span>
-            <span>${c.on_break ? '<span class="badge badge-on-break">On break</span>' : '<span class="badge badge-received">In</span>'} ${duration(c.hours)}</span>
+            <span class="muted">${c.end ? `${c.start}–${c.end}` : `since ${c.start}`}${c.rota ? ` · rota ${c.rota}` : c.not_on_rota ? ' · not on the rota' : ''}</span>
+            <span>${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-received">In</span> '}${duration(c.hours)}</span>
           </li>`).join('')}</ul></div>`).join('')
-        : '<p class="muted">Nobody is clocked in right now.</p>',
+        : `<p class="muted">${shown.isToday ? 'Nobody is clocked in right now.' : 'Nobody clocked in that day.'}</p>`,
     });
   });
   // Gross sales by hour: today next to the same weekday last week.
@@ -339,7 +362,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
   if (chartBox) {
     api(`/trading/hourly-compare?date=${d0}`).then((h) => {
       if (stale() || !chartBox.isConnected) return;
-      if (!h.hours.length) { chartBox.innerHTML = '<p class="muted small">No sales synced yet today.</p>'; return; }
+      if (!h.hours.length) { chartBox.innerHTML = `<p class="muted small">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}.</p>`; return; }
       const hh = (n) => String(n).padStart(2, '0');
       const whole = (v) => (v >= 1000 ? `£${(v / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })}k` : `£${Math.round(v)}`);
       pairedBarChart(chartBox, {
@@ -347,7 +370,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
         label: (x) => hh(x.hour),
         title: (x) => `${hh(x.hour)}:00–${hh(x.hour + 1)}:00`,
         series: [
-          { name: 'today', value: (x) => x.today, color: 'var(--series-1)' },
+          { name: shown.isToday ? 'today' : dayWord(), value: (x) => x.today, color: 'var(--series-1)' },
           { name: `${fmtDate(h.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })}`, value: (x) => x.last_week, color: 'var(--prev-bar)' },
         ],
         fmt: money,

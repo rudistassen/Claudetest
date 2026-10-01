@@ -1471,3 +1471,10 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
 .clocked-list li > span:last-child { grid-column: 2; grid-row: 1 / span 2; align-self: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .clocked-site h3 { text-transform: none; letter-spacing: 0; color: var(--text); font-weight: 700; display: flex; justify-content: space-between; }
 .clocked-site h3 .muted { font-weight: 500; }
+/* Dashboard: the date, with a small arrow to choose another day (a date picker sits invisibly over it). */
+.dash-date { position: relative; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.6rem; border-radius: 8px; color: var(--muted); cursor: pointer; }
+.dash-date:hover { background: var(--surface-2); color: var(--text); }
+.dash-date-caret { font-size: 0.8em; }
+.dash-date input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.dash-date input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+@media print { .dash-date-caret, #dash-today { display: none; } }

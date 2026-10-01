@@ -40,3 +40,15 @@ test('hourly gross sales: today next to the same weekday last week, estimating g
   const staff = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'staff1@cafe.local', password: DEMO_PASSWORD }) });
   assert.equal((await fetch(`${base}/trading/hourly-compare`, { headers: { cookie: staff.headers.get('set-cookie').split(';')[0] } })).status, 403);
 });
+
+test('the dashboard can show an earlier day in full, but not a future one', async () => {
+  const res = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@cafe.local', password: DEMO_PASSWORD }) });
+  const cookie = res.headers.get('set-cookie').split(';')[0];
+  const get = async (q) => fetch(`${base}/dashboard${q}`, { headers: { cookie } });
+  const past = await (await get(`?date=${addDays(today(), -3)}`)).json();
+  assert.equal(past.date, addDays(today(), -3));
+  assert.equal(past.full_day, true);
+  assert.equal(past.compare_date, addDays(today(), -10));
+  assert.equal((await (await get('')).json()).full_day, false);
+  assert.equal((await get(`?date=${addDays(today(), 1)}`)).status, 400);
+});
