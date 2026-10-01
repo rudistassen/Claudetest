@@ -1459,3 +1459,15 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
   .dash-hero .kpi-vs br { display: none; }
 }
 @media print { .dash-hero { grid-template-columns: 1fr 3fr; } .dash-hourly { grid-column: 2; grid-row: 1 / span 2; } }
+/* Dashboard: "Clocked in now" opens a list of who's in */
+.kpi-button { font: inherit; text-align: left; color: inherit; cursor: pointer; width: 100%; display: block; }
+.kpi-button:hover { border-color: var(--brand); }
+.kpi-button u { text-underline-offset: 2px; color: var(--brand); text-decoration-color: currentColor; }
+.clocked-site { margin-bottom: 0.9rem; }
+.clocked-site h3 { margin: 0 0 0.3rem; padding: 0.3rem 0.6rem; font-size: 0.9rem; border-left: 4px solid var(--site); background: color-mix(in srgb, var(--site) 12%, var(--surface)); border-radius: 6px; }
+.clocked-list { list-style: none; margin: 0; padding: 0; }
+.clocked-list li { display: grid; grid-template-columns: 1fr auto; gap: 0 0.6rem; padding: 0.4rem 0.2rem; border-bottom: 1px solid var(--border); }
+.clocked-list li .muted { grid-column: 1; font-size: 0.8rem; }
+.clocked-list li > span:last-child { grid-column: 2; grid-row: 1 / span 2; align-self: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.clocked-site h3 { text-transform: none; letter-spacing: 0; color: var(--text); font-weight: 700; display: flex; justify-content: space-between; }
+.clocked-site h3 .muted { font-weight: 500; }

@@ -1,5 +1,5 @@
 import { attachTip, pairedBarChart } from '../charts.js';
-import { addDays, api, esc, fmtDate, isDemo, money, siteColour, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, isDemo, money, openModal, siteColour, toast, todayISO } from '../lib.js';
 import { breakLine, clockInActions, wireClockInActions } from './breaks.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
@@ -305,7 +305,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
     <div class="kpis">
       <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
       <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks today</span><strong>${totals.fails}</strong></div>
-      ${clockedInNow === null ? '' : `<div class="kpi" data-icon="☺"><span>Clocked in now</span><strong>${clockedInNow}</strong><small>of ${totals.staff} on today’s rota</small></div>`}
+      ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>Clocked in now</span><strong>${clockedInNow}</strong><small>of ${totals.staff} on today’s rota · <u>see who</u></small></button>`}
     </div>` : ''}
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
     ${locs.some((l) => l.roster) ? whosIn(locs, data) : ''}
@@ -319,6 +319,21 @@ export async function render({ el, state, navigate, stale, rerender }) {
     <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
+  // "Clocked in now": who's clocked in, site by site.
+  el.querySelector('#clocked-in-now')?.addEventListener('click', () => {
+    const sites = locs.map((l) => ({ l, people: (l.clock_ins ?? []).filter((c) => !c.end) })).filter((x) => x.people.length);
+    openModal({
+      title: `Clocked in now (${clockedInNow})`,
+      body: sites.length ? sites.map(({ l, people }) => `<div class="clocked-site" style="--site: ${siteColour(l.name, l.id)}">
+          <h3>${esc(l.name)} <span class="muted">${people.length} in</span></h3>
+          <ul class="clocked-list">${people.sort((a, b) => a.start.localeCompare(b.start)).map((c) => `<li>
+            <strong>${esc(c.name)}</strong>
+            <span class="muted">since ${c.start}${c.rota ? ` · rota ${c.rota}` : c.not_on_rota ? ' · not on the rota' : ''}</span>
+            <span>${c.on_break ? '<span class="badge badge-on-break">On break</span>' : '<span class="badge badge-received">In</span>'} ${duration(c.hours)}</span>
+          </li>`).join('')}</ul></div>`).join('')
+        : '<p class="muted">Nobody is clocked in right now.</p>',
+    });
+  });
   // Gross sales by hour: today next to the same weekday last week.
   const chartBox = el.querySelector('#hourly-chart');
   if (chartBox) {
