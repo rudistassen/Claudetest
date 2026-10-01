@@ -1413,3 +1413,6 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
   .whos-in-table th, .whos-in-table td { padding: 0.18rem 0.25rem; }
   .whos-in-table .roster-status { font-size: 0.64rem; padding: 0 0.35rem; }
 }
+.whos-in-site { min-width: 0; }
+.whos-in-table td:last-child { white-space: normal; }
+.whos-in-table td:first-child { min-width: 6.5rem; }

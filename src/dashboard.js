@@ -78,7 +78,8 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
   // Everyone on the published rota at a site today, each with where they are now: 'due' (not started yet),
   // 'in', 'on_break', 'done' (clocked out), 'late' (shift started, not clocked in), 'missed' (shift over, never
   // clocked in), 'elsewhere' (clocked in at another site) or 'rota' (no Square clock-ins to compare with).
-  // Then anyone who clocked in here without a shift ('extra').
+  // Then everyone else actually clocked in here: covering from their rota at another site (in/on_break/done,
+  // with rota_site), or with no shift at all ('extra').
   const siteName = new Map(locations.map((l) => [l.id, l.name]));
   const roster = (locationId, att) => {
     const out = att.shifts.map((s) => {
@@ -97,9 +98,18 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       if (s.start > dayEnd) return { ...base, status: 'due' };
       return { ...base, status: s.end <= dayEnd ? 'missed' : 'late', late_minutes: Math.floor((Math.min(dayEnd, s.end) - s.start) / 60000) };
     });
+    const listed = new Set(att.shifts.map((s) => att.cardForShift.get(s.id)?.id).filter(Boolean));
     for (const t of cardsToday) {
-      if (t.location_id !== locationId || !att.byCard.get(t.id)?.not_on_rota) continue;
-      out.push({ name: t.name, rota: null, status: 'extra', clock: `${timeFormat.format(new Date(t.start))}–${t.end_at ? timeFormat.format(new Date(t.end)) : 'now'}` });
+      if (t.location_id !== locationId || listed.has(t.id)) continue;
+      const clock = `${timeFormat.format(new Date(t.start))}–${t.end_at ? timeFormat.format(new Date(t.end)) : 'now'}`;
+      const info = att.byCard.get(t.id) ?? {};
+      const rotaSite = att.shiftSiteForCard.get(t.id);
+      if (rotaSite && rotaSite !== locationId) {
+        const status = t.end_at ? 'done' : breakInfo(t, breaksToday.get(t.id), dayEnd).on_break ? 'on_break' : 'in';
+        out.push({ name: t.name, rota: info.rota ?? null, rota_site: siteName.get(rotaSite) ?? 'another site', status, clock, late_minutes: info.late_minutes ?? 0 });
+      } else {
+        out.push({ name: t.name, rota: null, status: 'extra', clock });
+      }
     }
     return out;
   };

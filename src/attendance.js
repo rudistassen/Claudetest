@@ -21,7 +21,8 @@ function shiftSpan(s) {
  * { rota: 'HH:MM–HH:MM' | null, late_minutes, over_minutes, not_on_rota }, and `missing` lists people rostered
  * there whose shift has started but who haven't clocked in (on a finished day: didn't clock in at all).
  * Also: `shifts`, the published shifts at this site that day (with start/end in ms), and `cardForShift`, the
- * clock-in matched to each (shift id → card), plus `clockedIn`, everyone who clocked in anywhere that day.
+ * clock-in matched to each (shift id → card), plus `clockedIn`, everyone who clocked in anywhere that day, and
+ * `shiftSiteForCard`, the site of the shift each clock-in here was matched to (card id → location id).
  */
 export function attendance(db, locationId, date, cards, now = Date.now()) {
   const shifts = db.prepare(`SELECT s.id, s.user_id, s.location_id, s.date, s.start_time, s.end_time, u.name
@@ -29,6 +30,7 @@ export function attendance(db, locationId, date, cards, now = Date.now()) {
   const used = new Set();
   const byCard = new Map();
   const cardForShift = new Map();
+  const shiftSiteForCard = new Map();
   for (const t of [...cards].sort((a, b) => a.start - b.start)) {
     if (t.location_id !== locationId) continue;
     // Their shift that day, at this site if they have one here, starting closest to when they clocked in.
@@ -43,6 +45,7 @@ export function attendance(db, locationId, date, cards, now = Date.now()) {
     }
     used.add(shift.id);
     cardForShift.set(shift.id, t);
+    shiftSiteForCard.set(t.id, shift.location_id);
     const late = Math.floor((t.start - shift.start) / 60000);
     const out = t.end_at ? t.end : now;
     const over = Math.floor((out - shift.end) / 60000);
@@ -59,5 +62,5 @@ export function attendance(db, locationId, date, cards, now = Date.now()) {
     .filter((s) => s.location_id === locationId && !used.has(s.id) && !clockedIn.has(s.user_id) && s.start <= now)
     .sort((a, b) => a.start - b.start)
     .map((s) => ({ name: s.name, rota: `${s.start_time}–${s.end_time}`, late_minutes: Math.floor((Math.min(now, s.end) - s.start) / 60000), shift_over: s.end <= now }));
-  return { byCard, missing, shifts: shifts.filter((s) => s.location_id === locationId).sort((a, b) => a.start - b.start), cardForShift, clockedIn };
+  return { byCard, missing, shifts: shifts.filter((s) => s.location_id === locationId).sort((a, b) => a.start - b.start), cardForShift, clockedIn, shiftSiteForCard };
 }

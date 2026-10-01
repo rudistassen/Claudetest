@@ -46,6 +46,11 @@ test('who’s in today: everyone on the rota at each site with where they are, t
     assert.equal(byStatus.late.late_minutes, 120);
     assert.match(byStatus.elsewhere.where, /\S/);
     assert.equal(byStatus.extra.clock, '08:00–11:00');
+
+    // b is rota'd here but clocked in at the other site: that site lists b as in, covering from here.
+    const there = siteSummaries(db, { locations, seeClockIns: true, date: day }).locations.find((l) => l.id === site2);
+    const cover = there.roster.find((p) => p.rota_site);
+    assert.deepEqual([cover.status, cover.rota, cover.rota_site, cover.clock], ['in', '09:00–17:00', locations[0].name, '09:00–now']);
   } finally {
     mock.timers.reset();
   }

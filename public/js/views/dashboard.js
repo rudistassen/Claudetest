@@ -26,34 +26,36 @@ function versus(now, then, { goodUp = true } = {}) {
 // where they are now, then anyone clocked in without a shift.
 const ROSTER = {
   in: ['In', 'is-in'], on_break: ['On break', 'is-break'], done: ['Finished', 'is-done'], due: ['Due', 'is-due'],
-  late: ['Not in', 'is-late'], missed: ['Didn’t clock in', 'is-late'], elsewhere: ['At another site', 'is-other'],
+  late: ['Not in', 'is-late'], missed: ['Didn’t clock in', 'is-late'], elsewhere: ['Elsewhere', 'is-other'],
   extra: ['Not on rota', 'is-other'], rota: ['On the rota', 'is-due'],
 };
 function rosterRow(p) {
   const [label, tone] = ROSTER[p.status] ?? ['', ''];
   const note = p.status === 'late' ? `${mins(p.late_minutes)} late`
-    : p.status === 'elsewhere' ? esc(p.where)
-      : p.late_minutes ? `${mins(p.late_minutes)} late` : '';
+    : p.status === 'elsewhere' ? `at ${esc(p.where)}`
+      : [p.rota_site ? 'covering' : '', p.late_minutes ? `${mins(p.late_minutes)} late` : ''].filter(Boolean).join(' · ');
   return `<tr class="roster-row ${tone}">
     <td>${esc(p.name)}</td>
-    <td>${p.rota ?? '<span class="muted">–</span>'}</td>
+    <td>${p.rota ? `${p.rota}${p.rota_site ? ` <span class="muted">at ${esc(p.rota_site)}</span>` : ''}` : '<span class="muted">–</span>'}</td>
     <td>${p.clock ? p.clock.replace('–now', '–<span class="muted">now</span>') : '<span class="muted">–</span>'}</td>
     <td><span class="roster-status">${label}</span>${note ? ` <span class="muted">${note}</span>` : ''}</td>
   </tr>`;
 }
 function whosIn(locs, data) {
   const count = (list, ...st) => list.filter((p) => st.includes(p.status)).length;
+  // On this site's rota (not covering from another site's rota, and not clocked in without a shift).
+  const rotad = (list) => list.filter((p) => p.status !== 'extra' && !p.rota_site).length;
   const rows = locs.filter((l) => l.roster);
   const all = rows.flatMap((l) => l.roster);
   return `<section class="card whos-in">
     <header class="card-head"><h2>Who’s in today</h2>
-      <span class="muted small">${all.filter((p) => p.status !== 'extra').length} on the rota · ${count(all, 'in', 'on_break', 'extra')} clocked in now · ${count(all, 'late', 'missed')} not in</span></header>
+      <span class="muted small">${rotad(all)} on the rota · ${count(all, 'in', 'on_break', 'extra')} clocked in now · ${count(all, 'late', 'missed')} not in</span></header>
     <div class="whos-in-grid">${rows.map((l) => {
       const r = l.roster;
       const notIn = count(r, 'late', 'missed');
       return `<div class="whos-in-site">
         <p class="whos-in-site-head"><strong>${esc(l.name)}</strong>
-          <span class="muted">${r.filter((p) => p.status !== 'extra').length} rota’d · ${count(r, 'in', 'on_break', 'extra')} in${notIn ? ` · <span class="tone-bad">${notIn} not in</span>` : ''}</span></p>
+          <span class="muted">${rotad(r)} rota’d · ${count(r, 'in', 'on_break', 'extra')} in${notIn ? ` · <span class="tone-bad">${notIn} not in</span>` : ''}</span></p>
         ${r.length ? `<table class="whos-in-table"><thead><tr><th>Person</th><th>Rota</th><th>Clocked</th><th>Status</th></tr></thead>
           <tbody>${r.map(rosterRow).join('')}</tbody></table>` : '<p class="muted small">Nobody on the rota today</p>'}
       </div>`;
