@@ -38,6 +38,24 @@ export function trustProxy(env) {
 export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, places = null, version = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // Browser protections: only this site's own scripts run, pages can't be shown inside other sites (stops
+  // click-jacking), files aren't second-guessed into another type, and HTTPS is remembered once used.
+  app.use((req, res, next) => {
+    res.set({
+      'Content-Security-Policy': [
+        "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https:", "media-src 'self' blob:", "frame-src 'self' blob:",
+        "connect-src 'self'", "font-src 'self' data:", "object-src 'none'", "base-uri 'self'",
+        "form-action 'self'", "frame-ancestors 'none'",
+      ].join('; '),
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'same-origin',
+      'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
+    });
+    if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
+    next();
+  });
   // Behind a hosting platform's proxy (Railway, Render, …) trust one hop, so HTTPS and visitors' addresses are seen.
   app.set('trust proxy', trustProxy(process.env));
   // Invoice uploads carry the file itself (up to 10 MB, a third bigger once encoded); everything else is small.

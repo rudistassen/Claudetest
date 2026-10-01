@@ -174,6 +174,13 @@ export function ensureAdmin(db, { email, password }) {
   return 'created';
 }
 
+/** Active accounts still signing in with the published demo password: [{ id, name, email }]. */
+export function demoPasswordAccounts(db) {
+  return db.prepare('SELECT id, name, email, password_hash FROM users WHERE active = 1').all()
+    .filter((u) => verifyPassword(DEMO_PASSWORD, u.password_hash))
+    .map(({ password_hash: _, ...u }) => u);
+}
+
 /** Switches off every account still using the demo password, apart from keepEmail. Returns how many. */
 export function lockDemoAccounts(db, { keepEmail } = {}) {
   const users = db.prepare('SELECT id, email, password_hash FROM users WHERE active = 1').all();

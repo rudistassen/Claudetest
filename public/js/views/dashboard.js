@@ -1,5 +1,5 @@
 import { attachTip } from '../charts.js';
-import { addDays, api, esc, fmtDate, money, siteColour, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, isDemo, money, siteColour, toast, todayISO } from '../lib.js';
 import { breakLine, clockInActions, wireClockInActions } from './breaks.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
@@ -223,10 +223,11 @@ export async function render({ el, state, navigate, stale, rerender }) {
   let period = 'today';
   try { period = localStorage.getItem(PERIOD_KEY) === 'week' ? 'week' : 'today'; } catch { /* storage unavailable */ }
   const d0 = todayISO();
-  const [data, myShifts, leave, tradeToday, tradeWeek, tradePrevWeek] = await Promise.all([
+  const [data, myShifts, leave, security, tradeToday, tradeWeek, tradePrevWeek] = await Promise.all([
     api('/dashboard'),
     api('/my-shifts'),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
+    state.isAdmin && !isDemo ? api('/admin/security').catch(() => null) : null,
     seeSales ? api(`/trading?from=${d0}&to=${d0}`) : null,
     seeSales && period === 'week' ? api(`/trading?from=${addDays(d0, -6)}&to=${d0}`) : null,
     // The week before, up to yesterday a week ago (last week's matching day to this time comes from /dashboard).
@@ -285,6 +286,7 @@ export async function render({ el, state, navigate, stale, rerender }) {
     </div>` : ''}
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
     ${locs.some((l) => l.roster) ? whosIn(locs, data) : ''}
+    ${security?.demo_password_accounts?.length ? `<p class="notice security-warning"><strong>⚠ Security: ${security.demo_password_accounts.length} account${security.demo_password_accounts.length === 1 ? '' : 's'} can still sign in with the demo password</strong> (${esc(security.demo_password_accounts.slice(0, 4).map((u) => u.email).join(', '))}${security.demo_password_accounts.length > 4 ? ', …' : ''}). Anyone who knows it could get in. Add <code>SEED_DEMO</code> = <code>false</code> in Railway → Variables to switch them all off, or give each a new password under Setup → Staff.</p>` : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
     ${myShifts.length ? `
     <section class="card">

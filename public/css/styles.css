@@ -1438,3 +1438,4 @@ body.rota-dragging, body.rota-dragging * { cursor: grabbing !important; -webkit-
 .dash-table tbody tr[style] th::before { content: ""; position: absolute; left: 0.45rem; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 3px; background: var(--site); }
 .dash-table tbody tr[style] .dash-sales .dash-bar:not(.dash-bar-prev) .fill { background: var(--site); }
 .whos-in-site-head { background: color-mix(in srgb, var(--site, var(--surface-2)) 13%, var(--surface)); border-left: 4px solid var(--site, var(--border)); }
+.security-warning { background: var(--bad-soft); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); }

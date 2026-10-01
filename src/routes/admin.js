@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { ACCESS_FIELDS, ACCESS_JOIN, PUBLIC_USER_FIELDS, assertLocation, hashPassword, requireAdmin, requirePerm, validatePassword, withPermissions } from '../auth.js';
 import { tx } from '../db.js';
+import { demoPasswordAccounts } from '../seed.js';
 import { trySquarePush } from '../square-staff.js';
 import { ALL_PERMISSIONS, cleanPermissions, parsePermissions, PERMISSION_AREAS, roleForPermissions } from '../permissions.js';
 import { badRequest, bool, forbidden, id, notFound, num, oneOf, str } from '../util.js';
@@ -10,6 +11,14 @@ const ROLES = ['admin', 'manager', 'staff'];
 // square: { config, client } when Square is connected; staff changes are then copied to Square (see square-staff.js).
 export function registerAdminRoutes(router, db, square = null) {
   // --- Locations ---
+
+  // Admins are warned on the dashboard while any account can still sign in with the published demo password.
+  // Checking every password takes a moment, so the answer is kept for a few minutes.
+  let demoCheck = { at: 0, list: [] };
+  router.get('/admin/security', requireAdmin, (req, res) => {
+    if (Date.now() - demoCheck.at > 5 * 60 * 1000 || req.query.fresh) demoCheck = { at: Date.now(), list: demoPasswordAccounts(db) };
+    res.json({ demo_password_accounts: demoCheck.list });
+  });
 
   router.get('/locations', (req, res) => {
     // Admins see every site (including inactive ones); everyone else the sites they can access.

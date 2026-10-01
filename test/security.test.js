@@ -66,3 +66,29 @@ test('a hosted app started before its settings were added still creates your adm
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('pages carry browser protections, and admins can see accounts still using the demo password', async () => {
+  const { openDb } = await import('../src/db.js');
+  const { createApp } = await import('../src/server.js');
+  const seed = await import('../src/seed.js');
+  const db = openDb(':memory:');
+  seed.seedAdmin(db, { email: 'boss@brewly-test.co.uk', password: 'a strong one!' });
+  seed.seedDemo(db);
+  const server = createApp(db).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const page = await fetch(`${base}/`);
+    assert.match(page.headers.get('content-security-policy'), /script-src 'self'.*frame-ancestors 'none'/);
+    assert.equal(page.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(page.headers.get('x-frame-options'), 'DENY');
+    const login = async (email, password) => (await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })).headers.get('set-cookie')?.split(';')[0];
+    const admin = await login('boss@brewly-test.co.uk', 'a strong one!');
+    const r = await (await fetch(`${base}/api/admin/security`, { headers: { cookie: admin } })).json();
+    assert.ok(r.demo_password_accounts.some((u) => u.email === 'manager1@cafe.local'));
+    assert.ok(!r.demo_password_accounts.some((u) => u.email === 'boss@brewly-test.co.uk'));
+    assert.ok(!JSON.stringify(r).includes('scrypt'), 'no password hashes');
+    const manager = await login('manager1@cafe.local', seed.DEMO_PASSWORD);
+    assert.equal((await fetch(`${base}/api/admin/security`, { headers: { cookie: manager } })).status, 403);
+  } finally { server.close(); }
+});
