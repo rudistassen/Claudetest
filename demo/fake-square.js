@@ -132,6 +132,8 @@ const BREAK_TYPES = [
   { id: 'BT_TEA', break_name: 'Tea break', expected_duration: 'PT10M', is_paid: true },
 ];
 let breakIds = 0;
+let paymentLinks = 0;
+const linkOrders = new Map();
 
 function page(items, q, key, size) {
   const offset = Number(q.cursor ?? 0);
@@ -193,6 +195,21 @@ export async function fakeSquareFetch(url, init = {}) {
   if (path.startsWith('/v2/team-members')) {
     const r = teamWrite(path, init.method ?? 'GET', init.body ? JSON.parse(init.body) : {});
     if (r) return r;
+  }
+  // Payment links: made instantly; each order counts as paid a minute after it's made (so "paid" can be tried).
+  if (path === '/v2/online-checkout/payment-links' && init.method === 'POST') {
+    const body = JSON.parse(init.body);
+    const n = ++paymentLinks;
+    const link = { id: `PL_${n}`, order_id: `ORD_PL_${n}`, url: `https://square.link/u/demo${n}`, created_at: new Date().toISOString() };
+    linkOrders.set(link.order_id, { created: Date.now(), amount: body.quick_pay.price_money.amount });
+    return json(200, { payment_link: link });
+  }
+  if (path.startsWith('/v2/online-checkout/payment-links/') && init.method === 'DELETE') return json(200, { id: path.split('/').pop() });
+  if (path.startsWith('/v2/orders/ORD_PL_')) {
+    const o = linkOrders.get(path.split('/').pop());
+    if (!o) return json(404, { errors: [{ code: 'NOT_FOUND', detail: 'Order not found' }] });
+    const paid = Date.now() - o.created > 60000;
+    return json(200, { order: { id: path.split('/').pop(), state: paid ? 'COMPLETED' : 'OPEN', tenders: paid ? [{ id: 'T1' }] : [], net_amount_due_money: { amount: paid ? 0 : o.amount, currency: 'GBP' } } });
   }
   if (path === '/v2/labor/break-types') {
     const loc = new URL(url).searchParams.get('location_id');

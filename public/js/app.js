@@ -6,6 +6,7 @@ import * as breaks from './views/breaks.js';
 import * as rotalog from './views/rotalog.js';
 import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
+import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
 import { renderSetPassword } from './views/password.js';
@@ -77,6 +78,7 @@ const ROUTES = [
   [/^admin\/products$/, admin.renderProducts, SUPPLIERS],
   [/^admin\/safety-tasks$/, safety.renderSetup, ['safety.manage']],
   [/^admin\/square$/, admin.renderSquare, 'admin'],
+  [/^admin\/payment-links$/, paymentlinks.render, ['payments.send']],
   [/^mybrew$/, mybrew.renderMyBrew],
   [/^admin\/news$/, mybrew.renderNewsSetup, ['news.manage']],
   [/^admin\/documents$/, mybrew.renderDocumentsSetup, ['news.manage']],
@@ -121,6 +123,7 @@ function navGroups() {
       ['admin/permissions', 'Permissions', '⚿', 'admin'],
       ['admin/locations', 'Locations', '⌂', 'admin'],
       ['admin/square', 'Square', '▢', 'admin'],
+      ['admin/payment-links', 'Payment links', '£', ['payments.send']],
       ['admin/email-reports', 'Email reports', '✉', 'admin'],
       ['admin/news', 'News', '✎', ['news.manage']],
       ['admin/documents', 'Documents', '❐', ['news.manage']],

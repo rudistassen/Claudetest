@@ -141,6 +141,19 @@ export class SquareClient {
     } while (cursor);
   }
 
+  // Payment links (Square Checkout): a page where a customer pays a set amount by card, Apple Pay or Google Pay.
+  async createPaymentLink(body) {
+    return this.request('POST', '/v2/online-checkout/payment-links', body);
+  }
+
+  async deletePaymentLink(id) {
+    return this.request('DELETE', `/v2/online-checkout/payment-links/${encodeURIComponent(id)}`);
+  }
+
+  async getOrder(id) {
+    return (await this.request('GET', `/v2/orders/${encodeURIComponent(id)}`)).order;
+  }
+
   // One clock-in (timecard; "shift" in older API versions).
   labourPath() {
     return this.config.version >= TIMECARDS_VERSION ? ['/v2/labor/timecards', 'timecard'] : ['/v2/labor/shifts', 'shift'];

@@ -267,6 +267,27 @@ CREATE TABLE IF NOT EXISTS password_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_password_tokens_user ON password_tokens(user_id);
 
+-- Payment links sent from Brewly (Setup → Payment links), each a Square Checkout link for a set amount.
+CREATE TABLE IF NOT EXISTS payment_links (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id),
+  square_link_id TEXT NOT NULL,
+  square_order_id TEXT,
+  url TEXT NOT NULL,
+  amount REAL NOT NULL,
+  description TEXT NOT NULL,
+  customer_name TEXT,
+  customer_email TEXT,
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'paid', 'cancelled')),
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by_name TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  emailed_at TEXT,
+  paid_at TEXT,
+  checked_at TEXT
+);
+
 -- Simple app-wide settings (key → value), e.g. the invoice inbox's default site.
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,

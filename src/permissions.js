@@ -33,6 +33,7 @@ export const PERMISSION_AREAS = [
   ['Sales & trading', [
     ['sales.view', 'See sales, labour costs and the Sales and Trading pages'],
     ['sales.sync', 'Sync sales from Square (up to a week at a time)'],
+    ['payments.send', 'Create and send Square payment links to customers (e.g. deposits)'],
   ]],
   ['Staff', [
     ['staff.manage', 'Add and edit staff at their site, and see pay rates'],
@@ -58,7 +59,7 @@ export const DEFAULT_SETS = [
     built_in: 'manager',
     name: 'Manager',
     description: 'Runs a site: rota, orders, stock, staff and sales for their own site.',
-    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products'].includes(p)),
+    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products', 'payments.send'].includes(p)),
   },
   {
     built_in: 'staff',
