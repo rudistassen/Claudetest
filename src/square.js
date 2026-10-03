@@ -20,7 +20,7 @@ export function squareConfig(env = process.env) {
     environment,
     baseUrl: env.SQUARE_BASE_URL || BASE_URLS[environment],
     version: env.SQUARE_API_VERSION || '2025-01-23',
-    syncMinutes: Number(env.SQUARE_SYNC_MINUTES) || 30,
+    syncMinutes: Math.max(2, Number(env.SQUARE_SYNC_MINUTES) || 5),
   };
 }
 

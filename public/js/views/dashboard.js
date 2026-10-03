@@ -45,13 +45,9 @@ function rosterRow(p) {
     <td><span class="roster-status">${label}</span>${note ? ` <span class="muted">${note}</span>` : ''}</td>
   </tr>`;
 }
-// "Updated 10:02 · ↻ Refresh" – the refresh button waits until 15 minutes after the last update.
+// When sales and clock-ins last came in from Square (every few minutes).
 const hm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-function syncLine(f) {
-  const updated = f.last_sync ? `Updated ${hm(`${f.last_sync.replace(' ', 'T')}Z`)}` : 'Not updated from Square yet';
-  const wait = f.next_refresh_at && Date.parse(f.next_refresh_at) > Date.now();
-  return `<span class="muted">${updated}</span> <button type="button" class="link-btn sync-btn" id="square-refresh" ${wait ? `disabled title="You can refresh again at ${hm(f.next_refresh_at)}"` : 'title="Get the latest sales and clock-ins from Square"'}>↻ ${wait ? `Refresh at ${hm(f.next_refresh_at)}` : 'Refresh'}</button>`;
-}
+const syncLine = (f) => `<span class="muted">${f.last_sync ? `Updated from Square at ${hm(`${f.last_sync.replace(' ', 'T')}Z`)}` : 'Not updated from Square yet'}</span>`;
 
 function whosIn(locs, data, fresh) {
   const count = (list, ...st) => list.filter((p) => st.includes(p.status)).length;
@@ -356,22 +352,6 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     navigate(v >= today ? 'dashboard' : `dashboard?date=${v}`);
   });
   el.querySelector('#dash-today')?.addEventListener('click', () => navigate('dashboard'));
-  // Refresh from Square (inside the folding heading, so it mustn't open or close the panel).
-  el.querySelector('#square-refresh')?.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const b = e.currentTarget;
-    b.disabled = true;
-    b.textContent = '↻ Refreshing…';
-    try {
-      await api('/square/refresh', { method: 'POST' });
-      toast('Updated from Square');
-      rerender();
-    } catch (err) {
-      toast(err.message, 'error');
-      b.textContent = '↻ Refresh';
-    }
-  });
   // "Clocked in now": who's clocked in, site by site.
   el.querySelector('#clocked-in-now')?.addEventListener('click', () => {
     const sites = locs.map((l) => ({ l, people: (l.clock_ins ?? []).filter(inNow) })).filter((x) => x.people.length);

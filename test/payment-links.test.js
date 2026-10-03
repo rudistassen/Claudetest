@@ -87,20 +87,13 @@ test('payment links: created in Square for the site, emailed, shown as paid, and
   assert.ok(theirs.every((p) => p.location_id === mine || db.prepare('SELECT all_sites FROM users WHERE email = ?').get('manager1@cafe.local').all_sites));
 });
 
-test('refresh from Square: shows when it last updated, and can only be run 15 minutes after the last update', async () => {
+test('the dashboard can show when data last came from Square', async () => {
   const staff = await login('staff1@cafe.local');
   assert.equal((await staff('/square/freshness')).status, 403);
   const admin = await login('admin@cafe.local');
-  db.prepare(`INSERT INTO square_sync_log (started_at, finished_at, status) VALUES (datetime('now', '-5 minutes'), datetime('now', '-5 minutes'), 'ok')`).run();
+  db.prepare(`INSERT INTO square_sync_log (started_at, finished_at, status) VALUES (datetime('now'), datetime('now'), 'ok')`).run();
   const f = (await admin('/square/freshness')).data;
   assert.equal(f.connected, true);
   assert.ok(f.last_sync);
-  assert.ok(Date.parse(f.next_refresh_at) > Date.now());
-  const early = await admin('/square/refresh', { method: 'POST' });
-  assert.equal(early.status, 429);
-  assert.match(early.data.error, /refresh again at \d\d:\d\d/);
-  db.prepare(`UPDATE square_sync_log SET finished_at = datetime('now', '-16 minutes')`).run();
-  const ok = await admin('/square/refresh', { method: 'POST' });
-  assert.equal(ok.status, 200, JSON.stringify(ok.data));
-  assert.ok(Date.parse(ok.data.next_refresh_at) > Date.now() + 14 * 60000, 'the clock starts again');
+  assert.equal((await admin('/square/refresh', { method: 'POST' })).status, 404, 'no manual refresh any more');
 });

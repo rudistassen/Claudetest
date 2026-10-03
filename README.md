@@ -68,7 +68,7 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 | `SEED_DEMO` | `true` | Set to `false` to skip demo data |
 | `SQUARE_ACCESS_TOKEN` | – | Square access token; turns on the Square integration |
 | `SQUARE_ENVIRONMENT` | `production` | `sandbox` to use a Square sandbox token and test data |
-| `SQUARE_SYNC_MINUTES` | `30` | How often today's and yesterday's sales are refreshed |
+| `SQUARE_SYNC_MINUTES` | `5` | How often today's and yesterday's sales are refreshed |
 | `SQUARE_API_VERSION` | `2025-01-23` | Square API version header |
 
 `npm run seed` **deletes** the database and recreates it.

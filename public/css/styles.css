@@ -1501,9 +1501,6 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 .pay-actions { white-space: nowrap; text-align: right; }
 .pay-actions .btn { margin: 0.1rem 0; }
 .site-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; background: var(--site); margin-right: 0.4rem; }
-/* Who's in today: when it last came in from Square, and Refresh */
+/* Who's in today: when it last came in from Square */
 .whos-in .sync-line { margin-left: auto; display: inline-flex; align-items: baseline; gap: 0.5rem; white-space: nowrap; }
-.whos-in .sync-btn { margin: 0; font-weight: 600; font-size: inherit; }
-.whos-in .sync-btn:disabled { color: var(--muted); text-decoration: none; cursor: default; }
 @media (max-width: 700px) { .whos-in .sync-line { margin-left: 0; order: 3; width: 100%; } }
-@media print { .whos-in .sync-btn { display: none; } }

@@ -93,7 +93,7 @@ async function boot() {
   seedActivity(db);
   publishAllShifts(db);
 
-  const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 30 };
+  const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 5 };
   const square = { config, client: new SquareClient(config, fakeSquareFetch) };
   const demoMailer = memoryMailer();
   for (const l of SQUARE_LOCATIONS.slice(0, 7)) {
