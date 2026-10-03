@@ -105,6 +105,25 @@ export function registerSalesRoutes(router, db, square) {
     res.json(applyCleanup(db, { currentUserId: req.user.id, removeLocations, removeStaff }));
   });
 
+  // The dashboard's "Updated 10:02 · Refresh": when sales and clock-ins last came in from Square, and a refresh
+  // of today that anyone who can see them may run, but not within 15 minutes of the last update.
+  const REFRESH_GAP_MS = 15 * 60 * 1000;
+  const freshness = () => {
+    const last = db.prepare(`SELECT finished_at FROM square_sync_log WHERE status = 'ok' ORDER BY id DESC LIMIT 1`).get()?.finished_at ?? null;
+    const lastMs = last ? Date.parse(`${last.replace(' ', 'T')}Z`) : 0;
+    return { connected: !!square, last_sync: last, next_refresh_at: lastMs ? new Date(lastMs + REFRESH_GAP_MS).toISOString() : null };
+  };
+  router.get('/square/freshness', requirePerm('sales.view', 'staff.manage'), (_req, res) => res.json(freshness()));
+  router.post('/square/refresh', requirePerm('sales.view', 'staff.manage'), requireSquare, async (req, res) => {
+    const f = freshness();
+    if (f.next_refresh_at && Date.parse(f.next_refresh_at) > Date.now()) {
+      const t = new Date(f.next_refresh_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+      throw new HttpError(429, `Updated in the last 15 minutes – you can refresh again at ${t}`);
+    }
+    await syncSales(db, square.client, { from: today(), to: today(), triggeredBy: `${req.user.name} (refresh)` });
+    res.json(freshness());
+  });
+
   router.post('/square/sync', requirePerm('sales.sync'), requireSquare, async (req, res) => {
     const to = date(req.body.to, 'to') ?? today();
     const from = date(req.body.from, 'from') ?? addDays(to, -1);

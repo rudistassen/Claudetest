@@ -45,7 +45,15 @@ function rosterRow(p) {
     <td><span class="roster-status">${label}</span>${note ? ` <span class="muted">${note}</span>` : ''}</td>
   </tr>`;
 }
-function whosIn(locs, data) {
+// "Updated 10:02 · ↻ Refresh" – the refresh button waits until 15 minutes after the last update.
+const hm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+function syncLine(f) {
+  const updated = f.last_sync ? `Updated ${hm(`${f.last_sync.replace(' ', 'T')}Z`)}` : 'Not updated from Square yet';
+  const wait = f.next_refresh_at && Date.parse(f.next_refresh_at) > Date.now();
+  return `<span class="muted">${updated}</span> <button type="button" class="link-btn sync-btn" id="square-refresh" ${wait ? `disabled title="You can refresh again at ${hm(f.next_refresh_at)}"` : 'title="Get the latest sales and clock-ins from Square"'}>↻ ${wait ? `Refresh at ${hm(f.next_refresh_at)}` : 'Refresh'}</button>`;
+}
+
+function whosIn(locs, data, fresh) {
   const count = (list, ...st) => list.filter((p) => st.includes(p.status)).length;
   // Clocked in right now: in or on a break, or not on the rota and not clocked out yet.
   const inNow = (list) => list.filter((p) => p.status === 'in' || p.status === 'on_break' || (p.status === 'extra' && !p.clocked_out)).length;
@@ -57,6 +65,7 @@ function whosIn(locs, data) {
   // Folded away to just its heading (and each site to its own heading); tap to open.
   return `<details class="card whos-in">
     <summary class="card-head"><h2>${shown.isToday ? 'Who’s in today' : `Who was in · ${esc(dayWord())}`}</h2>
+      ${shown.isToday && fresh?.connected ? `<span class="sync-line small">${syncLine(fresh)}</span>` : ''}
       <span class="muted small">${rotad(all)} on the rota · ${shown.isToday ? `${inNow(all)} clocked in now` : `${all.filter((p) => p.clock).length} clocked in`}${notInAll ? ` · <span class="tone-bad">${notInAll} not in</span>` : ''}</span></summary>
     <div class="whos-in-grid">${rows.map((l) => {
       const r = l.roster;
@@ -245,11 +254,12 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const d0 = /^\d{4}-\d{2}-\d{2}$/.test(query.date ?? '') && query.date < today ? query.date : today;
   shown.isToday = d0 === today;
   shown.day = d0;
-  const [data, myShifts, leave, security, tradeToday, tradeWeek, tradePrevWeek] = await Promise.all([
+  const [data, myShifts, leave, security, fresh, tradeToday, tradeWeek, tradePrevWeek] = await Promise.all([
     api(`/dashboard${shown.isToday ? '' : `?date=${d0}`}`),
     api('/my-shifts'),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
     state.isAdmin && !isDemo ? api('/admin/security').catch(() => null) : null,
+    seeSales || state.can('staff.manage') ? api('/square/freshness').catch(() => null) : null,
     seeSales ? api(`/trading?from=${d0}&to=${d0}`) : null,
     seeSales && period === 'week' ? api(`/trading?from=${addDays(d0, -6)}&to=${d0}`) : null,
     // The week before, up to yesterday a week ago (last week's matching day to this time comes from /dashboard).
@@ -326,7 +336,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>${shown.isToday ? 'Clocked in now' : 'Clocked in'}</span><strong>${clockedInNow}</strong><small>${shown.isToday ? `of ${totals.staff} on today’s rota` : `${totals.staff} on the rota`} · <u>see who</u></small></button>`}
     </div>` : ''}
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
-    ${locs.some((l) => l.roster) ? whosIn(locs, data) : ''}
+    ${locs.some((l) => l.roster) ? whosIn(locs, data, fresh) : ''}
     ${security?.demo_password_accounts?.length ? `<p class="notice security-warning"><strong>⚠ Security: ${security.demo_password_accounts.length} account${security.demo_password_accounts.length === 1 ? '' : 's'} can still sign in with the demo password</strong> (${esc(security.demo_password_accounts.slice(0, 4).map((u) => u.email).join(', '))}${security.demo_password_accounts.length > 4 ? ', …' : ''}). Anyone who knows it could get in. Add <code>SEED_DEMO</code> = <code>false</code> in Railway → Variables to switch them all off, or give each a new password under Setup → Staff.</p>` : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
     ${myShifts.length ? `
@@ -346,6 +356,22 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     navigate(v >= today ? 'dashboard' : `dashboard?date=${v}`);
   });
   el.querySelector('#dash-today')?.addEventListener('click', () => navigate('dashboard'));
+  // Refresh from Square (inside the folding heading, so it mustn't open or close the panel).
+  el.querySelector('#square-refresh')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const b = e.currentTarget;
+    b.disabled = true;
+    b.textContent = '↻ Refreshing…';
+    try {
+      await api('/square/refresh', { method: 'POST' });
+      toast('Updated from Square');
+      rerender();
+    } catch (err) {
+      toast(err.message, 'error');
+      b.textContent = '↻ Refresh';
+    }
+  });
   // "Clocked in now": who's clocked in, site by site.
   el.querySelector('#clocked-in-now')?.addEventListener('click', () => {
     const sites = locs.map((l) => ({ l, people: (l.clock_ins ?? []).filter(inNow) })).filter((x) => x.people.length);
