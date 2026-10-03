@@ -1,4 +1,4 @@
-import { addDays, api, esc, field, fmtDate, input, money, qs, qty, textarea, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, field, fmtDate, input, money, qs, qty, textarea, toast, todayISO, siteScope, siteFilter } from '../lib.js';
 
 let metaCache = null;
 const meta = async () => (metaCache ??= await api('/recipes/meta'));
@@ -23,7 +23,7 @@ function chips(keys, m, kind = '') {
 
 function tabs(state, active) {
   const items = [['recipes', 'Recipes'], ['recipes/allergens', 'Allergen matrix']];
-  if (state.isManager) items.push(['recipes/performance', 'Menu performance']);
+  if (state.can('recipes.costs')) items.push(['recipes/performance', 'Menu performance']);
   return `<div class="tabs">${items.map(([p, l]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${l}</a>`).join('')}</div>`;
 }
 
@@ -39,7 +39,7 @@ export async function renderList(ctx) {
   el.innerHTML = `
     <div class="page-head">
       <h1>Recipes</h1>
-      <div class="actions">${state.isAdmin ? '<a class="btn btn-primary" href="#/recipes/new">+ New recipe</a>' : ''}</div>
+      <div class="actions">${state.can('recipes.edit') ? '<a class="btn btn-primary" href="#/recipes/new">+ New recipe</a>' : ''}</div>
     </div>
     ${tabs(state, 'recipes')}
     <div class="filters">
@@ -49,19 +49,19 @@ export async function renderList(ctx) {
     <section class="card">
       ${recipes.length ? `<div class="table-wrap"><table>
         <thead><tr><th>Recipe</th><th>Category</th><th class="num">Price</th>
-          ${state.isManager ? `<th class="num">Cost / portion</th><th class="num">GP %</th>` : ''}
-          <th>Allergens</th>${state.isManager ? '<th>Square</th>' : ''}</tr></thead>
+          ${state.can('recipes.costs', 'recipes.edit') ? `<th class="num">Cost / portion</th><th class="num">GP %</th>` : ''}
+          <th>Allergens</th>${state.can('recipes.costs', 'recipes.edit') ? '<th>Square</th>' : ''}</tr></thead>
         <tbody>${recipes.map((r) => `
           <tr class="clickable ${r.active ? '' : 'inactive'}" data-id="${r.id}" data-cat="${esc(r.category ?? '')}" data-search="${esc(r.name.toLowerCase())}">
             <td><a href="#/recipes/${r.id}"><strong>${esc(r.name)}</strong></a>${r.missing_costs?.length ? ' <small class="tone-warn">some ingredients have no cost</small>' : ''}</td>
             <td>${esc(r.category ?? '')}</td>
             <td class="num">${money(r.selling_price)}</td>
-            ${state.isManager ? `<td class="num">${money(r.cost_per_portion)}</td><td class="num"><span class="tone-${gpTone(r.gp_pct, m.target_gp)}">${fmtPct(r.gp_pct)}</span></td>` : ''}
+            ${state.can('recipes.costs', 'recipes.edit') ? `<td class="num">${money(r.cost_per_portion)}</td><td class="num"><span class="tone-${gpTone(r.gp_pct, m.target_gp)}">${fmtPct(r.gp_pct)}</span></td>` : ''}
             <td>${chips(r.allergens, m)}</td>
-            ${state.isManager ? `<td>${r.square_catalog_object_id || r.square_item_name ? '<span class="badge badge-completed">Linked</span>' : '<span class="muted small">Not linked</span>'}</td>` : ''}
+            ${state.can('recipes.costs', 'recipes.edit') ? `<td>${r.square_catalog_object_id || r.square_item_name ? '<span class="badge badge-completed">Linked</span>' : '<span class="muted small">Not linked</span>'}</td>` : ''}
           </tr>`).join('')}</tbody>
-      </table></div>` : `<div class="empty">No recipes yet.${state.isAdmin ? ' Add your first one to get costings and an allergen matrix.' : ''}</div>`}
-      ${state.isManager ? `<p class="muted small">GP is after VAT. Target: ${m.target_gp}% or more.</p>` : ''}
+      </table></div>` : `<div class="empty">No recipes yet.${state.can('recipes.edit') ? ' Add your first one to get costings and an allergen matrix.' : ''}</div>`}
+      ${state.can('recipes.costs', 'recipes.edit') ? `<p class="muted small">GP is after VAT. Target: ${m.target_gp}% or more.</p>` : ''}
     </section>`;
 
   const search = el.querySelector('#search');
@@ -91,13 +91,13 @@ export async function renderRecipe(ctx) {
       <h1>${esc(r.name)}${r.active ? '' : ' <span class="badge">Inactive</span>'}</h1>
       <div class="actions">
         <a class="btn" href="#/recipes">‹ Recipes</a>
-        ${state.isAdmin ? `<a class="btn btn-primary" href="#/recipes/${r.id}/edit">Edit</a>` : ''}
+        ${state.can('recipes.edit') ? `<a class="btn btn-primary" href="#/recipes/${r.id}/edit">Edit</a>` : ''}
       </div>
     </div>
     <div class="kpis">
       <div class="kpi"><span>Selling price${r.vat_rated ? ' (inc VAT)' : ' (zero-rated)'}</span><strong>${money(r.selling_price)}</strong></div>
       <div class="kpi"><span>Makes</span><strong>${qty(r.portions)} portion${r.portions === 1 ? '' : 's'}</strong></div>
-      ${state.isManager ? `
+      ${state.can('recipes.costs', 'recipes.edit') ? `
       <div class="kpi"><span>Cost per portion</span><strong>${money(r.cost_per_portion)}</strong></div>
       <div class="kpi kpi-${gpTone(r.gp_pct, m.target_gp)}"><span>GP (after VAT) · ${money(r.gp)}</span><strong>${fmtPct(r.gp_pct)}</strong></div>` : ''}
     </div>
@@ -112,13 +112,13 @@ export async function renderRecipe(ctx) {
       <section class="card">
         <h2>Ingredients</h2>
         ${r.ingredients.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Ingredient</th><th class="num">Batch</th>${r.portions !== 1 ? '<th class="num">Per portion</th>' : ''}${state.isManager ? '<th class="num">Cost</th>' : ''}</tr></thead>
+          <thead><tr><th>Ingredient</th><th class="num">Batch</th>${r.portions !== 1 ? '<th class="num">Per portion</th>' : ''}${state.can('recipes.costs', 'recipes.edit') ? '<th class="num">Cost</th>' : ''}</tr></thead>
           <tbody>${r.ingredients.map((i) => `<tr>
             <td>${esc(i.product_name)}${i.notes ? ` <small class="muted">${esc(i.notes)}</small>` : ''}</td>
             <td class="num">${qty(i.quantity)} ${esc(i.recipe_unit)}</td>
             ${r.portions !== 1 ? `<td class="num">${qty(perPortion(i.quantity))} ${esc(i.recipe_unit)}</td>` : ''}
-            ${state.isManager ? `<td class="num">${money(i.line_cost)}</td>` : ''}</tr>`).join('')}</tbody>
-          ${state.isManager ? `<tfoot><tr><th colspan="${r.portions !== 1 ? 3 : 2}">Batch cost</th><td class="num">${money(r.batch_cost)}</td></tr></tfoot>` : ''}
+            ${state.can('recipes.costs', 'recipes.edit') ? `<td class="num">${money(i.line_cost)}</td>` : ''}</tr>`).join('')}</tbody>
+          ${state.can('recipes.costs', 'recipes.edit') ? `<tfoot><tr><th colspan="${r.portions !== 1 ? 3 : 2}">Batch cost</th><td class="num">${money(r.batch_cost)}</td></tr></tfoot>` : ''}
         </table></div>` : '<p class="muted">No ingredients added.</p>'}
       </section>
       <section class="card">
@@ -126,7 +126,7 @@ export async function renderRecipe(ctx) {
         ${r.method ? `<div class="method">${esc(r.method)}</div>` : '<p class="muted">No method written yet.</p>'}
         ${r.shelf_life ? `<p><strong>Shelf life / storage:</strong> ${esc(r.shelf_life)}</p>` : ''}
         ${r.description ? `<p class="muted">${esc(r.description)}</p>` : ''}
-        ${state.isManager ? `<p class="small muted">Square: ${r.square_catalog_object_id || r.square_item_name ? `linked${r.square_item_name ? ` to “${esc(r.square_item_name)}”` : ''}` : 'not linked – sales won’t count towards menu performance'}</p>` : ''}
+        ${state.can('recipes.costs', 'recipes.edit') ? `<p class="small muted">Square: ${r.square_catalog_object_id || r.square_item_name ? `linked${r.square_item_name ? ` to “${esc(r.square_item_name)}”` : ''}` : 'not linked – sales won’t count towards menu performance'}</p>` : ''}
       </section>
     </div>`;
 }
@@ -345,7 +345,7 @@ export async function renderPerformance(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -6);
-  const scope = state.isAdmin ? (query.scope ?? 'all') : 'site';
+  const scope = siteScope(state, query.scope);
   const [data, m] = await Promise.all([
     api(`/recipes/performance${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`),
     meta(),
@@ -357,7 +357,7 @@ export async function renderPerformance(ctx) {
     <div class="page-head"><h1>Menu performance</h1></div>
     ${tabs(state, 'recipes/performance')}
     <form class="filters" id="range">
-      ${state.isAdmin ? `<select name="scope"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      ${siteFilter(state, scope)}
       <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
       <button class="btn" type="submit">Update</button>
     </form>
@@ -393,7 +393,7 @@ export async function renderPerformance(ctx) {
           <tbody>${data.unlinked.map((u) => `<tr><td>${esc(u.name)}${u.variation_name && u.variation_name !== 'Regular' ? ` <small class="muted">${esc(u.variation_name)}</small>` : ''}</td>
             <td class="num">${qty(u.quantity)}</td><td class="num">${money(u.net_sales)}</td></tr>`).join('')}</tbody>
         </table></div>
-        ${state.isAdmin ? '<p class="small"><a href="#/recipes/new">Add a recipe</a> and link it to the Square item to include it.</p>' : ''}` : '<p class="muted">Every item sold has a recipe.</p>'}
+        ${state.can('recipes.edit') ? '<p class="small"><a href="#/recipes/new">Add a recipe</a> and link it to the Square item to include it.</p>' : ''}` : '<p class="muted">Every item sold has a recipe.</p>'}
       </section>
     </div>`;
 

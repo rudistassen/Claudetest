@@ -1,4 +1,4 @@
-import { assertLocation, isManager, requireManager, resolveLocation } from '../auth.js';
+import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { loadRecipes } from '../recipes.js';
 import { addDays, badRequest, csv, date, forbidden, id, notFound, num, oneOf, round2, str, today } from '../util.js';
@@ -36,7 +36,7 @@ export function registerStockRoutes(router, db) {
     return take;
   }
 
-  router.get('/stocktakes', (req, res) => {
+  router.get('/stocktakes', requirePerm('stock.count', 'stock.complete'), (req, res) => {
     const locationId = resolveLocation(req, req.query.location_id);
     const rows = db.prepare(`${takeSelect} WHERE t.location_id = ? ORDER BY t.started_at DESC, t.id DESC LIMIT 100`).all(locationId);
     for (const r of rows) r.total_value = round2(r.total_value);
@@ -44,7 +44,7 @@ export function registerStockRoutes(router, db) {
   });
 
   // Starts a count for a location, or returns the one already in progress.
-  router.post('/stocktakes', (req, res) => {
+  router.post('/stocktakes', requirePerm('stock.count'), (req, res) => {
     const locationId = resolveLocation(req, req.body.location_id);
     const existing = db.prepare(`SELECT id FROM stock_takes WHERE location_id = ? AND status = 'in_progress'`).get(locationId);
     if (existing) {
@@ -62,7 +62,7 @@ export function registerStockRoutes(router, db) {
     res.status(201).json(loadTake(req));
   });
 
-  router.get('/stocktakes/:id', (req, res) => {
+  router.get('/stocktakes/:id', requirePerm('stock.count', 'stock.complete'), (req, res) => {
     const take = loadTake(req);
     const previous = db.prepare(`SELECT id, completed_at FROM stock_takes WHERE location_id = ? AND status = 'completed' AND id != ?
       AND (completed_at < COALESCE(?, datetime('now', '+1 day'))) ORDER BY completed_at DESC, id DESC LIMIT 1`)
@@ -79,7 +79,7 @@ export function registerStockRoutes(router, db) {
     res.json(take);
   });
 
-  router.put('/stocktakes/:id/lines', (req, res) => {
+  router.put('/stocktakes/:id/lines', requirePerm('stock.count'), (req, res) => {
     const take = loadTake(req);
     if (take.status !== 'in_progress') throw badRequest('This stock take has been completed');
     const lines = Array.isArray(req.body.lines) ? req.body.lines : [];
@@ -92,7 +92,7 @@ export function registerStockRoutes(router, db) {
     res.json(loadTake(req));
   });
 
-  router.post('/stocktakes/:id/complete', requireManager, (req, res) => {
+  router.post('/stocktakes/:id/complete', requirePerm('stock.complete'), (req, res) => {
     const take = loadTake(req);
     if (take.status !== 'in_progress') throw badRequest('This stock take is already completed');
     const uncounted = take.line_count - take.counted_count;
@@ -107,7 +107,7 @@ export function registerStockRoutes(router, db) {
     res.json(loadTake(req));
   });
 
-  router.delete('/stocktakes/:id', requireManager, (req, res) => {
+  router.delete('/stocktakes/:id', requirePerm('stock.complete'), (req, res) => {
     const take = loadTake(req);
     if (take.status !== 'in_progress') throw badRequest('Completed stock takes cannot be deleted');
     db.prepare('DELETE FROM stock_takes WHERE id = ?').run(take.id);
@@ -125,29 +125,23 @@ export function registerStockRoutes(router, db) {
     return { from, to };
   }
 
-  // Admins may omit location_id to see every site.
-  function wastageLocations(req) {
-    if (req.user.role === 'admin' && !req.query.location_id) return null;
-    return resolveLocation(req, req.query.location_id);
-  }
-
+  // One site, or with no location_id every site the user can access.
   function wastageRows(req) {
     const { from, to } = wastageRange(req.query);
-    const locationId = wastageLocations(req);
+    const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
     const sql = `SELECT w.*, l.name AS location_name, u.name AS recorded_by_name FROM wastage w
       JOIN locations l ON l.id = w.location_id LEFT JOIN users u ON u.id = w.recorded_by
-      WHERE w.date BETWEEN ? AND ? ${locationId ? 'AND w.location_id = ?' : ''}
+      WHERE w.date BETWEEN ? AND ? AND w.location_id IN (${ids.map(() => '?').join(', ')})
       ORDER BY w.date DESC, w.id DESC`;
-    const rows = locationId ? db.prepare(sql).all(from, to, locationId) : db.prepare(sql).all(from, to);
-    return { from, to, locationId, rows };
+    return { from, to, ids, rows: db.prepare(sql).all(from, to, ...ids) };
   }
 
-  router.get('/wastage', (req, res) => {
+  router.get('/wastage', requirePerm('wastage.record', 'wastage.reports', 'wastage.manage'), (req, res) => {
     const { rows } = wastageRows(req);
     res.json(rows.slice(0, 500));
   });
 
-  router.post('/wastage', (req, res) => {
+  router.post('/wastage', requirePerm('wastage.record'), (req, res) => {
     const b = req.body;
     const locationId = resolveLocation(req, b.location_id);
     const productId = id(b.product_id, 'product_id');
@@ -171,18 +165,18 @@ export function registerStockRoutes(router, db) {
     res.status(201).json(db.prepare('SELECT * FROM wastage WHERE id = ?').get(r.lastInsertRowid));
   });
 
-  router.delete('/wastage/:id', (req, res) => {
+  router.delete('/wastage/:id', requirePerm('wastage.record', 'wastage.manage'), (req, res) => {
     const entry = db.prepare('SELECT * FROM wastage WHERE id = ?').get(Number(req.params.id));
     if (!entry) throw notFound('Wastage entry');
     assertLocation(req, entry.location_id);
     const ownToday = entry.recorded_by === req.user.id && entry.date === today();
-    if (!isManager(req.user) && !ownToday) throw forbidden('Only managers can remove older entries or other people’s entries');
+    if (!can(req.user, 'wastage.manage') && !ownToday) throw forbidden('You can only remove your own entries from today');
     db.prepare('DELETE FROM wastage WHERE id = ?').run(entry.id);
     res.json({ ok: true });
   });
 
-  router.get('/wastage/report', (req, res) => {
-    const { from, to, locationId, rows } = wastageRows(req);
+  router.get('/wastage/report', requirePerm('wastage.reports'), (req, res) => {
+    const { from, to, ids, rows } = wastageRows(req);
     const group = (keyFn) => {
       const m = new Map();
       for (const r of rows) {
@@ -198,9 +192,9 @@ export function registerStockRoutes(router, db) {
     };
     const totalCost = round2(rows.reduce((s, r) => s + r.total_cost, 0));
     let sales = null;
-    if (isManager(req.user)) {
-      const sql = `SELECT COALESCE(SUM(net_sales), 0) AS net, COUNT(*) AS n FROM sales_daily WHERE date BETWEEN ? AND ?${locationId ? ' AND location_id = ?' : ''}`;
-      const r = locationId ? db.prepare(sql).get(from, to, locationId) : db.prepare(sql).get(from, to);
+    if (can(req.user, 'sales.view')) {
+      const r = db.prepare(`SELECT COALESCE(SUM(net_sales), 0) AS net, COUNT(*) AS n FROM sales_daily
+        WHERE date BETWEEN ? AND ? AND location_id IN (${ids.map(() => '?').join(', ')})`).get(from, to, ...ids);
       if (r.n) sales = { net_sales: round2(r.net), wastage_pct: r.net > 0 ? round2((totalCost / r.net) * 100) : null };
     }
     res.json({
@@ -216,7 +210,7 @@ export function registerStockRoutes(router, db) {
     });
   });
 
-  router.get('/wastage/export.csv', (req, res) => {
+  router.get('/wastage/export.csv', requirePerm('wastage.reports'), (req, res) => {
     const { from, to, rows } = wastageRows(req);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="wastage_${from}_${to}.csv"`);

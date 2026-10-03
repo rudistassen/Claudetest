@@ -114,6 +114,144 @@ describe('rota', () => {
   });
 });
 
+describe('rota across sites', () => {
+  test('admins see every site at once and can put someone on at another site', async () => {
+    const admin = await login('admin@cafe.local');
+    const all = (await admin('/rota?location_id=all&week=2030-01-07')).data;
+    assert.equal(all.location_id, 'all');
+    const sites = new Set(all.staff.map((u) => u.location_name));
+    assert.ok(sites.size >= 7, 'staff from every site, with their home site');
+    const names = all.staff.map((u) => u.location_name);
+    assert.deepEqual(names, [...names].sort((a, b) => (a ?? '~').localeCompare(b ?? '~')), 'grouped by home site');
+
+    // Someone based at site 1 covers a shift at site 2.
+    const person = all.staff.find((u) => u.location_id === 1 && u.role === 'staff');
+    const cover = await admin('/shifts', { method: 'POST', body: { location_id: 2, user_id: person.id, date: '2030-01-08', start_time: '09:00', end_time: '13:00' } });
+    assert.equal(cover.status, 201);
+    assert.equal(cover.data.location_name, all.staff.find((u) => u.location_id === 2).location_name);
+
+    const home = (await admin('/rota?location_id=1&week=2030-01-07')).data;
+    assert.deepEqual(home.away_shifts.map((a) => [a.user_id, a.location_id, a.date]), [[person.id, 2, '2030-01-08']], 'shown greyed on their home rota');
+    assert.ok(!home.shifts.some((x) => x.id === cover.data.id));
+    const there = (await admin('/rota?location_id=2&week=2030-01-07')).data;
+    assert.ok(there.staff.some((u) => u.id === person.id), 'listed as cover at site 2');
+    const everyone = (await admin('/rota?location_id=all&week=2030-01-07')).data;
+    assert.ok(everyone.shifts.some((x) => x.id === cover.data.id));
+    assert.equal(everyone.away_shifts.length, 0);
+
+    // Moving the shift to site 3 by editing it.
+    const moved = await admin(`/shifts/${cover.data.id}`, { method: 'PUT', body: { location_id: 3, user_id: person.id, date: '2030-01-08', start_time: '09:00', end_time: '13:00' } });
+    assert.equal(moved.data.location_id, 3);
+    const clash = await admin('/shifts', { method: 'POST', body: { location_id: 1, user_id: person.id, date: '2030-01-08', start_time: '12:00', end_time: '16:00' } });
+    assert.equal(clash.status, 400, 'still no double-booking across sites');
+
+    // Copying a week at every site keeps each shift at its own site.
+    const copy = await admin('/rota/copy-week', { method: 'POST', body: { location_id: 'all', from_week: '2030-01-07', to_week: '2030-01-14' } });
+    assert.equal(copy.data.copied, 1);
+    const nextWeek = (await admin('/rota?location_id=all&week=2030-01-14')).data;
+    assert.deepEqual(nextWeek.shifts.map((x) => [x.user_id, x.location_id, x.date]), [[person.id, 3, '2030-01-15']]);
+  });
+
+  test('managers only run their own site', async () => {
+    const manager = await login('manager1@cafe.local');
+    const me = (await manager('/auth/me')).data.user;
+    const all = (await manager('/rota?location_id=all')).data;
+    assert.ok(all.staff.every((u) => u.location_id === me.location_id || all.shifts.some((x) => x.user_id === u.id)), '"all sites" is just the sites they can access');
+    assert.ok(all.shifts.every((x) => x.location_id === me.location_id));
+    const staff = (await manager('/rota')).data.staff.find((u) => u.role === 'staff');
+    const other = me.location_id === 1 ? 2 : 1;
+    const r = await manager('/shifts', { method: 'POST', body: { location_id: other, user_id: staff.id, date: '2030-02-04', start_time: '09:00', end_time: '12:00' } });
+    assert.equal(r.status, 403);
+  });
+});
+
+describe('rota publishing', () => {
+  test('staff only see shifts once they are published', async () => {
+    const admin = await login('admin@cafe.local');
+    const d = addDays(today(), 2);
+    const week = weekStart(d);
+    // A new starter at site 1, so their shifts don't clash with the demo rota.
+    const person = (await admin('/users', { method: 'POST', body: { name: 'Pat Publish', email: 'pat@cafe.local', role: 'staff', location_id: 1, password: DEMO_PASSWORD } })).data;
+    const pat = await login('pat@cafe.local');
+    const shift = (await admin('/shifts', { method: 'POST', body: { location_id: 1, user_id: person.id, date: d, start_time: '09:00', end_time: '13:00' } })).data;
+
+    const draft = (await admin(`/rota?location_id=1&week=${week}`)).data;
+    assert.equal(draft.shifts.find((x) => x.id === shift.id).state, 'new');
+    assert.ok(draft.unpublished >= 1);
+    assert.equal(draft.can_publish, true);
+    const seen = async () => (await pat(`/rota?week=${week}`)).data.shifts.filter((x) => x.user_id === person.id).map((x) => `${x.start_time}-${x.end_time}`);
+    assert.deepEqual(await seen(), [], 'not published yet');
+    assert.equal((await pat(`/rota?week=${week}`)).data.unpublished, undefined, 'staff are not told about drafts');
+    assert.deepEqual((await pat('/my-shifts')).data, []);
+    assert.equal((await pat('/rota/publish', { method: 'POST', body: { week } })).status, 403);
+
+    const pub = await admin('/rota/publish', { method: 'POST', body: { location_id: 1, week } });
+    assert.ok(pub.data.published >= 1);
+    assert.deepEqual(await seen(), ['09:00-13:00']);
+    assert.equal((await pat('/my-shifts')).data.length, 1);
+    assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.unpublished, 0);
+
+    // A change stays a draft: staff keep seeing the published times.
+    await admin(`/shifts/${shift.id}`, { method: 'PUT', body: { location_id: 1, user_id: person.id, date: d, start_time: '10:00', end_time: '14:00' } });
+    const changed = (await admin(`/rota?location_id=1&week=${week}`)).data.shifts.find((x) => x.id === shift.id);
+    assert.equal(changed.state, 'changed');
+    assert.deepEqual([changed.published.start_time, changed.published.end_time], ['09:00', '13:00']);
+    assert.deepEqual(await seen(), ['09:00-13:00']);
+
+    // Discarding goes back to what's published.
+    const discard = await admin('/rota/discard', { method: 'POST', body: { location_id: 1, week } });
+    assert.equal(discard.data.discarded, 1);
+    assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.find((x) => x.id === shift.id).start_time, '09:00');
+
+    // Deleting a published shift keeps it visible to staff until the rota is published again.
+    await admin(`/shifts/${shift.id}`, { method: 'DELETE' });
+    assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.find((x) => x.id === shift.id).state, 'removed');
+    assert.deepEqual(await seen(), ['09:00-13:00']);
+    const again = await admin('/shifts', { method: 'POST', body: { location_id: 1, user_id: person.id, date: d, start_time: '09:30', end_time: '12:00' } });
+    assert.equal(again.status, 201, 'a removed shift no longer blocks the slot');
+    await admin(`/shifts/${again.data.id}`, { method: 'DELETE' });
+    assert.equal((await admin(`/shifts/${shift.id}/restore`, { method: 'POST' })).status, 200);
+    assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.find((x) => x.id === shift.id).state, 'published');
+    await admin(`/shifts/${shift.id}`, { method: 'DELETE' });
+    await admin('/rota/publish', { method: 'POST', body: { location_id: 1, week } });
+    assert.deepEqual(await seen(), []);
+    assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.some((x) => x.id === shift.id), false);
+  });
+
+  test('"My shifts" shows only your own published shifts for the week, with who else is on', async () => {
+    const admin = await login('admin@cafe.local');
+    const staff = await login('staff3@cafe.local');
+    const me = (await staff('/auth/me')).data.user;
+    const thisWeek = (await staff(`/my-shifts?week=${today()}`)).data;
+    assert.ok(thisWeek.length > 0);
+    assert.ok(thisWeek.every((x) => x.user_id === me.id && x.hours > 0 && x.location_name));
+    assert.ok(thisWeek.every((x) => Array.isArray(x.colleagues) && x.colleagues.every((c) => c.name !== me.name)));
+    assert.ok(thisWeek.some((x) => x.colleagues.length > 0), 'others are on with them');
+
+    const later = addDays(weekStart(today()), 35);
+    await admin('/shifts', { method: 'POST', body: { location_id: me.location_id, user_id: me.id, date: later, start_time: '08:00', end_time: '12:00' } });
+    assert.deepEqual((await staff(`/my-shifts?week=${later}`)).data, [], 'drafts are not shown');
+    await admin('/rota/publish', { method: 'POST', body: { location_id: me.location_id, week: later } });
+    const published = (await staff(`/my-shifts?week=${later}`)).data;
+    assert.deepEqual(published.map((x) => [x.date, x.start_time, x.hours, x.colleagues.length]), [[later, '08:00', 4, 0]]);
+  });
+
+  test('editing and publishing are separate permissions', async () => {
+    const admin = await login('admin@cafe.local');
+    const manager = await login('manager1@cafe.local');
+    const week = weekStart(addDays(today(), 21));
+    assert.equal((await manager('/rota/publish', { method: 'POST', body: { week } })).status, 200, 'managers can publish');
+    const set = (await admin('/permission-sets', { method: 'POST', body: { name: 'Rota drafter', permissions: ['rota.view', 'rota.edit'] } })).data;
+    const staff = (await admin('/users')).data.find((u) => u.email === 'staff1@cafe.local');
+    await admin(`/users/${staff.id}`, { method: 'PUT', body: { name: staff.name, email: staff.email, location_id: staff.location_id, hourly_rate: staff.hourly_rate, permission_set_id: set.id } });
+    const drafter = await login('staff1@cafe.local');
+    const rota = (await drafter(`/rota?week=${week}`)).data;
+    assert.equal(rota.can_publish, false);
+    assert.equal((await drafter('/rota/publish', { method: 'POST', body: { week } })).status, 403);
+    assert.equal((await drafter('/rota/discard', { method: 'POST', body: { week } })).status, 200);
+  });
+});
+
 describe('stock takes and ordering', () => {
   test('suggested order quantities come from par minus last count', async () => {
     const manager = await login('manager3@cafe.local');

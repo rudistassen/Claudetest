@@ -1,5 +1,5 @@
-import { hashPassword } from './auth.js';
-import { tx } from './db.js';
+import { hashPassword, verifyPassword } from './auth.js';
+import { publishAllShifts, tx } from './db.js';
 import { addDays, today, weekStart } from './util.js';
 
 export const DEMO_PASSWORD = 'changeme123';
@@ -154,6 +154,47 @@ export function seedAdmin(db, { email, password, name = 'Owner' }) {
   db.prepare(`INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')`).run(name, email, hashPassword(password));
 }
 
+// Environment values pasted with surrounding quotes or spaces (easy to do in a hosting dashboard) are cleaned up.
+export const cleanEnv = (v) => (v ?? '').trim().replace(/^(["'])(.*)\1$/, '$2').trim() || null;
+
+/**
+ * Makes sure the ADMIN_EMAIL account exists and can sign in, even if the database was first created before
+ * ADMIN_EMAIL was set (e.g. a hosting platform started the app before its settings were added). An existing
+ * active account is left alone; a missing one is created and a deactivated one is switched back on.
+ */
+export function ensureAdmin(db, { email, password }) {
+  if (!email || !password) return null;
+  const existing = db.prepare('SELECT id, active FROM users WHERE email = ?').get(email);
+  if (existing?.active) return null;
+  if (existing) {
+    db.prepare(`UPDATE users SET active = 1, role = 'admin', location_id = NULL, password_hash = ? WHERE id = ?`).run(hashPassword(password), existing.id);
+    return 'reactivated';
+  }
+  seedAdmin(db, { email, password });
+  return 'created';
+}
+
+/** Active accounts still signing in with the published demo password: [{ id, name, email }]. */
+export function demoPasswordAccounts(db) {
+  return db.prepare('SELECT id, name, email, password_hash FROM users WHERE active = 1').all()
+    .filter((u) => verifyPassword(DEMO_PASSWORD, u.password_hash))
+    .map(({ password_hash: _, ...u }) => u);
+}
+
+/** Switches off every account still using the demo password, apart from keepEmail. Returns how many. */
+export function lockDemoAccounts(db, { keepEmail } = {}) {
+  const users = db.prepare('SELECT id, email, password_hash FROM users WHERE active = 1').all();
+  let n = 0;
+  for (const u of users) {
+    if (keepEmail && u.email.toLowerCase() === keepEmail.toLowerCase()) continue;
+    if (!verifyPassword(DEMO_PASSWORD, u.password_hash)) continue;
+    db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(u.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+    n++;
+  }
+  return n;
+}
+
 // Seven sites with staff, suppliers, products and this week's rota so every screen has something in it.
 export function seedDemo(db, { locationCount = 7 } = {}) {
   const streets = ['High Street', 'Market Square', 'Station Road', 'Riverside', 'Old Town', 'University Quarter', 'Harbour'];
@@ -206,4 +247,13 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
       }
     });
   });
+  publishAllShifts(db); // the demo rota is already published
+  // Each demo manager and member of staff works at one site (real staff get every site unless you limit them).
+  db.exec(`UPDATE users SET all_sites = 0 WHERE role != 'admin'`);
+  // A few posts for the My Brew news feed.
+  const admin = db.prepare(`SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1`).get()?.id ?? null;
+  const post = db.prepare(`INSERT INTO news_posts (title, body, category, pinned, requires_ack, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`);
+  post.run('Updated allergen policy', 'We’ve updated how we label allergens on the counter.\n\n• Every cake and pastry label now lists all 14 allergens it contains.\n• If a customer asks about allergens, always check the recipe in Brewly – never guess.\n• Report any labelling mistakes to your manager straight away.\n\nPlease read the full policy and tap “I’ve read this” below.', 'policy', 1, 1, admin, '-2 days');
+  post.run('Christmas rota requests', 'Holiday requests for 20 December – 2 January need to be in by 31 October. Use Time off → Request holiday.', 'reminder', 0, 0, admin, '-5 days');
+  post.run('Welcome to Brewly', 'This is your My Brew page: your shifts, your holiday and news from the team, all in one place.', 'announcement', 0, 0, admin, '-9 days');
 }

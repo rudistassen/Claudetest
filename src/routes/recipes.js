@@ -1,4 +1,4 @@
-import { isManager, requireAdmin, requireManager, resolveLocation } from '../auth.js';
+import { can, reportLocations, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
 import { ALLERGENS, SALES_MATCH, TARGET_GP, cleanAllergens, enrich, ingredientRows, loadRecipes, unitCost } from '../recipes.js';
 import { addDays, badRequest, bool, date, id, notFound, num, round2, str, today } from '../util.js';
@@ -7,21 +7,21 @@ const MAX_REPORT_DAYS = 366;
 
 // Staff see recipes, methods and allergens but not costs or margins.
 function forViewer(req, recipe) {
-  if (isManager(req.user)) return recipe;
+  if (can(req.user, 'recipes.costs') || can(req.user, 'recipes.edit')) return recipe;
   const { batch_cost, cost_per_portion, gp, gp_pct, missing_costs, ...rest } = recipe;
   if (rest.ingredients) rest.ingredients = rest.ingredients.map(({ unit_cost, line_cost, ...i }) => i);
   return rest;
 }
 
 export function registerRecipeRoutes(router, db) {
-  router.get('/recipes/meta', (_req, res) => res.json({ allergens: ALLERGENS, target_gp: TARGET_GP }));
+  router.get('/recipes/meta', requirePerm('recipes.view', 'recipes.costs', 'recipes.edit'), (_req, res) => res.json({ allergens: ALLERGENS, target_gp: TARGET_GP }));
 
-  router.get('/recipes', (req, res) => {
-    res.json(loadRecipes(db, { activeOnly: !isManager(req.user) }).map((r) => forViewer(req, r)));
+  router.get('/recipes', requirePerm('recipes.view', 'recipes.costs', 'recipes.edit'), (req, res) => {
+    res.json(loadRecipes(db, { activeOnly: !can(req.user, 'recipes.edit') && !can(req.user, 'recipes.costs') }).map((r) => forViewer(req, r)));
   });
 
   // Square items seen in synced sales, with the recipe each is linked to.
-  router.get('/recipes/square-items', requireManager, (_req, res) => {
+  router.get('/recipes/square-items', requirePerm('recipes.edit'), (_req, res) => {
     const items = db.prepare(`SELECT si.catalog_object_id, si.name, si.variation_name, SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net_sales
       FROM sales_items si WHERE si.date >= ? GROUP BY si.item_key ORDER BY net_sales DESC`).all(addDays(today(), -90));
     const recipes = db.prepare('SELECT id, name, square_catalog_object_id, square_item_name FROM recipes WHERE active = 1').all();
@@ -37,14 +37,14 @@ export function registerRecipeRoutes(router, db) {
    * Menu performance for a period: what each linked recipe sold, its food cost and GP, plus the
    * ingredients those sales should have used (theoretical usage). Admins may omit location_id for all sites.
    */
-  router.get('/recipes/performance', requireManager, (req, res) => {
+  router.get('/recipes/performance', requirePerm('recipes.costs'), (req, res) => {
     const to = date(req.query.to, 'to') ?? today();
     const from = date(req.query.from, 'from') ?? addDays(to, -6);
     if (from > to) throw badRequest('from must be before to');
     if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_REPORT_DAYS) throw badRequest(`Reports are limited to ${MAX_REPORT_DAYS} days`);
-    const locationId = req.user.role === 'admin' && !req.query.location_id ? null : resolveLocation(req, req.query.location_id);
-    const locFilter = locationId ? 'AND si.location_id = ?' : '';
-    const params = locationId ? [from, to, locationId] : [from, to];
+    const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
+    const locFilter = `AND si.location_id IN (${ids.map(() => '?').join(', ')})`;
+    const params = [from, to, ...ids];
 
     const recipes = new Map(loadRecipes(db, { activeOnly: true }).map((r) => [r.id, r]));
     const sold = db.prepare(`SELECT r.id AS recipe_id, SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net_sales
@@ -93,9 +93,9 @@ export function registerRecipeRoutes(router, db) {
     });
   });
 
-  router.get('/recipes/:id', (req, res) => {
+  router.get('/recipes/:id', requirePerm('recipes.view', 'recipes.costs', 'recipes.edit'), (req, res) => {
     const recipe = db.prepare('SELECT * FROM recipes WHERE id = ?').get(Number(req.params.id));
-    if (!recipe || (!recipe.active && !isManager(req.user))) throw notFound('Recipe');
+    if (!recipe || (!recipe.active && !can(req.user, 'recipes.edit') && !can(req.user, 'recipes.costs'))) throw notFound('Recipe');
     const ingredients = ingredientRows(db, [recipe.id]);
     res.json(forViewer(req, { ...enrich(recipe, ingredients), ingredients }));
   });
@@ -136,7 +136,7 @@ export function registerRecipeRoutes(router, db) {
     for (const i of ingredients) ins.run(recipeId, i.product_id, i.quantity, i.notes, i.sort_order);
   }
 
-  router.post('/recipes', requireAdmin, (req, res) => {
+  router.post('/recipes', requirePerm('recipes.edit'), (req, res) => {
     const { r, ingredients } = recipeBody(req.body);
     const recipeId = tx(db, () => {
       const created = db.prepare(`INSERT INTO recipes (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...cols.map((c) => r[c]));
@@ -146,7 +146,7 @@ export function registerRecipeRoutes(router, db) {
     res.status(201).json({ id: recipeId });
   });
 
-  router.put('/recipes/:id', requireAdmin, (req, res) => {
+  router.put('/recipes/:id', requirePerm('recipes.edit'), (req, res) => {
     const recipeId = Number(req.params.id);
     if (!db.prepare('SELECT 1 FROM recipes WHERE id = ?').get(recipeId)) throw notFound('Recipe');
     const { r, ingredients } = recipeBody(req.body);

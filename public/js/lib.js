@@ -188,3 +188,58 @@ export function statusBadge(status) {
 export function empty(message) {
   return `<div class="empty">${esc(message)}</div>`;
 }
+
+// --- Choosing a site on a page ---
+// Pages that show one site at a time carry their own "Site" drop-down listing every site (and "All sites" where
+// that makes sense). The choice is remembered, so the next page opens on the same site.
+
+const SITE_KEY = 'cafe-ops:location';
+
+export function chooseSite(state, id) {
+  state.locationId = id;
+  try { localStorage.setItem(SITE_KEY, String(id)); } catch { /* storage unavailable */ }
+}
+
+/** 'all' or 'site' from a page's ?scope= (either 'all', 'site' or a site's id, which becomes the chosen site). */
+export function siteScope(state, raw, fallback = 'all') {
+  if (!state.multiSite) return 'site';
+  const v = raw ?? fallback;
+  if (v === 'all') return 'all';
+  const id = Number(v);
+  if (id && state.locations.some((l) => l.id === id && l.active)) chooseSite(state, id);
+  return 'site';
+}
+
+/** A filter form's site drop-down (name="scope"); picking a site updates the page straight away. */
+export function siteFilter(state, scope, { all = true } = {}) {
+  if (!state.multiSite) return '';
+  const sites = state.locations.filter((l) => l.active);
+  return `<select name="scope" aria-label="Site" data-site-scope>
+    ${all ? `<option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option>` : ''}
+    ${sites.map((l) => `<option value="${l.id}" ${scope !== 'all' && l.id === state.locationId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+  </select>`;
+}
+
+/** A stand-alone site drop-down for pages about one site (checklist, stock takes, orders); changing it reloads the page. */
+export function sitePicker(state) {
+  if (!state.multiSite) return '';
+  const sites = state.locations.filter((l) => l.active);
+  return `<select class="site-pick" aria-label="Site" data-site-pick>
+    ${sites.map((l) => `<option value="${l.id}" ${l.id === state.locationId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+  </select>`;
+}
+
+// Each site's colour, from its brand: Common pink, Brew (& Barrel) dark green, Buddy's olive green, Buddy's
+// Bakery dark olive green, Omnibus orange. Any other site gets one of a few distinct colours, by its id.
+const BRAND_COLOURS = [
+  [/buddy'?s?\s*bakery|bakery/i, '#4b5320'],
+  [/buddy/i, '#7a8a2e'],
+  [/common/i, '#d63384'],
+  [/omnibus/i, '#e8730c'],
+  [/brew/i, '#1e5631'],
+];
+const OTHER_COLOURS = ['#0f766e', '#4f46e5', '#b45309', '#0369a1', '#7c3aed', '#be123c', '#475569'];
+export function siteColour(name = '', id = 0) {
+  const n = String(name).replace(/[’`]/g, "'");
+  return BRAND_COLOURS.find(([re]) => re.test(n))?.[1] ?? OTHER_COLOURS[Math.abs(Number(id) || 0) % OTHER_COLOURS.length];
+}

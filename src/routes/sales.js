@@ -1,6 +1,8 @@
-import { requireAdmin, requireManager, resolveLocation } from '../auth.js';
+import { reportLocations, requireAdmin, requirePerm } from '../auth.js';
 import { dayKey, labourByDay, pct, salesByDay, wastageByDay } from '../metrics.js';
 import { syncSales } from '../square.js';
+import { applyTeamImport, fetchTeam, planTeamImport } from '../team.js';
+import { applyCleanup, planCleanup } from '../cleanup.js';
 import { addDays, badRequest, date, HttpError, notFound, round2, str, today } from '../util.js';
 
 const MAX_SYNC_DAYS = 92;
@@ -12,7 +14,7 @@ export function registerSalesRoutes(router, db, square) {
 
   // --- Connection & location mapping (admin) ---
 
-  router.get('/square/status', requireManager, (_req, res) => {
+  router.get('/square/status', requirePerm('sales.view', 'sales.sync', 'staff.manage'), (_req, res) => {
     res.json({
       configured: !!square,
       environment: square?.config.environment ?? null,
@@ -60,27 +62,74 @@ export function registerSalesRoutes(router, db, square) {
     res.status(201).json(db.prepare('SELECT * FROM locations WHERE id = ?').get(r.lastInsertRowid));
   });
 
-  router.post('/square/sync', requireManager, requireSquare, async (req, res) => {
+  // --- Staff from Square Team (admin): preview, then import ---
+
+  const teamPlan = async (req) => {
+    const team = await fetchTeam(square.client);
+    return planTeamImport(db, team, { deactivateOthers: req.body?.deactivate_others === true || req.query.deactivate_others === 'true', currentUserId: req.user.id });
+  };
+  const siteNames = () => new Map(db.prepare('SELECT id, name FROM locations').all().map((l) => [l.id, l.name]));
+
+  router.get('/square/team', requireAdmin, requireSquare, async (req, res) => {
+    const names = siteNames();
+    res.json((await teamPlan(req)).map((r) => ({
+      name: r.name,
+      action: r.action,
+      reason: r.reason ?? null,
+      existing: r.user ? { id: r.user.id, name: r.user.name, email: r.user.email } : null,
+      email: r.values?.email ?? r.user?.email ?? null,
+      no_email: !!r.no_email,
+      role: r.values?.role ?? r.user?.role ?? null,
+      site: r.values ? (r.values.location_id ? names.get(r.values.location_id) : 'All (admin)') : null,
+      position: r.values?.position ?? null,
+      hourly_rate: r.values?.hourly_rate ?? null,
+    })));
+  });
+
+  router.post('/square/import-staff', requireAdmin, requireSquare, async (req, res) => {
+    const plan = await teamPlan(req);
+    const counts = applyTeamImport(db, plan, { currentUserId: req.user.id });
+    res.json({ ...counts, need_password: plan.filter((r) => r.action === 'create').map((r) => r.name) });
+  });
+
+  // --- Removing sites not linked to Square and staff not in the Square team (admin): preview, then delete ---
+
+  router.get('/square/cleanup', requireAdmin, (req, res) => {
+    res.json(planCleanup(db, { currentUserId: req.user.id }));
+  });
+
+  router.post('/square/cleanup', requireAdmin, (req, res) => {
+    const removeLocations = req.body.remove_locations === true;
+    const removeStaff = req.body.remove_staff === true;
+    if (!removeLocations && !removeStaff) throw badRequest('Choose sites, staff or both to remove');
+    res.json(applyCleanup(db, { currentUserId: req.user.id, removeLocations, removeStaff }));
+  });
+
+  // The dashboard's "Updated from Square at 10:02".
+  router.get('/square/freshness', requirePerm('sales.view', 'staff.manage'), (_req, res) => res.json({
+    connected: !!square,
+    last_sync: db.prepare(`SELECT finished_at FROM square_sync_log WHERE status = 'ok' ORDER BY id DESC LIMIT 1`).get()?.finished_at ?? null,
+  }));
+
+  router.post('/square/sync', requirePerm('sales.sync'), requireSquare, async (req, res) => {
     const to = date(req.body.to, 'to') ?? today();
     const from = date(req.body.from, 'from') ?? addDays(to, -1);
     if (from > to) throw badRequest('from must be before to');
     if (to > today()) throw badRequest('Cannot sync future dates');
     if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_SYNC_DAYS) throw badRequest(`Sync at most ${MAX_SYNC_DAYS} days at a time`);
-    if (req.user.role !== 'admin' && (Date.parse(to) - Date.parse(from)) / 86400000 > 7) throw badRequest('Managers can sync up to a week at a time');
+    if (req.user.role !== 'admin' && (Date.parse(to) - Date.parse(from)) / 86400000 > 7) throw badRequest('You can sync up to a week at a time');
     res.json(await syncSales(db, square.client, { from, to, triggeredBy: req.user.name }));
   });
 
   // --- Sales report: daily sales alongside labour and wastage (managers and admins) ---
 
-  router.get('/sales', requireManager, (req, res) => {
+  router.get('/sales', requirePerm('sales.view'), (req, res) => {
     const to = date(req.query.to, 'to') ?? today();
     const from = date(req.query.from, 'from') ?? addDays(to, -6);
     if (from > to) throw badRequest('from must be before to');
     if ((Date.parse(to) - Date.parse(from)) / 86400000 >= MAX_REPORT_DAYS) throw badRequest(`Reports are limited to ${MAX_REPORT_DAYS} days`);
 
-    const locations = req.user.role === 'admin' && !req.query.location_id
-      ? db.prepare('SELECT id, name, square_location_id FROM locations WHERE active = 1 ORDER BY name').all()
-      : [db.prepare('SELECT id, name, square_location_id FROM locations WHERE id = ?').get(resolveLocation(req, req.query.location_id))];
+    const locations = reportLocations(req, req.query.location_id);
     const ids = locations.map((l) => l.id);
     const sales = salesByDay(db, ids, from, to);
     const labour = labourByDay(db, ids, from, to, { toDate: true });

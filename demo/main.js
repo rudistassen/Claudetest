@@ -1,8 +1,8 @@
-// In-browser build of Cafe Ops: the real server routes run against SQLite (sql.js) inside the page,
+// In-browser build of Brewly: the real server routes run against SQLite (sql.js) inside the page,
 // and window.fetch('/api/...') is answered locally instead of by a server.
 import initSqlJs from 'sql.js/dist/sql-asm.js';
 import { loadUser, registerAuthRoutes, requireAuth } from '../src/auth.js';
-import { openDb } from '../src/db.js';
+import { openDb, publishAllShifts } from '../src/db.js';
 import { registerAdminRoutes } from '../src/routes/admin.js';
 import { registerOrderingRoutes } from '../src/routes/ordering.js';
 import { registerRecipeRoutes } from '../src/routes/recipes.js';
@@ -10,11 +10,27 @@ import { registerRotaRoutes } from '../src/routes/rota.js';
 import { registerSafetyRoutes } from '../src/routes/safety.js';
 import { registerSalesRoutes } from '../src/routes/sales.js';
 import { registerStockRoutes } from '../src/routes/stock.js';
+import { registerLeaveRoutes } from '../src/routes/leave.js';
+import { registerTradingRoutes } from '../src/routes/trading.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { SquareClient, syncSales } from '../src/square.js';
+import { memoryMailer } from '../src/email.js';
+import { registerReportRoutes } from '../src/reports.js';
+import { demoInvoiceReader } from '../src/invoice-demo.js';
+import { registerInvoiceRoutes } from '../src/routes/invoices.js';
+import { registerNewsRoutes } from '../src/routes/news.js';
+import { registerDocumentRoutes } from '../src/routes/documents.js';
+import { registerBreakRoutes } from '../src/routes/breaks.js';
+import { registerTimecardRoutes } from '../src/routes/timecards.js';
+import { registerPaymentLinkRoutes } from '../src/routes/payment-links.js';
+import { registerInvoiceInboxRoutes, setSetting } from '../src/invoice-inbox.js';
+import { memoryMailbox } from '../src/mailbox.js';
+import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
+import { demoPlaces } from './google-reviews.js';
+import { registerInviteRoutes, registerPasswordRoutes } from '../src/invites.js';
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
-import { SQUARE_LOCATIONS, fakeSquareFetch } from './fake-square.js';
+import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
 
 // --- A tiny Express-compatible router ---
 
@@ -75,12 +91,19 @@ async function boot() {
   seedAdmin(db, { email: 'admin@cafe.local', password: DEMO_PASSWORD });
   seedDemo(db);
   seedActivity(db);
+  publishAllShifts(db);
 
-  const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 30 };
+  const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 5 };
   const square = { config, client: new SquareClient(config, fakeSquareFetch) };
+  const demoMailer = memoryMailer();
   for (const l of SQUARE_LOCATIONS.slice(0, 7)) {
     db.prepare('UPDATE locations SET square_location_id = ? WHERE name = ?').run(l.id, l.name);
   }
+  setFakeRota(
+    db.prepare('SELECT u.id, u.name, u.email, u.role, u.position, u.hourly_rate, l.square_location_id FROM users u LEFT JOIN locations l ON l.id = u.location_id').all(),
+    db.prepare(`SELECT s.id, s.user_id, l.square_location_id, s.date, s.start_time, s.end_time, s.break_minutes
+      FROM shifts s JOIN locations l ON l.id = s.location_id WHERE l.square_location_id IS NOT NULL`).all(),
+  );
   await syncSales(db, square.client, { from: addDays(today(), -20), to: today(), triggeredBy: 'auto' });
 
   const api = new Router();
@@ -88,14 +111,47 @@ async function boot() {
   api.use((req, _res, next) => { req.db = db; next(); });
   api.use(loadUser(db));
   registerAuthRoutes(api, db);
+  registerPasswordRoutes(api, db, demoMailer);
   api.use(requireAuth);
-  registerAdminRoutes(api, db);
+  registerInviteRoutes(api, db, demoMailer, { demo: true, square });
+  registerAdminRoutes(api, db, square);
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);
+  registerTradingRoutes(api, db, square);
+  registerLeaveRoutes(api, db);
+  registerReportRoutes(api, db, demoMailer, { demo: true });
+  const invoiceReader = demoInvoiceReader(db);
+  registerInvoiceRoutes(api, db, invoiceReader);
+  // A pretend shared inbox with a few emails waiting, so "Check now" under Invoices can be tried.
+  const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+  const fakePdf = btoa('%PDF-1.4 demo invoice %%EOF');
+  setSetting(db, 'invoice_inbox_since', ago(120));
+  registerInvoiceInboxRoutes(api, db, { reader: invoiceReader, mailbox: memoryMailbox([
+    { id: 'demo-1', subject: 'Invoice INV-20931 – Harbour', from: 'accounts@hearthbakery.example', fromName: 'Hearth Bakery', to: ['invoices@example.com'], receivedAt: ago(95), preview: 'Please find attached our invoice.',
+      attachments: [{ name: 'INV-20931.pdf', contentType: 'application/pdf', size: 48213, isInline: false, data: fakePdf }] },
+    { id: 'demo-2', subject: 'Your weekly statement', from: 'billing@metro.example', fromName: 'Metro Wholesale', to: ['invoices@example.com'], receivedAt: ago(40), preview: 'Invoice for delivery to Old Town attached.',
+      attachments: [{ name: 'metro-invoice.pdf', contentType: 'application/pdf', size: 90211, isInline: false, data: fakePdf },
+        { name: 'logo.png', contentType: 'image/png', size: 4096, isInline: true, data: btoa('png') }] },
+    { id: 'demo-3', subject: 'Re: delivery times', from: 'orders@originroasters.example', fromName: 'Origin Coffee Roasters', to: ['invoices@example.com'], receivedAt: ago(10), preview: 'Thanks – see our updated delivery times.',
+      attachments: [{ name: 'signature.png', contentType: 'image/png', size: 3000, isInline: true, data: btoa('png') }] },
+  ], 'invoices@brewandbarrel.example') });
+  registerNewsRoutes(api, db);
+  registerDocumentRoutes(api, db);
+  registerBreakRoutes(api, db);
+  registerTimecardRoutes(api, db, square);
+  registerPaymentLinkRoutes(api, db, square, demoMailer);
+  // Pretend Google Maps listings: every site but one is linked, with a rating from a month ago to compare against.
+  const reviewSites = db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY id').all();
+  const places = demoPlaces(reviewSites);
+  reviewSites.slice(0, -1).forEach((s, i) => db.prepare('UPDATE locations SET google_place_id = ? WHERE id = ?').run(places.places[i].place_id, s.id));
+  await syncReviews(db, places);
+  reviewSites.slice(0, -1).forEach((s, i) => db.prepare('INSERT INTO google_ratings (location_id, date, rating, review_count) VALUES (?, ?, ?, ?)')
+    .run(s.id, addDays(today(), -28), Math.round((places.places[i].rating - [0.1, 0, 0.2, -0.1, 0.1, 0, 0.1][i % 7]) * 10) / 10, places.places[i].count - 4 - i));
+  registerReviewRoutes(api, db, places);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));
 
   const realFetch = window.fetch.bind(window);
@@ -110,6 +166,9 @@ async function boot() {
       headers: { cookie: Object.entries(cookies).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('; ') },
       params: {},
       secure: false,
+      protocol: 'https',
+      ip: 'demo',
+      get: (h) => (String(h).toLowerCase() === 'host' ? 'brewly.demo' : undefined),
     };
     const res = {
       statusCode: 200,
@@ -117,10 +176,11 @@ async function boot() {
       body: '',
       status(code) { this.statusCode = code; return this; },
       json(data) { this.body = JSON.stringify(data); },
-      send(text) { this.body = String(text); },
+      send(body) { this.body = body instanceof Uint8Array ? body : String(body); },
       setHeader(k, v) { this.headers[k] = v; },
       cookie(name, value) { cookies[name] = value; },
       clearCookie(name) { delete cookies[name]; },
+      end() {},
     };
     try {
       await api.handle(req, res);
@@ -133,7 +193,7 @@ async function boot() {
 
   // Downloads are blocked inside the page, so show exports (CSV) in a dialog instead.
   document.addEventListener('click', async (e) => {
-    const a = e.target.closest('a[href^="/api/"]');
+    const a = e.target.closest('a[href^="/api/"]:not([data-doc])'); // company documents download themselves
     if (!a) return;
     e.preventDefault();
     const text = await (await window.fetch(a.getAttribute('href'))).text();
