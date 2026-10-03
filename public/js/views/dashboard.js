@@ -1,6 +1,6 @@
 import { attachTip, pairedBarChart } from '../charts.js';
 import { addDays, api, esc, fmtDate, isDemo, money, openModal, siteColour, toast, todayISO } from '../lib.js';
-import { breakLine, clockInActions, wireClockInActions } from './breaks.js';
+import { clockInActions, wireClockInActions } from './breaks.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
 function progress(done, due) {
@@ -119,16 +119,20 @@ const siteInitials = (name) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).f
 
 const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`);
 
-// How a clock-in compares with the person's shift on the rota.
-function rotaLine(c) {
+
+// One-line version for the site cards: short tags, with the details (rota, breaks) on hover.
+function clockTags(c) {
   const tags = [];
-  if (c.late_minutes) tags.push(`<span class="chip">Late in ${mins(c.late_minutes)}</span>`);
-  if (c.over_minutes) tags.push(`<span class="chip">${c.end ? `Out ${mins(c.over_minutes)} after shift` : `${mins(c.over_minutes)} past shift end`}</span>`);
-  if (c.not_on_rota) tags.push('<span class="chip chip-muted">Not on the rota</span>');
-  // Only worth a line when something's off.
-  if (!tags.length) return '';
-  return `<span class="clock-rota small">${c.rota ? `<span class="muted">Rota ${c.rota}</span>` : ''} ${tags.join(' ')}</span>`;
+  if (c.late_minutes) tags.push(`<span class="mini-tag is-warn" title="Late in ${mins(c.late_minutes)}">Late ${mins(c.late_minutes)}</span>`);
+  if (c.over_minutes) tags.push(`<span class="mini-tag is-warn" title="${c.end ? 'Clocked out' : 'Still in'} ${mins(c.over_minutes)} after shift">+${mins(c.over_minutes)}</span>`);
+  if (c.not_on_rota) tags.push('<span class="mini-tag" title="Not on the rota">No rota</span>');
+  if (c.break_flag) tags.push(`<span class="mini-tag is-bad" title="Worked over 6 hours without a 20-minute break">⚠ ${c.break_flag === 'none' ? 'No break' : 'Short break'}</span>`);
+  return tags.length ? ` ${tags.join(' ')}` : '';
 }
+const clockTitle = (c) => [
+  c.rota ? `Rota ${c.rota}` : c.not_on_rota ? 'Not on the rota' : '',
+  c.breaks?.length ? `Break ${c.breaks.map((b) => `${b.start}–${b.end ?? 'now'}`).join(', ')}` : '',
+].filter(Boolean).join(' · ');
 
 function card(loc, state, data) {
   const staff = loc.shifts_today;
@@ -160,16 +164,15 @@ function card(loc, state, data) {
         <div class="span-2">
           <h3>Clocked in ${dayWord()} (${loc.clock_ins.length})</h3>
           ${loc.clock_ins.length
-            ? `<ul class="shift-list clock-list">${loc.clock_ins.map((c) => `<li><strong>${esc(shortName(c.name))}</strong>
-                <span class="muted">${c.start}–${c.end ?? 'now'}</span>
-                <span class="clock-hours">${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}${clockInActions(state, c, loc.id)}</span>
-                ${rotaLine(c)}
-                ${breakLine(c)}</li>`).join('')}</ul>
+            ? `<ul class="clock-rows">${loc.clock_ins.map((c) => `<li class="clock-row" title="${esc(clockTitle(c))}">
+                <span class="cr-main"><strong>${esc(shortName(c.name))}</strong> <span class="muted">${c.start}–${c.end ?? 'now'}</span></span>${clockTags(c) ? `<span class="cr-tags">${clockTags(c)}</span>` : ''}
+                <span class="cr-hours">${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">Break</span> ' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}</span>
+                ${clockInActions(state, c, loc.id, { compact: true })}</li>`).join('')}</ul>
               <p class="small muted">${duration(loc.clock_ins.reduce((n, c) => n + c.hours, 0))} in total</p>`
             : '<p class="muted">Nobody has clocked in yet</p>'}
-          ${loc.not_clocked_in?.length ? `<ul class="shift-list clock-list clock-missing">${loc.not_clocked_in.map((m) => `<li><strong>${esc(shortName(m.name))}</strong>
-              <span class="muted">Rota ${m.rota}</span>
-              <span class="clock-hours"><span class="chip chip-strong">${m.shift_over ? 'Didn’t clock in' : `Not clocked in · ${mins(m.late_minutes)} late`}</span></span></li>`).join('')}</ul>` : ''}
+          ${loc.not_clocked_in?.length ? `<ul class="clock-rows clock-missing">${loc.not_clocked_in.map((m) => `<li class="clock-row">
+              <span class="cr-main"><strong>${esc(shortName(m.name))}</strong> <span class="muted">rota ${m.rota}</span></span>
+              <span class="cr-hours"><span class="mini-tag is-bad">${m.shift_over ? 'Didn’t clock in' : `Not in · ${mins(m.late_minutes)} late`}</span></span></li>`).join('')}</ul>` : ''}
         </div>` : `
         <div class="span-2">
           <h3>On shift ${dayWord()} (${staff.length})</h3>

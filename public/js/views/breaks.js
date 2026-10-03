@@ -16,8 +16,8 @@ export const breakFlag = (c) => (c.break_flag
 export const canMoveClockIns = (state) => state.can('timecards.move') && state.multiSite;
 
 /** A "Change site" button for a clock-in; wire it up with wireMoveClockIn. */
-export const moveButton = (c, locationId) => `<button type="button" class="link-btn move-card" data-move-card="${esc(c.id)}"
-  data-loc="${locationId}" data-who="${esc(c.name)}" data-when="${esc(`${c.start}–${c.end ?? 'now'}`)}">Change site</button>`;
+export const moveButton = (c, locationId, { compact = false } = {}) => `<button type="button" class="link-btn move-card${compact ? ' icon-action' : ''}" data-move-card="${esc(c.id)}"
+  data-loc="${locationId}" data-who="${esc(c.name)}" data-when="${esc(`${c.start}–${c.end ?? 'now'}`)}"${compact ? ' title="Change site" aria-label="Change site"' : ''}>${compact ? '⇄' : 'Change site'}</button>`;
 
 /** Opens "Change site" for the buttons made by moveButton inside el. */
 export function wireMoveClockIn(el, ctx) {
@@ -45,12 +45,13 @@ export function wireMoveClockIn(el, ctx) {
 export const canEditBreaks = (state) => state.can('timecards.breaks');
 
 /** The links shown with a clock-in for people allowed to change it ("Breaks", "Change site"). */
-export function clockInActions(state, c, locationId) {
+// compact: small icon buttons (☕ breaks, ⇄ change site) to keep a person on one line.
+export function clockInActions(state, c, locationId, { compact = false } = {}) {
   const links = [];
   if (canEditBreaks(state)) {
-    links.push(`<button type="button" class="link-btn move-card" data-edit-breaks="${esc(c.id)}" data-who="${esc(c.name)}">Breaks</button>`);
+    links.push(`<button type="button" class="link-btn move-card${compact ? ' icon-action' : ''}" data-edit-breaks="${esc(c.id)}" data-who="${esc(c.name)}"${compact ? ' title="Breaks" aria-label="Breaks"' : ''}>${compact ? '☕' : 'Breaks'}</button>`);
   }
-  if (canMoveClockIns(state)) links.push(moveButton(c, locationId));
+  if (canMoveClockIns(state)) links.push(moveButton(c, locationId, { compact }));
   return links.length ? `<span class="clock-actions">${links.join('')}</span>` : '';
 }
 
