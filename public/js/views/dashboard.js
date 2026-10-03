@@ -15,6 +15,16 @@ function progress(done, due) {
 const shown = { isToday: true, day: '' };
 const dayWord = () => (shown.isToday ? 'today' : fmtDate(shown.day, { weekday: 'short', day: 'numeric', month: 'short' }));
 
+// Names on the dashboard are shortened to first name and last initial: "Boudebza Sid Ali" → "Boudebza A.".
+// A note in brackets stays, e.g. "Indy (Manager)".
+export function shortName(name) {
+  const full = String(name ?? '').trim();
+  const note = full.match(/\s*(\([^)]*\))\s*$/);
+  const words = (note ? full.slice(0, note.index) : full).split(/\s+/).filter(Boolean);
+  const short = words.length > 1 ? `${words[0]} ${words[words.length - 1][0].toUpperCase()}.` : words.join('');
+  return note ? `${short} ${note[1]}` : short;
+}
+
 const duration = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; };
 
 // Today so far against the same weekday last week up to the same time. Up is good for sales; labour is neutral.
@@ -39,7 +49,7 @@ function rosterRow(p) {
     : p.status === 'elsewhere' ? `at ${esc(p.where)}`
       : [p.rota_site ? 'covering' : '', p.late_minutes ? `${mins(p.late_minutes)} late` : ''].filter(Boolean).join(' · ');
   return `<tr class="roster-row ${tone}">
-    <td>${esc(p.name)}</td>
+    <td>${esc(shortName(p.name))}</td>
     <td>${p.rota ? `${p.rota}${p.rota_site ? ` <span class="muted">at ${esc(p.rota_site)}</span>` : ''}` : '<span class="muted">–</span>'}</td>
     <td>${p.clock ? p.clock.replace('–now', '–<span class="muted">now</span>') : '<span class="muted">–</span>'}</td>
     <td><span class="roster-status">${label}</span>${note ? ` <span class="muted">${note}</span>` : ''}</td>
@@ -150,21 +160,21 @@ function card(loc, state, data) {
         <div class="span-2">
           <h3>Clocked in ${dayWord()} (${loc.clock_ins.length})</h3>
           ${loc.clock_ins.length
-            ? `<ul class="shift-list clock-list">${loc.clock_ins.map((c) => `<li><strong>${esc(c.name)}</strong>
+            ? `<ul class="shift-list clock-list">${loc.clock_ins.map((c) => `<li><strong>${esc(shortName(c.name))}</strong>
                 <span class="muted">${c.start}–${c.end ?? 'now'}</span>
                 <span class="clock-hours">${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}${clockInActions(state, c, loc.id)}</span>
                 ${rotaLine(c)}
                 ${breakLine(c)}</li>`).join('')}</ul>
               <p class="small muted">${duration(loc.clock_ins.reduce((n, c) => n + c.hours, 0))} in total</p>`
             : '<p class="muted">Nobody has clocked in yet</p>'}
-          ${loc.not_clocked_in?.length ? `<ul class="shift-list clock-list clock-missing">${loc.not_clocked_in.map((m) => `<li><strong>${esc(m.name)}</strong>
+          ${loc.not_clocked_in?.length ? `<ul class="shift-list clock-list clock-missing">${loc.not_clocked_in.map((m) => `<li><strong>${esc(shortName(m.name))}</strong>
               <span class="muted">Rota ${m.rota}</span>
               <span class="clock-hours"><span class="chip chip-strong">${m.shift_over ? 'Didn’t clock in' : `Not clocked in · ${mins(m.late_minutes)} late`}</span></span></li>`).join('')}</ul>` : ''}
         </div>` : `
         <div class="span-2">
           <h3>On shift ${dayWord()} (${staff.length})</h3>
           ${staff.length
-            ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(s.name)}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
+            ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(shortName(s.name))}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
             : '<p class="muted">Nobody rostered</p>'}
         </div>`}
         <div class="site-checks span-2">
@@ -360,7 +370,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       body: sites.length ? sites.map(({ l, people }) => `<div class="clocked-site" style="--site: ${siteColour(l.name, l.id)}">
           <h3>${esc(l.name)} <span class="muted">${people.length}${shown.isToday ? ' in' : ''}</span></h3>
           <ul class="clocked-list">${people.sort((a, b) => a.start.localeCompare(b.start)).map((c) => `<li>
-            <strong>${esc(c.name)}</strong>
+            <strong>${esc(shortName(c.name))}</strong>
             <span class="muted">${c.end ? `${c.start}–${c.end}` : `since ${c.start}`}${c.rota ? ` · rota ${c.rota}` : c.not_on_rota ? ' · not on the rota' : ''}</span>
             <span>${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-received">In</span> '}${duration(c.hours)}</span>
           </li>`).join('')}</ul></div>`).join('')
