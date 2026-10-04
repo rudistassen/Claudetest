@@ -412,12 +412,16 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       if (!h.hours.length) { chartBox.innerHTML = `<p class="muted small">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}.</p>`; return; }
       const hh = (n) => String(n).padStart(2, '0');
       const whole = (v) => (v >= 1000 ? `£${(v / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })}k` : `£${Math.round(v)}`);
+      // Open (unpaid) orders show in orange on top of today's bars, and get a legend entry while there are any.
+      if (h.hours.some((x) => x.open > 0)) {
+        el.querySelector('.dash-hourly .chart-legend')?.insertAdjacentHTML('beforeend', '<span><i class="chart-legend-bar" style="background:var(--open-bar)"></i>Open orders</span>');
+      }
       pairedBarChart(chartBox, {
         data: h.hours,
         label: (x) => hh(x.hour),
         title: (x) => `${hh(x.hour)}:00–${hh(x.hour + 1)}:00`,
         series: [
-          { name: shown.isToday ? 'today' : dayWord(), value: (x) => x.today, color: 'var(--series-1)' },
+          { name: shown.isToday ? 'today' : dayWord(), value: (x) => x.today, color: 'var(--series-1)', part: { name: 'of that, open orders', value: (x) => x.open, color: 'var(--open-bar)' } },
           { name: `${fmtDate(h.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })}`, value: (x) => x.last_week, color: 'var(--prev-bar)' },
         ],
         fmt: money,

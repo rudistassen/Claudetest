@@ -33,12 +33,15 @@ test('open orders count in today’s sales while open, and once (as a sale) when
 
   await syncSales(db, client, { from: day, to: day });
   assert.deepEqual({ ...get() }, { gross_sales: 16, orders: 2, open_gross: 6, open_orders: 1 }, 'the open tab is included; the payment link isn’t');
+  const openByHour = () => db.prepare('SELECT SUM(open_gross) AS v FROM sales_hourly WHERE location_id = ? AND date = ?').get(site, day).v;
+  assert.equal(openByHour(), 6, 'the open tab is marked as open in the hourly figures too');
 
   // The tab is paid: it's now a completed order and no longer open.
   completed = [...completed, { ...open[0], state: 'COMPLETED', closed_at: new Date().toISOString() }];
   open = open.slice(1);
   await syncSales(db, client, { from: day, to: day });
   assert.deepEqual({ ...get() }, { gross_sales: 16, orders: 2, open_gross: 0, open_orders: 0 }, 'counted once');
+  assert.equal(openByHour(), 0);
 
   // A tab that's voided simply drops out.
   open = [...open, { id: 'O2', location_id: 'SQ_A', state: 'OPEN', created_at: now, line_items: [line(400)] }];

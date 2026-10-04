@@ -29,7 +29,7 @@ export function registerTradingRoutes(router, db, square) {
   /**
    * Gross sales by hour for one day (default today) next to the same weekday the week before, for the
    * dashboard's chart. Hours synced before gross was kept per hour are estimated from net, using that day's
-   * gross-to-net ratio.
+   * gross-to-net ratio. `open` is the part of today's figure still in open (unpaid) orders.
    */
   router.get('/trading/hourly-compare', requirePerm('sales.view'), (req, res) => {
     const day = date(req.query.date, 'date') ?? today();
@@ -40,11 +40,11 @@ export function registerTradingRoutes(router, db, square) {
       WHERE date IN (?, ?) AND location_id IN (${inList})`).all(day, before, ...ids)
       .map((r) => [`${r.location_id}|${r.date}`, r.net_sales ? r.gross_sales / r.net_sales : 1]));
     const byHour = new Map();
-    for (const r of db.prepare(`SELECT location_id, date, hour, net_sales, gross_sales FROM sales_hourly
+    for (const r of db.prepare(`SELECT location_id, date, hour, net_sales, gross_sales, open_gross FROM sales_hourly
       WHERE date IN (?, ?) AND location_id IN (${inList})`).all(day, before, ...ids)) {
       const gross = r.gross_sales ?? r.net_sales * (ratio.get(`${r.location_id}|${r.date}`) ?? 1);
-      const h = byHour.get(r.hour) ?? { hour: r.hour, today: 0, last_week: 0 };
-      if (r.date === day) h.today += gross; else h.last_week += gross;
+      const h = byHour.get(r.hour) ?? { hour: r.hour, today: 0, open: 0, last_week: 0 };
+      if (r.date === day) { h.today += gross; h.open += r.open_gross ?? 0; } else h.last_week += gross;
       byHour.set(r.hour, h);
     }
     const hours = [...byHour.values()].filter((h) => h.today || h.last_week).sort((a, b) => a.hour - b.hour);
@@ -52,8 +52,8 @@ export function registerTradingRoutes(router, db, square) {
     const filled = [];
     if (hours.length) {
       for (let h = hours[0].hour; h <= hours[hours.length - 1].hour; h++) {
-        const v = byHour.get(h) ?? { hour: h, today: 0, last_week: 0 };
-        filled.push({ hour: h, today: round2(v.today), last_week: round2(v.last_week) });
+        const v = byHour.get(h) ?? { hour: h, today: 0, open: 0, last_week: 0 };
+        filled.push({ hour: h, today: round2(v.today), open: round2(v.open), last_week: round2(v.last_week) });
       }
     }
     res.json({ date: day, compare_date: before, hours: filled });

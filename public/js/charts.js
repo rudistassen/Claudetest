@@ -153,7 +153,8 @@ export function barChart(container, opts) {
 /**
  * Two bars side by side per x (e.g. today and the same day last week), on one y-axis, with a 2px gap between
  * the pair and one tooltip per x listing both.
- * opts: { data, label(d), title(d), series: [{ name, value(d), color }] (2), fmt(v), fmtAxis(v), height, ariaLabel }
+ * opts: { data, label(d), title(d), series: [{ name, value(d), color, part? }] (2), fmt(v), fmtAxis(v), height, ariaLabel }
+ * A series' part ({ name, value(d), color }) is the share of its bar drawn in another colour on top, e.g. open orders.
  */
 export function pairedBarChart(container, opts) {
   const { data, series, height = 220 } = opts;
@@ -166,17 +167,27 @@ export function pairedBarChart(container, opts) {
     const xAt = (i) => PAD.left + band * i + band / 2;
     const base = y(0);
     data.forEach((d, i) => {
-      const bars = series.map((s, k) => {
+      const bars = series.flatMap((s, k) => {
         const v = s.value(d) ?? 0;
         const x = k === 0 ? xAt(i) - bw - 1 : xAt(i) + 1;
-        return svgEl('path', { d: barPath(x, y(v), bw, base), class: 'chart-bar', fill: s.color });
+        const part = Math.min(v, Math.max(0, s.part?.value(d) ?? 0));
+        if (!part) return [svgEl('path', { d: barPath(x, y(v), bw, base), class: 'chart-bar', fill: s.color })];
+        // The whole bar in the part's colour, with the rest drawn over its lower section.
+        const rest = v - part;
+        return [svgEl('path', { d: barPath(x, y(v), bw, base), class: 'chart-bar', fill: s.part.color }),
+          ...(rest > 0 ? [svgEl('rect', { x, y: y(rest), width: bw, height: base - y(rest), class: 'chart-bar', fill: s.color })] : [])];
+      });
+      const tipRows = () => series.flatMap((s) => {
+        const row = { value: opts.fmt(s.value(d) ?? 0), label: s.name, color: s.color };
+        const part = s.part?.value(d) ?? 0;
+        return part > 0 ? [row, { value: opts.fmt(part), label: s.part.name, color: s.part.color }] : [row];
       });
       const hit = svgEl('rect', { x: PAD.left + band * i, y: PAD.top, width: band, height: base - PAD.top, class: 'chart-hit', tabindex: 0 });
       hit.setAttribute('aria-label', `${opts.title(d)}: ${series.map((s) => `${s.name} ${opts.fmt(s.value(d) ?? 0)}`).join(', ')}`);
       const on = (e) => {
         bars.forEach((b) => b.classList.add('is-hot'));
         const r = hit.getBoundingClientRect();
-        showTip(opts.title(d), series.map((s) => ({ value: opts.fmt(s.value(d) ?? 0), label: s.name, color: s.color })), e.clientX ?? r.left + r.width / 2, e.clientY ?? r.top + 20);
+        showTip(opts.title(d), tipRows(), e.clientX ?? r.left + r.width / 2, e.clientY ?? r.top + 20);
       };
       const off = () => { bars.forEach((b) => b.classList.remove('is-hot')); hideTip(); };
       hit.addEventListener('pointermove', on);
