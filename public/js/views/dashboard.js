@@ -95,6 +95,15 @@ function change(now, then) {
   return `<span class="dash-vs ${tone}" title="${money(then)} last week">${Math.abs(c) < 0.05 ? '■ 0.0%' : `${c > 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%`}</span>`;
 }
 
+// "incl. £312.40 in 9 open orders": tabs and tickets not paid yet, counted in today's sales until they're paid.
+function openNote(locs) {
+  if (!shown.isToday) return '';
+  const n = locs.reduce((t, l) => t + (l.open_orders ?? 0), 0);
+  if (!n) return '';
+  const amount = locs.reduce((t, l) => t + (l.open_gross ?? 0), 0);
+  return `<span class="muted kpi-open" title="Tabs and tickets not paid yet – included until they're paid">incl. ${money(amount)} in ${n} open order${n === 1 ? '' : 's'}</span>`;
+}
+
 // For the labour tile: the change in percentage points on last week by this time. Lower labour is good (green).
 function labourVersus(now, then) {
   if (now === null || now === undefined) return '<span class="muted">of net sales so far</span>';
@@ -150,6 +159,7 @@ function card(loc, state, data) {
           <h3>Gross sales</h3>
           <p class="stat">${loc.gross_today === null ? '<span class="muted">–</span>' : money(loc.gross_today)}</p>
           <p class="small">${versus(loc.gross_today, lw.gross)}</p>
+          ${shown.isToday && loc.open_orders ? `<p class="small muted">incl. ${money(loc.open_gross)} open (${loc.open_orders})</p>` : ''}
         </div>
         <div>
           <h3>Labour cost</h3>
@@ -330,7 +340,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     ${state.multiSite ? `
     ${hasSales ? `<div class="dash-hero">
       <div class="kpi kpi-feature" data-icon="£"><span>Gross sales ${shown.isToday ? 'today' : ''}</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
-        <small class="kpi-vs">${versusLine(gross.now, gross.then)}</small></div>
+        <small class="kpi-vs">${versusLine(gross.now, gross.then)}${openNote(locs)}</small></div>
       <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour ${shown.isToday ? 'today' : ''}</span><strong>${fmtPct(labourPct)}</strong>
         <small class="kpi-vs">${labourVersus(labourPct, labourLastWeek)}</small></div>
       <section class="card dash-hourly">

@@ -558,6 +558,9 @@ CREATE TABLE IF NOT EXISTS square_sync_log (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // How much of a day's sales is open orders (tabs and tickets not paid yet, counted until they're paid).
+  ['sales_daily', 'open_gross', 'ALTER TABLE sales_daily ADD COLUMN open_gross REAL NOT NULL DEFAULT 0'],
+  ['sales_daily', 'open_orders', 'ALTER TABLE sales_daily ADD COLUMN open_orders INTEGER NOT NULL DEFAULT 0'],
   // Gross sales per hour too (for the dashboard's hourly chart). Hours synced before this only have net.
   ['sales_hourly', 'gross_sales', 'ALTER TABLE sales_hourly ADD COLUMN gross_sales REAL'],
   // When each person last signed in (for the Staff page's "who's joined" status). People already signed in on

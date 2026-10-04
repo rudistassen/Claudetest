@@ -41,7 +41,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
 
   // Sales figures are only as fresh as the last Square sync.
   const salesSummary = (locationId) => {
-    const todaySales = db.prepare('SELECT net_sales, gross_sales, orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, d);
+    const todaySales = db.prepare('SELECT net_sales, gross_sales, orders, open_gross, open_orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, d);
     const lastDay = db.prepare('SELECT net_sales, gross_sales, orders FROM sales_daily WHERE location_id = ? AND date = ?').get(locationId, lastWeek);
     // Last week's net sales by this time, from its hourly sales (the current hour counted pro rata).
     const hour = Math.floor(minutes / 60);
@@ -55,6 +55,8 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
     return {
       sales_today: todaySales ? round2(todaySales.net_sales) : null,
       gross_today: todaySales ? round2(todaySales.gross_sales) : null,
+      open_gross: todaySales ? round2(todaySales.open_gross ?? 0) : 0,
+      open_orders: todaySales?.open_orders ?? 0,
       orders_today: todaySales?.orders ?? 0,
       last_week: lastDay ? { net: round2(lastNet), gross: round2(lastGross), labour_cost: round2(labourLast) } : { net: null, gross: null, labour_cost: round2(labourLast) },
       labour_cost_today: round2(labourToday),

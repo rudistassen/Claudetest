@@ -242,6 +242,16 @@ export async function fakeSquareFetch(url, init = {}) {
   }
   if (path !== '/v2/orders/search') return json(404, { errors: [{ code: 'NOT_FOUND', detail: 'Not found' }] });
   const q = JSON.parse(init.body);
+  // Open tabs: a couple per site, started in the last hour or so.
+  if (q.query.filter.state_filter.states.includes('OPEN')) {
+    const now = Date.now();
+    const open = SQUARE_LOCATIONS.slice(0, 7).filter((l) => q.location_ids.includes(l.id)).flatMap((l, i) => [0, 1].slice(0, 1 + (i % 2)).map((k) => ({
+      id: `OPEN-${l.id}-${k}`, location_id: l.id, state: 'OPEN', created_at: new Date(now - (10 + i * 7 + k * 20) * 60000).toISOString(),
+      line_items: [{ name: 'Flat white', quantity: '2', total_money: { amount: 720, currency: 'GBP' }, total_tax_money: { amount: 120, currency: 'GBP' } },
+        { name: 'Toastie', quantity: '1', total_money: { amount: 850 + i * 50, currency: 'GBP' }, total_tax_money: { amount: 142, currency: 'GBP' } }],
+    })));
+    return json(200, { orders: open });
+  }
   const { start_at: start, end_at: end } = q.query.filter.date_time_filter.closed_at;
   const now = new Date().toISOString();
   const all = [];

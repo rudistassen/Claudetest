@@ -47,6 +47,8 @@ const mock = http.createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/v2/locations') return send(200, { locations: SQ_LOCATIONS });
     if (req.method === 'POST' && req.url === '/v2/orders/search') {
       const q = JSON.parse(body);
+      // No open tabs in this pretend account.
+      if (q.query.filter.state_filter.states.includes('OPEN')) return send(200, { orders: [] });
       const { start_at: start, end_at: end } = q.query.filter.date_time_filter.closed_at;
       const matching = orders.filter((o) => q.location_ids.includes(o.location_id) && o.closed_at >= start && o.closed_at < end);
       const offset = Number(q.cursor ?? 0);
@@ -175,7 +177,7 @@ describe('Square integration', () => {
     const r = await syncSales(db, square.client, { from: y, to: d });
     assert.equal(r.orders, 3);
 
-    const search = requests.filter((q) => q.url === '/v2/orders/search');
+    const search = requests.filter((q) => q.url === '/v2/orders/search' && q.body.query.filter.state_filter.states.includes('COMPLETED'));
     assert.equal(search.length, 2, 'follows the pagination cursor');
     assert.equal(search[0].headers['square-version'], '2025-01-23');
     assert.deepEqual(search[0].body.location_ids.sort(), ['SQ_HIGH', 'SQ_NEW']);

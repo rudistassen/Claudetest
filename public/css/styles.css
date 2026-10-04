@@ -1360,6 +1360,7 @@ p.square-box { background: var(--good-soft); border-color: transparent; }
 /* Dashboard: gross sales tile's change on last week */
 .kpi .kpi-vs span { display: inline; font-size: inherit; text-transform: none; letter-spacing: 0; font-weight: 700; color: inherit; }
 .kpi .kpi-vs span.muted { font-weight: 400; color: var(--muted); }
+.kpi .kpi-vs span.kpi-open { display: block; margin-top: 2px; }
 .kpi .kpi-vs span.tone-good { color: var(--good); }
 .kpi .kpi-vs span.tone-bad { color: var(--bad); }
 /* "Change site" on a clock-in */

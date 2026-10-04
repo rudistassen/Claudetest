@@ -63,8 +63,9 @@ export class SquareClient {
     return (await this.request('GET', '/v2/locations')).locations ?? [];
   }
 
-  // Yields every COMPLETED order closed in [startAt, endAt) for the given Square locations.
-  async *searchOrders({ locationIds, startAt, endAt }) {
+  // Yields every COMPLETED order closed in [startAt, endAt) for the given Square locations (or, with
+  // open: true, every OPEN order – a tab or ticket not paid yet – created in that time).
+  async *searchOrders({ locationIds, startAt, endAt, open = false }) {
     for (let i = 0; i < locationIds.length; i += LOCATIONS_PER_SEARCH) {
       let cursor;
       do {
@@ -72,10 +73,10 @@ export class SquareClient {
           location_ids: locationIds.slice(i, i + LOCATIONS_PER_SEARCH),
           query: {
             filter: {
-              state_filter: { states: ['COMPLETED'] },
-              date_time_filter: { closed_at: { start_at: startAt, end_at: endAt } },
+              state_filter: { states: [open ? 'OPEN' : 'COMPLETED'] },
+              date_time_filter: { [open ? 'created_at' : 'closed_at']: { start_at: startAt, end_at: endAt } },
             },
-            sort: { sort_field: 'CLOSED_AT', sort_order: 'ASC' },
+            sort: { sort_field: open ? 'CREATED_AT' : 'CLOSED_AT', sort_order: 'ASC' },
           },
           limit: 500,
           cursor,
@@ -229,8 +230,9 @@ export function summariseOrder(order, tz = BUSINESS_TZ) {
   for (const li of order.line_items ?? []) add(li, 1);
   for (const ret of order.returns ?? []) for (const li of ret.return_line_items ?? []) add(li, -1);
   return {
-    date: localDate(order.closed_at, tz),
-    hour: localHour(order.closed_at, tz),
+    // Open orders (not paid yet) count from when they were started.
+    date: localDate(order.closed_at ?? order.created_at, tz),
+    hour: localHour(order.closed_at ?? order.created_at, tz),
     lines,
     tips: money(order.total_tip_money),
     isSale: (order.line_items ?? []).length > 0,
@@ -353,6 +355,39 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
       daily.set(dk, d);
     }
 
+    // Today's open orders (tabs and tickets not paid yet) are added to today's totals too. Every sync rebuilds the
+    // totals from scratch, so when an order is paid it's counted once as a completed sale, and one that's voided
+    // simply drops out. Payment links sent from Brewly are left out (they're tracked on their own page).
+    const day = localDate(Date.now(), tz);
+    let openCount = 0;
+    if (day >= from && day <= to) {
+      const linkOrders = new Set(db.prepare('SELECT square_order_id FROM payment_links WHERE square_order_id IS NOT NULL').all().map((r) => r.square_order_id));
+      try {
+        for await (const order of client.searchOrders({ ...window, startAt: zonedMidnightUTC(day, tz), endAt: zonedMidnightUTC(addDays(day, 1), tz), open: true })) {
+          const locationId = bySquareId.get(order.location_id);
+          if (!locationId || linkOrders.has(order.id) || !(order.line_items ?? []).length) continue;
+          const s = summariseOrder(order, tz);
+          if (s.date !== day) continue;
+          openCount++;
+          const dk = `${locationId}|${s.date}`;
+          const d = daily.get(dk) ?? { location_id: locationId, date: s.date, net: 0, gross: 0, tax: 0, discounts: 0, tips: 0, orders: 0 };
+          const h = hourly.get(`${dk}|${s.hour}`) ?? { location_id: locationId, date: s.date, hour: s.hour, net: 0, gross: 0, orders: 0 };
+          d.orders += 1;
+          h.orders += 1;
+          d.open_orders = (d.open_orders ?? 0) + 1;
+          for (const l of s.lines) {
+            d.net += l.net; d.gross += l.gross; d.tax += l.tax; d.discounts += l.discount;
+            h.net += l.net; h.gross += l.gross;
+            d.open_gross = (d.open_gross ?? 0) + l.gross;
+          }
+          daily.set(dk, d);
+          hourly.set(`${dk}|${s.hour}`, h);
+        }
+      } catch {
+        // Open orders are a bonus; completed sales are still saved if they can't be read.
+      }
+    }
+
     const labour = await fetchLabour(client, { ...window, tz });
     const timecards = (labour.timecards ?? [])
       .map((t) => ({ ...t, location_id: bySquareId.get(t.square_location_id) }))
@@ -363,8 +398,8 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
       const inList = ids.map(() => '?').join(', ');
       db.prepare(`DELETE FROM sales_daily WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`).run(from, to, ...ids);
       db.prepare(`DELETE FROM sales_items WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`).run(from, to, ...ids);
-      const insDay = db.prepare(`INSERT INTO sales_daily (location_id, date, net_sales, gross_sales, tax, discounts, tips, orders) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-      for (const d of daily.values()) insDay.run(d.location_id, d.date, round2(d.net), round2(d.gross), round2(d.tax), round2(d.discounts), round2(d.tips), d.orders);
+      const insDay = db.prepare(`INSERT INTO sales_daily (location_id, date, net_sales, gross_sales, tax, discounts, tips, orders, open_gross, open_orders) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      for (const d of daily.values()) insDay.run(d.location_id, d.date, round2(d.net), round2(d.gross), round2(d.tax), round2(d.discounts), round2(d.tips), d.orders, round2(d.open_gross ?? 0), d.open_orders ?? 0);
       const insItem = db.prepare(`INSERT INTO sales_items (location_id, date, item_key, catalog_object_id, name, variation_name, quantity, net_sales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
       for (const it of items.values()) insItem.run(it.location_id, it.date, it.key, it.catalog_object_id, it.name, it.variation_name, round2(it.quantity), round2(it.net));
       db.prepare(`DELETE FROM sales_hourly WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`).run(from, to, ...ids);
@@ -389,7 +424,7 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
     const message = labour.error ? `Sales synced, but clock-ins were not: ${labour.error}` : null;
     db.prepare(`UPDATE square_sync_log SET status = 'ok', finished_at = datetime('now'), orders = ?, timecards = ?, message = ? WHERE id = ?`)
       .run(orderCount, labour.error ? null : timecards.length, message, log);
-    return { from, to, orders: orderCount, days: daily.size, timecards: labour.error ? null : timecards.length, warning: message };
+    return { from, to, orders: orderCount, open_orders: openCount, days: daily.size, timecards: labour.error ? null : timecards.length, warning: message };
   } catch (err) {
     db.prepare(`UPDATE square_sync_log SET status = 'error', finished_at = datetime('now'), message = ? WHERE id = ?`).run(err.message, log);
     throw err;
