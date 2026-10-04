@@ -15,7 +15,8 @@ test('open orders count in today’s sales while open, and once (as a sale) when
   const line = (pence) => ({ name: 'Item', quantity: '1', total_money: { amount: pence, currency: 'GBP' }, total_tax_money: { amount: Math.round(pence / 6), currency: 'GBP' } });
   let completed = [{ id: 'C1', location_id: 'SQ_A', state: 'COMPLETED', closed_at: now, line_items: [line(1000)] }];
   let open = [{ id: 'O1', location_id: 'SQ_A', state: 'OPEN', created_at: now, line_items: [line(600)] },
-    { id: 'PL1', location_id: 'SQ_A', state: 'OPEN', created_at: now, line_items: [line(5000)] }];
+    { id: 'PL1', location_id: 'SQ_A', state: 'OPEN', created_at: now, line_items: [line(5000)] },
+    { id: 'WEB1', location_id: 'SQ_A', state: 'OPEN', created_at: now, fulfillments: [{ type: 'PICKUP' }], line_items: [line(900)] }];
   db.prepare(`INSERT INTO payment_links (location_id, square_link_id, square_order_id, url, amount, description) VALUES (?, 'L', 'PL1', 'u', 50, 'deposit')`).run(site);
   const fetchFn = async (url, init = {}) => {
     const path = new URL(url).pathname;
@@ -32,7 +33,7 @@ test('open orders count in today’s sales while open, and once (as a sale) when
   const get = () => db.prepare('SELECT gross_sales, orders, open_gross, open_orders FROM sales_daily WHERE location_id = ? AND date = ?').get(site, day);
 
   await syncSales(db, client, { from: day, to: day });
-  assert.deepEqual({ ...get() }, { gross_sales: 16, orders: 2, open_gross: 6, open_orders: 1 }, 'the open tab is included; the payment link isn’t');
+  assert.deepEqual({ ...get() }, { gross_sales: 16, orders: 2, open_gross: 6, open_orders: 1 }, 'the open tab is included; the payment link and online order aren’t');
   const openByHour = () => db.prepare('SELECT SUM(open_gross) AS v FROM sales_hourly WHERE location_id = ? AND date = ?').get(site, day).v;
   assert.equal(openByHour(), 6, 'the open tab is marked as open in the hourly figures too');
 

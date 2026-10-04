@@ -210,6 +210,16 @@ const money = (m) => (m?.amount ?? 0) / 100;
  * Net sales = line totals after discounts, less VAT (UK prices are VAT-inclusive, so tax is inside total_money).
  * Itemised returns in the same order are subtracted.
  */
+/**
+ * Whether an open order came from online rather than a till: Square Online, a delivery app, or anything set up
+ * for pickup, delivery or shipping. These are usually paid already and just waiting to be made or collected, so
+ * they're left out of "open orders" (they count as sales once completed).
+ */
+export function isOnlineOrder(order) {
+  if ((order.fulfillments ?? []).some((f) => ['PICKUP', 'DELIVERY', 'SHIPMENT'].includes(f.type))) return true;
+  return /online|website|web store|deliveroo|uber|just ?eat|doordash/i.test(order.source?.name ?? '');
+}
+
 export function summariseOrder(order, tz = BUSINESS_TZ) {
   const lines = [];
   const add = (li, sign) => {
@@ -357,7 +367,7 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
 
     // Today's open orders (tabs and tickets not paid yet) are added to today's totals too. Every sync rebuilds the
     // totals from scratch, so when an order is paid it's counted once as a completed sale, and one that's voided
-    // simply drops out. Payment links sent from Brewly are left out (they're tracked on their own page).
+    // simply drops out. Payment links sent from Brewly and online orders are left out (see isOnlineOrder).
     const day = localDate(Date.now(), tz);
     let openCount = 0;
     if (day >= from && day <= to) {
@@ -365,7 +375,7 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
       try {
         for await (const order of client.searchOrders({ ...window, startAt: zonedMidnightUTC(day, tz), endAt: zonedMidnightUTC(addDays(day, 1), tz), open: true })) {
           const locationId = bySquareId.get(order.location_id);
-          if (!locationId || linkOrders.has(order.id) || !(order.line_items ?? []).length) continue;
+          if (!locationId || linkOrders.has(order.id) || isOnlineOrder(order) || !(order.line_items ?? []).length) continue;
           const s = summariseOrder(order, tz);
           if (s.date !== day) continue;
           openCount++;

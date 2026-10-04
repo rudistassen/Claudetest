@@ -1,6 +1,8 @@
 // Reporting → Open orders: tabs and tickets started on the tills but not paid yet, read live from Square, with
-// each order's items on request. Payment links sent from Brewly are left out (they have their own page).
+// each order's items on request. Payment links sent from Brewly (they have their own page) and online orders
+// (Square Online, delivery apps, pickup and delivery) are left out.
 import { reportLocations, requirePerm } from '../auth.js';
+import { isOnlineOrder } from '../square.js';
 import { addDays, badRequest, localDate, notFound, num, round2, today, zonedMidnightUTC } from '../util.js';
 
 const money = (m) => (m?.amount ?? 0) / 100;
@@ -28,7 +30,7 @@ export function registerOpenOrderRoutes(router, db, square) {
         open: true,
       })) {
         const site = bySquareId.get(o.location_id);
-        if (!site || skip.has(o.id)) continue;
+        if (!site || skip.has(o.id) || isOnlineOrder(o)) continue;
         const items = (o.line_items ?? []).reduce((n, li) => n + (Number(li.quantity) || 0), 0);
         orders.push({
           id: o.id,

@@ -39,16 +39,15 @@ export async function render(ctx) {
     </div>` : ''}
     <section class="card">
       ${list.length ? `<div class="table-wrap"><table class="open-orders">
-        <thead><tr><th>Date</th>${multi ? '<th>Site</th>' : ''}<th>Order</th><th class="num">Open for</th><th class="num">Amount</th></tr></thead>
+        <thead><tr><th>Opened</th><th>Order</th><th class="num">Amount</th></tr></thead>
         <tbody>${list.map((o) => `<tr class="row-link" data-order="${esc(o.id)}" tabindex="0" role="button" aria-label="Open order ${esc(o.name ?? '')} ${money(o.amount)}">
-          <td><strong>${fmtDate(o.date)}</strong><small class="muted">${esc(o.time)}</small></td>
-          ${multi ? `<td><span class="site-dot" style="--site: ${siteColour(o.location_name, o.location_id)}"></span>${esc(o.location_name)}</td>` : ''}
-          <td class="cell-title">${o.name ? `<strong>${esc(o.name)}</strong>` : ''}<small class="muted">${o.items} item${o.items === 1 ? '' : 's'}${o.summary ? ` · ${esc(o.summary)}` : ''}</small></td>
-          <td class="num">${openFor(o.created_at)}</td>
-          <td class="num"><strong>${money(o.amount)}</strong>${o.due < o.amount ? `<small class="muted">${money(o.due)} left to pay</small>` : ''}</td>
+          <td class="oo-when"><strong>${fmtDate(o.date)}</strong> <span class="muted">${esc(o.time)}</span>
+            ${multi ? `<small><span class="site-dot" style="--site: ${siteColour(o.location_name, o.location_id)}"></span>${esc(o.location_name)}</small>` : ''}</td>
+          <td class="oo-order"><strong>${esc(o.name ?? 'No name')}</strong><small class="muted">${o.items} item${o.items === 1 ? '' : 's'}${o.summary ? ` · ${esc(o.summary)}` : ''}</small></td>
+          <td class="num"><strong>${money(o.amount)}</strong><small class="muted">${o.due < o.amount ? `${money(o.due)} to pay · ` : ''}open ${openFor(o.created_at)}</small></td>
         </tr>`).join('')}</tbody></table></div>`
         : `<div class="empty">${data.square_ready ? 'No open orders – everything’s been paid.' : 'Nothing to show yet.'}</div>`}
-      <p class="muted small">Live from Square: orders started on the tills in this time and not paid yet. Once paid (or cancelled) they leave this list. Payment links are on their own page.</p>
+      <p class="muted small">Live from Square: orders started on the tills in this time and not paid yet. Once paid (or cancelled) they leave this list. Online orders aren’t included, and payment links are on their own page.</p>
     </section>`;
 
   const form = el.querySelector('#oo-filters');

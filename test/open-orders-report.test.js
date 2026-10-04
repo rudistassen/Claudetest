@@ -36,6 +36,8 @@ before(async () => {
       line_items: [{ name: 'Flat white', quantity: '2', modifiers: [{ name: 'Oat milk' }], total_money: gbp(720) }, { name: 'Toastie', quantity: '1', note: 'No butter', total_money: gbp(850) }],
       discounts: [{ name: 'Staff', applied_money: gbp(100) }], total_money: gbp(1470), total_tax_money: gbp(245), tenders: [{ amount_money: gbp(500) }], net_amount_due_money: gbp(970) },
     { id: 'T2', location_id: `SQ_${sites[1]}`, state: 'OPEN', created_at: ago(3 * 1440), line_items: [{ name: 'Cake', quantity: '1', total_money: gbp(400) }], total_money: gbp(400) },
+    { id: 'WEB1', location_id: `SQ_${sites[0]}`, state: 'OPEN', created_at: ago(15), source: { name: 'Square Online' }, line_items: [{ name: 'Cake', quantity: '1', total_money: gbp(400) }], total_money: gbp(400) },
+    { id: 'APP1', location_id: `SQ_${sites[0]}`, state: 'OPEN', created_at: ago(12), fulfillments: [{ type: 'DELIVERY' }], line_items: [{ name: 'Cake', quantity: '1', total_money: gbp(400) }], total_money: gbp(400) },
     { id: 'PL1', location_id: `SQ_${sites[0]}`, state: 'OPEN', created_at: ago(20), line_items: [{ name: 'Deposit', quantity: '1', total_money: gbp(5000) }], total_money: gbp(5000) },
   ];
   db.prepare(`INSERT INTO payment_links (location_id, square_link_id, square_order_id, url, amount, description) VALUES (?, 'L', 'PL1', 'u', 50, 'deposit')`).run(sites[0]);
@@ -55,7 +57,7 @@ async function login(email) {
   };
 }
 
-test('open orders report: lists unpaid tabs (not payment links), newest first, with details on request', async () => {
+test('open orders report: lists unpaid tabs (not payment links or online orders), newest first, with details on request', async () => {
   const admin = await login('admin@cafe.local');
   const all = (await admin('/open-orders')).data;
   assert.deepEqual(all.orders.map((o) => [o.id, o.name, o.amount, o.due, o.items]), [['T1', 'Table 4', 14.7, 9.7, 3], ['T2', null, 4, 4, 1]]);
@@ -78,6 +80,6 @@ test('open orders report: only for people who see sales, and only their own site
   const mine = db.prepare(`SELECT location_id FROM users WHERE email = 'manager1@cafe.local'`).get().location_id;
   const theirs = (await manager('/open-orders')).data.orders;
   assert.ok(theirs.every((o) => o.location_id === mine));
-  const other = orders.find((o) => o.location_id !== `SQ_${mine}` && o.id !== 'PL1');
+  const other = orders.find((o) => o.location_id !== `SQ_${mine}` && o.id.startsWith('T'));
   assert.equal((await manager(`/open-orders/${other.id}`)).status, 404, 'another site’s order stays hidden');
 });

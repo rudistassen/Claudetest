@@ -1538,7 +1538,18 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 @media print { .weather { display: none; } }
 /* Reporting → Open orders, and an order's items */
 .open-orders td small, .order-detail td small { display: block; }
+.open-orders { width: 100%; }
 .open-orders tr.row-link { cursor: pointer; }
+.open-orders td { vertical-align: top; }
+.open-orders .oo-when { white-space: nowrap; }
+.open-orders .num { white-space: nowrap; }
+@media (max-width: 640px) {
+  /* Phones: a compact list – long item summaries are cut short rather than wrapping. */
+  .open-orders th, .open-orders td { padding-left: 0.35rem; padding-right: 0.35rem; }
+  .open-orders .oo-when strong, .open-orders .oo-when .muted { display: block; }
+  .open-orders .oo-order { max-width: 0; width: 100%; }
+  .open-orders .oo-order strong, .open-orders .oo-order small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 .open-orders tr.row-link:focus-visible > td { background: var(--surface-2); }
 .order-detail { width: 100%; }
 .order-detail tfoot td { border-top: 1px solid var(--border); }
