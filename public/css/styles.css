@@ -1521,3 +1521,17 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 .clock-missing { margin-top: 0.2rem; }
 .cr-tags { flex: none; white-space: nowrap; }
 .cr-tags .mini-tag:first-child { margin-left: 0; }
+
+/* Dashboard: London's 7-day forecast */
+.weather { padding: 0.7rem 1rem; }
+.weather-title { font-size: 0.85rem; font-weight: 600; margin: 0 0 0.4rem; color: var(--muted); }
+.weather-days { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.3rem; }
+.weather-days li { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.35rem 0.1rem; border-radius: 8px; text-align: center; font-size: 0.8rem; }
+.weather-days li:first-child { background: var(--surface-2); }
+.wd-day { font-weight: 600; }
+.wd-icon { font-size: 1.4rem; line-height: 1.2; }
+.wd-temp { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wd-rain { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+.wd-rain.is-wet { color: var(--series-1); font-weight: 600; }
+@media (max-width: 420px) { .weather-days { gap: 0.1rem; } .weather-days li { font-size: 0.72rem; } .wd-icon { font-size: 1.15rem; } }
+@media print { .weather { display: none; } }

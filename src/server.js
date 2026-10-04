@@ -18,6 +18,7 @@ import { registerDocumentRoutes } from './routes/documents.js';
 import { registerBreakRoutes } from './routes/breaks.js';
 import { registerTimecardRoutes } from './routes/timecards.js';
 import { registerPaymentLinkRoutes } from './routes/payment-links.js';
+import { londonWeather, registerWeatherRoutes } from './weather.js';
 import { registerInvoiceInboxRoutes } from './invoice-inbox.js';
 import { registerReviewRoutes } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from './invites.js';
@@ -36,7 +37,7 @@ export function trustProxy(env) {
 // mailbox: the shared invoice inbox (see mailbox.js), or null when it isn't connected.
 // places: Google Maps, for each site's rating and reviews (see google-reviews.js), or null when it isn't set up.
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, places = null, version = null } = {}) {
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, places = null, version = null, weather = londonWeather() } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Browser protections: only this site's own scripts run, pages can't be shown inside other sites (stops
@@ -94,6 +95,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerBreakRoutes(api, db);
   registerTimecardRoutes(api, db, square);
   registerPaymentLinkRoutes(api, db, square, mailer);
+  registerWeatherRoutes(api, weather);
   registerInvoiceInboxRoutes(api, db, { mailbox, reader: invoiceReader });
   registerReviewRoutes(api, db, places);
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found')));

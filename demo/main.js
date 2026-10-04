@@ -23,6 +23,7 @@ import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { registerBreakRoutes } from '../src/routes/breaks.js';
 import { registerTimecardRoutes } from '../src/routes/timecards.js';
 import { registerPaymentLinkRoutes } from '../src/routes/payment-links.js';
+import { describe as weatherWords, registerWeatherRoutes } from '../src/weather.js';
 import { registerInvoiceInboxRoutes, setSetting } from '../src/invoice-inbox.js';
 import { memoryMailbox } from '../src/mailbox.js';
 import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
@@ -144,6 +145,10 @@ async function boot() {
   registerBreakRoutes(api, db);
   registerTimecardRoutes(api, db, square);
   registerPaymentLinkRoutes(api, db, square, demoMailer);
+  // A made-up London week, so the dashboard's forecast has something to show.
+  registerWeatherRoutes(api, async () => [3, 61, 2, 0, 80, 1, 63].map((code, i) => ({
+    date: addDays(today(), i), ...weatherWords(code), max: [16, 14, 15, 18, 13, 17, 12][i], min: [9, 8, 7, 10, 8, 9, 6][i], rain: [20, 80, 10, 0, 70, 5, 90][i],
+  })));
   // Pretend Google Maps listings: every site but one is linked, with a rating from a month ago to compare against.
   const reviewSites = db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY id').all();
   const places = demoPlaces(reviewSites);

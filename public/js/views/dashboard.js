@@ -344,6 +344,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks ${shown.isToday ? 'today' : ''}</span><strong>${totals.fails}</strong></div>
       ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>${shown.isToday ? 'Clocked in now' : 'Clocked in'}</span><strong>${clockedInNow}</strong><small>${shown.isToday ? `of ${totals.staff} on today’s rota` : `${totals.staff} on the rota`} · <u>see who</u></small></button>`}
     </div>` : ''}
+    <section class="card weather" id="weather" hidden></section>
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
     ${locs.some((l) => l.roster) ? whosIn(locs, data, fresh) : ''}
     ${security?.demo_password_accounts?.length ? `<p class="notice security-warning"><strong>⚠ Security: ${security.demo_password_accounts.length} account${security.demo_password_accounts.length === 1 ? '' : 's'} can still sign in with the demo password</strong> (${esc(security.demo_password_accounts.slice(0, 4).map((u) => u.email).join(', '))}${security.demo_password_accounts.length > 4 ? ', …' : ''}). Anyone who knows it could get in. Add <code>SEED_DEMO</code> = <code>false</code> in Railway → Variables to switch them all off, or give each a new password under Setup → Staff.</p>` : ''}
@@ -380,6 +381,19 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         : `<p class="muted">${shown.isToday ? 'Nobody is clocked in right now.' : 'Nobody clocked in that day.'}</p>`,
     });
   });
+  // London's 7-day forecast (loaded after the page, and simply left out if the weather service is unavailable).
+  const weatherBox = el.querySelector('#weather');
+  api('/weather').then((w) => {
+    if (stale() || !weatherBox.isConnected || !w.days?.length) return;
+    weatherBox.innerHTML = `<h2 class="weather-title">${esc(w.place)} weather</h2>
+      <ol class="weather-days">${w.days.map((d, i) => `<li title="${esc(`${d.label}${d.rain !== null ? ` · ${d.rain}% chance of rain` : ''}`)}">
+        <span class="wd-day">${i === 0 ? 'Today' : fmtDate(d.date, { weekday: 'short' })}</span>
+        <span class="wd-icon" role="img" aria-label="${esc(d.label)}">${d.icon}</span>
+        <span class="wd-temp"><strong>${d.max}°</strong> <span class="muted">${d.min}°</span></span>
+        ${d.rain !== null ? `<span class="wd-rain ${d.rain >= 50 ? 'is-wet' : ''}">💧${d.rain}%</span>` : ''}
+      </li>`).join('')}</ol>`;
+    weatherBox.hidden = false;
+  }).catch(() => {});
   // Gross sales by hour: today next to the same weekday last week.
   const chartBox = el.querySelector('#hourly-chart');
   if (chartBox) {
