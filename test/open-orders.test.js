@@ -14,8 +14,9 @@ test('open orders count in today’s sales while open, and once (as a sale) when
   const now = new Date(Date.now() - 30 * 60000).toISOString();
   const line = (pence) => ({ name: 'Item', quantity: '1', total_money: { amount: pence, currency: 'GBP' }, total_tax_money: { amount: Math.round(pence / 6), currency: 'GBP' } });
   let completed = [{ id: 'C1', location_id: 'SQ_A', state: 'COMPLETED', closed_at: now, line_items: [line(1000)] }];
-  let open = [{ id: 'O1', location_id: 'SQ_A', state: 'OPEN', created_at: now, line_items: [line(600)] },
+  let open = [{ id: 'O1', location_id: 'SQ_A', state: 'OPEN', created_at: now, source: { name: 'Square Point of Sale' }, line_items: [line(600)] },
     { id: 'PL1', location_id: 'SQ_A', state: 'OPEN', created_at: now, line_items: [line(5000)] },
+    { id: 'LINK2', location_id: 'SQ_A', state: 'OPEN', created_at: now, source: { name: 'Square Online Checkout' }, line_items: [line(700)] },
     { id: 'WEB1', location_id: 'SQ_A', state: 'OPEN', created_at: now, fulfillments: [{ type: 'PICKUP' }], line_items: [line(900)] }];
   db.prepare(`INSERT INTO payment_links (location_id, square_link_id, square_order_id, url, amount, description) VALUES (?, 'L', 'PL1', 'u', 50, 'deposit')`).run(site);
   const fetchFn = async (url, init = {}) => {
@@ -45,7 +46,7 @@ test('open orders count in today’s sales while open, and once (as a sale) when
   assert.equal(openByHour(), 0);
 
   // A tab that's voided simply drops out.
-  open = [...open, { id: 'O2', location_id: 'SQ_A', state: 'OPEN', created_at: now, line_items: [line(400)] }];
+  open = [...open, { id: 'O2', location_id: 'SQ_A', state: 'OPEN', created_at: now, ticket_name: 'Table 2', line_items: [line(400)] }];
   await syncSales(db, client, { from: day, to: day });
   assert.equal(get().gross_sales, 20);
   open = open.filter((o) => o.id !== 'O2');

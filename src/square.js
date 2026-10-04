@@ -211,13 +211,16 @@ const money = (m) => (m?.amount ?? 0) / 100;
  * Itemised returns in the same order are subtracted.
  */
 /**
- * Whether an open order came from online rather than a till: Square Online, a delivery app, or anything set up
- * for pickup, delivery or shipping. These are usually paid already and just waiting to be made or collected, so
- * they're left out of "open orders" (they count as sales once completed).
+ * Whether an open order was started on a till (Square Point of Sale, Restaurants, Retail, Register, Kiosk or
+ * Terminal), or is a named open ticket. Everything else – Square Online, delivery apps, payment links, invoices,
+ * anything set up for pickup, delivery or shipping – is left out of "open orders"; those count as sales once
+ * completed.
  */
-export function isOnlineOrder(order) {
-  if ((order.fulfillments ?? []).some((f) => ['PICKUP', 'DELIVERY', 'SHIPMENT'].includes(f.type))) return true;
-  return /online|website|web store|deliveroo|uber|just ?eat|doordash/i.test(order.source?.name ?? '');
+export function isTillOrder(order) {
+  if ((order.fulfillments ?? []).some((f) => ['PICKUP', 'DELIVERY', 'SHIPMENT'].includes(f.type))) return false;
+  const source = order.source?.name ?? '';
+  if (/online|checkout|payment link|invoice|website|web store|deliveroo|uber|just ?eat|doordash/i.test(source)) return false;
+  return /point of sale|restaurants|retail|register|kiosk|terminal/i.test(source) || !!order.ticket_name;
 }
 
 export function summariseOrder(order, tz = BUSINESS_TZ) {
@@ -367,7 +370,7 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
 
     // Today's open orders (tabs and tickets not paid yet) are added to today's totals too. Every sync rebuilds the
     // totals from scratch, so when an order is paid it's counted once as a completed sale, and one that's voided
-    // simply drops out. Payment links sent from Brewly and online orders are left out (see isOnlineOrder).
+    // simply drops out. Only till orders count (see isTillOrder); payment links sent from Brewly are left out too.
     const day = localDate(Date.now(), tz);
     let openCount = 0;
     if (day >= from && day <= to) {
@@ -375,7 +378,7 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
       try {
         for await (const order of client.searchOrders({ ...window, startAt: zonedMidnightUTC(day, tz), endAt: zonedMidnightUTC(addDays(day, 1), tz), open: true })) {
           const locationId = bySquareId.get(order.location_id);
-          if (!locationId || linkOrders.has(order.id) || isOnlineOrder(order) || !(order.line_items ?? []).length) continue;
+          if (!locationId || linkOrders.has(order.id) || !isTillOrder(order) || !(order.line_items ?? []).length) continue;
           const s = summariseOrder(order, tz);
           if (s.date !== day) continue;
           openCount++;

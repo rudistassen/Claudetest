@@ -47,7 +47,7 @@ export async function render(ctx) {
           <td class="num"><strong>${money(o.amount)}</strong><small class="muted">${o.due < o.amount ? `${money(o.due)} to pay · ` : ''}open ${openFor(o.created_at)}</small></td>
         </tr>`).join('')}</tbody></table></div>`
         : `<div class="empty">${data.square_ready ? 'No open orders – everything’s been paid.' : 'Nothing to show yet.'}</div>`}
-      <p class="muted small">Live from Square: orders started on the tills in this time and not paid yet. Once paid (or cancelled) they leave this list. Online orders aren’t included, and payment links are on their own page.</p>
+      <p class="muted small">Live from Square: orders started on the tills in this time and not paid yet. Once paid (or cancelled) they leave this list. Only orders from the tills (point of sale) – not online orders or payment links.</p>
     </section>`;
 
   const form = el.querySelector('#oo-filters');

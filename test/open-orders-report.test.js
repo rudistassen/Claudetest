@@ -35,9 +35,10 @@ before(async () => {
     { id: 'T1', location_id: `SQ_${sites[0]}`, state: 'OPEN', created_at: ago(30), ticket_name: 'Table 4',
       line_items: [{ name: 'Flat white', quantity: '2', modifiers: [{ name: 'Oat milk' }], total_money: gbp(720) }, { name: 'Toastie', quantity: '1', note: 'No butter', total_money: gbp(850) }],
       discounts: [{ name: 'Staff', applied_money: gbp(100) }], total_money: gbp(1470), total_tax_money: gbp(245), tenders: [{ amount_money: gbp(500) }], net_amount_due_money: gbp(970) },
-    { id: 'T2', location_id: `SQ_${sites[1]}`, state: 'OPEN', created_at: ago(3 * 1440), line_items: [{ name: 'Cake', quantity: '1', total_money: gbp(400) }], total_money: gbp(400) },
+    { id: 'T2', location_id: `SQ_${sites[1]}`, state: 'OPEN', source: { name: 'Square for Restaurants' }, created_at: ago(3 * 1440), line_items: [{ name: 'Cake', quantity: '1', total_money: gbp(400) }], total_money: gbp(400) },
     { id: 'WEB1', location_id: `SQ_${sites[0]}`, state: 'OPEN', created_at: ago(15), source: { name: 'Square Online' }, line_items: [{ name: 'Cake', quantity: '1', total_money: gbp(400) }], total_money: gbp(400) },
     { id: 'APP1', location_id: `SQ_${sites[0]}`, state: 'OPEN', created_at: ago(12), fulfillments: [{ type: 'DELIVERY' }], line_items: [{ name: 'Cake', quantity: '1', total_money: gbp(400) }], total_money: gbp(400) },
+    { id: 'LINK2', location_id: `SQ_${sites[0]}`, state: 'OPEN', created_at: ago(10), line_items: [{ name: 'Deposit', quantity: '1', total_money: gbp(2000) }], total_money: gbp(2000) },
     { id: 'PL1', location_id: `SQ_${sites[0]}`, state: 'OPEN', created_at: ago(20), line_items: [{ name: 'Deposit', quantity: '1', total_money: gbp(5000) }], total_money: gbp(5000) },
   ];
   db.prepare(`INSERT INTO payment_links (location_id, square_link_id, square_order_id, url, amount, description) VALUES (?, 'L', 'PL1', 'u', 50, 'deposit')`).run(sites[0]);
@@ -57,7 +58,7 @@ async function login(email) {
   };
 }
 
-test('open orders report: lists unpaid tabs (not payment links or online orders), newest first, with details on request', async () => {
+test('open orders report: lists unpaid tabs (only till orders – not payment links or online orders), newest first, with details on request', async () => {
   const admin = await login('admin@cafe.local');
   const all = (await admin('/open-orders')).data;
   assert.deepEqual(all.orders.map((o) => [o.id, o.name, o.amount, o.due, o.items]), [['T1', 'Table 4', 14.7, 9.7, 3], ['T2', null, 4, 4, 1]]);
