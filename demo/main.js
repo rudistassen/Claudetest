@@ -12,6 +12,7 @@ import { registerSalesRoutes } from '../src/routes/sales.js';
 import { registerStockRoutes } from '../src/routes/stock.js';
 import { registerLeaveRoutes } from '../src/routes/leave.js';
 import { registerTradingRoutes } from '../src/routes/trading.js';
+import { registerOpenOrderRoutes } from '../src/routes/open-orders.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { SquareClient, syncSales } from '../src/square.js';
 import { memoryMailer } from '../src/email.js';
@@ -123,6 +124,7 @@ async function boot() {
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);
   registerTradingRoutes(api, db, square);
+  registerOpenOrderRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, demoMailer, { demo: true });
   const invoiceReader = demoInvoiceReader(db);

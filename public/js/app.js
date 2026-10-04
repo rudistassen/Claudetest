@@ -6,6 +6,7 @@ import * as breaks from './views/breaks.js';
 import * as rotalog from './views/rotalog.js';
 import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
+import * as openorders from './views/openorders.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -68,6 +69,7 @@ const ROUTES = [
   [/^breaks$/, breaks.render, ['sales.view', 'staff.manage']],
   [/^rota-costs$/, rotacosts.render, ['sales.view']],
   [/^reviews$/, reviews.render, ['sales.view']],
+  [/^open-orders$/, openorders.render, ['sales.view']],
   [/^orders$/, orders.renderList, ['orders.manage']],
   [/^orders\/new$/, orders.renderNew, ['orders.manage']],
   [/^orders\/(\d+)$/, orders.renderOrder, ['orders.manage']],
@@ -113,6 +115,7 @@ function navGroups() {
     ['Reporting', [
       ['trading', 'Trading', '◔', ['sales.view']],
       ['sales', 'Sales', '£', ['sales.view']],
+      ['open-orders', 'Open orders', '◌', ['sales.view']],
       ['rota-costs', 'Rota costs', '⚖', ['sales.view']],
       ['breaks', 'Breaks', '☕', ['sales.view', 'staff.manage']],
       ['reviews', 'Reviews', '★', ['sales.view']],

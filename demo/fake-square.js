@@ -35,6 +35,28 @@ function pick(r) {
 
 const cache = new Map();
 
+const TICKETS = ['Table 4', 'Sam – flat whites', 'Table 12', 'Window seat', 'Builders tab', 'Table 2', 'Outside 3'];
+const gbp = (amount) => ({ amount, currency: 'GBP' });
+
+/** Open tabs and tickets: one or two per site from the last hour, plus one at the first site left open for days. */
+function openOrders(now = Date.now()) {
+  const tab = (l, i, k, minsAgo) => {
+    const toastie = 850 + i * 50;
+    const created = new Date(now - minsAgo * 60000).toISOString();
+    return {
+      id: `OPEN-${l.id}-${k}`, location_id: l.id, state: 'OPEN', created_at: created, updated_at: created,
+      ticket_name: TICKETS[(i + k) % TICKETS.length], source: { name: 'Square Point of Sale' },
+      line_items: [
+        { name: 'Flat white', variation_name: 'Regular', quantity: '2', modifiers: [{ name: 'Oat milk' }], total_money: gbp(720), total_tax_money: gbp(120) },
+        { name: 'Toastie', variation_name: 'Ham & cheese', quantity: '1', note: k ? 'No butter' : undefined, total_money: gbp(toastie), total_tax_money: gbp(142) },
+      ],
+      total_money: gbp(720 + toastie), total_tax_money: gbp(262), net_amount_due_money: gbp(720 + toastie),
+    };
+  };
+  const recent = SQUARE_LOCATIONS.slice(0, 7).flatMap((l, i) => [0, 1].slice(0, 1 + (i % 2)).map((k) => tab(l, i, k, 10 + i * 7 + k * 20)));
+  return [...recent, { ...tab(SQUARE_LOCATIONS[0], 0, 9, 2 * 1440 + 200), ticket_name: 'Party booking deposit?' }];
+}
+
 function ordersFor(locIndex, isoDate) {
   const key = `${locIndex}|${isoDate}`;
   if (!cache.has(key)) cache.set(key, generate(locIndex, isoDate));
@@ -205,6 +227,10 @@ export async function fakeSquareFetch(url, init = {}) {
     return json(200, { payment_link: link });
   }
   if (path.startsWith('/v2/online-checkout/payment-links/') && init.method === 'DELETE') return json(200, { id: path.split('/').pop() });
+  if (path.startsWith('/v2/orders/OPEN-')) {
+    const o = openOrders().find((x) => x.id === decodeURIComponent(path.split('/').pop()));
+    return o ? json(200, { order: o }) : json(404, { errors: [{ code: 'NOT_FOUND', detail: 'Order not found' }] });
+  }
   if (path.startsWith('/v2/orders/ORD_PL_')) {
     const o = linkOrders.get(path.split('/').pop());
     if (!o) return json(404, { errors: [{ code: 'NOT_FOUND', detail: 'Order not found' }] });
@@ -242,15 +268,10 @@ export async function fakeSquareFetch(url, init = {}) {
   }
   if (path !== '/v2/orders/search') return json(404, { errors: [{ code: 'NOT_FOUND', detail: 'Not found' }] });
   const q = JSON.parse(init.body);
-  // Open tabs: a couple per site, started in the last hour or so.
+  // Open tabs: a couple per site, started in the last hour or so (and one left open from a couple of days ago).
   if (q.query.filter.state_filter.states.includes('OPEN')) {
-    const now = Date.now();
-    const open = SQUARE_LOCATIONS.slice(0, 7).filter((l) => q.location_ids.includes(l.id)).flatMap((l, i) => [0, 1].slice(0, 1 + (i % 2)).map((k) => ({
-      id: `OPEN-${l.id}-${k}`, location_id: l.id, state: 'OPEN', created_at: new Date(now - (10 + i * 7 + k * 20) * 60000).toISOString(),
-      line_items: [{ name: 'Flat white', quantity: '2', total_money: { amount: 720, currency: 'GBP' }, total_tax_money: { amount: 120, currency: 'GBP' } },
-        { name: 'Toastie', quantity: '1', total_money: { amount: 850 + i * 50, currency: 'GBP' }, total_tax_money: { amount: 142, currency: 'GBP' } }],
-    })));
-    return json(200, { orders: open });
+    const { start_at: start, end_at: end } = q.query.filter.date_time_filter.created_at;
+    return json(200, { orders: openOrders().filter((o) => q.location_ids.includes(o.location_id) && o.created_at >= start && o.created_at < end) });
   }
   const { start_at: start, end_at: end } = q.query.filter.date_time_filter.closed_at;
   const now = new Date().toISOString();

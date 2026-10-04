@@ -1536,3 +1536,10 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 .wd-rain.is-wet { color: var(--series-1); font-weight: 600; }
 @media (max-width: 420px) { .weather-days { gap: 0.1rem; } .weather-days li { font-size: 0.72rem; } .wd-icon { font-size: 1.15rem; } }
 @media print { .weather { display: none; } }
+/* Reporting → Open orders, and an order's items */
+.open-orders td small, .order-detail td small { display: block; }
+.open-orders tr.row-link { cursor: pointer; }
+.open-orders tr.row-link:focus-visible > td { background: var(--surface-2); }
+.order-detail { width: 100%; }
+.order-detail tfoot td { border-top: 1px solid var(--border); }
+.order-detail tfoot tr + tr td { border-top: 0; }

@@ -11,6 +11,7 @@ import { registerSafetyRoutes } from './routes/safety.js';
 import { registerStockRoutes } from './routes/stock.js';
 import { registerLeaveRoutes } from './routes/leave.js';
 import { registerTradingRoutes } from './routes/trading.js';
+import { registerOpenOrderRoutes } from './routes/open-orders.js';
 import { registerReportRoutes } from './reports.js';
 import { registerInvoiceRoutes } from './routes/invoices.js';
 import { registerNewsRoutes } from './routes/news.js';
@@ -87,6 +88,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);
   registerTradingRoutes(api, db, square);
+  registerOpenOrderRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, mailer);
   registerInvoiceRoutes(api, db, invoiceReader);
