@@ -1,5 +1,5 @@
 import { fmtPct, labourTone } from './sales.js';
-import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite } from '../lib.js';
+import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite, siteColour } from '../lib.js';
 import { shiftHistory } from './rotalog.js';
 import { openStaffEditor } from './admin.js';
 import { askToDrop, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
@@ -297,7 +297,7 @@ export async function render(ctx) {
           ${(data.open_shifts ?? []).length ? `<tr class="rota-open"><th>Open shifts<small>tap to pick up</small></th>${data.days.map((d) => `<td class="${d === today ? 'is-today' : ''}">${openOn(d).map(openButton).join('')}</td>`).join('')}<td></td></tr>` : ''}
           ${rows.map(({ header, groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
             <th colspan="${data.days.length + 2}"><span class="rota-subgroup-name">${esc(sub)}</span>
-              <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group ${layout === 'group-site' && all ? 'rota-group-by-rg' : ''}" data-group="${esc(groupId)}"><th colspan="${data.days.length + 2}">
+              <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group ${layout === 'group-site' && all ? 'rota-group-by-rg' : ''}" data-group="${esc(groupId)}"${siteOfGroup(groupId) ? ` style="--site: ${siteColour(siteName(siteOfGroup(groupId)), siteOfGroup(groupId))}"` : ''}><th colspan="${data.days.length + 2}">
             <div class="rota-group-line"><button class="rota-group-toggle" aria-expanded="true" data-toggle="${esc(groupId)}">
               <span class="rota-chevron" aria-hidden="true">▾</span>
               <span class="rota-group-name">${esc(header)}</span>

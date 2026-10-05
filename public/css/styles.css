@@ -1210,53 +1210,22 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .person-link:hover { color: var(--brand); text-decoration-color: currentColor; }
 .day-name .person-link { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Week rota: each site's heading is a bold banner, so sites stand apart clearly. */
+/* Week rota: kept calm and neutral so the shifts are what stand out. Each site's heading is a light grey bar with
+   a thin strip in the site's own colour. */
 .rota tr.rota-group th {
-  background: linear-gradient(100deg, var(--brand-deep), var(--brand)); color: #fff;
-  padding: 0.75rem 1rem; border-left: 0; border-top: 18px solid var(--surface);
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+  background: var(--surface-2); color: var(--text); padding: 0.45rem 0.8rem;
+  border-left: 0; border-top: 10px solid var(--surface); box-shadow: inset 4px 0 0 var(--site, var(--border));
 }
 .rota tr.rota-group .rota-group-toggle { align-items: center; }
-.rota tr.rota-group .rota-group-name { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
-.rota tr.rota-group .rota-chevron { color: #fff; font-size: 1rem; }
-.rota tr.rota-group .rota-group-meta {
-  margin-left: 0.9rem; padding: 0.25rem 0.8rem; border-radius: 99px;
-  background: var(--surface); color: var(--text); opacity: 1; font-size: 0.85rem; font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-}
-.rota tr.rota-group .rota-publish-site { background: var(--surface); color: var(--text); }
-@media print {
-  .rota tr.rota-group th { background: #eee !important; color: #000 !important; box-shadow: none; }
-  .rota tr.rota-group .rota-group-name, .rota tr.rota-group .rota-chevron { color: #000; text-shadow: none; }
-}
-/* …with a raised, 3D look: a light top edge, darker bottom and left edges, a sheen and a shadow beneath. */
-.rota tr.rota-group th {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.06) 48%, rgba(0, 0, 0, 0.06) 52%, rgba(0, 0, 0, 0.16) 100%),
-    linear-gradient(100deg, var(--brand-deep), var(--brand));
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -5px 0 rgba(0, 0, 0, 0.22),
-    inset 7px 0 0 rgba(0, 0, 0, 0.22),
-    0 6px 10px -4px rgba(0, 40, 90, 0.45);
-  border-radius: 10px;
-  position: relative;
-}
-.rota tr.rota-group .rota-group-meta { box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18), 0 3px 8px rgba(0, 0, 0, 0.2); }
-.rota tr.rota-group .rota-chevron { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
-/* …in a deeper navy, with a stronger bevel: bright top edge, thick dark bottom and side edges. */
-.rota tr.rota-group th {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(0, 0, 0, 0.08) 55%, rgba(0, 0, 0, 0.22) 100%),
-    linear-gradient(100deg, #1b3f66, #2b5c8f);
-  padding: 0.8rem 1.1rem 1rem 1.3rem;
-  box-shadow:
-    inset 0 3px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -8px 0 rgba(0, 0, 0, 0.35),
-    inset 9px 0 0 rgba(0, 0, 0, 0.3),
-    inset -3px 0 0 rgba(0, 0, 0, 0.2),
-    0 10px 16px -6px rgba(10, 30, 55, 0.6);
-  border-radius: 12px;
+.rota tr.rota-group .rota-group-name { font-size: 1rem; font-weight: 700; }
+.rota tr.rota-group .rota-chevron { color: var(--muted); font-size: 0.8rem; }
+.rota tr.rota-group .rota-group-meta { margin-left: 0.6rem; font-size: 0.8rem; font-weight: 500; color: var(--muted); opacity: 1; }
+.rota tr.rota-group .rota-group-line { gap: 0.5rem; }
+@media print { .rota tr.rota-group th { background: #eee !important; color: #000 !important; } }
+@media (max-width: 640px) {
+  .rota tr.rota-group th { padding: 0.35rem 0.6rem; }
+  .rota tr.rota-group .rota-group-name { font-size: 0.92rem; }
+  .rota tr.rota-group .rota-group-meta { font-size: 0.72rem; margin-left: 0.4rem; }
 }
 
 /* Reporting → Rota costs */
@@ -1264,41 +1233,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .rota-costs tbody th small.bank-hol { display: block; color: var(--warn); font-size: 0.72rem; font-weight: 700; }
 .rota-costs td small { font-size: 0.75rem; }
 .rota-costs tfoot tr th, .rota-costs tfoot tr td { border-top: 2px solid var(--border); font-weight: 700; }
-/* …in aquamarine, with dark teal lettering so the site name stays easy to read. */
-.rota tr.rota-group th {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 45%, rgba(0, 0, 0, 0.03) 55%, rgba(0, 60, 50, 0.14) 100%),
-    linear-gradient(100deg, #3ccfae, #7fe8cf);
-  color: #07352d;
-  box-shadow:
-    inset 0 3px 0 rgba(255, 255, 255, 0.6),
-    inset 0 -8px 0 rgba(0, 80, 65, 0.3),
-    inset 9px 0 0 rgba(0, 80, 65, 0.28),
-    inset -3px 0 0 rgba(0, 80, 65, 0.15),
-    0 10px 16px -6px rgba(0, 80, 65, 0.45);
-}
-.rota tr.rota-group .rota-group-name { color: #07352d; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45); }
-.rota tr.rota-group .rota-chevron { color: #07352d; text-shadow: none; }
-/* …kept slim: smaller lettering and less height, with a lighter bevel. */
-.rota tr.rota-group th {
-  padding: 0.4rem 0.8rem 0.55rem 1rem; border-top-width: 10px; border-radius: 9px;
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.6),
-    inset 0 -5px 0 rgba(0, 80, 65, 0.3),
-    inset 6px 0 0 rgba(0, 80, 65, 0.28),
-    inset -2px 0 0 rgba(0, 80, 65, 0.15),
-    0 6px 10px -5px rgba(0, 80, 65, 0.45);
-}
-.rota tr.rota-group .rota-group-name { font-size: 1rem; font-weight: 800; }
-.rota tr.rota-group .rota-chevron { font-size: 0.8rem; }
-.rota tr.rota-group .rota-group-meta { margin-left: 0.6rem; padding: 0.12rem 0.6rem; font-size: 0.76rem; }
-.rota tr.rota-group .rota-group-line { gap: 0.5rem; }
-@media (max-width: 640px) {
-  .rota tr.rota-group th { padding: 0.35rem 0.6rem 0.5rem 0.8rem; }
-  .rota tr.rota-group .rota-group-name { font-size: 0.92rem; }
-  .rota tr.rota-group .rota-group-meta { font-size: 0.7rem; margin-left: 0.4rem; }
-}
-
 /* Dashboard: clock-ins against the rota. */
 .clock-rota { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; margin-top: 0.1rem; }
 .chip-muted { background: var(--surface-2); color: var(--muted); }
@@ -1568,3 +1502,12 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 .rota tr.rota-open th, .rota tr.rota-open td { background: var(--tone-team, var(--surface-2)); }
 .shift.shift-open { border-style: dashed; background: var(--surface); }
 .shift .shift-tag.tag-drop, .day-card .shift-tag.tag-drop { background: color-mix(in srgb, #f08a24 25%, transparent); color: inherit; }
+/* Rota: neutral shifts and rows – colour is kept for what needs attention (new, changed, removed, open shifts) */
+.rota .is-today { background: color-mix(in srgb, var(--brand) 5%, var(--surface)); }
+.rota-scroll .rota thead th.is-today { background: color-mix(in srgb, var(--brand) 10%, var(--surface-2)); }
+.shift { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid color-mix(in srgb, var(--text) 30%, transparent); }
+.day-card { background: var(--surface-2); border-left-color: color-mix(in srgb, var(--text) 30%, transparent); }
+.rota tr.rota-forecast th, .rota tr.rota-forecast td, .rota-scroll .rota tr.rota-forecast > th:first-child { background: var(--surface); color: var(--muted); }
+.rota tr.rota-open th, .rota tr.rota-open td { background: var(--surface); }
+.person-link { text-decoration: none; }
+.person-link:hover { text-decoration: underline; }
