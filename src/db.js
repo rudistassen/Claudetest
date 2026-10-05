@@ -624,6 +624,12 @@ const MIGRATIONS = [
   // Rota publishing: the pub_* columns hold what staff can see (null = never published); the other columns are the
   // draft editors work on, and removed marks a published shift deleted in the draft. Shifts that existed before
   // publishing was added count as published, and whoever could edit the rota can now also publish it.
+  // Sickness: a shift can be marked as the person being off sick. It stays on the rota (and is kept for the
+  // Sickness report) but doesn't count as hours or labour cost, or as a missed clock-in.
+  ['shifts', 'sick', `ALTER TABLE shifts ADD COLUMN sick INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE shifts ADD COLUMN sick_note TEXT;
+    ALTER TABLE shifts ADD COLUMN sick_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE shifts ADD COLUMN sick_at TEXT;`],
   ['shifts', 'pub_date', (db) => {
     db.exec(`ALTER TABLE shifts ADD COLUMN pub_location_id INTEGER;
       ALTER TABLE shifts ADD COLUMN pub_user_id INTEGER;
@@ -670,13 +676,16 @@ export const UNPUBLISHED = `removed = 1 OR pub_date IS NULL OR pub_location_id !
   OR pub_start_time != start_time OR pub_end_time != end_time OR pub_break_minutes != break_minutes`;
 
 // What staff see (published_shifts) and what editors see (draft_shifts), with the usual shift columns.
+// Rebuilt each time the database opens, so they pick up new columns.
 const VIEWS = `
-CREATE VIEW IF NOT EXISTS published_shifts AS
+DROP VIEW IF EXISTS published_shifts;
+CREATE VIEW published_shifts AS
   SELECT id, pub_location_id AS location_id, pub_user_id AS user_id, pub_date AS date, pub_start_time AS start_time,
-    pub_end_time AS end_time, pub_break_minutes AS break_minutes, position, notes
+    pub_end_time AS end_time, pub_break_minutes AS break_minutes, position, notes, sick, sick_note
   FROM shifts WHERE pub_date IS NOT NULL;
-CREATE VIEW IF NOT EXISTS draft_shifts AS
-  SELECT id, location_id, user_id, date, start_time, end_time, break_minutes, position, notes FROM shifts WHERE removed = 0;
+DROP VIEW IF EXISTS draft_shifts;
+CREATE VIEW draft_shifts AS
+  SELECT id, location_id, user_id, date, start_time, end_time, break_minutes, position, notes, sick, sick_note FROM shifts WHERE removed = 0;
 `;
 
 export function openDb(file = ':memory:') {

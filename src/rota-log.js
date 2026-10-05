@@ -28,7 +28,7 @@ export function shiftChanges(db, before, after) {
 
 /**
  * Records one change. entry: { action, location_id, shift (the shift it's about, for its person and day), details }.
- * Actions: add, change, remove, restore, publish_shift, publish, discard, copy, drop, claim, withdraw.
+ * Actions: add, change, remove, restore, publish_shift, publish, discard, copy, drop, claim, withdraw, sick.
  */
 export function logRota(db, req, { action, location_id, shift = null, details = '' }) {
   db.prepare(`INSERT INTO rota_log (actor_id, actor_name, action, location_id, location_name, shift_id, staff_id, staff_name, shift_date, hours, details)

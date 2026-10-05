@@ -1,6 +1,7 @@
 import { attachTip, pairedBarChart } from '../charts.js';
 import { addDays, api, esc, fmtDate, isDemo, money, openModal, siteColour, toast, todayISO } from '../lib.js';
 import { clockInActions, wireClockInActions } from './breaks.js';
+import { sickAttrs, wireSickButtons } from './sickness.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 
 function progress(done, due) {
@@ -12,7 +13,8 @@ function progress(done, due) {
 
 // "4h 05m" from hours.
 // The day the dashboard is showing: today (so far, the default) or a whole earlier day picked from the date menu.
-const shown = { isToday: true, day: '' };
+// isToday/day: the day shown; canSick: whether this person can mark a rota shift as sickness (rota editors).
+const shown = { isToday: true, day: '', canSick: false };
 const dayWord = () => (shown.isToday ? 'today' : fmtDate(shown.day, { weekday: 'short', day: 'numeric', month: 'short' }));
 
 // Names on the dashboard are shortened to first name and last initial: "Boudebza Sid Ali" → "Boudebza A.".
@@ -41,15 +43,18 @@ function versus(now, then, { goodUp = true } = {}) {
 const ROSTER = {
   in: ['In', 'is-in'], on_break: ['On break', 'is-break'], done: ['Finished', 'is-done'], due: ['Due', 'is-due'],
   late: ['Not in', 'is-late'], missed: ['Didn’t clock in', 'is-late'], elsewhere: ['Elsewhere', 'is-other'],
-  extra: ['Not on rota', 'is-other'], rota: ['On the rota', 'is-due'],
+  extra: ['Not on rota', 'is-other'], rota: ['On the rota', 'is-due'], sick: ['Sick', 'is-sick'],
 };
 function rosterRow(p) {
   const [label, tone] = ROSTER[p.status] ?? ['', ''];
   const note = p.status === 'late' ? `${mins(p.late_minutes)} late`
     : p.status === 'elsewhere' ? `at ${esc(p.where)}`
+      : p.status === 'sick' ? (p.note ? esc(p.note) : '')
       : [p.rota_site ? 'covering' : '', p.late_minutes ? `${mins(p.late_minutes)} late` : ''].filter(Boolean).join(' · ');
+  // Rota editors can tap someone on the rota to mark them as sick (or change it).
+  const sickable = shown.canSick && p.shift_id && !p.rota_site && ['due', 'late', 'missed', 'rota', 'sick'].includes(p.status);
   return `<tr class="roster-row ${tone}">
-    <td>${esc(shortName(p.name))}</td>
+    <td>${sickable ? `<button class="link-btn roster-sick" ${sickAttrs({ ...p, name: shortName(p.name), date: shown.day, sick: p.status === 'sick' })} title="${p.status === 'sick' ? 'Off sick – tap to change' : 'Tap to mark as sick'}">${esc(shortName(p.name))}</button>` : esc(shortName(p.name))}</td>
     <td>${p.rota ? `${p.rota}${p.rota_site ? ` <span class="muted">at ${esc(p.rota_site)}</span>` : ''}` : '<span class="muted">–</span>'}</td>
     <td>${p.clock ? p.clock.replace('–now', '–<span class="muted">now</span>') : '<span class="muted">–</span>'}</td>
     <td><span class="roster-status">${label}</span>${note ? ` <span class="muted">${note}</span>` : ''}</td>
@@ -182,12 +187,16 @@ function card(loc, state, data) {
             : '<p class="muted">Nobody has clocked in yet</p>'}
           ${loc.not_clocked_in?.length ? `<ul class="clock-rows clock-missing">${loc.not_clocked_in.map((m) => `<li class="clock-row">
               <span class="cr-main"><strong>${esc(shortName(m.name))}</strong> <span class="muted">rota ${m.rota}</span></span>
-              <span class="cr-hours"><span class="mini-tag is-bad">${m.shift_over ? 'Didn’t clock in' : `Not in · ${mins(m.late_minutes)} late`}</span></span></li>`).join('')}</ul>` : ''}
+              <span class="cr-hours"><span class="mini-tag is-bad">${m.shift_over ? 'Didn’t clock in' : `Not in · ${mins(m.late_minutes)} late`}</span>
+                ${shown.canSick && m.shift_id ? `<button class="mini-tag sick-btn" ${sickAttrs({ ...m, name: shortName(m.name), date: shown.day })} title="Mark as sick">Sick?</button>` : ''}</span></li>`).join('')}</ul>` : ''}
+          ${loc.sick?.length ? `<ul class="clock-rows clock-sick">${loc.sick.map((m) => `<li class="clock-row">
+              <span class="cr-main"><strong>${esc(shortName(m.name))}</strong> <span class="muted">rota ${m.rota}${m.note ? ` · ${esc(m.note)}` : ''}</span></span>
+              <span class="cr-hours">${shown.canSick ? `<button class="mini-tag is-sick" ${sickAttrs({ ...m, name: shortName(m.name), date: shown.day, sick: true })} title="Off sick – tap to change">Sick</button>` : '<span class="mini-tag is-sick">Sick</span>'}</span></li>`).join('')}</ul>` : ''}
         </div>` : `
         <div class="span-2">
           <h3>On shift ${dayWord()} (${staff.length})</h3>
           ${staff.length
-            ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(shortName(s.name))}</strong> ${s.start_time}–${s.end_time}</li>`).join('')}</ul>`
+            ? `<ul class="shift-list">${staff.map((s) => `<li><strong>${esc(shortName(s.name))}</strong> ${s.start_time}–${s.end_time}${shown.canSick ? ` <button class="mini-tag ${s.sick ? 'is-sick' : 'sick-btn'}" ${sickAttrs({ shift_id: s.id, name: shortName(s.name), rota: `${s.start_time}–${s.end_time}`, date: shown.day, sick: !!s.sick })}>${s.sick ? 'Sick' : 'Sick?'}</button>` : s.sick ? ' <span class="mini-tag is-sick">Sick</span>' : ''}</li>`).join('')}</ul>`
             : '<p class="muted">Nobody rostered</p>'}
         </div>`}
         <div class="site-checks span-2">
@@ -273,6 +282,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const d0 = /^\d{4}-\d{2}-\d{2}$/.test(query.date ?? '') && query.date < today ? query.date : today;
   shown.isToday = d0 === today;
   shown.day = d0;
+  shown.canSick = state.can('rota.edit');
   const [data, myShifts, leave, security, fresh, tradeToday, tradeWeek, tradePrevWeek] = await Promise.all([
     api(`/dashboard${shown.isToday ? '' : `?date=${d0}`}`),
     api('/my-shifts'),
@@ -432,6 +442,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     }).catch(() => { if (chartBox.isConnected) chartBox.innerHTML = '<p class="muted small">Couldn’t load the hourly chart.</p>'; });
   }
   wireClockInActions(el, { state, rerender });
+  wireSickButtons(el, rerender);
   el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
     try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }
     rerender();

@@ -3,6 +3,7 @@ import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openMod
 import { shiftHistory } from './rotalog.js';
 import { openStaffEditor } from './admin.js';
 import { askToDrop, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
+import { sickDialog } from './sickness.js';
 
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
@@ -26,7 +27,7 @@ export async function render(ctx) {
   // Open shifts (dropped and approved) at the sites shown, and shifts someone has asked to drop.
   const dropAsked = new Set(data.drop_requested ?? []);
   const openOn = (d) => (data.open_shifts ?? []).filter((x) => x.date === d);
-  const dropTag = (s) => (dropAsked.has(s.id) ? '<em class="shift-tag tag-drop">Drop asked</em>' : '');
+  const dropTag = (s) => (s.sick ? '<em class="shift-tag tag-sick">Sick</em>' : '') + (dropAsked.has(s.id) ? '<em class="shift-tag tag-drop">Drop asked</em>' : '');
   const openButton = (x) => `<button class="shift shift-open" data-open-shift="${x.id}" title="Open shift – tap to pick it up"><span class="shift-time">${x.start_time}–${x.end_time}</span>${all ? `<small>@ ${esc(x.location_name)}</small>` : ''}</button>`;
   const canEdit = state.can('rota.edit');
   const today = todayISO();
@@ -65,7 +66,8 @@ export async function render(ctx) {
     coverAway.set(k, [...(coverAway.get(k) ?? []), x].sort((a, b) => a.start_time.localeCompare(b.start_time)));
   }
   // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
-  const counted = data.shifts.filter((x) => x.state !== 'removed');
+  // Removed shifts and sickness don't count towards hours or labour cost.
+  const counted = data.shifts.filter((x) => x.state !== 'removed' && !x.sick);
   // How the rota is laid out, remembered on this device: by site; site then role (Kitchen, Front of house…);
   // or role then site. On a single site's rota the last two both split it by role. (Roles are stored as rota_group.)
   const LAYOUT_KEY = 'cafe-ops:rota-layout';
@@ -214,7 +216,7 @@ export async function render(ctx) {
             const from = u && u.location_id !== id && u.location_name ? `Covering from ${u.location_name}` : '';
             return `<li class="day-person ${x.state && x.state !== 'published' ? `is-${x.state}` : ''}" ${canEdit ? `data-drop data-user="${x.user_id}" data-date="${day}" data-site="${id}"` : ''}>
               <span class="day-name">${personName(x.user_id, x.user_name)}</span>
-              <button class="day-card ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
+              <button class="day-card ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''} ${x.sick ? 'shift-sick' : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
                 title="${esc([shiftTitle(x), from].filter(Boolean).join(' · ') || `${x.start_time}–${x.end_time}`)}">
                 <span>${x.start_time}–${x.end_time}</span>${TAGS[x.state] ? `<em class="shift-tag">${TAGS[x.state]}</em>` : ''}${dropTag(x)}</button>
             </li>`;
@@ -317,7 +319,7 @@ export async function render(ctx) {
                 return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''} ${covering ? 'is-covering' : ''}" ${canEdit ? 'data-drop' : ''} data-user="${u.id}" data-date="${d}" data-site="${site}">
                   ${cellNotes(u.id, d)}
                   ${away.map((x) => `<span class="cover-away" title="Covering at ${esc(x.location_name)} ${x.start_time}–${x.end_time}">Covering at ${esc(x.location_name)}<small>${x.start_time}–${x.end_time}</small></span>`).join('')}
-                  ${shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
+                  ${shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''} ${s.sick ? 'shift-sick' : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
                   ${canEdit && !shifts.length && !off && !covering ? '<span class="add-hint">+</span>' : ''}
                 </td>`;
               }).join('')}
@@ -409,6 +411,8 @@ export async function render(ctx) {
       body: `
         ${unpublished ? `<p class="notice publish-one">${shift.state === 'new' ? 'Staff can’t see this shift yet.' : 'Staff still see the old version of this shift.'}
           ${data.can_publish ? '<button type="button" class="btn btn-small btn-primary" id="publish-one">Publish just this shift</button>' : ''}</p>` : ''}
+        ${shift ? `<p class="sick-line ${shift.sick ? 'is-sick' : ''}">${shift.sick ? `<span><strong>Off sick</strong>${shift.sick_note ? ` – ${esc(shift.sick_note)}` : ''}</span>` : '<span class="muted">Not coming in?</span>'}
+          <button type="button" class="btn btn-small" id="sick-btn">${shift.sick ? 'Change' : 'Mark as sick'}</button></p>` : ''}
         <div class="row">
           ${field('Staff member', select('user_id', staffOptions, s.user_id, 'required'))}
           ${field('Site', select('location_id', siteOptions, site, `required ${siteOptions.length > 1 ? '' : 'disabled'}`))}
@@ -438,6 +442,9 @@ export async function render(ctx) {
         ctx.rerender();
       },
     });
+    form.querySelector('#sick-btn')?.addEventListener('click', () => sickDialog({
+      shift_id: shift.id, name: shift.user_name, date: shift.date, rota: `${shift.start_time}–${shift.end_time}`, sick: !!shift.sick, note: shift.sick_note,
+    }, () => ctx.rerender()));
     // Warn (without blocking) when the shift is outside someone's usual availability or on a day they've asked off.
     const warn = form.querySelector('#avail-warn');
     const check = () => {
@@ -650,7 +657,7 @@ async function renderMine(ctx, week) {
           <div class="my-date"><strong>${fmtDate(d, { weekday: 'long' })}</strong><span>${fmtDate(d, { day: 'numeric', month: 'short' })}${d === today ? ' · today' : ''}</span></div>
           <div class="my-list">${mine.length ? mine.map((s) => `
             <div class="my-shift">
-              <div class="my-time">${s.start_time}–${s.end_time}</div>
+              <div class="my-time">${s.start_time}–${s.end_time}${s.sick ? ' <span class="badge badge-cancelled">Off sick</span>' : ''}</div>
               <div class="my-where">${esc(s.location_name)}<small>${hrs(s.hours)}${s.break_minutes ? ` · ${s.break_minutes} min break` : ''}${s.notes ? ` · ${esc(s.notes)}` : ''}</small></div>
               ${s.drop_requested ? '<div class="my-drop"><span class="badge badge-sent">Drop asked – waiting for a manager</span></div>' : s.can_drop ? `<div class="my-drop"><button class="btn btn-small btn-ghost" data-drop-shift="${s.id}">Drop shift</button></div>` : ''}
               ${s.colleagues ? `<div class="my-with small muted">${s.colleagues.length ? `With ${s.colleagues.map((c) => `${esc(c.name)} <span class="nowrap">${c.start_time}–${c.end_time}</span>`).join(', ')}` : 'Nobody else on'}</div>` : ''}

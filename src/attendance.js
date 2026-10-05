@@ -19,14 +19,17 @@ function shiftSpan(s) {
 /**
  * For one site and day: each clock-in (cards from timecardsFor, with user_id) gets
  * { rota: 'HH:MM–HH:MM' | null, late_minutes, over_minutes, not_on_rota }, and `missing` lists people rostered
- * there whose shift has started but who haven't clocked in (on a finished day: didn't clock in at all).
+ * there whose shift has started but who haven't clocked in (on a finished day: didn't clock in at all), and `sick`
+ * those rostered here who are off sick.
  * Also: `shifts`, the published shifts at this site that day (with start/end in ms), and `cardForShift`, the
  * clock-in matched to each (shift id → card), plus `clockedIn`, everyone who clocked in anywhere that day, and
  * `shiftSiteForCard`, the site of the shift each clock-in here was matched to (card id → location id).
  */
 export function attendance(db, locationId, date, cards, now = Date.now()) {
-  const shifts = db.prepare(`SELECT s.id, s.user_id, s.location_id, s.date, s.start_time, s.end_time, u.name
+  const all = db.prepare(`SELECT s.id, s.user_id, s.location_id, s.date, s.start_time, s.end_time, s.sick, s.sick_note, u.name
     FROM published_shifts s JOIN users u ON u.id = s.user_id WHERE s.date = ?`).all(date).map((s) => ({ ...s, ...shiftSpan(s) }));
+  // Someone off sick isn't expected in, so their shift isn't matched to clock-ins or counted as missed.
+  const shifts = all.filter((s) => !s.sick);
   const used = new Set();
   const byCard = new Map();
   const cardForShift = new Map();
@@ -61,6 +64,8 @@ export function attendance(db, locationId, date, cards, now = Date.now()) {
   const missing = shifts
     .filter((s) => s.location_id === locationId && !used.has(s.id) && !clockedIn.has(s.user_id) && s.start <= now)
     .sort((a, b) => a.start - b.start)
-    .map((s) => ({ name: s.name, rota: `${s.start_time}–${s.end_time}`, late_minutes: Math.floor((Math.min(now, s.end) - s.start) / 60000), shift_over: s.end <= now }));
-  return { byCard, missing, shifts: shifts.filter((s) => s.location_id === locationId).sort((a, b) => a.start - b.start), cardForShift, clockedIn, shiftSiteForCard };
+    .map((s) => ({ shift_id: s.id, name: s.name, rota: `${s.start_time}–${s.end_time}`, late_minutes: Math.floor((Math.min(now, s.end) - s.start) / 60000), shift_over: s.end <= now }));
+  const sick = all.filter((s) => s.sick && s.location_id === locationId).sort((a, b) => a.start - b.start)
+    .map((s) => ({ shift_id: s.id, name: s.name, rota: `${s.start_time}–${s.end_time}`, note: s.sick_note }));
+  return { byCard, missing, sick, shifts: shifts.filter((s) => s.location_id === locationId).sort((a, b) => a.start - b.start), cardForShift, clockedIn, shiftSiteForCard };
 }

@@ -86,7 +86,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
   const roster = (locationId, att) => {
     const out = att.shifts.map((s) => {
       const t = att.cardForShift.get(s.id);
-      const base = { name: s.name, rota: `${s.start_time}–${s.end_time}` };
+      const base = { shift_id: s.id, name: s.name, rota: `${s.start_time}–${s.end_time}` };
       if (t) {
         const status = t.end_at ? 'done' : breakInfo(t, breaksToday.get(t.id), dayEnd).on_break ? 'on_break' : 'in';
         const late = att.byCard.get(t.id)?.late_minutes ?? 0;
@@ -100,6 +100,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       if (s.start > dayEnd) return { ...base, status: 'due' };
       return { ...base, status: s.end <= dayEnd ? 'missed' : 'late', late_minutes: Math.floor((Math.min(dayEnd, s.end) - s.start) / 60000) };
     });
+    for (const s of att.sick) out.push({ ...s, status: 'sick' });
     const listed = new Set(att.shifts.map((s) => att.cardForShift.get(s.id)?.id).filter(Boolean));
     for (const t of cardsToday) {
       if (t.location_id !== locationId || listed.has(t.id)) continue;
@@ -124,7 +125,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       const done = checks.filter((c) => c.period === period && taskIds.has(c.task_id));
       return { due: taskIds.size, done: done.length, fails: done.filter((c) => c.status === 'fail').length };
     };
-    const shiftsToday = db.prepare(`SELECT s.start_time, s.end_time, s.position, u.name FROM published_shifts s JOIN users u ON u.id = s.user_id
+    const shiftsToday = db.prepare(`SELECT s.id, s.start_time, s.end_time, s.position, s.sick, u.name FROM published_shifts s JOIN users u ON u.id = s.user_id
       WHERE s.location_id = ? AND s.date = ? ORDER BY s.start_time`).all(loc.id, d);
     const lastTake = db.prepare(`SELECT MAX(completed_at) AS at FROM stock_takes WHERE location_id = ? AND status = 'completed'`).get(loc.id).at;
     const takeInProgress = db.prepare(`SELECT id FROM stock_takes WHERE location_id = ? AND status = 'in_progress'`).get(loc.id)?.id ?? null;
@@ -148,7 +149,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       ...(seeClockIns ? (() => {
         const att = attendanceAt(loc.id);
         // People missing from their shift only matter once Square clock-ins are coming through.
-        return { clock_ins: clockIns(loc.id, att), not_clocked_in: labourSynced ? att.missing : [], roster: roster(loc.id, att) };
+        return { clock_ins: clockIns(loc.id, att), not_clocked_in: labourSynced ? att.missing : [], sick: att.sick, roster: roster(loc.id, att) };
       })() : {}),
     };
   });

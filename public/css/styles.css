@@ -1511,3 +1511,16 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 .rota tr.rota-open th, .rota tr.rota-open td { background: var(--surface); }
 .person-link { text-decoration: none; }
 .person-link:hover { text-decoration: underline; }
+/* Sickness: on the rota, the dashboard and the shift window */
+.shift.shift-sick, .day-card.shift-sick { opacity: 0.75; background: var(--surface-2); }
+.shift.shift-sick .shift-time, .day-card.shift-sick > span:first-child { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text) 45%, transparent); }
+.shift .shift-tag.tag-sick, .day-card .shift-tag.tag-sick { background: color-mix(in srgb, #7c5cbf 22%, transparent); color: inherit; }
+.mini-tag.is-sick { background: color-mix(in srgb, #7c5cbf 20%, transparent); color: inherit; }
+button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor: pointer; }
+.mini-tag.sick-btn { background: var(--surface-2); color: var(--muted); }
+.mini-tag.sick-btn:hover { color: var(--text); }
+.whos-in-table tr.is-sick .roster-status { color: #7c5cbf; }
+.roster-sick { font: inherit; color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+.sick-line { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.45rem 0.6rem; border-radius: 8px; background: var(--surface-2); }
+.sick-line.is-sick { background: color-mix(in srgb, #7c5cbf 14%, var(--surface)); }
+.sick-shifts td small { display: block; }

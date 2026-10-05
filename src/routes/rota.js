@@ -230,7 +230,8 @@ export function registerRotaRoutes(router, db) {
     let totalCost = 0;
     for (const s of shifts) {
       s.hours = round2(shiftHours(s.start_time, s.end_time, s.break_minutes));
-      if (s.removed) continue;
+      // Removed shifts and sickness don't count towards hours or labour cost.
+      if (s.removed || s.sick) continue;
       byUser[s.user_id] = round2((byUser[s.user_id] ?? 0) + s.hours);
       totalHours += s.hours;
       totalCost += s.hours * (rates.get(s.user_id) ?? 0);
@@ -372,7 +373,7 @@ export function registerRotaRoutes(router, db) {
     else { where.push('at >= ? AND at < ?'); args.push(sqlTime(from), sqlTime(addDays(to, 1))); }
     if (req.query.staff_id) { where.push('staff_id = ?'); args.push(Number(req.query.staff_id)); }
     if (req.query.action) {
-      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy', 'drop', 'claim', 'withdraw', 'timecard_site', 'timecard_breaks']);
+      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy', 'drop', 'claim', 'withdraw', 'sick', 'timecard_site', 'timecard_breaks']);
       // "Published" covers publishing a whole rota and a single shift.
       if (kind === 'publish') where.push(`action IN ('publish', 'publish_shift')`);
       else { where.push('action = ?'); args.push(kind); }
@@ -453,6 +454,50 @@ export function registerRotaRoutes(router, db) {
         details: `${shiftText(shift)}${shift.pub_date === null ? ' (never published)' : ' (staff see it until the rota is published)'}` });
     });
     res.json({ ok: true });
+  });
+
+  // Marks a shift as the person being off sick (or not, with { sick: false }). It applies straight away, to the
+  // rota staff see too – it's a record of what happened, not a change waiting to be published.
+  router.post('/shifts/:id/sickness', requirePerm('rota.edit'), (req, res) => {
+    const shift = loadShift(req);
+    const sick = req.body?.sick !== false;
+    const note = sick ? str(req.body?.note, 'note', { max: 500 }) : null;
+    tx(db, () => {
+      db.prepare(`UPDATE shifts SET sick = ?, sick_note = ?, sick_by = ?, sick_at = ${sick ? "datetime('now')" : 'NULL'} WHERE id = ?`)
+        .run(sick ? 1 : 0, note, sick ? req.user.id : null, shift.id);
+      logRota(db, req, { action: 'sick', location_id: shift.location_id, shift,
+        details: `${shiftText(shift)} — ${sick ? `marked as sick${note ? ` (“${note}”)` : ''}` : 'no longer marked as sick'}` });
+    });
+    res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(shift.id));
+  });
+
+  /**
+   * Reporting → Sickness: every shift marked as sickness in the dates (default the last 90 days), newest first,
+   * with each person's total days and hours off sick.
+   */
+  router.get('/reports/sickness', requirePerm('rota.edit', 'staff.manage'), (req, res) => {
+    const to = date(req.query.to, 'to') ?? today();
+    const from = date(req.query.from, 'from') ?? addDays(to, -89);
+    if (from > to) throw badRequest('from must be before to');
+    const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
+    const rows = db.prepare(`SELECT s.id, s.date, s.start_time, s.end_time, s.break_minutes, s.sick_note, s.sick_at, s.user_id, u.name AS user_name,
+        s.location_id, l.name AS location_name, m.name AS marked_by
+      FROM draft_shifts d JOIN shifts s ON s.id = d.id JOIN users u ON u.id = s.user_id JOIN locations l ON l.id = s.location_id
+      LEFT JOIN users m ON m.id = s.sick_by
+      WHERE s.sick = 1 AND s.date BETWEEN ? AND ? AND s.location_id IN (${ids.map(() => '?').join(', ')}) ORDER BY s.date DESC, s.start_time`)
+      .all(from, to, ...ids)
+      .map((r) => ({ ...r, hours: round2(shiftHours(r.start_time, r.end_time, r.break_minutes)) }));
+    const people = new Map();
+    for (const r of rows) {
+      const p = people.get(r.user_id) ?? { user_id: r.user_id, name: r.user_name, days: new Set(), hours: 0, shifts: 0, last: r.date };
+      p.days.add(r.date);
+      p.hours += r.hours;
+      p.shifts += 1;
+      people.set(r.user_id, p);
+    }
+    const byPerson = [...people.values()].map((p) => ({ ...p, days: p.days.size, hours: round2(p.hours) }))
+      .sort((a, b) => b.days - a.days || b.hours - a.hours || a.name.localeCompare(b.name));
+    res.json({ from, to, shifts: rows, people: byPerson });
   });
 
   router.post('/shifts/:id/restore', requirePerm('rota.edit'), (req, res) => {
