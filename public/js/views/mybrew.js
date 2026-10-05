@@ -1,4 +1,5 @@
 import { api, esc, field, fmtDate, fmtDateTime, input, isDemo, openModal, select, showError, textarea, toast, todayISO } from '../lib.js';
+import { askToDrop, dropsPanel, wireDrops } from './shiftdrops.js';
 
 // --- Photos and short videos on posts ---
 
@@ -119,7 +120,7 @@ function greeting() {
 
 export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
-  const [shifts, news] = await Promise.all([api('/my-shifts'), api('/news')]);
+  const [shifts, news, drops] = await Promise.all([api('/my-shifts'), api('/news'), api('/shift-drops')]);
   if (stale()) return;
   const u = state.user;
   const today = todayISO();
@@ -149,13 +150,15 @@ export async function renderMyBrew(ctx) {
       <div><h1>My Brew</h1><p class="muted my-greeting">${greeting()}, ${esc(u.name.replace(/\s*\(.*\)$/, '').split(' ')[0])} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
     </div>
     ${toRead ? `<p class="notice">📌 <strong>${toRead} ${toRead === 1 ? 'update needs' : 'updates need'}</strong> you to confirm you’ve read ${toRead === 1 ? 'it' : 'them'} – see the news below.</p>` : ''}
+    ${dropsPanel(drops)}
     <div class="mybrew">
         <section class="card my-shifts-card">
           <h2>Your next shifts</h2>
           ${next.length ? `<ul class="my-shift-list">${next.map((s) => `<li class="${s.date === today ? 'is-today' : ''}">
               <span class="my-shift-day">${s.date === today ? 'Today' : fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
               <span class="my-shift-time">${s.start_time}–${s.end_time}</span>
-              <span class="muted small">${esc(s.location_name ?? '')}</span></li>`).join('')}</ul>
+              <span class="muted small">${esc(s.location_name ?? '')}</span>
+              ${s.drop_requested ? '<span class="my-shift-drop is-asked" title="You’ve asked to drop this shift – waiting for a manager">Asked</span>' : s.can_drop ? `<button class="link-btn my-shift-drop" data-drop-shift="${s.id}">Drop</button>` : ''}</li>`).join('')}</ul>
             <p class="small muted">${Math.round(weekHours * 10) / 10} hours in the next 7 days</p>`
             : '<p class="muted">No shifts on the rota for the next two weeks.</p>'}
           <a class="small" href="#/rota?view=mine">All my shifts →</a>
@@ -173,6 +176,8 @@ export async function renderMyBrew(ctx) {
         </section>
     </div>`;
 
+  wireDrops(el, drops, () => ctx.rerender());
+  el.querySelectorAll('[data-drop-shift]').forEach((b) => b.addEventListener('click', () => askToDrop(shifts.find((s) => s.id === Number(b.dataset.dropShift)), () => ctx.rerender())));
   // Long posts are shortened with "Read more".
   el.querySelectorAll('.news-post').forEach((a) => {
     const bodyEl = a.querySelector('.news-body');

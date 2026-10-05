@@ -4,6 +4,7 @@ import { availabilityFor, leaveFor, onHoliday } from './leave.js';
 import { dayKey, labourByDay, pct, rotaByDay, salesByDay } from '../metrics.js';
 import { bankHoliday } from '../bank-holidays.js';
 import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
+import { notStarted, registerShiftDropRoutes, rotaDrops } from './shift-drops.js';
 import { addDays, badRequest, date, id, notFound, num, oneOf, round2, shiftHours, str, time, today, weekStart, zonedMidnightUTC } from '../util.js';
 
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -129,6 +130,8 @@ export function registerRotaRoutes(router, db) {
     });
   }
 
+  registerShiftDropRoutes(router, db, { findClash });
+
   function shiftBody(req) {
     const b = req.body;
     const s = {
@@ -236,6 +239,7 @@ export function registerRotaRoutes(router, db) {
     if (!manager) for (const u of staff) delete u.hourly_rate;
 
     const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+    const drops = rotaDrops(db, ids, ws, we);
     let money;
     if (manager) {
       const sales = salesByDay(db, ids, ws, we);
@@ -292,6 +296,9 @@ export function registerRotaRoutes(router, db) {
       forecast: manager ? salesForecast(db, ids, ws) : undefined,
       bank_holidays: Object.fromEntries(days.map((d) => [d, bankHoliday(d)]).filter(([, n]) => n)),
       can_publish: editor ? can(req.user, 'rota.publish') : undefined,
+      // Dropped shifts that are open for anyone at the site to pick up, and shifts someone has asked to drop.
+      open_shifts: drops.open,
+      drop_requested: drops.pending_shift_ids,
     });
   });
 
@@ -365,7 +372,7 @@ export function registerRotaRoutes(router, db) {
     else { where.push('at >= ? AND at < ?'); args.push(sqlTime(from), sqlTime(addDays(to, 1))); }
     if (req.query.staff_id) { where.push('staff_id = ?'); args.push(Number(req.query.staff_id)); }
     if (req.query.action) {
-      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy', 'timecard_site', 'timecard_breaks']);
+      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy', 'drop', 'claim', 'withdraw', 'timecard_site', 'timecard_breaks']);
       // "Published" covers publishing a whole rota and a single shift.
       if (kind === 'publish') where.push(`action IN ('publish', 'publish_shift')`);
       else { where.push('action = ?'); args.push(kind); }
@@ -390,8 +397,12 @@ export function registerRotaRoutes(router, db) {
     const withOthers = week && can(req.user, 'rota.view');
     const others = db.prepare(`SELECT s.start_time, s.end_time, u.name FROM published_shifts s JOIN users u ON u.id = s.user_id
       WHERE s.location_id = ? AND s.date = ? AND s.user_id != ? ORDER BY s.start_time, u.name`);
+    const dropAsked = new Set(db.prepare(`SELECT shift_id FROM shift_drops WHERE dropped_by = ? AND status = 'pending'`).all(req.user.id).map((r) => r.shift_id));
     for (const s of mine) {
       s.hours = round2(shiftHours(s.start_time, s.end_time, s.break_minutes));
+      // Whether they can ask to drop it, or already have.
+      s.drop_requested = dropAsked.has(s.id);
+      s.can_drop = !s.drop_requested && notStarted(s);
       if (withOthers) s.colleagues = others.all(s.location_id, s.date, req.user.id);
     }
     res.json(mine);

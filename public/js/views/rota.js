@@ -2,6 +2,7 @@ import { fmtPct, labourTone } from './sales.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite } from '../lib.js';
 import { shiftHistory } from './rotalog.js';
 import { openStaffEditor } from './admin.js';
+import { askToDrop, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
 
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
@@ -20,8 +21,13 @@ export async function render(ctx) {
   if (siteId && siteId !== state.locationId) chooseSite(state, siteId);
   const siteParam = all ? 'all' : String(siteId);
   const scopeQs = (extra = {}) => qs({ view: view === 'week' ? 'week' : undefined, ...extra, site: state.multiSite ? siteParam : undefined });
-  const data = await api(`/rota${qs({ location_id: all ? 'all' : siteId, week })}`);
+  const [data, drops] = await Promise.all([api(`/rota${qs({ location_id: all ? 'all' : siteId, week })}`), api('/shift-drops')]);
   if (stale()) return;
+  // Open shifts (dropped and approved) at the sites shown, and shifts someone has asked to drop.
+  const dropAsked = new Set(data.drop_requested ?? []);
+  const openOn = (d) => (data.open_shifts ?? []).filter((x) => x.date === d);
+  const dropTag = (s) => (dropAsked.has(s.id) ? '<em class="shift-tag tag-drop">Drop asked</em>' : '');
+  const openButton = (x) => `<button class="shift shift-open" data-open-shift="${x.id}" title="Open shift – tap to pick it up"><span class="shift-time">${x.start_time}–${x.end_time}</span>${all ? `<small>@ ${esc(x.location_name)}</small>` : ''}</button>`;
   const canEdit = state.can('rota.edit');
   const today = todayISO();
   const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
@@ -133,7 +139,7 @@ export async function render(ctx) {
   const shiftLabel = (s, u, site) => {
     const where = s.location_id !== site ? `@ ${s.location_name}` : '';
     const tag = TAGS[s.state] ? `<em class="shift-tag">${TAGS[s.state]}</em>` : '';
-    return `<span class="shift-time">${s.start_time}–${s.end_time}</span>${tag}${where ? `<small>${esc(where)}</small>` : ''}`;
+    return `<span class="shift-time">${s.start_time}–${s.end_time}</span>${tag}${dropTag(s)}${where ? `<small>${esc(where)}</small>` : ''}`;
   };
   const shiftTitle = (s) => (s.state === 'new' ? 'New – staff can’t see this until you publish'
     : s.state === 'removed' ? 'Removed – staff still see this until you publish. Click to put it back.'
@@ -210,7 +216,7 @@ export async function render(ctx) {
               <span class="day-name">${personName(x.user_id, x.user_name)}</span>
               <button class="day-card ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
                 title="${esc([shiftTitle(x), from].filter(Boolean).join(' · ') || `${x.start_time}–${x.end_time}`)}">
-                <span>${x.start_time}–${x.end_time}</span>${TAGS[x.state] ? `<em class="shift-tag">${TAGS[x.state]}</em>` : ''}</button>
+                <span>${x.start_time}–${x.end_time}</span>${TAGS[x.state] ? `<em class="shift-tag">${TAGS[x.state]}</em>` : ''}${dropTag(x)}</button>
             </li>`;
           }).join('')}
         </ul>
@@ -240,6 +246,8 @@ export async function render(ctx) {
       <h2 class="day-title">${day === today ? 'Today · ' : ''}${fmtDate(day, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         ${bankHol(day) ? `<span class="badge badge-sent">${esc(bankHol(day))}</span>` : ''}</h2>
       <p class="muted">${liveCount} shift${liveCount === 1 ? '' : 's'}${data.labour_cost !== undefined ? ` · ${money(totalCost)} labour` : ''}</p>
+      ${openOn(day).length ? `<section class="card day-site day-open"><header class="day-site-head"><div><h2>Open shifts</h2><span class="muted small">Dropped by someone – tap one to pick it up</span></div></header>
+        <ul class="day-list">${openOn(day).map((x) => `<li class="day-person"><span class="day-name">${esc(x.location_name)}</span>${openButton(x).replace('class="shift shift-open"', 'class="day-card shift-open"')}</li>`).join('')}</ul></section>` : ''}
       ${withShifts.length ? withShifts.map(siteBlock).join('') : `<div class="card empty">Nobody is on the rota ${day === today ? 'today' : 'this day'}.</div>`}
       ${canEdit && without.length && withShifts.length ? `<p class="muted small">No shifts at ${without.map((x) => `${esc(x.name)} <button class="link-btn" data-add-site="${x.id}">+ Add</button>`).join(' · ')}</p>` : ''}
       ${canEdit && !withShifts.length && without.length ? `<p>${without.map((x) => `<button class="btn btn-small" data-add-site="${x.id}">+ Add a shift at ${esc(x.name)}</button>`).join(' ')}</p>` : ''}
@@ -286,6 +294,7 @@ export async function render(ctx) {
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: undefined, day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
+          ${(data.open_shifts ?? []).length ? `<tr class="rota-open"><th>Open shifts<small>tap to pick up</small></th>${data.days.map((d) => `<td class="${d === today ? 'is-today' : ''}">${openOn(d).map(openButton).join('')}</td>`).join('')}<td></td></tr>` : ''}
           ${rows.map(({ header, groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
             <th colspan="${data.days.length + 2}"><span class="rota-subgroup-name">${esc(sub)}</span>
               <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group ${layout === 'group-site' && all ? 'rota-group-by-rg' : ''}" data-group="${esc(groupId)}"><th colspan="${data.days.length + 2}">
@@ -528,6 +537,16 @@ export async function render(ctx) {
     });
   }
 
+  // Drop requests to approve (and your own) above the rota; open shifts are picked up from the grid.
+  el.querySelector('.page-head')?.insertAdjacentHTML('afterend', dropsPanel(drops, { open: false }));
+  wireDrops(el, drops, () => ctx.rerender());
+  el.querySelectorAll('[data-open-shift]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = Number(b.dataset.openShift);
+    const mine = drops.open.find((x) => x.id === id);
+    const x = mine ?? data.open_shifts.find((o) => o.id === id);
+    claimShift(x, () => ctx.rerender(), { canClaim: !!mine?.can_claim, problem: mine ? mine.claim_problem : 'You don’t work at this site', canWithdraw: !!mine?.can_withdraw });
+  }));
   el.querySelectorAll('[data-person]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
     openStaffEditor(ctx, Number(b.dataset.person)).catch(showError);
@@ -633,12 +652,14 @@ async function renderMine(ctx, week) {
             <div class="my-shift">
               <div class="my-time">${s.start_time}–${s.end_time}</div>
               <div class="my-where">${esc(s.location_name)}<small>${hrs(s.hours)}${s.break_minutes ? ` · ${s.break_minutes} min break` : ''}${s.notes ? ` · ${esc(s.notes)}` : ''}</small></div>
+              ${s.drop_requested ? '<div class="my-drop"><span class="badge badge-sent">Drop asked – waiting for a manager</span></div>' : s.can_drop ? `<div class="my-drop"><button class="btn btn-small btn-ghost" data-drop-shift="${s.id}">Drop shift</button></div>` : ''}
               ${s.colleagues ? `<div class="my-with small muted">${s.colleagues.length ? `With ${s.colleagues.map((c) => `${esc(c.name)} <span class="nowrap">${c.start_time}–${c.end_time}</span>`).join(', ')}` : 'Nobody else on'}</div>` : ''}
             </div>`).join('') : '<span class="muted">Day off</span>'}</div>
         </div>`;
       }).join('')}
     </section>
-    <p class="muted small">These are your published shifts. If something looks wrong, speak to your manager.</p>`;
+    <p class="muted small">These are your published shifts. Can’t make one? Tap “Drop shift” – once a manager approves, it’s offered to everyone at that site. If something looks wrong, speak to your manager.</p>`;
+  el.querySelectorAll('[data-drop-shift]').forEach((b) => b.addEventListener('click', () => askToDrop(shifts.find((s) => s.id === Number(b.dataset.dropShift)), () => ctx.rerender())));
 
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
     const offset = Number(b.dataset.week);

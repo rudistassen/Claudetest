@@ -353,6 +353,32 @@ CREATE TABLE IF NOT EXISTS rota_log (
 CREATE INDEX IF NOT EXISTS idx_rota_log_at ON rota_log(at);
 CREATE INDEX IF NOT EXISTS idx_rota_log_shift ON rota_log(shift_id);
 
+-- Dropped shifts: someone asks to drop a published shift; a manager approves (it comes off their rota and becomes
+-- an open shift at that site) or declines; anyone at the site can then claim it. The shift's details are copied
+-- in, as they were when it was dropped. status: pending, open, claimed, declined, cancelled, withdrawn.
+CREATE TABLE IF NOT EXISTS shift_drops (
+  id INTEGER PRIMARY KEY,
+  shift_id INTEGER,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  break_minutes INTEGER NOT NULL DEFAULT 0,
+  position TEXT,
+  notes TEXT,
+  dropped_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+  decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  decided_at TEXT,
+  decision_note TEXT,
+  claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  claimed_at TEXT,
+  claimed_shift_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_shift_drops_status ON shift_drops(status, location_id, date);
+
 -- Breaks taken during a clock-in (from Square). A break still running has no end_at.
 CREATE TABLE IF NOT EXISTS timecard_breaks (
   id INTEGER PRIMARY KEY,

@@ -842,11 +842,13 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 .mybrew .card { margin: 0 0 1rem; }
 .mybrew h2 { font-size: 1.05rem; margin: 0 0 0.6rem; }
 .my-shift-list { list-style: none; margin: 0 0 0.5rem; padding: 0; }
-.my-shift-list li { display: grid; grid-template-columns: 6.5rem auto 1fr; gap: 0.5rem; align-items: baseline; padding: 0.4rem 0.5rem; border-radius: 8px; }
+.my-shift-list li { display: grid; grid-template-columns: 6.5rem auto 1fr auto; gap: 0.5rem; align-items: baseline; padding: 0.4rem 0.5rem; border-radius: 8px; }
 .my-shift-list li:nth-child(odd) { background: var(--surface-2); }
 .my-shift-list li.is-today { background: var(--tone-team); font-weight: 600; }
 .my-shift-list .my-shift-time { font-variant-numeric: tabular-nums; font-weight: 600; }
-.my-shift-list li > span:last-child { text-align: right; }
+.my-shift-list li > span:nth-child(3) { text-align: right; }
+.my-shift-list .my-shift-drop { justify-self: end; font-size: 0.8rem; }
+.my-shift-list .my-shift-drop.is-asked { color: #b45f06; font-weight: 600; }
 .news-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.7rem; }
 .news-head h2 { margin: 0; font-size: 1.2rem; }
 .news-post { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 0.8rem; }
@@ -1554,3 +1556,15 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 .order-detail { width: 100%; }
 .order-detail tfoot td { border-top: 1px solid var(--border); }
 .order-detail tfoot tr + tr td { border-top: 0; }
+/* Dropped shifts: requests to approve, open shifts to pick up, your own requests (My Brew and the rota) */
+.drops-card h2 { font-size: 1rem; margin: 0 0 0.4rem; display: flex; align-items: center; gap: 0.4rem; }
+.drops-card h2:not(:first-child) { margin-top: 0.9rem; }
+.drops-list { list-style: none; margin: 0; padding: 0; }
+.drops-list li { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.5rem 0; border-top: 1px solid var(--border); }
+.drops-list li:first-child { border-top: 0; }
+.drops-list small { display: block; color: var(--muted); }
+.drops-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+/* The rota's open shifts: a row at the top of the week, and a card on the day view */
+.rota tr.rota-open th, .rota tr.rota-open td { background: var(--tone-team, var(--surface-2)); }
+.shift.shift-open { border-style: dashed; background: var(--surface); }
+.shift .shift-tag.tag-drop, .day-card .shift-tag.tag-drop { background: color-mix(in srgb, #f08a24 25%, transparent); color: inherit; }
