@@ -412,7 +412,8 @@ export async function render(ctx) {
         ${unpublished ? `<p class="notice publish-one">${shift.state === 'new' ? 'Staff can’t see this shift yet.' : 'Staff still see the old version of this shift.'}
           ${data.can_publish ? '<button type="button" class="btn btn-small btn-primary" id="publish-one">Publish just this shift</button>' : ''}</p>` : ''}
         ${shift ? `<p class="sick-line ${shift.sick ? 'is-sick' : ''}">${shift.sick ? `<span><strong>Off sick</strong>${shift.sick_note ? ` – ${esc(shift.sick_note)}` : ''}</span>` : '<span class="muted">Not coming in?</span>'}
-          <button type="button" class="btn btn-small" id="sick-btn">${shift.sick ? 'Change' : 'Mark as sick'}</button></p>` : ''}
+          <span class="sick-line-actions">${data.can_publish && !shift.sick && shift.state !== 'removed' ? '<button type="button" class="btn btn-small" id="open-btn" title="Take it off their rota now and offer it to everyone at the site">Drop to open</button>' : ''}
+          <button type="button" class="btn btn-small" id="sick-btn">${shift.sick ? 'Change' : 'Mark as sick'}</button></span></p>` : ''}
         <div class="row">
           ${field('Staff member', select('user_id', staffOptions, s.user_id, 'required'))}
           ${field('Site', select('location_id', siteOptions, site, `required ${siteOptions.length > 1 ? '' : 'disabled'}`))}
@@ -442,6 +443,18 @@ export async function render(ctx) {
         ctx.rerender();
       },
     });
+    form.querySelector('#open-btn')?.addEventListener('click', () => openModal({
+      title: 'Drop to open?',
+      body: `<p><strong>${esc(shift.user_name)}</strong> · ${fmtDate(shift.date)} · ${shift.start_time}–${shift.end_time}</p>
+        <p class="muted small">It comes off ${esc(shift.user_name)}’s rota straight away and becomes an open shift that anyone at ${esc(siteName(shift.location_id))} can pick up.</p>
+        ${field('Reason (optional)', textarea('reason', '', 'maxlength="500" placeholder="e.g. Swapped to another site"'))}`,
+      submitLabel: 'Drop to open',
+      onSubmit: async (v) => {
+        await api(`/shifts/${shift.id}/open`, { method: 'POST', body: { reason: v.reason } });
+        toast('Shift is now open for anyone at the site to pick up');
+        ctx.rerender();
+      },
+    }));
     form.querySelector('#sick-btn')?.addEventListener('click', () => sickDialog({
       shift_id: shift.id, name: shift.user_name, date: shift.date, rota: `${shift.start_time}–${shift.end_time}`, sick: !!shift.sick, note: shift.sick_note,
     }, () => ctx.rerender()));

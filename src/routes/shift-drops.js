@@ -130,6 +130,31 @@ export function registerShiftDropRoutes(router, db, { findClash }) {
     res.json({ ...withHours(load(d.id)), shift_id: shiftId });
   });
 
+  // A manager drops someone's shift straight to open: it comes off their rota now (no approval needed) and anyone
+  // at the site can pick it up. Any request they'd made to drop it is closed by this.
+  router.post('/shifts/:id/open', requirePerm('rota.publish'), (req, res) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ? AND removed = 0').get(Number(req.params.id));
+    if (!shift) throw notFound('Shift');
+    assertLocation(req, shift.location_id);
+    if (shift.pub_location_id && shift.pub_location_id !== shift.location_id) assertLocation(req, shift.pub_location_id);
+    if (!notStarted(shift)) throw badRequest('This shift has already started, so it can’t be opened up');
+    if (shift.sick) throw badRequest('This shift is marked as sickness – take that off first if someone else should cover it');
+    const reason = str(req.body?.reason, 'reason', { max: 500 });
+    const person = db.prepare('SELECT name FROM users WHERE id = ?').get(shift.user_id)?.name ?? 'Someone';
+    const id = tx(db, () => {
+      db.prepare(`UPDATE shift_drops SET status = 'cancelled', decided_by = ?, decided_at = datetime('now'), decision_note = 'Opened up by a manager' WHERE shift_id = ? AND status = 'pending'`)
+        .run(req.user.id, shift.id);
+      const r = db.prepare(`INSERT INTO shift_drops (shift_id, location_id, date, start_time, end_time, break_minutes, position, notes, dropped_by, reason,
+        status, decided_by, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, datetime('now'))`)
+        .run(shift.id, shift.location_id, shift.date, shift.start_time, shift.end_time, shift.break_minutes, shift.position, shift.notes, shift.user_id, reason, req.user.id);
+      db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
+      logRota(db, req, { action: 'drop', location_id: shift.location_id, shift,
+        details: `${shiftText(shift)} — taken off ${person}’s rota by ${req.user.name}${reason ? ` (“${reason}”)` : ''}; now an open shift` });
+      return r.lastInsertRowid;
+    });
+    res.json(withHours(load(id)));
+  });
+
   // A manager takes an open shift away (it's no longer needed, or they've covered it another way).
   router.post('/shift-drops/:id/withdraw', requirePerm('rota.publish'), (req, res) => {
     const d = load(req.params.id);

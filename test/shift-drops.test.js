@@ -103,3 +103,21 @@ test('a shift that has already started can’t be dropped', async () => {
   const staff = await login('staff1@cafe.local');
   assert.equal((await staff(`/shifts/${shiftId}/drop`, { method: 'POST', body: {} })).status, 400);
 });
+
+test('a manager can drop someone’s shift straight to open; staff can’t', async () => {
+  const day = addDays(today(), 6);
+  const shiftId = publishedShift('staff1@cafe.local', day);
+  const staff = await login('staff1@cafe.local');
+  const manager = await login('manager1@cafe.local');
+  const asked = (await staff(`/shifts/${shiftId}/drop`, { method: 'POST', body: {} })).data;
+
+  assert.equal((await staff(`/shifts/${shiftId}/open`, { method: 'POST', body: {} })).status, 403);
+  const opened = await manager(`/shifts/${shiftId}/open`, { method: 'POST', body: { reason: 'Moved to another site' } });
+  assert.equal(opened.status, 200);
+  assert.equal(opened.data.status, 'open');
+  assert.equal(opened.data.reason, 'Moved to another site');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM shifts WHERE id = ?').get(shiftId).n, 0, 'off their rota');
+  assert.equal(db.prepare('SELECT status FROM shift_drops WHERE id = ?').get(asked.id).status, 'cancelled', 'their own request is closed');
+  assert.ok((await login('staff1-2@cafe.local').then((c) => c('/shift-drops'))).data.open.some((d) => d.id === opened.data.id), 'open to the site');
+  assert.equal((await manager(`/shifts/${shiftId}/open`, { method: 'POST', body: {} })).status, 404, 'only once');
+});
