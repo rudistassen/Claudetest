@@ -37,7 +37,7 @@ export function interviewDialog(c, jobs, done) {
     submitLabel: '✓ Move to interview',
     onSubmit: async (v) => {
       await api(`/candidates/${c.id}`, { method: 'PUT', body: { stage: 'interview', vacancy_id: v.vacancy_id || null, next_step_on: v.next_step_on } });
-      toast(`${c.name} moved to interview`);
+      toast(`${c.name} moved to interview – they’re under In progress on Recruitment`);
       done();
     },
   });
@@ -156,7 +156,6 @@ export async function renderRecruitment(ctx) {
   const noJob = apps.no_job.filter((c) => showAll || c.stage !== 'rejected');
   const shown = showAll ? jobs : jobs.filter((j) => j.status === 'open');
   const open = jobs.filter((j) => j.status === 'open');
-  const inPlay = open.flatMap((j) => j.candidates).filter((c) => !['hired', 'rejected'].includes(c.stage));
   const multi = state.multiSite && scope === 'all';
 
   el.innerHTML = `
@@ -164,12 +163,24 @@ export async function renderRecruitment(ctx) {
     ${filters(state, scope)}
     <div class="kpis">
       <div class="kpi" data-icon="✎"><span>Open jobs</span><strong>${open.length}</strong></div>
-      <div class="kpi" data-icon="☺"><span>Candidates in progress</span><strong>${inPlay.length}</strong>
-        <small>${inPlay.filter((c) => c.stage === 'interview').length} to interview · ${inPlay.filter((c) => c.stage === 'trial').length} on trial</small></div>
+      <div class="kpi" data-icon="☺"><span>Candidates in progress</span><strong>${apps.in_progress.length}</strong>
+        <small>${apps.in_progress.filter((c) => c.stage === 'interview').length} to interview · ${apps.in_progress.filter((c) => c.stage === 'trial').length} on trial · ${apps.in_progress.filter((c) => c.stage === 'offer').length} offered</small></div>
     </div>
     ${apps.new.length || inbox?.configured ? `<section class="card pp-apps">
       <div class="pp-job-head"><h2>✉ New applications <span class="badge ${apps.new.length ? 'badge-sent' : ''}">${apps.new.length}</span></h2></div>
       ${apps.new.length ? `<ul class="pp-app-list">${apps.new.map(applicationCard).join('')}</ul>` : '<p class="muted small">Nothing new – applications emailed to the careers inbox appear here.</p>'}
+    </section>` : ''}
+    ${apps.in_progress.length ? `<section class="card pp-job" id="pp-in-progress">
+      <div class="pp-job-head"><div><h2>In progress <span class="badge badge-sent">${apps.in_progress.length}</span></h2>
+        <p class="muted small">Everyone being interviewed, on a trial shift or offered a job – soonest first.</p></div></div>
+      <div class="table-wrap"><table class="pp-cands">
+        <thead><tr><th>Candidate</th><th>Job</th><th>Stage</th><th>Next step</th></tr></thead>
+        <tbody>${apps.in_progress.map((c) => `<tr>
+          <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.files ? ' <span title="Has a CV">📎</span>' : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
+          <td>${c.job_title ? `${esc(c.job_title)}${c.site_name ? `<small class="muted">${esc(c.site_name)}</small>` : ''}` : '<span class="muted">No job picked</span>'}</td>
+          <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+          <td>${c.next_step_on ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</span>` : '<span class="muted">Not booked</span>'}</td>
+        </tr>`).join('')}</tbody></table></div>
     </section>` : ''}
     <p class="small"><a href="#/people/recruitment${qs({ scope: query.scope, show: showAll ? undefined : 'all' })}">${showAll ? 'Only show open jobs' : 'Show filled and closed jobs too'}</a></p>
     ${shown.length ? shown.map((j) => `<section class="card pp-job" data-job="${j.id}">

@@ -102,6 +102,12 @@ test('the profile, its CV, moving on to interview and turning down with a draft 
 
   // Tom goes to interview for the Barista job.
   assert.equal((await a(`/candidates/${tom.id}`, { method: 'PUT', body: { stage: 'interview', vacancy_id: jobId, next_step_on: '2030-01-01' } })).status, 200);
+  // Moved on without a job too: they're listed under In progress, not lost at the bottom.
+  const tomNoJob = await a(`/candidates/${tom.id}`, { method: 'PUT', body: { stage: 'interview', vacancy_id: null } });
+  assert.equal(tomNoJob.status, 200);
+  assert.ok((await a('/applications')).data.in_progress.some((c) => c.id === tom.id && !c.job_title));
+  assert.ok(!(await a('/applications')).data.no_job.some((c) => c.id === tom.id));
+  await a(`/candidates/${tom.id}`, { method: 'PUT', body: { vacancy_id: jobId } });
   const t = db.prepare('SELECT stage, vacancy_id FROM candidates WHERE id = ?').get(tom.id);
   assert.deepEqual({ ...t }, { stage: 'interview', vacancy_id: jobId });
 

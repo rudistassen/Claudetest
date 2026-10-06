@@ -119,15 +119,19 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     return c;
   };
 
-  // The careers inbox's new applications (not yet moved on or turned down), and candidates who aren't for a job.
+  // The careers inbox's new applications (not yet moved on or turned down), everyone being interviewed, on a trial
+  // shift or offered a job (whatever it's for), and the rest of those who aren't for a job.
   router.get('/applications', perm, (req, res) => {
     const rows = db.prepare(`SELECT ${CANDIDATE_LIST}, v.title AS job_title, COALESCE(v.location_id, c.location_id) AS site_id, l.name AS site_name
       FROM candidates c LEFT JOIN vacancies v ON v.id = c.vacancy_id LEFT JOIN locations l ON l.id = COALESCE(v.location_id, c.location_id)
-      WHERE (c.source = 'email' AND c.stage = 'applied') OR c.vacancy_id IS NULL
+      WHERE (c.source = 'email' AND c.stage = 'applied') OR c.vacancy_id IS NULL OR c.stage IN ('interview', 'trial', 'offer')
       ORDER BY COALESCE(c.received_at, c.created_at) DESC, c.id DESC`).all().filter((c) => canSee(req, c));
+    const going = (c) => ['interview', 'trial', 'offer'].includes(c.stage);
     res.json({
       new: rows.filter((c) => c.source === 'email' && c.stage === 'applied'),
-      no_job: rows.filter((c) => c.stage !== 'applied' || c.source !== 'email'),
+      // Soonest next step first; those without one after.
+      in_progress: rows.filter(going).sort((a, b) => (a.next_step_on ?? '9999').localeCompare(b.next_step_on ?? '9999')),
+      no_job: rows.filter((c) => !c.vacancy_id && !going(c) && !(c.source === 'email' && c.stage === 'applied')),
     });
   });
 
