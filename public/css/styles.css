@@ -1723,3 +1723,22 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .pp-preview img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); }
 .pp-email { white-space: pre-wrap; font: inherit; font-size: 0.92rem; background: var(--surface-2); padding: 0.8rem 1rem; border-radius: 10px; max-height: 320px; overflow-y: auto; }
 .pp-send-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* Stock & Ordering → Suppliers: each supplier's tabs */
+.sup-table tbody tr { cursor: pointer; }
+.sup-table td small { display: block; }
+.sup-table tr.is-off td, .sup-days tr.is-off td { opacity: 0.55; }
+.sup-form { max-width: 860px; }
+.sup-form textarea { width: 100%; }
+.sup-sub { font-size: 1rem; margin: 1.2rem 0 0.3rem; }
+.sup-switch { padding: 0.8rem 0.9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); margin-bottom: 1rem; }
+.sup-switch small { display: block; font-weight: 400; }
+.sup-days td, .sup-days th { vertical-align: middle; }
+.sup-days input[type=checkbox] { width: auto; transform: scale(1.15); }
+.sup-days select { width: auto; min-width: 9rem; }
+.sup-refs select, .sup-refs input { width: 100%; }
+.sup-actions { display: flex; gap: 0.5rem; justify-content: space-between; flex-wrap: wrap; margin-top: 0.8rem; }
+.sup-xero-search { display: flex; gap: 0.4rem; max-width: 520px; }
+.sup-xero-search input { flex: 1; }
+.sup-xero-results { list-style: none; padding: 0; margin: 0.5rem 0 1rem; max-width: 520px; }
+.sup-xero-results li { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }

@@ -13,7 +13,7 @@ const nullable = (type) => ({ anyOf: [{ type }, { type: 'null' }] });
 export const INVOICE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['is_invoice', 'supplier', 'invoice_number', 'invoice_date', 'due_date', 'order_reference', 'currency', 'lines', 'subtotal', 'vat', 'total', 'notes'],
+  required: ['is_invoice', 'supplier', 'invoice_number', 'invoice_date', 'due_date', 'order_reference', 'customer_reference', 'delivered_to', 'currency', 'lines', 'subtotal', 'vat', 'total', 'notes'],
   properties: {
     is_invoice: { type: 'boolean', description: 'False if the document is not a supplier invoice or delivery note with prices' },
     supplier: {
@@ -32,6 +32,8 @@ export const INVOICE_SCHEMA = {
     invoice_date: { type: 'string', description: 'YYYY-MM-DD, or empty' },
     due_date: { type: 'string', description: 'YYYY-MM-DD, or empty' },
     order_reference: { type: 'string' },
+    customer_reference: { type: 'string', description: 'The café’s account, customer or delivery-point number with this supplier, as printed' },
+    delivered_to: { type: 'string', description: 'The name and address the invoice is addressed or delivered to (the café site), as printed' },
     currency: { type: 'string' },
     lines: {
       type: 'array',
@@ -67,6 +69,8 @@ Extract exactly what the document says; never invent values. Use an empty string
 - quantity: the number of units invoiced; unit: the pack or unit it is sold by (e.g. case, each, kg, 4L bottle) if shown.
 - unit_price and line_total are before VAT when the invoice shows both; vat_rate is the percentage (20, 5 or 0) when shown per line.
 - subtotal (net), vat and total (gross) as printed on the invoice.
+- customer_reference: the café's account / customer / delivery-point number with the supplier (e.g. "Account No: HB1042"), if printed.
+- delivered_to: the café name and address the invoice is for (the "Invoice to" or "Deliver to" block), as printed.
 - currency: the ISO code, e.g. GBP.
 - is_invoice: false if this isn't an invoice, credit note or priced delivery note.
 - notes: anything a person checking it should know (e.g. "handwritten amendments", "page 2 appears to be missing"), otherwise empty.`;

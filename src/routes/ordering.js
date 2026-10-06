@@ -5,40 +5,111 @@ import { applyImport, planImport } from '../product-import.js';
 import { badRequest, bool, date, id, notFound, num, round2, str } from '../util.js';
 import { cleanVatCode } from '../vat-codes.js';
 
+const DAYS = [1, 2, 3, 4, 5, 6, 7];
+export const parseSchedule = (json) => {
+  try { const v = JSON.parse(json ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+};
+/** Delivery days with their cut-offs: [{ day, cutoff_day, cutoff_time }] (1 = Monday … 7 = Sunday), as JSON. */
+function cleanSchedule(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const list = typeof v === 'string' ? parseSchedule(v) : v;
+  if (!Array.isArray(list)) throw badRequest('Delivery days aren’t in the right form');
+  const seen = new Set();
+  const out = list.map((d) => {
+    const day = Number(d.day);
+    const cutoffDay = Number(d.cutoff_day);
+    if (!DAYS.includes(day) || !DAYS.includes(cutoffDay)) throw badRequest('Delivery days aren’t in the right form');
+    const cutoffTime = String(d.cutoff_time ?? '');
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoffTime)) throw badRequest('Each cut-off needs a time, e.g. 22:00');
+    if (seen.has(day)) throw badRequest('Each delivery day can only be listed once');
+    seen.add(day);
+    return { day, cutoff_day: cutoffDay, cutoff_time: cutoffTime };
+  }).sort((a, b) => a.day - b.day);
+  return out.length ? JSON.stringify(out) : null;
+}
+
 export function registerOrderingRoutes(router, db) {
   // --- Suppliers ---
 
+  // A supplier as the app sees it: the delivery days parsed, and their references for each site.
+  const refs = db.prepare(`SELECT r.location_id, r.reference, l.name AS location_name FROM supplier_site_refs r JOIN locations l ON l.id = r.location_id
+    WHERE r.supplier_id = ? ORDER BY l.name, r.reference`);
+  const shape = (s) => s && ({ ...s, delivery_schedule: parseSchedule(s.delivery_schedule), site_refs: refs.all(s.id) });
+  const supplierById = (sid) => shape(db.prepare(`SELECT s.*, (SELECT COUNT(*) FROM products p WHERE p.supplier_id = s.id AND p.active = 1) AS product_count
+    FROM suppliers s WHERE s.id = ?`).get(sid));
+
   router.get('/suppliers', (_req, res) => {
     res.json(db.prepare(`SELECT s.*, (SELECT COUNT(*) FROM products p WHERE p.supplier_id = s.id AND p.active = 1) AS product_count
-      FROM suppliers s ORDER BY s.active DESC, s.name`).all());
+      FROM suppliers s ORDER BY s.active DESC, s.name`).all().map(shape));
   });
 
+  router.get('/suppliers/:id', (req, res) => {
+    const s = supplierById(Number(req.params.id));
+    if (!s) throw notFound('Supplier');
+    res.json(s);
+  });
+
+  const emails = (v, name) => {
+    const list = String(v ?? '').split(/[\s,;]+/).map((e) => e.trim()).filter(Boolean);
+    for (const e of list) if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw badRequest(`${name}: “${e}” isn’t an email address`);
+    return list.length ? list.join(', ').slice(0, 1000) : null;
+  };
   const supplierBody = (b) => ({
-    name: str(b.name, 'name', { required: true, max: 100 }),
-    contact_name: str(b.contact_name, 'contact_name', { max: 100 }),
-    email: str(b.email, 'email', { max: 200 }),
-    phone: str(b.phone, 'phone', { max: 50 }),
+    name: str(b.name, 'Name', { required: true, max: 100 }),
+    contact_name: str(b.contact_name, 'Contact name', { max: 100 }),
+    email: emails(b.email, 'Email'),
+    phone: str(b.phone, 'Phone', { max: 50 }),
+    address: str(b.address, 'Address', { max: 500 }),
+    order_email: emails(b.order_email, 'Order email'),
+    cc_emails: emails(b.cc_emails, 'CC'),
+    delivery_schedule: cleanSchedule(b.delivery_schedule),
+    orders_enabled: b.orders_enabled === undefined ? 1 : bool(b.orders_enabled),
     order_days: str(b.order_days, 'order_days', { max: 100 }),
-    lead_time_days: num(b.lead_time_days, 'lead_time_days', { min: 0, max: 60, int: true }) ?? 1,
-    min_order: num(b.min_order, 'min_order', { min: 0 }) ?? 0,
-    notes: str(b.notes, 'notes'),
+    lead_time_days: num(b.lead_time_days, 'Lead time', { min: 0, max: 60, int: true }) ?? 1,
+    min_order: num(b.min_order, 'Minimum order', { min: 0 }) ?? 0,
+    xero_contact_id: str(b.xero_contact_id, 'Xero contact', { max: 64 }),
+    xero_contact_name: str(b.xero_contact_name, 'Xero contact', { max: 255 }),
+    payment_terms_days: num(b.payment_terms_days, 'Payment terms', { min: 0, max: 365, int: true }),
+    notes: str(b.notes, 'Notes', { max: 2000 }),
     active: b.active === undefined ? 1 : bool(b.active),
   });
-  const supplierCols = ['name', 'contact_name', 'email', 'phone', 'order_days', 'lead_time_days', 'min_order', 'notes', 'active'];
+  const supplierCols = ['name', 'contact_name', 'email', 'phone', 'address', 'order_email', 'cc_emails', 'delivery_schedule', 'orders_enabled',
+    'order_days', 'lead_time_days', 'min_order', 'xero_contact_id', 'xero_contact_name', 'payment_terms_days', 'notes', 'active'];
+  const sameName = (name, notId = 0) => db.prepare('SELECT 1 FROM suppliers WHERE lower(name) = lower(?) AND id != ?').get(name, notId);
 
   router.post('/suppliers', requirePerm('setup.products'), (req, res) => {
-    const s = supplierBody(req.body);
+    const s = supplierBody(req.body ?? {});
+    if (sameName(s.name)) throw badRequest(`There’s already a supplier called ${s.name}`);
     const r = db.prepare(`INSERT INTO suppliers (${supplierCols.join(', ')}) VALUES (${supplierCols.map(() => '?').join(', ')})`)
       .run(...supplierCols.map((c) => s[c]));
-    res.status(201).json(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(r.lastInsertRowid));
+    res.status(201).json(supplierById(Number(r.lastInsertRowid)));
   });
 
+  // Changes what's sent and keeps the rest, so each tab can save its own part.
   router.put('/suppliers/:id', requirePerm('setup.products'), (req, res) => {
-    const s = supplierBody(req.body);
-    const r = db.prepare(`UPDATE suppliers SET ${supplierCols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`)
-      .run(...supplierCols.map((c) => s[c]), Number(req.params.id));
-    if (!r.changes) throw notFound('Supplier');
-    res.json(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(Number(req.params.id)));
+    const old = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(Number(req.params.id));
+    if (!old) throw notFound('Supplier');
+    const s = supplierBody({ ...old, delivery_schedule: parseSchedule(old.delivery_schedule), ...(req.body ?? {}) });
+    if (sameName(s.name, old.id)) throw badRequest(`There’s already a supplier called ${s.name}`);
+    db.prepare(`UPDATE suppliers SET ${supplierCols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...supplierCols.map((c) => s[c]), old.id);
+    res.json(supplierById(old.id));
+  });
+
+  // { refs: [{ location_id, reference }] } – all of this supplier's site references, replacing what was there.
+  router.put('/suppliers/:id/site-refs', requirePerm('setup.products'), (req, res) => {
+    const s = db.prepare('SELECT id FROM suppliers WHERE id = ?').get(Number(req.params.id));
+    if (!s) throw notFound('Supplier');
+    const list = (Array.isArray(req.body?.refs) ? req.body.refs : []).map((r, i) => ({
+      location_id: id(r.location_id, `line ${i + 1} site`, { required: true }),
+      reference: str(r.reference, `line ${i + 1} reference`, { max: 100 }),
+    })).filter((r) => r.reference);
+    for (const r of list) if (!db.prepare('SELECT 1 FROM locations WHERE id = ?').get(r.location_id)) throw notFound('Site');
+    tx(db, () => {
+      db.prepare('DELETE FROM supplier_site_refs WHERE supplier_id = ?').run(s.id);
+      const ins = db.prepare('INSERT INTO supplier_site_refs (supplier_id, location_id, reference) VALUES (?, ?, ?)');
+      for (const r of list) ins.run(s.id, r.location_id, r.reference);
+    });
+    res.json(supplierById(s.id));
   });
 
   // --- Product categories ---
@@ -203,7 +274,7 @@ export function registerOrderingRoutes(router, db) {
   // --- Purchase orders ---
 
   const orderSelect = `
-    SELECT o.*, s.name AS supplier_name, s.email AS supplier_email, l.name AS location_name, u.name AS created_by_name,
+    SELECT o.*, s.name AS supplier_name, COALESCE(s.order_email, s.email) AS supplier_email, s.cc_emails AS supplier_cc, l.name AS location_name, u.name AS created_by_name,
       (SELECT COALESCE(SUM(quantity * unit_cost), 0) FROM purchase_order_lines WHERE order_id = o.id) AS total,
       (SELECT COUNT(*) FROM purchase_order_lines WHERE order_id = o.id) AS line_count
     FROM purchase_orders o

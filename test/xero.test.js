@@ -112,6 +112,15 @@ test('Xero: connect, choose coding, and send a confirmed invoice as a draft bill
   assert.equal((await admin(`/invoices/${invId}/xero`, { method: 'POST' })).status, 400, 'never twice');
   assert.equal((await admin(`/invoices/${invId}`)).data.xero_url, sent.data.url);
 
+  // No due date on the invoice: the supplier's payment terms set it.
+  db.prepare('UPDATE suppliers SET payment_terms_days = 14 WHERE id = ?').run(supplier.id);
+  const inv2 = Number(db.prepare(`INSERT INTO invoices (location_id, supplier_id, supplier_name, invoice_number, invoice_date, subtotal, vat, total, status)
+    VALUES (?, ?, ?, 'INV-78', '2026-10-01', 10, 0, 10, 'confirmed')`).run(site.id, supplier.id, supplier.name).lastInsertRowid);
+  const before = calls.length;
+  assert.equal((await admin(`/invoices/${inv2}/xero`, { method: 'POST' })).status, 200);
+  const bill2 = JSON.parse(calls.slice(before).find((c) => c.path === '/api.xro/2.0/Invoices').body).Invoices[0];
+  assert.equal(bill2.DueDate, '2026-10-15');
+
   // Tokens are refreshed when they run out; an expired connection asks for a reconnect.
   db.prepare('UPDATE xero_connection SET expires_at = 0').run();
   await admin('/xero/options');

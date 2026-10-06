@@ -1,4 +1,5 @@
 import { addDays, api, isDemo, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, qs, qty, select, showError, statusBadge, textarea, toast, todayISO, sitePicker } from '../lib.js';
+import { nextDelivery, scheduleSummary } from '../delivery.js';
 
 const STATUSES = [['', 'All'], ['draft', 'Draft'], ['sent', 'Sent'], ['received', 'Received'], ['cancelled', 'Cancelled']];
 
@@ -64,10 +65,12 @@ function bindLines(root, minOrder) {
 
 export async function renderNew(ctx) {
   const { el, state, query, stale } = ctx;
-  const suppliers = (await api('/suppliers')).filter((s) => s.active);
+  const suppliers = (await api('/suppliers')).filter((s) => s.active && s.orders_enabled);
   if (stale()) return;
   const supplierId = Number(query.supplier) || null;
   const supplier = suppliers.find((s) => s.id === supplierId);
+  // The next delivery that can still be ordered for, from the supplier's delivery days and cut-offs.
+  const next = supplier ? nextDelivery(supplier.delivery_schedule) : null;
   const suggestion = supplier ? await api(`/orders/suggest${qs({ location_id: state.locationId, supplier_id: supplier.id })}`) : null;
   if (stale()) return;
 
@@ -78,7 +81,7 @@ export async function renderNew(ctx) {
     </div>
     <section class="card">
       ${field('Supplier', select('supplier', [['', 'Choose a supplier…'], ...suppliers.map((s) => [s.id, s.name])], supplierId ?? '', 'id="supplier"'))}
-      ${supplier ? `<p class="muted">Order days: ${esc(supplier.order_days ?? '–')} · Lead time: ${supplier.lead_time_days} day(s) · Minimum order: ${money(supplier.min_order)}</p>` : ''}
+      ${supplier ? `<p class="muted">Deliveries: ${esc(scheduleSummary(supplier.delivery_schedule))}${next ? ` · next: <strong>${fmtDate(next.date)}</strong> if ordered by ${esc(next.cutoff.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}` : ''} · Minimum order: ${money(supplier.min_order)}</p>` : ''}
     </section>
     ${suggestion ? `
     <form class="card" id="order-form">
@@ -90,7 +93,7 @@ export async function renderNew(ctx) {
         : '<p class="empty">This supplier has no products yet. Add them under Setup → Products.</p>'}
       <p class="alert-text min-warning" hidden>Below this supplier’s minimum order of ${money(supplier.min_order)}.</p>
       <div class="row">
-        ${field('Delivery date', input('delivery_date', addDays(todayISO(), supplier.lead_time_days || 1), 'type="date"'))}
+        ${field('Delivery date', input('delivery_date', next?.date ?? addDays(todayISO(), supplier.lead_time_days || 1), 'type="date"'))}
         ${field('Notes for supplier', textarea('notes', ''))}
       </div>
       <div class="actions"><button class="btn btn-primary" type="submit">Save draft order</button></div>
@@ -178,13 +181,14 @@ export async function renderOrder(ctx) {
       openModal({
         title: `Email to ${o.supplier_name}`,
         wide: true,
-        body: `<p>To: <strong>${esc(o.supplier_email ?? 'no email saved')}</strong> · Subject: Order PO-${o.id} – ${esc(o.location_name)}</p>
+        body: `<p>To: <strong>${esc(o.supplier_email ?? 'no email saved')}</strong>${o.supplier_cc ? ` · Cc: ${esc(o.supplier_cc)}` : ''} · Subject: Order PO-${o.id} – ${esc(o.location_name)}</p>
           <p class="muted">In the installed app this opens a ready-written email. Here is the text:</p>
           <textarea rows="14" readonly>${esc(orderText(o))}</textarea>`,
       });
       return;
     }
-    const url = `mailto:${encodeURIComponent(o.supplier_email ?? '')}?subject=${encodeURIComponent(`Order PO-${o.id} – ${o.location_name}`)}&body=${encodeURIComponent(orderText(o))}`;
+    const cc = o.supplier_cc ? `&cc=${encodeURIComponent(o.supplier_cc.replace(/\s+/g, ''))}` : '';
+    const url = `mailto:${encodeURIComponent((o.supplier_email ?? '').replace(/\s+/g, ''))}?subject=${encodeURIComponent(`Order PO-${o.id} – ${o.location_name}`)}${cc}&body=${encodeURIComponent(orderText(o))}`;
     window.location.href = url;
   };
 

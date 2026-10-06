@@ -12,6 +12,7 @@ import * as requests from './views/requests.js';
 import * as xeroView from './views/xero.js';
 import * as people from './views/people.js';
 import * as categories from './views/categories.js';
+import * as supplierViews from './views/suppliers.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -89,7 +90,8 @@ const ROUTES = [
   [/^admin\/staff$/, admin.renderStaff, ['staff.manage']],
   [/^admin\/permissions$/, admin.renderPermissions, 'admin'],
   [/^admin\/locations$/, admin.renderLocations, 'admin'],
-  [/^admin\/suppliers$/, admin.renderSuppliers, SUPPLIERS],
+  [/^admin\/suppliers$/, supplierViews.renderList, SUPPLIERS],
+  [/^admin\/suppliers\/(\d+)$/, supplierViews.renderSupplier, SUPPLIERS],
   [/^admin\/products$/, admin.renderProducts, SUPPLIERS],
   [/^admin\/product-categories$/, categories.render, SUPPLIERS],
   [/^admin\/safety-tasks$/, safety.renderSetup, ['safety.manage']],

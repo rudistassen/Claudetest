@@ -92,8 +92,29 @@ const dateOrNull = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v
  * Saves an invoice that's been read (see invoice-reader.js): matches the supplier and each line to products, and
  * stores the file with it for checking. email: { from, subject } when it came in by email. Returns its id.
  */
-export function saveReadInvoice(db, { locationId, read, fileName, mediaType, bytes, userId = null, email = null }) {
+/**
+ * The site an invoice is for, from the supplier's references for each site (Suppliers → Accounting and payments):
+ * a reference printed as the account number, in the delivery address, the order reference or the email's subject.
+ * The longest matching reference wins (so "HB10421" beats "HB1042"). Null when none match.
+ */
+export function siteFromReference(db, supplierId, read, extra = '') {
+  if (!supplierId) return null;
+  const flat = (t) => String(t ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const text = ` ${flat([read.customer_reference, read.delivered_to, read.order_reference, read.notes, extra].filter(Boolean).join(' '))} `;
+  const hit = db.prepare(`SELECT r.location_id, r.reference FROM supplier_site_refs r JOIN locations l ON l.id = r.location_id
+    WHERE r.supplier_id = ? AND l.active = 1`).all(supplierId)
+    .filter((r) => flat(r.reference) && text.includes(` ${flat(r.reference)} `))
+    .sort((a, b) => flat(b.reference).length - flat(a.reference).length)[0];
+  return hit?.location_id ?? null;
+}
+
+// sites: when given, the sites the invoice may be moved to (the uploader's), so it never lands where they can't see it.
+export function saveReadInvoice(db, { locationId, read, fileName, mediaType, bytes, userId = null, email = null, sites = null }) {
   const supplier = matchSupplier(db, read.supplier);
+  // The supplier's reference for a site, printed on the invoice, beats the site it was uploaded or emailed to.
+  let bySite = siteFromReference(db, supplier.supplier_id, read, email?.subject);
+  if (bySite && sites && !sites.includes(bySite)) bySite = null;
+  if (bySite) locationId = bySite;
   const lines = (Array.isArray(read.lines) ? read.lines : []).filter((l) => l && String(l.description ?? '').trim());
   const invoiceId = tx(db, () => {
     const r = db.prepare(`INSERT INTO invoices (location_id, supplier_id, supplier_name, supplier_details, invoice_number, invoice_date, due_date,
@@ -118,7 +139,7 @@ export function saveReadInvoice(db, { locationId, read, fileName, mediaType, byt
     });
     return r.lastInsertRowid;
   });
-  return { invoiceId, supplierMatch: supplier.how };
+  return { invoiceId, supplierMatch: supplier.how, siteFromReference: !!bySite, locationId };
 }
 
 export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) {
@@ -181,8 +202,8 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
 
     const read = await reader.read({ media_type: mediaType, data });
     if (read.is_invoice === false) throw badRequest('That doesn’t look like a supplier invoice. Check you picked the right file.');
-    const { invoiceId, supplierMatch } = saveReadInvoice(db, { locationId, read, fileName, mediaType, bytes, userId: req.user.id });
-    res.status(201).json({ ...withLines(load({ ...req, params: { id: invoiceId } })), supplier_match: supplierMatch });
+    const { invoiceId, supplierMatch, siteFromReference: bySite } = saveReadInvoice(db, { locationId, read, fileName, mediaType, bytes, userId: req.user.id, sites: req.user.site_ids });
+    res.status(201).json({ ...withLines(load({ ...req, params: { id: invoiceId } })), supplier_match: supplierMatch, site_from_reference: bySite });
   });
 
   router.get('/invoices/:id', requirePerm('orders.manage'), (req, res) => res.json(withLines(load(req))));

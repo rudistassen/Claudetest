@@ -51,6 +51,12 @@ export function registerXeroRoutes(router, db, xero) {
     res.json({ from_xero: false, codes: STANDARD_VAT_CODES });
   });
 
+  // Contacts in Xero, to link a supplier to.
+  router.get('/xero/contacts', requirePerm('setup.products'), async (req, res) => {
+    if (!xero?.connected()) throw badRequest('Connect Xero first (Setup → Xero)');
+    res.json(await xero.findContacts(req.query.q));
+  });
+
   // Starts connecting: off to Xero's sign-in, which comes back to /api/xero/callback.
   router.get('/xero/connect', requireAdmin, (req, res) => {
     needXero();

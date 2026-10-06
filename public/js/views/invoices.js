@@ -184,7 +184,7 @@ function openUpload(ctx, dropped = []) {
           const inv = await api('/invoices/scan', { method: 'POST', body: { location_id: v.location_id ?? state.locationId, file_name: file.name, media_type: file.type, data: await readAsBase64(file) } });
           done.push(inv);
           li.className = 'is-done';
-          li.querySelector('.upload-state').textContent = `✓ ${inv.matched_supplier_name ?? inv.supplier_name ?? 'Read'} · ${inv.lines.length} lines`;
+          li.querySelector('.upload-state').textContent = `✓ ${inv.matched_supplier_name ?? inv.supplier_name ?? 'Read'} · ${inv.lines.length} lines${inv.site_from_reference ? ` · for ${inv.location_name} (from their reference)` : ''}`;
         } catch (err) {
           failed.push(file.name);
           li.className = 'is-failed';

@@ -2,7 +2,7 @@
 // tracking option and the original file attached). Connecting is done once by an admin through Xero's sign-in
 // (OAuth 2.0, a "Web app" made at developer.xero.com); Brewly keeps the tokens fresh. Set XERO_CLIENT_ID and
 // XERO_CLIENT_SECRET (and XERO_REDIRECT_URI if APP_URL isn't set).
-import { HttpError, round2 } from './util.js';
+import { addDays, HttpError, round2 } from './util.js';
 import { vatCodeForRate } from './vat-codes.js';
 import { appUrl } from './reports.js';
 
@@ -147,6 +147,14 @@ export class Xero {
     };
   }
 
+  /** Contacts in Xero whose name contains the search: [{ id, name, email }] (up to 25). */
+  async findContacts(search) {
+    const q = String(search ?? '').trim().slice(0, 100);
+    const r = await this.api('GET', `/Contacts?summaryOnly=true&page=1${q ? `&searchTerm=${encodeURIComponent(q)}` : ''}`);
+    return (r.Contacts ?? []).filter((c) => c.ContactStatus !== 'ARCHIVED').slice(0, 25)
+      .map((c) => ({ id: c.ContactID, name: c.Name, email: c.EmailAddress ?? null }));
+  }
+
   /** Xero's VAT rates that can go on bills: [{ code, name, rate }]. */
   async vatCodes() {
     const r = await this.api('GET', '/TaxRates');
@@ -204,7 +212,9 @@ export class Xero {
         Type: 'ACCPAY',
         Contact: { ContactID: contactId },
         ...(inv.invoice_date ? { Date: inv.invoice_date } : {}),
-        ...(inv.due_date ? { DueDate: inv.due_date } : {}),
+        // No due date on the invoice: the supplier's payment terms from the invoice date.
+        ...(inv.due_date ? { DueDate: inv.due_date }
+          : inv.invoice_date && supplier?.payment_terms_days != null ? { DueDate: addDays(inv.invoice_date, supplier.payment_terms_days) } : {}),
         ...(inv.invoice_number ? { InvoiceNumber: inv.invoice_number } : {}),
         Reference: `Brewly #${inv.id} · ${inv.location_name}`.slice(0, 255),
         Status: 'DRAFT',

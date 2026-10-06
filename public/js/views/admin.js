@@ -443,38 +443,6 @@ export async function renderLocations(ctx) {
   });
 }
 
-export async function renderSuppliers(ctx) {
-  const rows = await api('/suppliers');
-  if (ctx.stale()) return;
-  listPage(ctx, {
-    title: 'Suppliers',
-    rows,
-    search: true,
-    canEdit: ctx.state.can('setup.products'),
-    addLabel: 'Add supplier',
-    columns: [
-      { label: 'Name', key: 'name' },
-      { label: 'Contact', key: 'contact_name' },
-      { label: 'Email', html: (r) => (r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : '') },
-      { label: 'Phone', html: (r) => (r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : '') },
-      { label: 'Order days', key: 'order_days' },
-      { label: 'Lead time', value: (r) => `${r.lead_time_days} day(s)` },
-      { label: 'Min order', num: true, value: (r) => money(r.min_order) },
-      { label: 'Products', num: true, key: 'product_count' },
-    ],
-    form: (s) => `
-      <div class="row">${field('Name', input('name', s.name, 'required'))}${field('Contact name', input('contact_name', s.contact_name))}</div>
-      <div class="row">${field('Order email', input('email', s.email, 'type="email"'))}${field('Phone', input('phone', s.phone))}</div>
-      <div class="row">
-        ${field('Order days / cut-off', input('order_days', s.order_days, 'placeholder="e.g. Mon, Thu by 2pm"'))}
-        ${field('Lead time (days)', input('lead_time_days', s.lead_time_days ?? 1, 'type="number" min="0"'))}
-        ${field('Minimum order (£)', input('min_order', s.min_order ?? 0, 'type="number" min="0" step="0.01"'))}
-      </div>
-      ${field('Notes', textarea('notes', s.notes))}${activeBox(s.active)}`,
-    save: (v, row) => (row ? api(`/suppliers/${row.id}`, { method: 'PUT', body: v }) : api('/suppliers', { method: 'POST', body: v })),
-  });
-}
-
 export async function renderProducts(ctx) {
   const { state } = ctx;
   const [rows, suppliers, meta, cats, vat] = await Promise.all([api('/products'), api('/suppliers'), api('/recipes/meta'), api('/product-categories'), api('/vat-codes')]);

@@ -625,6 +625,16 @@ CREATE TABLE IF NOT EXISTS square_sync_log (
   triggered_by TEXT
 );
 
+-- A supplier's references for each site – e.g. the account number they print on that site's invoices – so an
+-- invoice from them is put against the right site automatically.
+CREATE TABLE IF NOT EXISTS supplier_site_refs (
+  id INTEGER PRIMARY KEY,
+  supplier_id INTEGER NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  reference TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_supplier_site_refs ON supplier_site_refs(supplier_id);
+
 -- Product categories (Stock & Ordering → Product categories): every product is in one (products.category holds its
 -- name), and each can have the Xero account code its lines go to on a bill.
 CREATE TABLE IF NOT EXISTS product_categories (
@@ -780,6 +790,16 @@ const MIGRATIONS = [
     ALTER TABLE invoices ADD COLUMN xero_sent_at TEXT;
     ALTER TABLE invoices ADD COLUMN xero_error TEXT;`],
   ['suppliers', 'xero_contact_id', 'ALTER TABLE suppliers ADD COLUMN xero_contact_id TEXT'],
+  // The supplier's tabs: their address; where orders go (and who's copied in), when they deliver and the cut-off
+  // for each delivery day (JSON: [{ day, cutoff_day, cutoff_time }], days 1 = Monday … 7 = Sunday), and whether
+  // they're used for ordering; the Xero contact's name and their payment terms.
+  ['suppliers', 'order_email', `ALTER TABLE suppliers ADD COLUMN address TEXT;
+    ALTER TABLE suppliers ADD COLUMN order_email TEXT;
+    ALTER TABLE suppliers ADD COLUMN cc_emails TEXT;
+    ALTER TABLE suppliers ADD COLUMN delivery_schedule TEXT;
+    ALTER TABLE suppliers ADD COLUMN orders_enabled INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE suppliers ADD COLUMN xero_contact_name TEXT;
+    ALTER TABLE suppliers ADD COLUMN payment_terms_days INTEGER;`],
   // Candidates from the careers inbox: they needn't be for a job, so the table is rebuilt without that rule.
   ['candidates', 'source', (db) => {
     // Built alongside and swapped in: renaming the old table instead would point the tables linked to it (the CVs
