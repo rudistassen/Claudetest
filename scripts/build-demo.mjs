@@ -23,7 +23,9 @@ const result = await build({
   logLevel: 'warning',
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
-const css = fs.readFileSync(path.join(root, 'public/css/styles.css'), 'utf8');
+// Fonts are inlined so the single demo file needs nothing else.
+const css = fs.readFileSync(path.join(root, 'public/css/styles.css'), 'utf8')
+  .replace(/url\(\/fonts\/([\w-]+\.woff2)\)/g, (_, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(root, 'public/fonts', f)).toString('base64')})`);
 // The logo band from index.html, with each logo inlined so the demo stays one file.
 const band = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
   .match(/<header class="brand-band"[\s\S]*?<\/header>/)[0]
