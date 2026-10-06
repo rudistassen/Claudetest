@@ -421,8 +421,10 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
 
       if (labour.error) return;
       saveTeamMembers(db, labour.members);
-      db.prepare(`DELETE FROM timecard_breaks WHERE timecard_id IN (SELECT id FROM timecards WHERE date BETWEEN ? AND ? AND location_id IN (${inList}))`).run(from, to, ...ids);
-      db.prepare(`DELETE FROM timecards WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`).run(from, to, ...ids);
+      // These sites' clock-ins, including any counted at a site that isn't in Square (see timecard_allocations).
+      const theirs = `date BETWEEN ? AND ? AND (location_id IN (${inList}) OR id IN (SELECT timecard_id FROM timecard_allocations WHERE square_site_id IN (${inList})))`;
+      db.prepare(`DELETE FROM timecard_breaks WHERE timecard_id IN (SELECT id FROM timecards WHERE ${theirs})`).run(from, to, ...ids, ...ids);
+      db.prepare(`DELETE FROM timecards WHERE ${theirs}`).run(from, to, ...ids, ...ids);
       const insCard = db.prepare(`INSERT OR REPLACE INTO timecards (id, location_id, team_member_id, user_id, date, start_at, end_at, unpaid_break_minutes, hourly_rate, status, breaks_synced)
         VALUES (?, ?, ?, (SELECT user_id FROM square_team_members WHERE id = ?), ?, ?, ?, ?, ?, ?, 1)`);
       const clearBreaks = db.prepare('DELETE FROM timecard_breaks WHERE timecard_id = ?');
@@ -432,6 +434,10 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
         insCard.run(t.id, t.location_id, t.team_member_id, t.team_member_id, t.date, t.start_at, t.end_at, t.unpaid_break_minutes, t.hourly_rate, t.status);
         for (const b of t.breaks ?? []) insBreak.run(t.id, b.start_at, b.end_at, b.is_paid ? 1 : 0, b.name);
       }
+      // Clock-ins counted at a site that isn't in Square go back there (if they're still at the Square location
+      // they were counted from; one moved in Square since is left where Square has it).
+      db.prepare(`UPDATE timecards SET location_id = (SELECT a.location_id FROM timecard_allocations a WHERE a.timecard_id = timecards.id)
+        WHERE date BETWEEN ? AND ? AND id IN (SELECT a.timecard_id FROM timecard_allocations a WHERE a.square_site_id = timecards.location_id)`).run(from, to);
     });
 
     const message = labour.error ? `Sales synced, but clock-ins were not: ${labour.error}` : null;

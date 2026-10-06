@@ -95,8 +95,41 @@ test('a clock-in can be moved to another site: changed in Square, in Brewly and 
   assert.equal(listed.status, 200);
 
   assert.equal((await admin('/timecards/TC1/location', { method: 'PUT', body: { location_id: siteB } })).status, 400, 'already there');
-  const unlinked = db.prepare('SELECT id FROM locations WHERE square_location_id IS NULL AND active = 1 LIMIT 1').get().id;
-  assert.equal((await admin('/timecards/TC1/location', { method: 'PUT', body: { location_id: unlinked } })).status, 400);
+});
+
+test('a clock-in moved to a site that isn’t in Square (e.g. HQ) is counted there in Brewly only, and stays there after syncing', async () => {
+  const admin = await login('admin@cafe.local');
+  const hq = db.prepare('SELECT id FROM locations WHERE square_location_id IS NULL AND active = 1 LIMIT 1').get().id;
+  const squareSite = db.prepare(`SELECT location_id FROM timecards WHERE id = 'TC1'`).get().location_id;
+  const sentBefore = sent.length;
+  const moved = await admin('/timecards/TC1/location', { method: 'PUT', body: { location_id: hq } });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.data.brewly_only, true);
+  assert.equal(sent.length, sentBefore, 'Square isn’t changed');
+  assert.equal(db.prepare(`SELECT location_id FROM timecards WHERE id = 'TC1'`).get().location_id, hq);
+  assert.match(db.prepare(`SELECT details FROM rota_log WHERE action = 'timecard_site' ORDER BY id DESC LIMIT 1`).get().details, /Brewly only/);
+
+  // The next sync from Square rebuilds the clock-ins: it stays counted at HQ.
+  const { syncSales } = await import('../src/square.js');
+  const syncFetch = async (url, init = {}) => {
+    const path = new URL(url).pathname;
+    if (path === '/v2/orders/search') return json(200, { orders: [] });
+    if (path === '/v2/team-members/search') return json(200, { team_members: [{ id: 'TM1', given_name: 'Jo', status: 'ACTIVE' }] });
+    if (path.startsWith('/v2/labor/')) return json(200, { [path.includes('timecards') ? 'timecards' : 'shifts']: [card] });
+    return json(200, {});
+  };
+  const config = { token: 't', environment: 'production', baseUrl: 'https://square.test', version: '2025-01-23' };
+  await syncSales(db, new SquareClient(config, syncFetch), { from: today(), to: today() });
+  assert.deepEqual({ ...db.prepare('SELECT status, timecards, message FROM square_sync_log ORDER BY id DESC LIMIT 1').get() }, { status: 'ok', timecards: 1, message: null }, 'the sync rebuilt the clock-ins');
+  assert.equal(db.prepare(`SELECT location_id FROM timecards WHERE id = 'TC1'`).get().location_id, hq, 'still at HQ after syncing');
+
+  // Moving it back to the Square site it's really at is Brewly only too.
+  const back = await admin('/timecards/TC1/location', { method: 'PUT', body: { location_id: squareSite } });
+  assert.equal(back.status, 200);
+  assert.equal(sent.length, sentBefore);
+  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM timecard_allocations`).get().n, 0);
+  await syncSales(db, new SquareClient(config, syncFetch), { from: today(), to: today() });
+  assert.equal(db.prepare(`SELECT location_id FROM timecards WHERE id = 'TC1'`).get().location_id, squareSite);
 });
 
 test('moving clock-ins is its own permission: in the Manager set, not Staff, and added to existing Manager sets', async () => {

@@ -1,6 +1,7 @@
 // Moving a clock-in (Square timecard) to another site, for when someone clocked in on the wrong site's till.
 // The change is made in Square, so Square, payroll and Brewly's labour figures all agree, and it's recorded
-// under Rota → Rota changes. Breaks can be added, changed or removed the same way.
+// under Rota → Rota changes. A site that isn't in Square (e.g. an HQ) can't hold a timecard there, so a clock-in
+// moved to one stays put in Square and Brewly just counts it at that site (timecard_allocations). Breaks can be added, changed or removed the same way.
 import { requirePerm } from '../auth.js';
 import { summariseTimecard } from '../square.js';
 import { BUSINESS_TZ, badRequest, forbidden, HttpError, id, localDate, notFound, zonedTimeUTC } from '../util.js';
@@ -162,8 +163,31 @@ export function registerTimecardRoutes(router, db, square) {
     }
     const site = db.prepare('SELECT id, name, square_location_id, active FROM locations WHERE id = ?').get(to);
     if (!site?.active) throw notFound('Site');
-    if (!site.square_location_id) throw badRequest(`${site.name} isn’t linked to a Square location yet (Setup → Square)`);
     const fromName = db.prepare('SELECT name FROM locations WHERE id = ?').get(card.location_id)?.name ?? 'another site';
+    // Already counted at a site that isn't in Square: the Brewly site whose Square location it's really at.
+    const allocation = db.prepare('SELECT * FROM timecard_allocations WHERE timecard_id = ?').get(card.id);
+    const squareSite = allocation?.square_site_id ?? card.location_id;
+    const log = (t, details) => {
+      const hours = t.end_at ? Math.round(((Date.parse(t.end_at) - Date.parse(t.start_at)) / 3600000 - t.unpaid_break_minutes / 60) * 100) / 100 : null;
+      db.prepare(`INSERT INTO rota_log (actor_id, actor_name, action, location_id, location_name, staff_id, staff_name, shift_date, hours, details)
+        VALUES (?, ?, 'timecard_site', ?, ?, ?, ?, ?, ?, ?)`)
+        .run(req.user.id, req.user.name, to, site.name, card.user_id, card.person ?? 'Someone', t.date, hours, details);
+    };
+    const times = (t) => `${timeFormat.format(new Date(t.start_at))}–${t.end_at ? timeFormat.format(new Date(t.end_at)) : 'still clocked in'}`;
+
+    // A site that isn't in Square (or the Square site it's really at): only Brewly changes – the timecard stays
+    // where it is in Square, and Brewly counts its hours and cost at the chosen site.
+    if (!site.square_location_id || (allocation && to === squareSite)) {
+      if (to === squareSite) db.prepare('DELETE FROM timecard_allocations WHERE timecard_id = ?').run(card.id);
+      else {
+        db.prepare(`INSERT INTO timecard_allocations (timecard_id, location_id, square_site_id, moved_by) VALUES (?, ?, ?, ?)
+          ON CONFLICT(timecard_id) DO UPDATE SET location_id = excluded.location_id, moved_by = excluded.moved_by, moved_at = datetime('now')`)
+          .run(card.id, to, squareSite, req.user.id);
+      }
+      db.prepare('UPDATE timecards SET location_id = ? WHERE id = ?').run(to, card.id);
+      log(card, `Clock-in ${times(card)} counted at ${site.name} instead of ${fromName}${to === squareSite ? '' : ' (in Brewly only – Square is unchanged)'}`);
+      return res.json({ ok: true, location_id: to, location_name: site.name, from_name: fromName, brewly_only: true });
+    }
 
     const current = await square.client.getTimecard(card.id);
     if (!current) throw notFound('Clock-in in Square');
@@ -173,13 +197,9 @@ export function registerTimecardRoutes(router, db, square) {
     } catch (err) {
       throw new HttpError(err.status ?? 502, `Square didn’t accept the change: ${err.message.replace(/^Square error: /, '')}`);
     }
+    db.prepare('DELETE FROM timecard_allocations WHERE timecard_id = ?').run(card.id);
     const t = saveTimecard(db, card.id, updated ?? { ...current, location_id: site.square_location_id }, to);
-
-    const times = `${timeFormat.format(new Date(t.start_at))}–${t.end_at ? timeFormat.format(new Date(t.end_at)) : 'still clocked in'}`;
-    const hours = t.end_at ? Math.round(((Date.parse(t.end_at) - Date.parse(t.start_at)) / 3600000 - t.unpaid_break_minutes / 60) * 100) / 100 : null;
-    db.prepare(`INSERT INTO rota_log (actor_id, actor_name, action, location_id, location_name, staff_id, staff_name, shift_date, hours, details)
-      VALUES (?, ?, 'timecard_site', ?, ?, ?, ?, ?, ?, ?)`)
-      .run(req.user.id, req.user.name, to, site.name, card.user_id, card.person ?? 'Someone', t.date, hours, `Clock-in ${times} moved from ${fromName} to ${site.name}`);
+    log(t, `Clock-in ${times(t)} moved from ${fromName} to ${site.name}`);
     res.json({ ok: true, location_id: to, location_name: site.name, from_name: fromName });
   });
 }

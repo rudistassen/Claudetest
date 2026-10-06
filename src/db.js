@@ -254,6 +254,17 @@ CREATE TABLE IF NOT EXISTS timecards (
 );
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
+-- Clock-ins counted at a site that isn't in Square (e.g. an HQ): the timecard stays at its Square location
+-- (square_site_id, the Brewly site linked to it), but Brewly counts its hours and cost at location_id. Kept apart
+-- from timecards so each sync from Square (which rebuilds timecards) can put it back.
+CREATE TABLE IF NOT EXISTS timecard_allocations (
+  timecard_id TEXT PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  square_site_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  moved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  moved_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Links emailed to staff to choose a password: an invite, or a reset when they've forgotten it (see invites.js).
 -- Only a hash of each link's secret is kept.
 CREATE TABLE IF NOT EXISTS password_tokens (

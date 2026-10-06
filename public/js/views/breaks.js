@@ -30,11 +30,11 @@ export function wireMoveClockIn(el, ctx) {
       title: `Move ${b.dataset.who}’s clock-in`,
       submitLabel: 'Move clock-in',
       body: `<p>${esc(b.dataset.who)} clocked in at <strong>${esc(fromName)}</strong> (${esc(b.dataset.when)}). Which site were they actually working at?</p>
-        <label class="field"><span>Site</span><select name="location_id" required>${sites.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></label>
-        <p class="muted small">This changes the timecard in Square too, so payroll and each site’s labour costs match. It’s recorded under Rota → Rota changes.</p>`,
+        <label class="field"><span>Site</span><select name="location_id" required>${sites.map((l) => `<option value="${l.id}">${esc(l.name)}${l.square_location_id ? '' : ' – count here (not in Square)'}</option>`).join('')}</select></label>
+        <p class="muted small">For a site in Square, this changes the timecard in Square too, so payroll and each site’s labour costs match. For a site that isn’t in Square (like HQ), the timecard stays where it is in Square and Brewly counts its hours and cost at that site. Either way it’s recorded under Rota → Rota changes.</p>`,
       onSubmit: async (v) => {
         const r = await api(`/timecards/${encodeURIComponent(b.dataset.moveCard)}/location`, { method: 'PUT', body: { location_id: Number(v.location_id) } });
-        toast(`Clock-in moved to ${r.location_name}`);
+        toast(r.brewly_only ? `Clock-in now counted at ${r.location_name} – Square is unchanged` : `Clock-in moved to ${r.location_name}`);
         ctx.rerender();
       },
     });
