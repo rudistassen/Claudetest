@@ -8,8 +8,12 @@ import { sickDialog } from './sickness.js';
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   if (query.view === 'mine') return renderMine(ctx, weekStart(query.week || todayISO()));
-  // The rota opens on today (only the shifts that are on); the Week button shows the whole week's grid.
-  const view = query.view === 'week' || (query.week && query.view !== 'day') ? 'week' : 'day';
+  // The rota opens on the whole week's grid on a computer or tablet, and on today (only the shifts that are on) on a
+  // phone, where the grid is cramped. Day / Week switch between them; a link to a particular day opens that day.
+  const wide = window.matchMedia('(min-width: 700px)').matches;
+  const view = query.view === 'week' ? 'week'
+    : query.view === 'day' || query.day ? 'day'
+      : query.week || wide ? 'week' : 'day';
   const day = view === 'day' ? (/^\d{4}-\d{2}-\d{2}$/.test(query.day ?? '') ? query.day : todayISO()) : null;
   const week = weekStart(day ?? query.week ?? todayISO());
   // People with more than one site can see every site's rota at once.
@@ -21,7 +25,7 @@ export async function render(ctx) {
   // Remember the site picked here, so other pages open on it too.
   if (siteId && siteId !== state.locationId) chooseSite(state, siteId);
   const siteParam = all ? 'all' : String(siteId);
-  const scopeQs = (extra = {}) => qs({ view: view === 'week' ? 'week' : undefined, ...extra, site: state.multiSite ? siteParam : undefined });
+  const scopeQs = (extra = {}) => qs({ view: view === 'week' ? 'week' : 'day', ...extra, site: state.multiSite ? siteParam : undefined });
   const [data, drops] = await Promise.all([api(`/rota${qs({ location_id: all ? 'all' : siteId, week })}`), api('/shift-drops')]);
   if (stale()) return;
   // Open shifts (dropped and approved) at the sites shown, and shifts someone has asked to drop.
@@ -294,7 +298,7 @@ export async function render(ctx) {
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
     <div class="table-wrap rota-scroll">
       <table class="rota">
-        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: undefined, day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}</th>`).join('')}<th>Hours</th></tr></thead>
+        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: 'day', day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
           ${(data.open_shifts ?? []).length ? `<tr class="rota-open"><th>Open shifts<small>tap to pick up</small></th>${data.days.map((d) => `<td class="${d === today ? 'is-today' : ''}">${openOn(d).map(openButton).join('')}</td>`).join('')}<td></td></tr>` : ''}
           ${rows.map(({ header, groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
@@ -347,10 +351,10 @@ export async function render(ctx) {
     try { localStorage.setItem(LAYOUT_KEY, e.target.value); } catch { /* storage unavailable */ }
     ctx.rerender();
   });
-  el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs(view === 'day' ? { day, site: e.target.value } : { view: 'week', week, site: e.target.value })}`));
+  el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs(view === 'day' ? { view: 'day', day, site: e.target.value } : { view: 'week', week, site: e.target.value })}`));
   el.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.view === view) return;
-    ctx.navigate(`rota${scopeQs(b.dataset.view === 'day' ? { view: undefined, day: week === weekStart(today) ? today : week } : { view: 'week', week: weekStart(day) })}`);
+    ctx.navigate(`rota${scopeQs(b.dataset.view === 'day' ? { view: 'day', day: week === weekStart(today) ? today : week } : { view: 'week', week: weekStart(day) })}`);
   }));
   el.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => {
     const n = Number(b.dataset.day);
