@@ -8,6 +8,7 @@ import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
 import * as openorders from './views/openorders.js';
 import * as sickness from './views/sickness.js';
+import * as requests from './views/requests.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -72,6 +73,7 @@ const ROUTES = [
   [/^reviews$/, reviews.render, ['sales.view']],
   [/^open-orders$/, openorders.render, ['sales.view']],
   [/^sickness$/, sickness.renderReport, ['rota.edit', 'staff.manage']],
+  [/^rota\/requests$/, requests.render, ['rota.publish', 'leave.manage']],
   [/^orders$/, orders.renderList, ['orders.manage']],
   [/^orders\/new$/, orders.renderNew, ['orders.manage']],
   [/^orders\/(\d+)$/, orders.renderOrder, ['orders.manage']],
@@ -105,6 +107,7 @@ function navGroups() {
     [null, [['dashboard', 'Dashboard', '▦', ['dashboard.view']], ['mybrew', 'My Brew', '☕']]],
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
+      ['rota/requests', 'Requests', '✉', ['rota.publish', 'leave.manage']],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
       ['timeoff', 'Time off', '☀'],
     ]],
@@ -147,6 +150,26 @@ function navGroups() {
 // Each menu section's colour.
 const NAV_TONES = { Rota: 'team', Trail: 'trail', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
 
+// Requests waiting for this person (holiday, and shifts asked to be dropped), shown on Rota → Requests.
+let pendingRequests = { count: 0, at: 0, user: null };
+async function showRequestBadge(force = false) {
+  const leave = state.can('leave.manage');
+  const drops = state.can('rota.publish');
+  if (!leave && !drops) return;
+  if (force || pendingRequests.user !== state.user?.id || Date.now() - pendingRequests.at > 60000) {
+    try {
+      const [l, d] = await Promise.all([leave ? api('/leave/pending-count') : { count: 0 }, drops ? api('/shift-drops') : { to_approve: [] }]);
+      pendingRequests = { count: l.count + d.to_approve.length, at: Date.now(), user: state.user?.id };
+    } catch { return; }
+  }
+  document.querySelectorAll('[data-req-badge]').forEach((b) => {
+    b.hidden = !pendingRequests.count;
+    b.textContent = pendingRequests.count;
+    b.title = `${pendingRequests.count} request${pendingRequests.count === 1 ? '' : 's'} to review`;
+  });
+}
+window.addEventListener('requests:changed', () => showRequestBadge(true));
+
 // The number of news posts waiting for this person to confirm they've read them, shown on My Brew in the menu.
 let newsUnread = { count: 0, at: 0, user: null };
 async function showNewsBadge(force = false) {
@@ -177,6 +200,7 @@ const HUBS = { Rota: 'rota-menu', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
   rota: 'See and plan the week’s shifts',
+  'rota/requests': 'Holiday and shift drops waiting for you',
   'rota/log': 'Every change to the rota, and who made it',
   timeoff: 'Ask for holiday and see your requests',
   stock: 'Count stock and see past stock takes',
@@ -190,7 +214,7 @@ const TILE_NOTES = {
 const railScreen = window.matchMedia('(min-width: 900px)');
 const hubTile = ([p, label, ic], active) => `<a class="hub-tile ${p === active ? 'is-active' : ''}" href="#/${p}" ${p === active ? 'aria-current="page"' : ''}>
   <span class="hub-icon" aria-hidden="true">${ic}</span>
-  <span class="hub-text"><strong>${esc(label)}</strong>${TILE_NOTES[p] ? `<small>${esc(TILE_NOTES[p])}</small>` : ''}</span>
+  <span class="hub-text"><strong>${esc(label)}${p === 'rota/requests' ? ' <span class="nav-badge" data-req-badge hidden></span>' : ''}</strong>${TILE_NOTES[p] ? `<small>${esc(TILE_NOTES[p])}</small>` : ''}</span>
   <span class="hub-go" aria-hidden="true">›</span></a>`;
 // The tiles-section a page belongs to: [heading, items, active item] or null.
 function hubOf(path) {
@@ -262,7 +286,7 @@ function renderShell() {
   const section = groups.find(([, items]) => items.some(([p]) => p === active))?.[0] ?? null;
   document.body.dataset.section = section ? (NAV_TONES[section] ?? 'setup') : '';
   document.body.style.setProperty('--section-label', section ? JSON.stringify(section) : '""');
-  const link = ([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}"><span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}</a>`;
+  const link = ([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}"><span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'rota/requests' ? '<span class="nav-badge" data-req-badge hidden></span>' : ''}</a>`;
   document.getElementById('app').innerHTML = `
     <header class="topbar">
       <button class="icon-btn menu-toggle" aria-label="Menu" title="Menu">☰</button>
@@ -323,6 +347,7 @@ function renderShell() {
     </div>
     ${tabBar(groups.flatMap(([, items]) => items), active)}`;
   showNewsBadge();
+  showRequestBadge();
   document.querySelectorAll('[data-install]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); install(); }));
   document.querySelectorAll('[data-logout]').forEach((a) => a.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -473,6 +498,7 @@ export async function route() {
   };
   try {
     await match.view(ctx);
+    showRequestBadge();
   } catch (err) {
     if (seq !== routeSeq) return;
     view.innerHTML = `<div class="empty">Could not load this page: ${esc(err.message)}</div>`;
