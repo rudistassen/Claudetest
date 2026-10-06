@@ -297,7 +297,8 @@ export async function renderInvoice(ctx) {
             <td class="num">${numIn('l-price', l.unit_price)}</td>
             <td class="num">${numIn('l-total', l.line_total)}</td>
             <td class="inv-product">${editable ? `<select class="l-product">${productOptions(inv.supplier_id, l.product_id ?? (l.match === 'new' ? 'new' : null))}</select>` : esc(l.product_name ?? '— Not a stock item —')}
-              <span class="l-badge">${matchBadge(l.match)}</span></td>
+              <span class="l-badge">${matchBadge(l.match)}</span>
+              ${editable && canAdd && (!l.product_id || l.match === 'similar') ? '<button type="button" class="link-btn l-new" title="Add this as a new product, choosing its name, unit and cost">+ New product</button>' : ''}</td>
             <td class="l-cost">${costCell(l, l.product_id, !!l.update_cost)}</td></tr>`).join('')}</tbody>
         </table></div>
         <div class="invoice-totals">
@@ -362,6 +363,46 @@ export async function renderInvoice(ctx) {
       if (q !== null && pr !== null) { tr.querySelector('.l-total').value = (Math.round(q * pr * 100) / 100).toFixed(2); refreshSum(); }
     });
   });
+  // "+ New product": add the line as a new product (name, unit and cost filled in from the invoice, to check),
+  // then pick it for the line.
+  const categories = [...new Set(products.map((p) => p.category).filter(Boolean))].sort();
+  rows().forEach((tr) => tr.querySelector('.l-new')?.addEventListener('click', () => {
+    const l = line(tr);
+    const sup = el.querySelector('#inv-supplier');
+    const supplierId = Number(sup.value) || null;
+    const supplierName = supplierId ? sup.selectedOptions[0]?.textContent.trim() : null;
+    const price = val(tr, '.l-price');
+    openModal({
+      title: 'Add a new product',
+      body: `
+        <label class="field"><span>Name</span><input name="name" required maxlength="150" value="${esc(tr.querySelector('.l-desc')?.value ?? l.description)}"></label>
+        <div class="row">
+          <label class="field"><span>Unit</span><input name="unit" maxlength="30" value="${esc(l.unit ?? 'each')}" placeholder="e.g. case of 12, kg, bottle"></label>
+          <label class="field"><span>Cost per unit (£)</span><input name="unit_cost" type="number" min="0" step="0.01" value="${price ?? ''}"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Category</span><input name="category" list="new-product-categories" maxlength="100"></label>
+          <label class="field"><span>Supplier’s code</span><input name="sku" maxlength="50" value="${esc(l.sku ?? '')}"></label>
+        </div>
+        <datalist id="new-product-categories">${categories.map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
+        <p class="muted small">${supplierName ? `From ${esc(supplierName)}. ` : 'Choose the supplier above first to link the product to them. '}You can add par levels, allergens and more later under Setup → Products.</p>`,
+      submitLabel: 'Add product',
+      onSubmit: async (v) => {
+        const made = await api('/products', { method: 'POST', body: { name: v.name, unit: v.unit || 'each', unit_cost: v.unit_cost === '' ? 0 : Number(v.unit_cost), category: v.category || null, sku: v.sku || null, supplier_id: supplierId } });
+        products.push(made);
+        productById.set(made.id, made);
+        // Every line's list gets the new product; this line picks it.
+        rows().forEach((r) => {
+          const sel = r.querySelector('.l-product');
+          const cur = r === tr ? made.id : sel.value === 'new' ? 'new' : sel.value ? Number(sel.value) : null;
+          sel.innerHTML = productOptions(supplierId, cur);
+        });
+        tr.dataset.touched = '1';
+        refreshRow(tr);
+        toast(`${made.name} added – remember to save the invoice`);
+      },
+    });
+  }));
   // Picking a different supplier re-sorts each line's product list to put their products first.
   el.querySelector('#inv-supplier').addEventListener('change', (e) => {
     const sid = Number(e.target.value) || null;

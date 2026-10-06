@@ -1546,3 +1546,4 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .hub-go { color: var(--muted); font-size: 1.4rem; }
 @media (max-width: 640px) { .hub-tiles { grid-template-columns: 1fr 1fr; gap: 0.6rem; } .hub-tile { flex-direction: column; align-items: flex-start; gap: 0.6rem; padding: 0.9rem; } .hub-go { display: none; } }
 .sidebar a.nav-hub .nav-caret { margin-left: auto; color: var(--muted); }
+.invoice-lines .l-new { font-size: 0.8rem; margin-left: 0.3rem; white-space: nowrap; }
