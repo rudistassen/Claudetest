@@ -773,9 +773,10 @@ const MIGRATIONS = [
   ['suppliers', 'xero_contact_id', 'ALTER TABLE suppliers ADD COLUMN xero_contact_id TEXT'],
   // Candidates from the careers inbox: they needn't be for a job, so the table is rebuilt without that rule.
   ['candidates', 'source', (db) => {
+    // Built alongside and swapped in: renaming the old table instead would point the tables linked to it (the CVs
+    // and the careers emails) at the old copy.
     db.exec(`PRAGMA foreign_keys = OFF; BEGIN;
-      ALTER TABLE candidates RENAME TO candidates_old;
-      CREATE TABLE candidates (
+      CREATE TABLE candidates_new (
         id INTEGER PRIMARY KEY,
         vacancy_id INTEGER REFERENCES vacancies(id) ON DELETE CASCADE,
         location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
@@ -785,9 +786,10 @@ const MIGRATIONS = [
         source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'email')),
         subject TEXT, message TEXT, email_message_id TEXT, received_at TEXT, declined_at TEXT, reply_drafted_at TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
-      INSERT INTO candidates (id, vacancy_id, name, email, phone, stage, next_step_on, notes, created_at, updated_at)
-        SELECT id, vacancy_id, name, email, phone, stage, next_step_on, notes, created_at, updated_at FROM candidates_old;
-      DROP TABLE candidates_old;
+      INSERT INTO candidates_new (id, vacancy_id, name, email, phone, stage, next_step_on, notes, created_at, updated_at)
+        SELECT id, vacancy_id, name, email, phone, stage, next_step_on, notes, created_at, updated_at FROM candidates;
+      DROP TABLE candidates;
+      ALTER TABLE candidates_new RENAME TO candidates;
       CREATE INDEX IF NOT EXISTS idx_candidates_vacancy ON candidates(vacancy_id);
       COMMIT; PRAGMA foreign_keys = ON;`);
   }],
@@ -875,6 +877,7 @@ export function openDb(file = ':memory:') {
     else db.exec(change);
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_square ON locations(square_location_id)');
+  repairCandidateLinks(db);
   db.exec(VIEWS);
   // One-off data changes, tracked with SQLite's user_version.
   const version = db.prepare('PRAGMA user_version').get().user_version;
@@ -941,6 +944,34 @@ export function openDb(file = ':memory:') {
   }
   ensureDefaultSets(db);
   return db;
+}
+
+/**
+ * The first version of the candidates change left the CV files and careers emails linked to a table that no longer
+ * exists ("candidates_old"), so nothing could be saved in them. Each is rebuilt linked to candidates. Applications
+ * the careers inbox half-added while that was broken (not yet looked at) are cleared, so they're added again
+ * properly – with their CVs – the next time the inbox is checked.
+ */
+function repairCandidateLinks(db) {
+  const broken = db.prepare(`SELECT name, sql FROM sqlite_master WHERE type = 'table' AND sql LIKE '%candidates_old%'`).all();
+  if (!broken.length) return;
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    tx(db, () => {
+      for (const t of broken) {
+        db.exec(`ALTER TABLE "${t.name}" RENAME TO "${t.name}_fix"`);
+        db.exec(t.sql.replace(/"?candidates_old"?/g, 'candidates'));
+        db.exec(`INSERT INTO "${t.name}" SELECT * FROM "${t.name}_fix"; DROP TABLE "${t.name}_fix";`);
+      }
+      if (!db.prepare('SELECT 1 FROM careers_emails LIMIT 1').get()) {
+        db.exec(`DELETE FROM candidates WHERE source = 'email' AND stage = 'applied' AND declined_at IS NULL AND notes IS NULL
+          AND NOT EXISTS (SELECT 1 FROM candidate_files f WHERE f.candidate_id = candidates.id)`);
+      }
+    });
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+  db.exec(SCHEMA);
 }
 
 // Runs fn inside a transaction, rolling back if it throws.

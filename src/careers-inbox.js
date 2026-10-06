@@ -2,6 +2,7 @@
 // Recruitment, with their message and their CV (or anything else they attached) on their profile. Someone who
 // emails again is added to the profile they already have. Each email is only handled once.
 import { requirePerm } from './auth.js';
+import { tx } from './db.js';
 import { getSetting, setSetting } from './invoice-inbox.js';
 import { CAREERS_VARIABLES, mailboxSetup } from './mailbox.js';
 import { fromBase64 } from './routes/invoices.js';
@@ -84,24 +85,27 @@ async function handle(db, mailbox, m) {
   const files = cvAttachments(m.hasAttachments === false ? [] : await mailbox.attachments(m.id));
   const name = (m.fromName && !m.fromName.includes('@') ? m.fromName : from.split('@')[0].replace(/[._]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())).slice(0, 100);
   const addFile = db.prepare('INSERT INTO candidate_files (candidate_id, file_name, file_type, size, file) VALUES (?, ?, ?, ?, ?)');
-  // Someone who has emailed before and is still being considered: added to their profile.
-  const already = db.prepare(`SELECT id, message FROM candidates WHERE lower(email) = lower(?) AND stage NOT IN ('hired', 'rejected')
-    ORDER BY id DESC LIMIT 1`).get(from);
-  let candidateId;
-  if (already) {
-    const when = new Date(m.receivedAt ?? Date.now()).toLocaleString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const message = [already.message, `— Emailed again on ${when}${m.subject ? `: ${m.subject}` : ''} —\n\n${body}`].filter(Boolean).join('\n\n').slice(-40000);
-    db.prepare(`UPDATE candidates SET message = ?, email_message_id = ?, phone = COALESCE(phone, ?), updated_at = datetime('now') WHERE id = ?`)
-      .run(message, m.id, findPhone(body), already.id);
-    candidateId = already.id;
-  } else {
-    const job = pickJob(db, m, body);
-    candidateId = Number(db.prepare(`INSERT INTO candidates (vacancy_id, location_id, name, email, phone, source, subject, message, email_message_id, received_at)
-      VALUES (?, ?, ?, ?, ?, 'email', ?, ?, ?, ?)`).run(job?.id ?? null, job?.location_id ?? pickSite(db, m, body), name, from.slice(0, 200), findPhone(body),
-      (m.subject ?? '').slice(0, 300) || null, body || null, m.id, m.receivedAt ?? null).lastInsertRowid);
-  }
-  for (const f of files) addFile.run(candidateId, String(f.name).slice(0, 200), f.type, f.bytes, fromBase64(f.data));
-  return { status: 'added', candidateId, detail: already ? 'Added to their existing profile' : null };
+  // Saved all together, so a problem part-way leaves nothing half-added (the email is tried again next time).
+  return tx(db, () => {
+    // Someone who has emailed before and is still being considered: added to their profile.
+    const already = db.prepare(`SELECT id, message FROM candidates WHERE lower(email) = lower(?) AND stage NOT IN ('hired', 'rejected')
+      ORDER BY id DESC LIMIT 1`).get(from);
+    let candidateId;
+    if (already) {
+      const when = new Date(m.receivedAt ?? Date.now()).toLocaleString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const message = [already.message, `— Emailed again on ${when}${m.subject ? `: ${m.subject}` : ''} —\n\n${body}`].filter(Boolean).join('\n\n').slice(-40000);
+      db.prepare(`UPDATE candidates SET message = ?, email_message_id = ?, phone = COALESCE(phone, ?), updated_at = datetime('now') WHERE id = ?`)
+        .run(message, m.id, findPhone(body), already.id);
+      candidateId = already.id;
+    } else {
+      const job = pickJob(db, m, body);
+      candidateId = Number(db.prepare(`INSERT INTO candidates (vacancy_id, location_id, name, email, phone, source, subject, message, email_message_id, received_at)
+        VALUES (?, ?, ?, ?, ?, 'email', ?, ?, ?, ?)`).run(job?.id ?? null, job?.location_id ?? pickSite(db, m, body), name, from.slice(0, 200), findPhone(body),
+        (m.subject ?? '').slice(0, 300) || null, body || null, m.id, m.receivedAt ?? null).lastInsertRowid);
+    }
+    for (const f of files) addFile.run(candidateId, String(f.name).slice(0, 200), f.type, f.bytes, fromBase64(f.data));
+    return { status: 'added', candidateId, detail: already ? 'Added to their existing profile' : null };
+  });
 }
 
 let running = null;
