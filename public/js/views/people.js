@@ -1,4 +1,4 @@
-import { api, confirmDialog, esc, field, fmtDate, input, openModal, qs, select, showError, siteColour, siteFilter, siteScope, textarea, toast, todayISO } from '../lib.js';
+import { api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, siteColour, siteFilter, siteScope, textarea, toast, todayISO } from '../lib.js';
 
 // People: Recruitment (jobs and their candidates), Learning and development (training and who has done it),
 // Performance (one-to-ones, probation reviews and appraisals) and Areas (where each person can work).
@@ -23,12 +23,137 @@ const siteQuery = (state, scope) => qs({ location_id: scope === 'all' ? undefine
 
 // ---- Recruitment ----
 
+const fileSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+const received = (c) => (c.received_at ? fmtDateTime(c.received_at.replace('T', ' ').slice(0, 19)) : day(c.created_at.slice(0, 10)));
+
+/** Moving someone on to an interview: which job it's for (if they haven't got one) and when, if it's booked. */
+export function interviewDialog(c, jobs, done) {
+  const open = jobs.filter((j) => j.status === 'open' || j.id === c.vacancy_id);
+  openModal({
+    title: `Invite ${c.name} to interview`,
+    body: `${field('For the job', select('vacancy_id', [['', '— Not for a particular job —'], ...open.map((j) => [j.id, `${j.title}${j.location_name ? ` – ${j.location_name}` : ''}`])], c.vacancy_id ?? ''))}
+      ${field('Interview on (optional)', input('next_step_on', c.next_step_on, 'type="date"'), { hint: 'Leave blank if it isn’t booked yet' })}
+      ${c.email ? `<p class="muted small">Get in touch with them to arrange it – <a href="mailto:${esc(c.email)}">${esc(c.email)}</a>${c.phone ? ` or ${esc(c.phone)}` : ''}.</p>` : ''}`,
+    submitLabel: '✓ Move to interview',
+    onSubmit: async (v) => {
+      await api(`/candidates/${c.id}`, { method: 'PUT', body: { stage: 'interview', vacancy_id: v.vacancy_id || null, next_step_on: v.next_step_on } });
+      toast(`${c.name} moved to interview`);
+      done();
+    },
+  });
+}
+
+/** Turning someone down: the reply, from the template, to check and change, then a draft in the careers inbox. */
+export async function declineDialog(candidateId, done) {
+  let c;
+  try { c = await api(`/candidates/${candidateId}`); } catch (err) { showError(err); return; }
+  openModal({
+    title: `Turn down ${c.name}?`,
+    wide: true,
+    body: c.email ? `<p class="muted small">They’ll be marked as not taken on. Check the reply below – you can change it for them.</p>
+        ${field('To', `<input value="${esc(c.email)}" disabled>`)}
+        ${field('Subject', input('subject', c.decline.subject, 'required maxlength="200"'))}
+        ${field('Message', textarea('body', c.decline.body, 'rows="11" required maxlength="5000"'))}
+        ${c.can_draft_reply ? '<label class="check-row"><input type="checkbox" name="draft" checked><span>Save it as a <strong>draft reply in the careers inbox</strong>, to check and send from Outlook</span></label>'
+          : '<p class="muted small">Next you can copy the reply, or open it in your email to send.</p>'}`
+      : `<p>There’s no email address for ${esc(c.name)}, so they’ll just be marked as not taken on.</p>
+        <input type="hidden" name="subject" value="${esc(c.decline.subject)}"><input type="hidden" name="body" value="${esc(c.decline.body)}">`,
+    submitLabel: '✕ Turn down',
+    onSubmit: async (v) => {
+      const r = await api(`/candidates/${c.id}/decline`, { method: 'POST', body: { subject: v.subject, body: v.body, draft: !!v.draft } });
+      done();
+      if (r.draft === 'created') {
+        toast(`Turned down – the reply is waiting in Drafts in ${r.mailbox}`);
+        return;
+      }
+      toast(`${c.name} turned down`);
+      if (r.to) setTimeout(() => sendYourself(r), 0);
+    },
+  });
+}
+
+// When Brewly couldn't save the reply as a draft: the email to copy or open in their own email.
+function sendYourself(r) {
+  const mailto = `mailto:${encodeURIComponent(r.to)}?${new URLSearchParams({ subject: r.subject, body: r.body }).toString().replace(/\+/g, '%20')}`;
+  const { form } = openModal({
+    title: 'Send your reply',
+    wide: true,
+    body: `${r.draft === 'failed' ? `<p class="notice notice-warn">The draft couldn’t be saved in the careers inbox: ${esc(r.error)}</p>` : ''}
+      <p><strong>To:</strong> ${esc(r.to)}<br><strong>Subject:</strong> ${esc(r.subject)}</p>
+      <pre class="pp-email">${esc(r.body)}</pre>
+      <p class="pp-send-actions"><a class="btn btn-primary" href="${esc(mailto)}">✉ Open in my email</a>
+        <button type="button" class="btn" data-copy>Copy the message</button></p>`,
+  });
+  form.querySelector('[data-copy]').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(r.body); toast('Copied'); } catch { toast('Couldn’t copy – select the text instead', 'error'); }
+  });
+}
+
+// The careers inbox: set-up steps until it's connected, then when it was last checked and the decline wording.
+function careersCard(inbox) {
+  if (!inbox) return '';
+  if (!inbox.configured) {
+    const have = inbox.setup?.filter((v) => v.status === 'ok').map((v) => v.name) ?? [];
+    return `<details class="card inbox-card"><summary><strong>✉ Careers inbox</strong> <span class="muted small">– have job applications added here automatically</span></summary>
+      <p>Emails to your careers address (for example <em>careers@yourcompany.co.uk</em>) can be added here as candidates every few minutes – with their message and their CV on their profile.</p>
+      <p>It uses the same Microsoft 365 app as the invoice inbox. In Railway, add:</p>
+      <ul><li><code>CAREERS_MAILBOX</code> – the careers inbox’s email address${have.includes('CAREERS_MAILBOX') ? ' ✓' : ''}</li>
+        ${['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET'].map((n) => `<li><code>${n}</code>${have.includes(n) ? ' ✓ already there' : ' – from the Microsoft app (see Invoices → Invoice inbox)'}</li>`).join('')}</ul>
+      <p class="muted small">To have Brewly save turn-down replies as drafts in the careers inbox, give the Microsoft app the <strong>Mail.ReadWrite</strong> permission (not just Mail.Read).</p>
+      <p><button type="button" class="btn btn-small" data-edit-template>Edit the turn-down email</button></p>
+    </details>`;
+  }
+  return `<section class="card inbox-card">
+    <div class="card-head"><h2>✉ Careers inbox</h2><button class="btn btn-small" id="careers-check">Check now</button></div>
+    <p class="small">Applications emailed to <strong>${esc(inbox.mailbox)}</strong> are added above every few minutes.
+      ${inbox.last_check ? `Last checked ${fmtDateTime(inbox.last_check.replace('T', ' ').slice(0, 19))}.` : 'Not checked yet.'}</p>
+    ${inbox.last_error ? `<p class="notice notice-warn">${esc(inbox.last_error)}</p>` : ''}
+    <p><button type="button" class="btn btn-small" data-edit-template>Edit the turn-down email</button></p>
+  </section>`;
+}
+
+function templateDialog(inbox, done) {
+  openModal({
+    title: 'The turn-down email',
+    wide: true,
+    body: `<p class="muted small">Filled in for each person when you turn them down – you can still change it each time. These are replaced for you:
+        <code>{first_name}</code>, <code>{name}</code>, <code>{job}</code>, <code>{job_as}</code> (“ as a Barista”) and <code>{job_for}</code> (“ for Barista”).</p>
+      ${field('Subject', input('subject', inbox.template.subject, 'required maxlength="200"'), { hint: 'Used when you send it yourself – a draft in the careers inbox replies to their email' })}
+      ${field('Message', textarea('body', inbox.template.body, 'rows="13" required maxlength="5000"'))}`,
+    onSubmit: async (v) => {
+      await api('/careers-inbox/template', { method: 'PUT', body: v });
+      toast('Saved');
+      done();
+    },
+    danger: 'Use the standard wording',
+    onDanger: async () => {
+      await api('/careers-inbox/template', { method: 'PUT', body: inbox.default_template });
+      toast('Back to the standard wording');
+      done();
+    },
+  });
+}
+
+const applicationCard = (c) => `<li class="pp-app">
+  <div class="pp-app-main">
+    <a href="#/people/recruitment/candidates/${c.id}" class="pp-app-name"><strong>${esc(c.name)}</strong></a>
+    <small class="muted">${esc(received(c))}${c.job_title ? ` · for <strong>${esc(c.job_title)}</strong>` : ''}${c.site_name ? ` · ${siteTag(c.site_name, c.site_id)}` : ''}${c.files ? ` · 📎 ${c.files} file${c.files === 1 ? '' : 's'}` : ' · no CV'}</small>
+    ${c.subject ? `<span class="pp-app-subject">${esc(c.subject)}</span>` : ''}
+    ${c.preview ? `<span class="pp-app-preview">${esc(c.preview.replace(/\s+/g, ' '))}</span>` : ''}
+  </div>
+  <div class="pp-app-actions">
+    <a class="btn btn-small btn-ghost" href="#/people/recruitment/candidates/${c.id}">View</a>
+    <button type="button" class="btn btn-small btn-primary" data-interview="${c.id}">✓ Interview</button>
+    <button type="button" class="btn btn-small" data-decline="${c.id}">✕ Decline</button>
+  </div></li>`;
+
 export async function renderRecruitment(ctx) {
   const { el, state, query, stale, navigate, rerender } = ctx;
   const scope = siteScope(state, query.scope);
   const showAll = query.show === 'all';
-  const jobs = await api(`/vacancies${siteQuery(state, scope)}`);
+  const [jobs, apps, inbox] = await Promise.all([api(`/vacancies${siteQuery(state, scope)}`), api('/applications'), api('/careers-inbox').catch(() => null)]);
   if (stale()) return;
+  const noJob = apps.no_job.filter((c) => showAll || c.stage !== 'rejected');
   const shown = showAll ? jobs : jobs.filter((j) => j.status === 'open');
   const open = jobs.filter((j) => j.status === 'open');
   const inPlay = open.flatMap((j) => j.candidates).filter((c) => !['hired', 'rejected'].includes(c.stage));
@@ -42,6 +167,10 @@ export async function renderRecruitment(ctx) {
       <div class="kpi" data-icon="☺"><span>Candidates in progress</span><strong>${inPlay.length}</strong>
         <small>${inPlay.filter((c) => c.stage === 'interview').length} to interview · ${inPlay.filter((c) => c.stage === 'trial').length} on trial</small></div>
     </div>
+    ${apps.new.length || inbox?.configured ? `<section class="card pp-apps">
+      <div class="pp-job-head"><h2>✉ New applications <span class="badge ${apps.new.length ? 'badge-sent' : ''}">${apps.new.length}</span></h2></div>
+      ${apps.new.length ? `<ul class="pp-app-list">${apps.new.map(applicationCard).join('')}</ul>` : '<p class="muted small">Nothing new – applications emailed to the careers inbox appear here.</p>'}
+    </section>` : ''}
     <p class="small"><a href="#/people/recruitment${qs({ scope: query.scope, show: showAll ? undefined : 'all' })}">${showAll ? 'Only show open jobs' : 'Show filled and closed jobs too'}</a></p>
     ${shown.length ? shown.map((j) => `<section class="card pp-job" data-job="${j.id}">
       <div class="pp-job-head">
@@ -54,12 +183,35 @@ export async function renderRecruitment(ctx) {
       ${j.candidates.length ? `<div class="table-wrap"><table class="pp-cands">
         <thead><tr><th>Candidate</th><th>Stage</th><th>Next step</th><th></th></tr></thead>
         <tbody>${j.candidates.map((c) => `<tr class="${c.stage === 'rejected' ? 'is-out' : ''}">
-          <td><strong>${esc(c.name)}</strong><small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
+          <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.source === 'email' ? ' <span title="Applied by email">✉</span>' : ''}${c.files ? ` <span title="${c.files} file${c.files === 1 ? '' : 's'}">📎</span>` : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
           <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
           <td>${c.next_step_on ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</span>` : '<span class="muted">–</span>'}</td>
           <td class="num"><button class="btn btn-small btn-ghost" data-edit-cand="${c.id}" data-job-of="${j.id}">Edit</button></td>
         </tr>`).join('')}</tbody></table></div>` : '<p class="muted small">No candidates yet.</p>'}
-    </section>`).join('') : `<div class="empty">${jobs.length ? 'No open jobs right now.' : 'No jobs yet – add one when you’re hiring.'}</div>`}`;
+    </section>`).join('') : `<div class="empty">${jobs.length ? 'No open jobs right now.' : 'No jobs yet – add one when you’re hiring.'}</div>`}
+    ${noJob.length ? `<section class="card pp-job">
+      <div class="pp-job-head"><div><h2>Not for a particular job</h2><p class="muted small">People who applied in general – open their profile to put them forward for a job.</p></div></div>
+      <div class="table-wrap"><table class="pp-cands">
+        <thead><tr><th>Candidate</th><th>Stage</th><th>Next step</th></tr></thead>
+        <tbody>${noJob.map((c) => `<tr class="${c.stage === 'rejected' ? 'is-out' : ''}">
+          <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.files ? ' <span title="Has files">📎</span>' : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
+          <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+          <td>${c.next_step_on ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</span>` : '<span class="muted">–</span>'}</td>
+        </tr>`).join('')}</tbody></table></div>
+    </section>` : ''}
+    ${careersCard(inbox)}`;
+
+  el.querySelectorAll('[data-interview]').forEach((b) => b.addEventListener('click', () => interviewDialog(apps.new.find((c) => c.id === Number(b.dataset.interview)), jobs, rerender)));
+  el.querySelectorAll('[data-decline]').forEach((b) => b.addEventListener('click', () => declineDialog(Number(b.dataset.decline), rerender)));
+  el.querySelectorAll('[data-edit-template]').forEach((b) => b.addEventListener('click', () => templateDialog(inbox, rerender)));
+  el.querySelector('#careers-check')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      const r = await api('/careers-inbox/check', { method: 'POST' });
+      toast(r.error ? r.error : r.added ? `${r.added} new application${r.added === 1 ? '' : 's'} added` : 'No new applications', r.error ? 'error' : 'ok');
+      rerender();
+    } catch (err) { showError(err); e.target.disabled = false; }
+  });
 
   wireFilters(el, 'people/recruitment', navigate, { show: showAll ? 'all' : undefined });
   const job = (jid) => jobs.find((j) => j.id === Number(jid));
@@ -122,6 +274,122 @@ export async function renderRecruitment(ctx) {
       toast(s.value === 'hired' ? 'Hired! Add them in Square (or Setup → Staff) so they can sign in and go on the rota.' : `Moved to ${STAGE[s.value]}`);
       rerender();
     } catch (err) { showError(err); }
+  }));
+}
+
+// A candidate's profile: their details, the email they sent, their CV and files, and notes.
+export async function renderCandidate(ctx) {
+  const { el, params, stale, rerender, navigate } = ctx;
+  const [c, jobs] = await Promise.all([api(`/candidates/${params[0]}`), api('/vacancies')]);
+  if (stale()) return;
+  const fileUrl = (f) => `/api/candidates/${c.id}/files/${f.id}`;
+  const viewable = (f) => f.file_type === 'application/pdf' || f.file_type.startsWith('image/');
+  const first = c.files.find(viewable);
+
+  el.innerHTML = `
+    <p class="small"><a href="#/people/recruitment">← Recruitment</a></p>
+    <div class="page-head"><div><h1>${esc(c.name)} <span class="badge ${c.stage === 'rejected' ? 'badge-cancelled' : c.stage === 'hired' ? 'badge-received' : 'badge-sent'}">${STAGE[c.stage]}</span></h1>
+      <p class="muted small">${c.job_title ? `For <strong>${esc(c.job_title)}</strong>` : 'Not for a particular job'}${c.site_name ? ` · ${siteTag(c.site_name, c.site_id)}` : ''}
+        · ${c.source === 'email' ? `applied by email ${esc(received(c))}` : `added ${day(c.created_at.slice(0, 10))}`}</p></div>
+      <div class="actions">
+        ${c.stage === 'applied' ? '<button class="btn btn-primary" id="cand-interview">✓ Invite to interview</button>' : ''}
+        ${c.stage !== 'rejected' && c.stage !== 'hired' ? '<button class="btn" id="cand-decline">✕ Decline</button>' : ''}
+        <button class="btn btn-ghost" id="cand-edit">Edit</button></div></div>
+    ${c.declined_at ? `<p class="notice">Turned down on ${fmtDateTime(c.declined_at)}${c.reply_drafted_at ? ' – a reply was saved in the careers inbox’s Drafts' : ''}.</p>` : ''}
+    <div class="pp-profile">
+      <div>
+        <section class="card">
+          <h2>Contact</h2>
+          <p>${c.email ? `✉ <a href="mailto:${esc(c.email)}">${esc(c.email)}</a><br>` : ''}${c.phone ? `☎ <a href="tel:${esc(c.phone.replace(/\s/g, ''))}">${esc(c.phone)}</a>` : ''}${!c.email && !c.phone ? '<span class="muted">No contact details</span>' : ''}</p>
+          ${c.next_step_on ? `<p class="small">Next step: <strong class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</strong></p>` : ''}
+        </section>
+        ${c.message ? `<section class="card"><h2>Their email</h2>${c.subject ? `<p class="small muted">Subject: ${esc(c.subject)}</p>` : ''}<div class="pp-text pp-message">${esc(c.message)}</div></section>` : ''}
+        <section class="card">
+          <h2>Notes</h2>
+          <textarea id="cand-notes" rows="5" maxlength="4000" placeholder="Interview notes, availability, references…">${esc(c.notes ?? '')}</textarea>
+          <p><button class="btn btn-small" id="cand-save-notes">Save notes</button></p>
+        </section>
+      </div>
+      <section class="card">
+        <div class="pp-job-head"><h2>CV and files</h2>
+          <label class="btn btn-small">+ Add a file<input type="file" id="cand-file" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.pages,image/*" hidden></label></div>
+        ${c.files.length ? `<ul class="pp-files">${c.files.map((f) => `<li><span>📄 <button class="link-btn" data-open-file="${f.id}">${esc(f.file_name)}</button> <small class="muted">${fileSize(f.size)}</small></span>
+          <button class="btn btn-small btn-ghost" data-del-file="${f.id}" title="Remove">✕</button></li>`).join('')}</ul>` : '<p class="muted small">No CV yet.</p>'}
+        ${first ? '<div id="cand-preview" class="pp-preview muted small">Loading…</div>' : ''}
+      </section>
+    </div>`;
+
+  const blobUrl = async (f) => {
+    const r = await fetch(fileUrl(f));
+    if (!r.ok) throw new Error('The file couldn’t be opened');
+    return URL.createObjectURL(await r.blob());
+  };
+  if (first) {
+    (async () => {
+      const box = el.querySelector('#cand-preview');
+      try {
+        const url = await blobUrl(first);
+        if (stale()) return;
+        box.className = 'pp-preview';
+        box.innerHTML = first.file_type === 'application/pdf' ? `<iframe src="${url}" title="${esc(first.file_name)}"></iframe>` : `<img src="${url}" alt="${esc(first.file_name)}">`;
+      } catch { box.textContent = 'The CV couldn’t be shown here – open it above.'; }
+    })();
+  }
+  el.querySelectorAll('[data-open-file]').forEach((b) => b.addEventListener('click', async () => {
+    const f = c.files.find((x) => x.id === Number(b.dataset.openFile));
+    try {
+      const url = await blobUrl(f);
+      const a = document.createElement('a');
+      a.href = url;
+      if (viewable(f)) a.target = '_blank'; else a.download = f.file_name;
+      a.rel = 'noopener';
+      a.click();
+    } catch (err) { showError(err); }
+  }));
+  el.querySelectorAll('[data-del-file]').forEach((b) => b.addEventListener('click', async () => {
+    const f = c.files.find((x) => x.id === Number(b.dataset.delFile));
+    if (!await confirmDialog(`Remove ${f.file_name}?`, { confirmLabel: 'Remove' })) return;
+    try { await api(`/candidates/${c.id}/files/${f.id}`, { method: 'DELETE' }); toast('Removed'); rerender(); } catch (err) { showError(err); }
+  }));
+  el.querySelector('#cand-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { showError(new Error('Files can be up to 10 MB')); return; }
+    try {
+      const data = await new Promise((ok, fail) => {
+        const r = new FileReader();
+        r.onload = () => ok(String(r.result).split(',')[1] ?? '');
+        r.onerror = () => fail(new Error('The file couldn’t be read'));
+        r.readAsDataURL(file);
+      });
+      await api(`/candidates/${c.id}/files`, { method: 'POST', body: { file_name: file.name, media_type: file.type, data } });
+      toast('File added');
+      rerender();
+    } catch (err) { showError(err); }
+  });
+  el.querySelector('#cand-save-notes').addEventListener('click', async () => {
+    try { await api(`/candidates/${c.id}`, { method: 'PUT', body: { notes: el.querySelector('#cand-notes').value } }); toast('Notes saved'); } catch (err) { showError(err); }
+  });
+  el.querySelector('#cand-interview')?.addEventListener('click', () => interviewDialog(c, jobs, rerender));
+  el.querySelector('#cand-decline')?.addEventListener('click', () => declineDialog(c.id, rerender));
+  el.querySelector('#cand-edit').addEventListener('click', () => openModal({
+    title: `Edit ${c.name}`,
+    body: `${field('Name', input('name', c.name, 'required maxlength="100"'))}
+      <div class="row">${field('Phone', input('phone', c.phone, 'type="tel" maxlength="50"'))}${field('Email', input('email', c.email, 'type="email" maxlength="200"'))}</div>
+      ${field('For the job', select('vacancy_id', [['', '— Not for a particular job —'], ...jobs.filter((j) => j.status === 'open' || j.id === c.vacancy_id).map((j) => [j.id, `${j.title} – ${j.location_name}`])], c.vacancy_id ?? ''))}
+      <div class="row">${field('Stage', select('stage', STAGES, c.stage))}${field('Next step on', input('next_step_on', c.next_step_on, 'type="date"'))}</div>`,
+    onSubmit: async (v) => {
+      await api(`/candidates/${c.id}`, { method: 'PUT', body: { ...v, vacancy_id: v.vacancy_id || null } });
+      toast('Saved');
+      rerender();
+    },
+    danger: 'Delete candidate',
+    onDanger: async () => {
+      if (!await confirmDialog(`Delete ${c.name}, their email and their files? This can’t be undone.`, { confirmLabel: 'Delete' })) return;
+      await api(`/candidates/${c.id}`, { method: 'DELETE' });
+      toast('Deleted');
+      navigate('people/recruitment');
+    },
   }));
 }
 

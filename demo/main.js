@@ -21,6 +21,7 @@ import { demoInvoiceReader } from '../src/invoice-demo.js';
 import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { registerXeroRoutes } from '../src/routes/xero.js';
 import { registerPeopleRoutes } from '../src/routes/people.js';
+import { registerCareersRoutes } from '../src/careers-inbox.js';
 import { registerNewsRoutes } from '../src/routes/news.js';
 import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { registerBreakRoutes } from '../src/routes/breaks.js';
@@ -133,7 +134,18 @@ async function boot() {
   registerInvoiceRoutes(api, db, invoiceReader);
   // Xero isn't connected in the demo: Setup → Xero shows how to set it up.
   registerXeroRoutes(api, db, null);
-  registerPeopleRoutes(api, db);
+  // A pretend careers inbox with a few applications waiting, so People → Recruitment's "Check now" can be tried.
+  const careersInbox = memoryMailbox([
+    { id: 'cv-1', subject: 'Barista application', from: 'maya.patel@example.com', fromName: 'Maya Patel', to: ['careers@example.com'], receivedAt: new Date(Date.now() - 26 * 3600000).toISOString(),
+      body: 'Hi there,\n\nI’d love to apply for the barista role. I’ve worked at a busy independent coffee shop for two years and I’m confident on the machine, latte art and the till.\n\nI’m free weekends and most weekdays. My CV is attached.\n\nThanks,\nMaya\n07700 900123',
+      attachments: [{ name: 'Maya Patel CV.pdf', contentType: 'application/pdf', size: 52000, isInline: false, data: btoa('%PDF-1.4 demo CV %%EOF') }] },
+    { id: 'cv-2', subject: 'Any jobs going?', from: 'tom.r@example.com', fromName: 'Tom Reed', to: ['careers@example.com'], receivedAt: new Date(Date.now() - 5 * 3600000).toISOString(),
+      body: 'Hello, I’m a student looking for part-time work in the kitchen or front of house. I have food hygiene level 2. CV attached – thanks!\nTom',
+      attachments: [{ name: 'Tom_Reed_CV.docx', contentType: 'application/octet-stream', size: 31000, isInline: false, data: btoa('demo docx') }] },
+    { id: 'cv-3', subject: 'Automatic reply: Your application', from: 'someone@example.com', fromName: 'Someone', to: ['careers@example.com'], receivedAt: new Date(Date.now() - 3600000).toISOString(), body: 'I am out of the office.' },
+  ], 'careers@brewandbarrel.example');
+  registerPeopleRoutes(api, db, { careers: careersInbox });
+  registerCareersRoutes(api, db, { mailbox: careersInbox });
   // A pretend shared inbox with a few emails waiting, so "Check now" under Invoices can be tried.
   const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
   const fakePdf = btoa('%PDF-1.4 demo invoice %%EOF');

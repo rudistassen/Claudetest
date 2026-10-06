@@ -177,7 +177,7 @@ export function select(name, options, selected, attrs = '') {
 }
 
 export function textarea(name, value, attrs = '') {
-  return `<textarea name="${name}" rows="3" ${attrs}>${esc(value ?? '')}</textarea>`;
+  return `<textarea name="${name}" ${/\brows=/.test(attrs) ? '' : 'rows="3" '}${attrs}>${esc(value ?? '')}</textarea>`;
 }
 
 export function statusBadge(status) {

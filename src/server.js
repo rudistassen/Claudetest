@@ -24,6 +24,7 @@ import { registerTimecardRoutes } from './routes/timecards.js';
 import { registerPaymentLinkRoutes } from './routes/payment-links.js';
 import { londonWeather, registerWeatherRoutes } from './weather.js';
 import { registerInvoiceInboxRoutes } from './invoice-inbox.js';
+import { registerCareersRoutes } from './careers-inbox.js';
 import { registerReviewRoutes } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from './invites.js';
 import { HttpError } from './util.js';
@@ -39,10 +40,11 @@ export function trustProxy(env) {
 // mailer: sends the emailed reports (see email.js), or null when email isn't set up.
 // invoiceReader: reads uploaded supplier invoices (see invoice-reader.js), or null when it isn't set up.
 // mailbox: the shared invoice inbox (see mailbox.js), or null when it isn't connected.
+// careers: the shared careers inbox (see careers-inbox.js), or null when it isn't connected.
 // places: Google Maps, for each site's rating and reviews (see google-reviews.js), or null when it isn't set up.
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
 // xero: { config, fetch? } when Xero is set up (see xero.js), otherwise null.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
   const xeroClient = xero ? new Xero(db, xero.config, xero.fetch) : null;
   const app = express();
   app.disable('x-powered-by');
@@ -72,6 +74,8 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   app.use('/api/news/media', express.json({ limit: '36mb' }));
   // Company documents (up to 20 MB, a third bigger once encoded).
   app.use('/api/documents', express.json({ limit: '28mb' }));
+  // CVs added to a candidate (up to 10 MB, a third bigger once encoded).
+  app.use(/^\/api\/candidates\/\d+\/files$/, express.json({ limit: '15mb' }));
   app.use(express.json({ limit: '1mb' }));
   app.use((req, _res, next) => {
     req.db = db;
@@ -98,7 +102,8 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerReportRoutes(api, db, mailer);
   registerInvoiceRoutes(api, db, invoiceReader, { xero: xeroClient });
   registerXeroRoutes(api, db, xeroClient);
-  registerPeopleRoutes(api, db);
+  registerPeopleRoutes(api, db, { careers });
+  registerCareersRoutes(api, db, { mailbox: careers });
   registerNewsRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);

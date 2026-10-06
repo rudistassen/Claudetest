@@ -7,7 +7,8 @@ import { xeroConfig } from './xero.js';
 import { appVersion } from './app-version.js';
 import { brevoMailer, emailConfig } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
-import { graphMailbox, mailboxConfig, mailboxSetup } from './mailbox.js';
+import { careersMailboxConfig, graphMailbox, mailboxConfig, mailboxSetup } from './mailbox.js';
+import { startCareersInbox } from './careers-inbox.js';
 import { startInvoiceInbox } from './invoice-inbox.js';
 import { googlePlaces, placesConfig, startReviewSync } from './google-reviews.js';
 import { startReportScheduler } from './reports.js';
@@ -91,6 +92,14 @@ else {
   }
 }
 
+// The shared careers inbox (Microsoft 365, the same app): job applications become candidates on People → Recruitment.
+const careersSettings = careersMailboxConfig();
+const careers = careersSettings ? graphMailbox(careersSettings, { withAttachmentsOnly: false, label: 'careers inbox', variable: 'CAREERS_MAILBOX' }) : null;
+if (careers) {
+  console.log(`Careers inbox connected (${careersSettings.address}); checking every ${careersSettings.minutes} minutes.`);
+  startCareersInbox(db, { mailbox: careers, minutes: careersSettings.minutes });
+}
+
 // Google reviews for each site.
 const placesSettings = placesConfig();
 const places = placesSettings ? googlePlaces(placesSettings.key) : null;
@@ -102,4 +111,4 @@ if (places) {
 const version = appVersion(publicDir);
 const xeroSettings = xeroConfig();
 if (xeroSettings) console.log('Xero: set up – connect it under Setup → Xero.');
-createApp(db, { square, mailer, invoiceReader, mailbox, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, mailbox, careers, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));

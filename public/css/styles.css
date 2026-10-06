@@ -1695,3 +1695,26 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .mb-training-none strong { color: var(--muted); font-weight: 600; }
 .mb-training-tag { flex: none; font-size: 0.75rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 99px; background: var(--warn-soft); color: var(--warn); }
 .mb-training-expired .mb-training-tag { background: var(--bad-soft); color: var(--bad); }
+
+/* People → Recruitment: applications from the careers inbox, and a candidate's profile */
+.pp-app-list { list-style: none; margin: 0; padding: 0; }
+.pp-app { display: flex; gap: 1rem; align-items: center; justify-content: space-between; padding: 0.8rem 0; border-top: 1px solid var(--border); }
+.pp-app:first-child { border-top: 0; }
+.pp-app-main { min-width: 0; flex: 1; }
+.pp-app-main > * { display: block; }
+.pp-app-name { color: var(--text); text-decoration: none; font-size: 1.02rem; }
+.pp-app-name:hover { color: var(--brand); }
+.pp-app-subject { font-weight: 600; font-size: 0.9rem; margin-top: 0.2rem; }
+.pp-app-preview { color: var(--muted); font-size: 0.88rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pp-app-actions { display: flex; gap: 0.4rem; flex: none; }
+@media (max-width: 640px) { .pp-app { flex-direction: column; align-items: stretch; gap: 0.6rem; } .pp-app-actions { justify-content: flex-start; flex-wrap: wrap; } }
+.pp-profile { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .pp-profile { grid-template-columns: 1fr; } }
+.pp-profile textarea { width: 100%; }
+.pp-message { max-height: 420px; overflow-y: auto; font-size: 0.93rem; line-height: 1.5; }
+.pp-files { list-style: none; margin: 0 0 0.75rem; padding: 0; }
+.pp-files li { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+.pp-preview iframe { width: 100%; height: 640px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.pp-preview img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+.pp-email { white-space: pre-wrap; font: inherit; font-size: 0.92rem; background: var(--surface-2); padding: 0.8rem 1rem; border-radius: 10px; max-height: 320px; overflow-y: auto; }
+.pp-send-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }

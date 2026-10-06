@@ -93,7 +93,7 @@ test('Microsoft 365: signs in, reads only new emails with attachments, and expla
   };
   const box = graphMailbox({ tenant: 't1', clientId: 'c1', secret: 's1', address: 'invoices@x.example' }, { fetchFn });
   const list = await box.listNew('2026-01-02T00:00:00.000Z');
-  assert.deepEqual(list, [{ id: 'M1', subject: 'Inv', from: 's@x.example', fromName: 'S', to: ['invoices@x.example'], receivedAt: '2026-01-02T10:00:00Z', preview: 'hi' }]);
+  assert.deepEqual(list, [{ id: 'M1', subject: 'Inv', from: 's@x.example', fromName: 'S', to: ['invoices@x.example'], receivedAt: '2026-01-02T10:00:00Z', preview: 'hi', hasAttachments: true }]);
   const graphUrl = decodeURIComponent(seen[1].url.replace(/\+/g, " "));
   assert.match(graphUrl, /users\/invoices@x\.example\/mailFolders\/inbox\/messages/);
   assert.match(graphUrl, /receivedDateTime ge 2026-01-02T00:00:00Z and hasAttachments eq true/);

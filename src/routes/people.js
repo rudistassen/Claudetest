@@ -1,6 +1,8 @@
 // People: recruitment (jobs and candidates), learning and development (training courses and who has done
 // them), performance (one-to-ones, probation reviews and appraisals) and areas (where each person can work).
 import { assertLocation, requirePerm } from '../auth.js';
+import { cvType, declineTemplate, fillTemplate, MAX_CV_BYTES } from '../careers-inbox.js';
+import { fromBase64 } from './invoices.js';
 import { badRequest, date, id, notFound, num, oneOf, str, today } from '../util.js';
 
 const STAGES = ['applied', 'interview', 'trial', 'offer', 'hired', 'rejected'];
@@ -9,7 +11,13 @@ const LEVELS = ['learning', 'trained'];
 // Training that runs out within this many days shows as due soon.
 const DUE_SOON_DAYS = 30;
 
-export function registerPeopleRoutes(router, db) {
+// For lists: everything about a candidate but their message (which can be long), plus how many files they have.
+const CANDIDATE_LIST = `c.id, c.vacancy_id, c.location_id, c.name, c.email, c.phone, c.stage, c.next_step_on, c.notes, c.source, c.subject,
+  substr(c.message, 1, 240) AS preview, c.received_at, c.declined_at, c.reply_drafted_at, c.created_at, c.updated_at,
+  (SELECT COUNT(*) FROM candidate_files f WHERE f.candidate_id = c.id) AS files`;
+
+/** careers: the careers inbox (see mailbox.js), for drafting replies to candidates who emailed; or null. */
+export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   const perm = requirePerm('people.manage');
 
   // Active staff (not admins) at the sites this person can work with, or at one of them.
@@ -45,7 +53,7 @@ export function registerPeopleRoutes(router, db) {
     const jobs = db.prepare(`SELECT v.*, l.name AS location_name FROM vacancies v JOIN locations l ON l.id = v.location_id
       WHERE v.location_id IN (${sites.map(() => '?').join(',')})
       ORDER BY CASE v.status WHEN 'open' THEN 0 ELSE 1 END, v.created_at DESC, v.id DESC`).all(...sites);
-    const cands = db.prepare('SELECT * FROM candidates WHERE vacancy_id = ? ORDER BY created_at, id');
+    const cands = db.prepare(`SELECT ${CANDIDATE_LIST} FROM candidates c WHERE c.vacancy_id = ? ORDER BY c.created_at, c.id`);
     res.json(jobs.map((j) => ({ ...j, candidates: cands.all(j.id) })));
   });
 
@@ -96,18 +104,116 @@ export function registerPeopleRoutes(router, db) {
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
+  // Who can see a candidate: for a job, those who manage its site; not for a job, those who manage the site they
+  // mentioned, or anyone using People if they didn't mention one.
+  const canSee = (req, c) => {
+    if (c.vacancy_id) {
+      const v = db.prepare('SELECT location_id FROM vacancies WHERE id = ?').get(c.vacancy_id);
+      return !!v && req.user.site_ids.includes(v.location_id);
+    }
+    return !c.location_id || req.user.site_ids.includes(c.location_id);
+  };
   const candidate = (req, candidateId) => {
     const c = db.prepare('SELECT * FROM candidates WHERE id = ?').get(candidateId);
-    if (!c) throw notFound('Candidate');
-    vacancy(req, c.vacancy_id);
+    if (!c || !canSee(req, c)) throw notFound('Candidate');
     return c;
   };
 
+  // The careers inbox's new applications (not yet moved on or turned down), and candidates who aren't for a job.
+  router.get('/applications', perm, (req, res) => {
+    const rows = db.prepare(`SELECT ${CANDIDATE_LIST}, v.title AS job_title, COALESCE(v.location_id, c.location_id) AS site_id, l.name AS site_name
+      FROM candidates c LEFT JOIN vacancies v ON v.id = c.vacancy_id LEFT JOIN locations l ON l.id = COALESCE(v.location_id, c.location_id)
+      WHERE (c.source = 'email' AND c.stage = 'applied') OR c.vacancy_id IS NULL
+      ORDER BY COALESCE(c.received_at, c.created_at) DESC, c.id DESC`).all().filter((c) => canSee(req, c));
+    res.json({
+      new: rows.filter((c) => c.source === 'email' && c.stage === 'applied'),
+      no_job: rows.filter((c) => c.stage !== 'applied' || c.source !== 'email'),
+    });
+  });
+
+  // A candidate's profile: their details, the email they sent, and their files.
+  router.get('/candidates/:id', perm, (req, res) => {
+    const c = candidate(req, Number(req.params.id));
+    const v = c.vacancy_id ? db.prepare('SELECT v.title, v.location_id, l.name AS site FROM vacancies v JOIN locations l ON l.id = v.location_id WHERE v.id = ?').get(c.vacancy_id) : null;
+    res.json({
+      ...c,
+      job_title: v?.title ?? null,
+      site_id: v?.location_id ?? c.location_id,
+      site_name: v?.site ?? (c.location_id ? db.prepare('SELECT name FROM locations WHERE id = ?').get(c.location_id)?.name : null),
+      files: db.prepare('SELECT id, file_name, file_type, size, created_at FROM candidate_files WHERE candidate_id = ? ORDER BY id').all(c.id),
+      can_draft_reply: !!(careers && c.email_message_id),
+      decline: (() => {
+        const t = declineTemplate(db);
+        const job = v?.title ?? null;
+        return { subject: fillTemplate(t.subject, { name: c.name, job }), body: fillTemplate(t.body, { name: c.name, job }) };
+      })(),
+    });
+  });
+
   router.put('/candidates/:id', perm, (req, res) => {
     const c = candidate(req, Number(req.params.id));
-    const f = candidateFields({ ...c, ...(req.body ?? {}) });
-    db.prepare(`UPDATE candidates SET name = ?, email = ?, phone = ?, stage = ?, next_step_on = ?, notes = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(f.name, f.email, f.phone, f.stage, f.next_step_on, f.notes, c.id);
+    const b = req.body ?? {};
+    const f = candidateFields({ ...c, ...b });
+    // Moving them to a job (or off one).
+    let vacancyId = c.vacancy_id;
+    let locationId = c.location_id;
+    if (b.vacancy_id !== undefined) {
+      vacancyId = id(b.vacancy_id, 'vacancy_id');
+      if (vacancyId) locationId = vacancy(req, vacancyId).location_id;
+    }
+    db.prepare(`UPDATE candidates SET name = ?, email = ?, phone = ?, stage = ?, next_step_on = ?, notes = ?, vacancy_id = ?, location_id = ?,
+      declined_at = CASE WHEN ? = 'rejected' THEN declined_at ELSE NULL END, updated_at = datetime('now') WHERE id = ?`)
+      .run(f.name, f.email, f.phone, f.stage, f.next_step_on, f.notes, vacancyId, locationId, f.stage, c.id);
+    res.json({ ok: true });
+  });
+
+  // Not taking them further. With draft: true (and the careers inbox connected), a reply is saved in the careers
+  // inbox's Drafts to check and send from there; either way the wording comes back for copying or sending by hand.
+  router.post('/candidates/:id/decline', perm, async (req, res) => {
+    const c = candidate(req, Number(req.params.id));
+    const subject = str(req.body?.subject, 'Subject', { required: true, max: 200 });
+    const body = str(req.body?.body, 'Message', { required: true, max: 5000 });
+    db.prepare(`UPDATE candidates SET stage = 'rejected', declined_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(c.id);
+    const out = { ok: true, to: c.email, subject, body, draft: 'none' };
+    if (req.body?.draft && careers && c.email_message_id) {
+      try {
+        const d = await careers.replyDraft(c.email_message_id, body);
+        db.prepare(`UPDATE candidates SET reply_drafted_at = datetime('now') WHERE id = ?`).run(c.id);
+        Object.assign(out, { draft: 'created', web_link: d.webLink, mailbox: careers.address });
+      } catch (err) {
+        Object.assign(out, { draft: 'failed', error: err.message });
+      }
+    }
+    res.json(out);
+  });
+
+  // Their CV and anything else they sent (or that was added).
+  router.get('/candidates/:id/files/:fileId', perm, (req, res) => {
+    const c = candidate(req, Number(req.params.id));
+    const f = db.prepare('SELECT file_name, file_type, file FROM candidate_files WHERE id = ? AND candidate_id = ?').get(Number(req.params.fileId), c.id);
+    if (!f) throw notFound('File');
+    res.setHeader('Content-Type', f.file_type);
+    res.setHeader('Content-Disposition', `${f.file_type === 'application/pdf' || f.file_type.startsWith('image/') ? 'inline' : 'attachment'}; filename="${f.file_name.replace(/[^\w.\- ]/g, '_')}"`);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(globalThis.Buffer ? Buffer.from(f.file) : f.file);
+  });
+
+  // { file_name, data (base64) } – e.g. a CV handed in on paper and photographed.
+  router.post('/candidates/:id/files', perm, (req, res) => {
+    const c = candidate(req, Number(req.params.id));
+    const name = str(req.body?.file_name, 'File name', { required: true, max: 200 });
+    const type = cvType(name, req.body?.media_type);
+    if (!type) throw badRequest('That type of file can’t be added – use a PDF, Word document or photo');
+    const bytes = fromBase64(String(req.body?.data ?? ''));
+    if (!bytes.length) throw badRequest('The file is empty');
+    if (bytes.length > MAX_CV_BYTES) throw badRequest('Files can be up to 10 MB');
+    const r = db.prepare('INSERT INTO candidate_files (candidate_id, file_name, file_type, size, file) VALUES (?, ?, ?, ?, ?)').run(c.id, name, type, bytes.length, bytes);
+    res.status(201).json({ id: Number(r.lastInsertRowid) });
+  });
+
+  router.delete('/candidates/:id/files/:fileId', perm, (req, res) => {
+    const c = candidate(req, Number(req.params.id));
+    db.prepare('DELETE FROM candidate_files WHERE id = ? AND candidate_id = ?').run(Number(req.params.fileId), c.id);
     res.json({ ok: true });
   });
 

@@ -77,6 +77,7 @@ const ROUTES = [
   [/^sickness$/, sickness.renderReport, ['rota.edit', 'staff.manage']],
   [/^rota\/requests$/, requests.render, ['rota.publish', 'leave.manage']],
   [/^people\/recruitment$/, people.renderRecruitment, ['people.manage']],
+  [/^people\/recruitment\/candidates\/(\d+)$/, people.renderCandidate, ['people.manage']],
   [/^people\/training$/, people.renderTraining, ['people.manage']],
   [/^people\/performance$/, people.renderPerformance, ['people.manage']],
   [/^people\/performance\/(\d+)$/, people.renderPerson, ['people.manage']],

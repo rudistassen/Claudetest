@@ -636,19 +636,51 @@ CREATE TABLE IF NOT EXISTS vacancies (
   created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Candidates are added by hand under a job, or arrive by email in the careers inbox (see careers-inbox.js), where
+-- they may not be for a particular job (vacancy_id empty) – location_id is then the site they mentioned, if any.
 CREATE TABLE IF NOT EXISTS candidates (
   id INTEGER PRIMARY KEY,
-  vacancy_id INTEGER NOT NULL REFERENCES vacancies(id) ON DELETE CASCADE,
+  vacancy_id INTEGER REFERENCES vacancies(id) ON DELETE CASCADE,
+  location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   email TEXT,
   phone TEXT,
   stage TEXT NOT NULL DEFAULT 'applied' CHECK (stage IN ('applied', 'interview', 'trial', 'offer', 'hired', 'rejected')),
   next_step_on TEXT,
   notes TEXT,
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'email')),
+  subject TEXT,
+  message TEXT,
+  email_message_id TEXT,
+  received_at TEXT,
+  declined_at TEXT,
+  reply_drafted_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_candidates_vacancy ON candidates(vacancy_id);
+CREATE TABLE IF NOT EXISTS candidate_files (
+  id INTEGER PRIMARY KEY,
+  candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  file BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_candidate_files ON candidate_files(candidate_id);
+-- Each email in the careers inbox, handled once.
+CREATE TABLE IF NOT EXISTS careers_emails (
+  message_id TEXT PRIMARY KEY,
+  received_at TEXT,
+  from_address TEXT,
+  subject TEXT,
+  status TEXT NOT NULL CHECK (status IN ('added', 'skipped', 'failed')),
+  candidate_id INTEGER REFERENCES candidates(id) ON DELETE SET NULL,
+  detail TEXT,
+  attempts INTEGER NOT NULL DEFAULT 1,
+  processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 -- People → Learning and development: training courses (some need doing again every so many months) and who has
 -- done them.
@@ -739,6 +771,26 @@ const MIGRATIONS = [
     ALTER TABLE invoices ADD COLUMN xero_sent_at TEXT;
     ALTER TABLE invoices ADD COLUMN xero_error TEXT;`],
   ['suppliers', 'xero_contact_id', 'ALTER TABLE suppliers ADD COLUMN xero_contact_id TEXT'],
+  // Candidates from the careers inbox: they needn't be for a job, so the table is rebuilt without that rule.
+  ['candidates', 'source', (db) => {
+    db.exec(`PRAGMA foreign_keys = OFF; BEGIN;
+      ALTER TABLE candidates RENAME TO candidates_old;
+      CREATE TABLE candidates (
+        id INTEGER PRIMARY KEY,
+        vacancy_id INTEGER REFERENCES vacancies(id) ON DELETE CASCADE,
+        location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+        name TEXT NOT NULL, email TEXT, phone TEXT,
+        stage TEXT NOT NULL DEFAULT 'applied' CHECK (stage IN ('applied', 'interview', 'trial', 'offer', 'hired', 'rejected')),
+        next_step_on TEXT, notes TEXT,
+        source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'email')),
+        subject TEXT, message TEXT, email_message_id TEXT, received_at TEXT, declined_at TEXT, reply_drafted_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+      INSERT INTO candidates (id, vacancy_id, name, email, phone, stage, next_step_on, notes, created_at, updated_at)
+        SELECT id, vacancy_id, name, email, phone, stage, next_step_on, notes, created_at, updated_at FROM candidates_old;
+      DROP TABLE candidates_old;
+      CREATE INDEX IF NOT EXISTS idx_candidates_vacancy ON candidates(vacancy_id);
+      COMMIT; PRAGMA foreign_keys = ON;`);
+  }],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],
