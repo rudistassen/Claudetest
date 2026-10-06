@@ -149,7 +149,32 @@ async function boot() {
   registerCareersRoutes(api, db, { mailbox: careersInbox });
   // A pretend events inbox with a few enquiries waiting, so Events → Enquiries' "Check now" can be tried.
   const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString();
-  registerEventRoutes(api, db, { mailbox: memoryMailbox([
+  // A stand-in for the enquiry reader: in the real app Claude reads each email; here a few patterns are picked out.
+  const demoEnquiryReader = {
+    async read({ emails, sites }) {
+      const text = emails.map((e) => `${e.subject} ${e.body}`).join(' ');
+      const people = text.match(/(?:about|around|for)?\s*(\d{1,4})\s*(?:people|guests)/i);
+      const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+      const d = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i);
+      let date = null;
+      if (d) {
+        const now = new Date();
+        let y = now.getFullYear();
+        const m = months.indexOf(d[2].toLowerCase());
+        if (new Date(y, m, Number(d[1])) < now) y++;
+        date = `${y}-${String(m + 1).padStart(2, '0')}-${String(d[1]).padStart(2, '0')}`;
+      }
+      const t = text.match(/(\d{1,2})\s*pm/i);
+      const type = /birthday/i.test(text) ? 'Birthday party' : /breakfast|meeting/i.test(text) ? 'Meeting' : /wedding/i.test(text) ? 'Wedding / reception' : null;
+      const phone = text.match(/0\d{4}\s?\d{6}/);
+      return {
+        is_enquiry: true, title: null, event_type: type, event_date: date, start_time: t ? `${Number(t[1]) + 12}:00` : null, end_time: null,
+        guests: people ? Number(people[1]) : null, budget: null, contact_name: null, phone: phone ? phone[0] : null,
+        site: sites.find((s) => text.toLowerCase().includes(s.toLowerCase())) ?? null,
+      };
+    },
+  };
+  registerEventRoutes(api, db, { reader: demoEnquiryReader, mailbox: memoryMailbox([
     { id: 'ev-1', conversationId: 'conv-1', subject: '40th birthday party – Harbour', from: 'sarah.jones@example.com', fromName: 'Sarah Jones', receivedAt: hoursAgo(30),
       body: 'Hi,\n\nI’m looking to book a space for my husband’s 40th birthday on Saturday 14th November, around 7pm until late. We’d be about 40 people.\n\nCould you send me some options for food and drinks packages?\n\nThanks,\nSarah\n07700 900456' },
     { id: 'ev-2', conversationId: 'conv-2', subject: 'Corporate breakfast meeting', from: 'events@acme.example', fromName: 'Priya at Acme', receivedAt: hoursAgo(6),

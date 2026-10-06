@@ -8,6 +8,7 @@ const STATUS = Object.fromEntries(STATUSES);
 const statusBadge = (s) => `<span class="ev-status ev-${s}">${STATUS[s] ?? esc(s)}</span>`;
 const EVENT_TYPES = ['Birthday party', 'Wedding / reception', 'Corporate', 'Meeting', 'Private hire', 'Christening / baptism', 'Wake', 'Baby shower', 'Christmas party', 'Other'];
 const changed = () => window.dispatchEvent(new Event('events:changed'));
+const FIELD_NAMES = { title: 'title', event_type: 'type of event', event_date: 'date', start_time: 'start', end_time: 'end', guests: 'guests', budget: 'budget', phone: 'phone', location_id: 'site' };
 const when = (e) => [e.event_date ? fmtDate(e.event_date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : null,
   e.start_time ? `${e.start_time}${e.end_time ? `–${e.end_time}` : ''}` : null].filter(Boolean).join(' · ');
 
@@ -157,7 +158,8 @@ export async function renderEnquiry(ctx) {
         </form>
       </section>
       <form class="card ev-details" id="ev-details">
-        <h2>Details</h2>
+        <div class="card-head"><h2>Details</h2>${e.can_read && hasThread ? '<button type="button" class="btn btn-small" id="ev-fill" title="Read their emails and fill in anything still blank">✨ Fill in from emails</button>' : ''}</div>
+        ${e.filled_fields.length ? `<p class="notice small ev-filled-note">✨ Filled in from their email: <strong>${e.filled_fields.map((k) => FIELD_NAMES[k] ?? k).join(', ')}</strong> – check them, then Save.</p>` : ''}
         ${detailsFields(state, e)}
         <div class="ev-details-actions"><button class="btn btn-ghost" type="button" id="ev-delete">Delete</button><button class="btn btn-primary">Save</button></div>
       </form>
@@ -204,6 +206,16 @@ export async function renderEnquiry(ctx) {
   }));
 
   const details = el.querySelector('#ev-details');
+  for (const k of e.filled_fields) details.querySelector(`[name="${k}"]`)?.classList.add('ev-filled');
+  el.querySelector('#ev-fill')?.addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    ev.target.textContent = 'Reading…';
+    try {
+      const r = await api(`/events/enquiries/${e.id}/fill`, { method: 'POST' });
+      toast(r.filled.length ? `Filled in ${r.filled.map((k) => FIELD_NAMES[k] ?? k).join(', ')}` : 'Nothing new to fill in – the blanks aren’t in their emails');
+      rerender();
+    } catch (err) { showError(err); ev.target.disabled = false; ev.target.textContent = '✨ Fill in from emails'; }
+  });
   details.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const v = Object.fromEntries([...details.elements].filter((x) => x.name).map((x) => [x.name, x.value === '' ? null : x.value]));

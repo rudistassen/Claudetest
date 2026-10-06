@@ -9,6 +9,7 @@ import { brevoMailer, emailConfig } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
 import { careersMailboxConfig, eventsMailboxConfig, graphMailbox, mailboxConfig, mailboxSetup } from './mailbox.js';
 import { startEventsInbox } from './events.js';
+import { enquiryReaderFromEnv } from './enquiry-reader.js';
 import { startCareersInbox } from './careers-inbox.js';
 import { startInvoiceInbox } from './invoice-inbox.js';
 import { googlePlaces, placesConfig, startReviewSync } from './google-reviews.js';
@@ -104,9 +105,11 @@ if (careers) {
 // The shared events inbox (Microsoft 365, the same app): event enquiries and the conversations about them.
 const eventsSettings = eventsMailboxConfig();
 const events = eventsSettings ? graphMailbox(eventsSettings, { withAttachmentsOnly: false, label: 'events inbox', variable: 'EVENTS_MAILBOX' }) : null;
+// Reads each enquiry for its date, guests and so on (the same Claude API key as the invoice reader).
+const enquiryReader = enquiryReaderFromEnv();
 if (events) {
-  console.log(`Events inbox connected (${eventsSettings.address}); checking every ${eventsSettings.minutes} minutes.`);
-  startEventsInbox(db, { mailbox: events, minutes: eventsSettings.minutes });
+  console.log(`Events inbox connected (${eventsSettings.address}); checking every ${eventsSettings.minutes} minutes${enquiryReader ? ', reading each enquiry for its details' : ''}.`);
+  startEventsInbox(db, { mailbox: events, reader: enquiryReader, minutes: eventsSettings.minutes });
 }
 
 // Google reviews for each site.
@@ -120,4 +123,4 @@ if (places) {
 const version = appVersion(publicDir);
 const xeroSettings = xeroConfig();
 if (xeroSettings) console.log('Xero: set up – connect it under Setup → Xero.');
-createApp(db, { square, mailer, invoiceReader, mailbox, careers, events, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, mailbox, careers, events, enquiryReader, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));

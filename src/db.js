@@ -900,6 +900,8 @@ const MIGRATIONS = [
   // The category (and VAT code) chosen for an invoice line that becomes a new product when the invoice is confirmed.
   ['invoice_lines', 'new_category', `ALTER TABLE invoice_lines ADD COLUMN new_category TEXT;
     ALTER TABLE invoice_lines ADD COLUMN new_vat_code TEXT;`],
+  // Which of an enquiry's details were filled in by reading their emails (JSON list), to check.
+  ['event_enquiries', 'filled_fields', 'ALTER TABLE event_enquiries ADD COLUMN filled_fields TEXT'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],

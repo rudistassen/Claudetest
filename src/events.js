@@ -6,7 +6,7 @@ import { tx } from './db.js';
 import { getSetting, setSetting } from './invoice-inbox.js';
 import { EVENTS_VARIABLES, mailboxSetup } from './mailbox.js';
 import { fromBase64 } from './routes/invoices.js';
-import { badRequest, date, HttpError, id, notFound, num, oneOf, str, time } from './util.js';
+import { badRequest, date, HttpError, id, notFound, num, oneOf, str, time, today } from './util.js';
 
 const KEY = { since: 'events_inbox_since', lastCheck: 'events_inbox_last_check', lastError: 'events_inbox_last_error' };
 const MAX_ATTEMPTS = 3;
@@ -59,9 +59,49 @@ async function handle(db, mailbox, m) {
   });
 }
 
+// The details read from an enquiry's emails, as they're saved (anything not in the right form is left out).
+const DETAIL_FIELDS = ['title', 'event_type', 'event_date', 'start_time', 'end_time', 'guests', 'budget', 'phone', 'location_id'];
+function readDetails(db, out) {
+  const site = out.site ? db.prepare('SELECT id FROM locations WHERE active = 1 AND lower(name) = lower(?)').get(out.site) : null;
+  const ok = (v, re) => (typeof v === 'string' && re.test(v) ? v : null);
+  return {
+    title: out.title ? String(out.title).slice(0, 200) : null,
+    event_type: out.event_type ? String(out.event_type).slice(0, 100) : null,
+    event_date: ok(out.event_date, /^\d{4}-\d{2}-\d{2}$/),
+    start_time: ok(out.start_time, /^([01]\d|2[0-3]):[0-5]\d$/),
+    end_time: ok(out.end_time, /^([01]\d|2[0-3]):[0-5]\d$/),
+    guests: Number.isInteger(out.guests) && out.guests > 0 && out.guests < 100000 ? out.guests : null,
+    budget: typeof out.budget === 'number' && out.budget > 0 ? out.budget : null,
+    phone: out.phone ? String(out.phone).slice(0, 50) : null,
+    location_id: site?.id ?? null,
+  };
+}
+
+/**
+ * Reads an enquiry's emails and fills in the details it doesn't have yet – never changing what's there (so nothing
+ * someone has typed is overwritten). The title read from the email replaces one that's just the email's subject.
+ * Returns the fields filled.
+ */
+export async function fillFromEmails(db, reader, enquiryId) {
+  const e = db.prepare('SELECT * FROM event_enquiries WHERE id = ?').get(enquiryId);
+  if (!e) return [];
+  const emails = db.prepare(`SELECT from_address AS "from", subject, body FROM enquiry_messages WHERE enquiry_id = ? AND direction = 'in'
+    ORDER BY created_at DESC, id DESC LIMIT 10`).all(e.id).reverse();
+  if (!emails.length) return [];
+  const sites = db.prepare('SELECT name FROM locations WHERE active = 1 ORDER BY name').all().map((l) => l.name);
+  const found = readDetails(db, await reader.read({ emails, sites, today: today() }));
+  const subjectTitle = !e.title || e.title === cleanSubject(emails[0].subject).slice(0, 200);
+  const filled = DETAIL_FIELDS.filter((k) => found[k] !== null && (k === 'title' ? subjectTitle && found.title !== e.title : e[k] === null || e[k] === undefined));
+  if (!filled.length) return [];
+  const before = (() => { try { return JSON.parse(e.filled_fields ?? '[]'); } catch { return []; } })();
+  db.prepare(`UPDATE event_enquiries SET ${filled.map((k) => `${k} = ?`).join(', ')}, filled_fields = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(...filled.map((k) => found[k]), JSON.stringify([...new Set([...before, ...filled])]), e.id);
+  return filled;
+}
+
 let running = null;
 /** Checks the inbox once (the first time, bringing in the last fortnight's emails). */
-export function checkEvents(db, { mailbox, now = new Date() }) {
+export function checkEvents(db, { mailbox, reader = null, now = new Date() }) {
   if (running) return running;
   running = (async () => {
     const summary = { checked: 0, added: 0, skipped: 0, failed: 0 };
@@ -83,6 +123,10 @@ export function checkEvents(db, { mailbox, now = new Date() }) {
         summary.checked++;
         let result;
         try { result = await handle(db, mailbox, m); } catch (err) { result = { status: 'failed', detail: err.message }; }
+        // Fill in the details from the email; if that doesn't work the enquiry is still there to fill in by hand.
+        if (result.status === 'added' && reader) {
+          try { await fillFromEmails(db, reader, result.enquiryId); } catch (err) { console.error(`Events inbox: couldn’t read the details from an email: ${err.message}`); }
+        }
         save.run(m.id, m.receivedAt ?? null, m.from ?? null, m.subject ?? null, result.status, result.enquiryId ?? null, result.detail ?? null, (before?.attempts ?? 0) + 1);
         summary[result.status]++;
       }
@@ -98,9 +142,9 @@ export function checkEvents(db, { mailbox, now = new Date() }) {
   return running;
 }
 
-export function startEventsInbox(db, { mailbox, minutes = 5, log = console }) {
+export function startEventsInbox(db, { mailbox, reader = null, minutes = 5, log = console }) {
   const run = async () => {
-    const r = await checkEvents(db, { mailbox });
+    const r = await checkEvents(db, { mailbox, reader });
     if (r.error) log.error(`Events inbox: ${r.error}`);
     else if (r.added) log.log(`Events inbox: ${r.added} email(s) added`);
   };
@@ -108,7 +152,7 @@ export function startEventsInbox(db, { mailbox, minutes = 5, log = console }) {
   return setInterval(run, minutes * 60000);
 }
 
-export function registerEventRoutes(router, db, { mailbox = null } = {}) {
+export function registerEventRoutes(router, db, { mailbox = null, reader = null } = {}) {
   const perm = requirePerm('events.manage');
   const canSee = (req, e) => !e.location_id || req.user.site_ids.includes(e.location_id);
   const enquiry = (req, eid) => {
@@ -127,7 +171,7 @@ export function registerEventRoutes(router, db, { mailbox = null } = {}) {
   router.get('/events/inbox', perm, (_req, res) => res.json(status()));
   router.post('/events/inbox/check', perm, async (_req, res) => {
     if (!mailbox) throw badRequest('The events inbox isn’t connected yet');
-    res.json({ ...(await checkEvents(db, { mailbox })), ...status() });
+    res.json({ ...(await checkEvents(db, { mailbox, reader })), ...status() });
   });
 
   router.get('/events/unread', perm, (req, res) => {
@@ -197,15 +241,27 @@ export function registerEventRoutes(router, db, { mailbox = null } = {}) {
         FROM enquiry_messages m LEFT JOIN users u ON u.id = m.sent_by WHERE m.enquiry_id = ? ORDER BY m.created_at, m.id`).all(e.id),
       files: db.prepare('SELECT id, message_id, file_name, file_type, size FROM enquiry_files WHERE enquiry_id = ? ORDER BY id').all(e.id),
       can_send: !!mailbox,
+      can_read: !!reader,
+      filled_fields: (() => { try { return JSON.parse(e.filled_fields ?? '[]'); } catch { return []; } })(),
       mailbox: mailbox?.address ?? null,
     });
+  });
+
+  // Read their emails again and fill in any details still missing.
+  router.post('/events/enquiries/:id/fill', perm, async (req, res) => {
+    const e = enquiry(req, Number(req.params.id));
+    if (!reader) throw badRequest('Reading emails needs ANTHROPIC_API_KEY (the same key as the invoice reader)');
+    let filled;
+    try { filled = await fillFromEmails(db, reader, e.id); } catch (err) { throw new HttpError(502, `Their emails couldn’t be read: ${err.message}`); }
+    res.json({ filled });
   });
 
   router.put('/events/enquiries/:id', perm, (req, res) => {
     const e = enquiry(req, Number(req.params.id));
     const f = fields(req.body ?? {}, e);
     checkSite(req, f);
-    db.prepare(`UPDATE event_enquiries SET ${COLS.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...COLS.map((c) => f[c]), e.id);
+    // Saving the details means someone has checked them, so the "filled in from their email" marks go.
+    db.prepare(`UPDATE event_enquiries SET ${COLS.map((c) => `${c} = ?`).join(', ')}, filled_fields = NULL, updated_at = datetime('now') WHERE id = ?`).run(...COLS.map((c) => f[c]), e.id);
     res.json({ ok: true });
   });
 

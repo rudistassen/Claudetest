@@ -1805,3 +1805,5 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .ev-chip.ev-completed { background: var(--surface-2); color: var(--text); }
 .cal-agenda { display: none; }
 @media (max-width: 700px) { .cal-grid { display: none; } .cal-agenda { display: block; } }
+.ev-details .card-head { margin-bottom: 0.4rem; }
+.ev-details .ev-filled { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface)); }
