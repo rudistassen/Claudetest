@@ -1445,6 +1445,8 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 /* Site cards: each clocked-in person on one line (name, times, short tags | hours | ☕ ⇄). */
 .clock-rows { list-style: none; margin: 0 0 0.4rem; padding: 0; }
 .clock-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.32rem 0; border-bottom: 1px dashed var(--border); font-size: 0.88rem; line-height: 1.3; }
+/* Someone clocked in right now: a light green row. */
+.clock-row.is-in { background: color-mix(in srgb, var(--good) 16%, var(--surface)); margin: 0 -0.4rem; padding-left: 0.4rem; padding-right: 0.4rem; border-radius: 6px; }
 .clock-row:last-child { border-bottom: 0; }
 .cr-main { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cr-hours { white-space: nowrap; font-variant-numeric: tabular-nums; }

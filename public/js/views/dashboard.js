@@ -38,6 +38,9 @@ function versus(now, then, { goodUp = true } = {}) {
   return `<span class="${tone}">${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%</span><br><span class="muted">${money(then)} last week</span>`;
 }
 
+// Clock-ins with the people in right now (including on a break) first, each group in the order they clocked in.
+const inFirst = (list) => [...list].sort((a, b) => (a.end ? 1 : 0) - (b.end ? 1 : 0));
+
 // "Who's in today": a table of everyone on today's rota, site by site, with when they clocked in and out and
 // where they are now, then anyone clocked in without a shift.
 const ROSTER = {
@@ -179,9 +182,9 @@ function card(loc, state, data) {
         <div class="span-2">
           <h3>Clocked in ${dayWord()} (${loc.clock_ins.length})</h3>
           ${loc.clock_ins.length
-            ? `<ul class="clock-rows">${loc.clock_ins.map((c) => `<li class="clock-row" title="${esc(clockTitle(c))}">
+            ? `<ul class="clock-rows">${inFirst(loc.clock_ins).map((c) => `<li class="clock-row ${c.end ? '' : 'is-in'}" title="${esc(clockTitle(c))}">
                 <span class="cr-main"><strong>${esc(shortName(c.name))}</strong> <span class="muted">${c.start}–${c.end ?? 'now'}</span></span>${clockTags(c) ? `<span class="cr-tags">${clockTags(c)}</span>` : ''}
-                <span class="cr-hours">${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">Break</span> ' : '<span class="badge badge-sent">In</span> '}${duration(c.hours)}</span>
+                <span class="cr-hours">${!c.end && c.on_break ? '<span class="badge badge-on-break">Break</span> ' : ''}${duration(c.hours)}</span>
                 ${clockInActions(state, c, loc.id, { compact: true })}</li>`).join('')}</ul>
               <p class="small muted">${duration(loc.clock_ins.reduce((n, c) => n + c.hours, 0))} in total</p>`
             : '<p class="muted">Nobody has clocked in yet</p>'}
