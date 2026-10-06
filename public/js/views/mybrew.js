@@ -1,4 +1,4 @@
-import { api, esc, field, fmtDate, fmtDateTime, input, isDemo, openModal, select, showError, textarea, toast, todayISO } from '../lib.js';
+import { api, esc, field, fmtDate, fmtDateTime, input, isDemo, openModal, select, showError, siteColour, textarea, toast, todayISO } from '../lib.js';
 import { askToDrop, dropsPanel, wireDrops } from './shiftdrops.js';
 
 // --- Photos and short videos on posts ---
@@ -124,7 +124,7 @@ export async function renderMyBrew(ctx) {
   if (stale()) return;
   const u = state.user;
   const today = todayISO();
-  const next = shifts.slice(0, 6);
+  const next = shifts.slice(0, 10);
   const weekHours = shifts.filter((s) => s.date < addDaysISO(today, 7)).reduce((t, s) => t + (s.hours ?? 0), 0);
   const toRead = news.filter((p) => p.requires_ack && !p.read).length;
   let filter = 'all';
@@ -145,25 +145,66 @@ export async function renderMyBrew(ctx) {
       ${p.requires_ack ? (p.read ? '<p class="news-read">✓ You’ve read this</p>' : `<button class="btn btn-primary btn-small" data-ack="${p.id}">I’ve read this</button>`) : ''}
     </article>`;
 
+  // Shortcuts (like Spotify's grid of favourites): the pages this person uses, each with a live detail.
+  const firstName = (n) => n.replace(/\s*\(.*\)$/, '').split(' ')[0];
+  const dayWord = (d) => (d === today ? 'Today' : d === addDaysISO(today, 1) ? 'Tomorrow' : fmtDate(d, { weekday: 'short', day: 'numeric', month: 'short' }));
+  const nextShift = shifts[0];
+  const can = (...p) => state.can(...p);
+  const shortcuts = [
+    { href: '#/rota?view=mine', icon: '📅', label: 'My shifts', detail: nextShift ? `${dayWord(nextShift.date)} ${nextShift.start_time}` : 'Nothing booked yet', c: ['#4f8cff', '#2a5bd7'] },
+    { href: drops.open.length ? '#/mybrew' : '#/rota', icon: '🙋', label: 'Open shifts', detail: drops.open.length ? `${drops.open.length} to pick up` : 'None right now', c: ['#ff8a5c', '#e2552e'], open: true },
+    can('rota.view', 'rota.edit') ? { href: '#/rota', icon: '👥', label: 'Rota', detail: 'Who’s on when', c: ['#3ccf91', '#16935e'] } : null,
+    { href: '#/timeoff', icon: '🌴', label: 'Time off', detail: 'Book holiday', c: ['#ffc94d', '#e09a12'] },
+    can('safety.complete', 'safety.manage', 'safety.report') ? { href: '#/safety', icon: '✅', label: 'Checks', detail: 'Today’s checklist', c: ['#b07cff', '#7a45e0'] } : null,
+    can('wastage.record', 'wastage.reports', 'wastage.manage') ? { href: '#/wastage', icon: '🗑️', label: 'Wastage', detail: 'Log what’s thrown away', c: ['#ff6f91', '#d93a64'] } : null,
+    can('dashboard.view') ? { href: '#/dashboard', icon: '📊', label: 'Dashboard', detail: 'Today at every site', c: ['#38c3d6', '#16879a'] } : null,
+    { href: '#/documents', icon: '📄', label: 'Documents', detail: 'Policies and handbooks', c: ['#9aa5b8', '#5f6b80'] },
+  ].filter(Boolean);
+  // Big cards (like Spotify's mixes): each shift in its site's colour, with the site on a label strip.
+  const shiftCard = (s) => `<div class="mb-card">
+      <div class="mb-cover ${s.date === today ? 'is-today' : ''}" style="--site: ${siteColour(s.location_name, s.location_id)}">
+        <span class="mb-day">${esc(dayWord(s.date))}</span>
+        <span class="mb-time">${s.start_time}–${s.end_time}</span>
+        <span class="mb-strip">${esc(s.location_name ?? '')}</span>
+      </div>
+      <p class="mb-card-sub"><span>${s.hours ? `${s.hours} h` : ''}${s.break_minutes ? ` · ${s.break_minutes}m break` : ''}</span>
+        ${s.drop_requested ? '<span class="mb-asked" title="You’ve asked to drop this shift – waiting for a manager">Drop asked</span>'
+          : s.can_drop ? `<button type="button" class="link-btn mb-drop" data-drop-shift="${s.id}" title="Can’t make it? Ask to drop this shift">Drop</button>` : ''}</p>
+    </div>`;
+  const openCard = (d) => `<div class="mb-card">
+      <div class="mb-cover is-open" style="--site: ${siteColour(d.location_name, d.location_id)}">
+        <span class="mb-day">${esc(dayWord(d.date))}</span>
+        <span class="mb-time">${d.start_time}–${d.end_time}</span>
+        <span class="mb-strip">${esc(d.location_name)}</span>
+      </div>
+      <p class="mb-card-sub">${d.can_claim ? `<button type="button" class="btn btn-small btn-primary" data-claim="${d.id}">Pick up</button>` : `<span class="muted">${esc(d.claim_problem ?? '')}</span>`}
+        ${d.can_withdraw ? `<button type="button" class="link-btn" data-withdraw="${d.id}">Withdraw</button>` : ''}</p>
+    </div>`;
+
   el.innerHTML = `
     <div class="page-head">
-      <div><h1>My Brew</h1><p class="muted my-greeting">${greeting()}, ${esc(u.name.replace(/\s*\(.*\)$/, '').split(' ')[0])} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
+      <div><h1>My Brew</h1><p class="muted my-greeting">${greeting()}, ${esc(firstName(u.name))} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
     </div>
     ${toRead ? `<p class="notice">📌 <strong>${toRead} ${toRead === 1 ? 'update needs' : 'updates need'}</strong> you to confirm you’ve read ${toRead === 1 ? 'it' : 'them'} – see the news below.</p>` : ''}
-    ${dropsPanel(drops)}
+    <div class="mb-pills" role="group" aria-label="Show">
+      ${[['all', 'All'], ['shifts', 'Shifts'], ['news', 'News']].map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
+    </div>
     <div class="mybrew">
-        <section class="card my-shifts-card">
-          <h2>Your next shifts</h2>
-          ${next.length ? `<ul class="my-shift-list">${next.map((s) => `<li class="${s.date === today ? 'is-today' : ''}">
-              <span class="my-shift-day">${s.date === today ? 'Today' : fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
-              <span class="my-shift-time">${s.start_time}–${s.end_time}</span>
-              <span class="muted small">${esc(s.location_name ?? '')}</span>
-              ${s.drop_requested ? '<span class="my-shift-drop is-asked" title="You’ve asked to drop this shift – waiting for a manager">Asked</span>' : s.can_drop ? `<button class="link-btn my-shift-drop" data-drop-shift="${s.id}">Drop</button>` : ''}</li>`).join('')}</ul>
+        <div class="mb-shortcuts" data-mb="all">${shortcuts.map((t) => `<a class="mb-shortcut" href="${t.href}">
+          <span class="mb-art" style="--c1: ${t.c[0]}; --c2: ${t.c[1]}" aria-hidden="true">${t.icon}</span>
+          <span class="mb-shortcut-text"><strong>${esc(t.label)}</strong><small>${esc(t.detail)}</small></span></a>`).join('')}</div>
+        <div data-mb="shifts">${dropsPanel({ ...drops, open: [] })}</div>
+        <section class="mb-section" data-mb="shifts">
+          <div class="mb-section-head"><h2>Your week</h2><a class="small" href="#/rota?view=mine">All my shifts</a></div>
+          ${next.length ? `<div class="mb-row">${next.map(shiftCard).join('')}</div>
             <p class="small muted">${Math.round(weekHours * 10) / 10} hours in the next 7 days</p>`
             : '<p class="muted">No shifts on the rota for the next two weeks.</p>'}
-          <a class="small" href="#/rota?view=mine">All my shifts →</a>
         </section>
-        <section class="mybrew-news">
+        ${drops.open.length ? `<section class="mb-section" data-mb="shifts" id="mb-open">
+          <div class="mb-section-head"><h2>Open shifts</h2><span class="small muted">Pick one up – it goes straight on your rota</span></div>
+          <div class="mb-row">${drops.open.map(openCard).join('')}</div>
+        </section>` : ''}
+        <section class="mybrew-news" data-mb="news">
         <div class="news-head">
           <h2>News</h2>
           <div class="seg" role="group" aria-label="Show">
@@ -177,6 +218,16 @@ export async function renderMyBrew(ctx) {
     </div>`;
 
   wireDrops(el, drops, () => ctx.rerender());
+  // All / Shifts / News: shows just those sections.
+  el.querySelectorAll('[data-mb-show]').forEach((b) => b.addEventListener('click', () => {
+    const show = b.dataset.mbShow;
+    el.querySelectorAll('[data-mb-show]').forEach((x) => x.classList.toggle('is-on', x === b));
+    el.querySelectorAll('[data-mb]').forEach((sec) => { sec.hidden = show !== 'all' && sec.dataset.mb !== show; });
+  }));
+  el.querySelector('.mb-shortcut[href="#/mybrew"]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    el.querySelector('#mb-open')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   el.querySelectorAll('[data-drop-shift]').forEach((b) => b.addEventListener('click', () => askToDrop(shifts.find((s) => s.id === Number(b.dataset.dropShift)), () => ctx.rerender())));
   // Long posts are shortened with "Read more".
   el.querySelectorAll('.news-post').forEach((a) => {
