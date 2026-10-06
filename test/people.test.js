@@ -131,3 +131,22 @@ test('a manager only sees people and jobs at their own sites', async () => {
     db.prepare('UPDATE users SET all_sites = ? WHERE id = ?').run(me.all_sites, me.id);
   }
 });
+
+test('staff see their own training (and only theirs) for My Brew', async () => {
+  const a = await login('admin@cafe.local');
+  const s = await login('staff1@cafe.local');
+  const u = staff();
+  const other = db.prepare(`SELECT id FROM users WHERE email = 'staff2@cafe.local'`).get();
+  const fire = (await a('/training/courses', { method: 'POST', body: { name: 'Fire safety', renew_months: 12 } })).data.id;
+  const allergens = (await a('/training/courses', { method: 'POST', body: { name: 'Allergens', renew_months: 12 } })).data.id;
+  await a('/training/records', { method: 'POST', body: { course_id: fire, user_ids: [u.id], completed_on: addDays(today(), -400) } });
+  if (other) await a('/training/records', { method: 'POST', body: { course_id: allergens, user_ids: [other.id], completed_on: today() } });
+  const mine = await s('/training/mine');
+  assert.equal(mine.status, 200);
+  const f = mine.data.records.find((r) => r.course_id === fire);
+  assert.equal(f.status, 'expired');
+  assert.ok(!mine.data.records.some((r) => r.course_id === allergens));
+  assert.ok(mine.data.not_done.some((c) => c.course_id === allergens));
+  // They still can't see anyone else's.
+  assert.equal((await s(`/training/people/${u.id}`)).status, 403);
+});

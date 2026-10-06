@@ -118,22 +118,39 @@ export function registerPeopleRoutes(router, db) {
 
   // ---- Learning and development ----
 
-  // Each person's latest record of each course, and whether it's still in date.
-  router.get('/training', perm, (req, res) => {
-    const staff = people(req, site(req));
-    const courses = db.prepare('SELECT * FROM training_courses WHERE active = 1 ORDER BY name').all();
+  // Someone's latest record of each (current) course, and whether it's still in date: done, due_soon or expired.
+  const latest = db.prepare(`SELECT r.id, r.course_id, r.user_id, r.completed_on, r.notes,
+      CASE WHEN c.renew_months THEN date(r.completed_on, '+' || c.renew_months || ' months') END AS expires_on
+    FROM training_records r JOIN training_courses c ON c.id = r.course_id
+    WHERE r.user_id = ? AND c.active = 1 AND r.id = (SELECT r2.id FROM training_records r2 WHERE r2.user_id = r.user_id AND r2.course_id = r.course_id
+      ORDER BY r2.completed_on DESC, r2.id DESC LIMIT 1)`);
+  const latestFor = (userIds) => {
     const now = today();
     const soon = db.prepare(`SELECT date(?, '+${DUE_SOON_DAYS} days') AS d`).get(now).d;
-    const latest = db.prepare(`SELECT r.id, r.course_id, r.user_id, r.completed_on, r.notes,
-        CASE WHEN c.renew_months THEN date(r.completed_on, '+' || c.renew_months || ' months') END AS expires_on
-      FROM training_records r JOIN training_courses c ON c.id = r.course_id
-      WHERE r.user_id = ? AND r.id = (SELECT r2.id FROM training_records r2 WHERE r2.user_id = r.user_id AND r2.course_id = r.course_id
-        ORDER BY r2.completed_on DESC, r2.id DESC LIMIT 1)`);
-    const records = staff.flatMap((p) => latest.all(p.id)).map((r) => ({
+    return userIds.flatMap((u) => latest.all(u)).map((r) => ({
       ...r,
       status: !r.expires_on ? 'done' : r.expires_on < now ? 'expired' : r.expires_on <= soon ? 'due_soon' : 'done',
     }));
-    res.json({ courses, people: staff, records });
+  };
+  const activeCourses = () => db.prepare('SELECT * FROM training_courses WHERE active = 1 ORDER BY name').all();
+
+  // Each person's latest record of each course.
+  router.get('/training', perm, (req, res) => {
+    const staff = people(req, site(req));
+    res.json({ courses: activeCourses(), people: staff, records: latestFor(staff.map((p) => p.id)) });
+  });
+
+  // My Brew: the training the signed-in person has done (anyone can see their own), and the courses they haven't.
+  router.get('/training/mine', (req, res) => {
+    const records = latestFor([req.user.id]);
+    const done = new Set(records.map((r) => r.course_id));
+    const courses = activeCourses();
+    const name = new Map(courses.map((c) => [c.id, c.name]));
+    res.json({
+      records: records.map((r) => ({ course_id: r.course_id, course_name: name.get(r.course_id), completed_on: r.completed_on, expires_on: r.expires_on, status: r.status }))
+        .sort((a, b) => a.course_name.localeCompare(b.course_name)),
+      not_done: courses.filter((c) => !done.has(c.id)).map((c) => ({ course_id: c.id, course_name: c.name })),
+    });
   });
 
   // Everything someone has done (newest first).

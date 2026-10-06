@@ -120,7 +120,7 @@ function greeting() {
 
 export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
-  const [shifts, news, drops] = await Promise.all([api('/my-shifts'), api('/news'), api('/shift-drops')]);
+  const [shifts, news, drops, training] = await Promise.all([api('/my-shifts'), api('/news'), api('/shift-drops'), api('/training/mine').catch(() => null)]);
   if (stale()) return;
   // For My tasks: today's Trail checks where they're working (their shift today, or for a manager their site),
   // and requests waiting for managers.
@@ -137,6 +137,9 @@ export async function renderMyBrew(ctx) {
   const weekHours = shifts.filter((s) => s.date < addDaysISO(today, 7)).reduce((t, s) => t + (s.hours ?? 0), 0);
   const toRead = news.filter((p) => p.requires_ack && !p.read).length;
   let filter = 'all';
+  const hasTraining = !!(training && (training.records.length || training.not_done.length));
+  const TRAINING_STATUS = { done: ['✓', 'Done'], due_soon: ['!', 'Runs out soon'], expired: ['✕', 'Out of date'] };
+  const trainingDay = (d) => fmtDate(d, { day: 'numeric', month: 'short', year: 'numeric' });
 
   const post = (p) => `
     <article class="news-post ${p.pinned ? 'is-pinned' : ''} ${p.requires_ack && !p.read ? 'needs-read' : ''}" data-post="${p.id}" data-category="${p.category}">
@@ -179,6 +182,7 @@ export async function renderMyBrew(ctx) {
     toRead ? { icon: '📌', title: `Confirm you’ve read ${toRead} update${toRead === 1 ? '' : 's'}`, detail: 'In the newsfeed below', action: 'Read', go: 'news', primary: true } : null,
     checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} Trail check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety', primary: true } : null,
     toReview ? { icon: '✉', title: `${toReview} request${toReview === 1 ? '' : 's'} to review`, detail: [leaveCount.count ? `${leaveCount.count} holiday` : '', drops.to_approve.length ? `${drops.to_approve.length} shift drop${drops.to_approve.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), action: 'Review', href: '#/rota/requests', primary: true } : null,
+    ...(training?.records ?? []).filter((r) => r.status !== 'done').map((r) => ({ icon: '🎓', title: r.status === 'expired' ? `Your ${r.course_name} has run out` : `Your ${r.course_name} runs out soon`, detail: `${r.status === 'expired' ? 'Ran out' : 'Runs out'} ${fmtDate(r.expires_on, { day: 'numeric', month: 'short', year: 'numeric' })} – speak to your manager about redoing it`, action: 'See training', go: 'training' })),
     claimable ? { icon: '🙋', title: `${claimable} open shift${claimable === 1 ? '' : 's'} you could pick up`, detail: 'Extra hours, if you want them', action: 'See shifts', go: 'open' } : null,
   ].filter(Boolean);
   // Big cards (like Spotify's mixes): each shift in its site's colour, with the site on a label strip.
@@ -207,7 +211,7 @@ export async function renderMyBrew(ctx) {
       <div><h1>My Brew</h1><p class="muted my-greeting">${greeting()}, ${esc(firstName(u.name))} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
     </div>
     <div class="mb-pills" role="group" aria-label="Show">
-      ${[['all', 'All'], ['shifts', 'Shifts'], ['tasks', 'My tasks'], ['news', 'Newsfeed']].map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
+      ${[['all', 'All'], ['shifts', 'Shifts'], ['tasks', 'My tasks'], hasTraining ? ['training', 'My training'] : null, ['news', 'Newsfeed']].filter(Boolean).map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
     </div>
     <div class="mybrew">
         <div class="mb-shortcuts" data-mb="all">${shortcuts.map((t) => `<a class="mb-shortcut" href="${t.href}">
@@ -221,6 +225,15 @@ export async function renderMyBrew(ctx) {
             ${t.href ? `<a class="btn btn-small ${t.primary ? 'btn-primary' : ''}" href="${t.href}">${esc(t.action)}</a>` : `<button type="button" class="btn btn-small ${t.primary ? 'btn-primary' : ''}" data-task-go="${t.go}">${esc(t.action)}</button>`}
           </li>`).join('')}</ul>` : '<p class="card mb-tasks-done">✓ Nothing to do right now – you’re all caught up.</p>'}
         </section>
+        ${hasTraining ? `<section class="mb-section" data-mb="training" id="mb-training">
+          <div class="mb-section-head"><h2>My training</h2><span class="small muted">${training.records.length} of ${training.records.length + training.not_done.length} done</span></div>
+          <ul class="mb-training">${training.records.map((r) => `<li class="mb-training-${r.status}">
+            <span class="mb-training-mark" aria-hidden="true">${TRAINING_STATUS[r.status][0]}</span>
+            <span><strong>${esc(r.course_name)}</strong><small>Done ${trainingDay(r.completed_on)}${r.expires_on ? ` · ${r.status === 'expired' ? 'ran out' : 'valid until'} ${trainingDay(r.expires_on)}` : ''}</small></span>
+            ${r.status !== 'done' ? `<span class="mb-training-tag">${TRAINING_STATUS[r.status][1]}</span>` : ''}</li>`).join('')}
+            ${training.not_done.map((c) => `<li class="mb-training-none"><span class="mb-training-mark" aria-hidden="true">○</span>
+              <span><strong>${esc(c.course_name)}</strong><small>Not done yet</small></span></li>`).join('')}</ul>
+        </section>` : ''}
         <div data-mb="shifts">${dropsPanel({ ...drops, open: [] })}</div>
         <section class="mb-section" data-mb="shifts">
           <div class="mb-section-head"><h2>Your week</h2><a class="small" href="#/rota?view=mine">All my shifts</a></div>
@@ -253,7 +266,8 @@ export async function renderMyBrew(ctx) {
     el.querySelectorAll('[data-mb]').forEach((sec) => { sec.hidden = show !== 'all' && sec.dataset.mb !== show; });
   }));
   el.querySelectorAll('[data-task-go]').forEach((b) => b.addEventListener('click', () => {
-    const target = b.dataset.taskGo === 'news' ? el.querySelector('.mybrew-news .needs-read') ?? el.querySelector('.mybrew-news') : el.querySelector('#mb-open');
+    const go = b.dataset.taskGo;
+    const target = go === 'news' ? el.querySelector('.mybrew-news .needs-read') ?? el.querySelector('.mybrew-news') : el.querySelector(go === 'training' ? '#mb-training' : '#mb-open');
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
   el.querySelector('.mb-shortcut[href="#/mybrew"]')?.addEventListener('click', (e) => {

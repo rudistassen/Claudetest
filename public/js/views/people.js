@@ -189,11 +189,16 @@ export async function renderTraining(ctx) {
     },
   });
 
-  const recordModal = ({ courseId = null, userIds = [] } = {}) => openModal({
+  const recordModal = ({ courseId = null, userIds = [] } = {}) => wirePicker(openModal({
     title: 'Record training',
     body: `${field('Course', select('course_id', data.courses.map((c) => [c.id, c.name]), courseId ?? data.courses[0]?.id))}
       ${field('Date completed', input('completed_on', todayISO(), `type="date" required max="${todayISO()}"`))}
-      <fieldset class="field pp-pick"><legend>Who did it</legend>${data.people.map((p) => `<label class="check"><input type="checkbox" data-who="${p.id}" ${userIds.includes(p.id) ? 'checked' : ''}> ${esc(p.name)}</label>`).join('')}</fieldset>
+      <fieldset class="pp-pick"><legend>Who did it <span class="muted small" data-picked></span></legend>
+        <div class="pp-pick-tools"><input type="search" data-pick-search placeholder="Search names…" aria-label="Search names" autocomplete="off">
+          <button type="button" class="btn btn-small" data-pick-all>Tick all shown</button><button type="button" class="btn btn-small btn-ghost" data-pick-none>Clear</button></div>
+        <div class="pp-pick-list">${data.people.map((p) => `<label class="pp-pick-item" data-name="${esc(p.name.toLowerCase())}"><input type="checkbox" data-who="${p.id}" ${userIds.includes(p.id) ? 'checked' : ''}>
+          <span>${esc(p.name)}${p.position ? `<small class="muted">${esc(p.position)}</small>` : ''}</span></label>`).join('')}</div>
+      </fieldset>
       ${field('Notes (optional)', textarea('notes', '', 'maxlength="1000" placeholder="e.g. Certificate number, score"'))}`,
     submitLabel: 'Save',
     wide: true,
@@ -204,7 +209,26 @@ export async function renderTraining(ctx) {
       toast(`Training recorded for ${ids.length} ${ids.length === 1 ? 'person' : 'people'}`);
       rerender();
     },
-  });
+  }).form);
+
+  // The "Who did it" list: search by name, tick everyone shown, and a count of who's ticked.
+  const wirePicker = (form) => {
+    const items = [...form.querySelectorAll('.pp-pick-item')];
+    const count = () => {
+      const n = form.querySelectorAll('[data-who]:checked').length;
+      form.querySelector('[data-picked]').textContent = n ? `· ${n} ticked` : '';
+    };
+    form.querySelector('[data-pick-search]').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      items.forEach((i) => { i.hidden = !!q && !i.dataset.name.includes(q); });
+    });
+    // Enter in the search box shouldn't save the form.
+    form.querySelector('[data-pick-search]').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+    form.querySelector('[data-pick-all]').addEventListener('click', () => { items.filter((i) => !i.hidden).forEach((i) => { i.querySelector('input').checked = true; }); count(); });
+    form.querySelector('[data-pick-none]').addEventListener('click', () => { items.forEach((i) => { i.querySelector('input').checked = false; }); count(); });
+    form.addEventListener('change', count);
+    count();
+  };
 
   const historyModal = async (p) => {
     try {
