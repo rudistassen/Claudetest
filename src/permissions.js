@@ -3,6 +3,9 @@
 // permissions of their set. Users without a set get the built-in set for their role (Manager or Staff).
 
 export const PERMISSION_AREAS = [
+  ['Dashboard', [
+    ['dashboard.view', 'See the dashboard (each site’s day at a glance; sales and labour figures also need “See sales”)'],
+  ]],
   ['Trail', [
     ['safety.complete', 'Complete Trail checks'],
     ['safety.manage', 'Set up their site’s checks and clear completed ones'],

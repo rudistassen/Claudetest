@@ -236,7 +236,7 @@ export function registerSafetyRoutes(router, db) {
   // --- Dashboard: one card per site the user can see ---
 
   // ?date= shows a past day in full (default: today so far).
-  router.get('/dashboard', (req, res) => {
+  router.get('/dashboard', requirePerm('dashboard.view'), (req, res) => {
     const day = date(req.query.date, 'date') ?? today();
     if (day > today()) throw badRequest('Choose today or an earlier day');
     res.json(siteSummaries(db, {

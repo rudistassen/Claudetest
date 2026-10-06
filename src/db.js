@@ -742,6 +742,17 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 4');
   }
+  if (version < 5) {
+    // Seeing the dashboard became a permission: every set keeps it except the built-in Staff set, so staff open
+    // Brewly on My Brew (an admin can tick it for them on the Permissions page).
+    for (const ps of db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in IS NULL OR built_in != 'staff'`).all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (!perms.includes('dashboard.view')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify(['dashboard.view', ...perms]), ps.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 5');
+  }
   ensureDefaultSets(db);
   return db;
 }

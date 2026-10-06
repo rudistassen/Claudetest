@@ -6,9 +6,10 @@ import { createApp } from '../src/server.js';
 
 let server;
 let base;
+let db;
 
 before(async () => {
-  const db = openDb(':memory:');
+  db = openDb(':memory:');
   seedAdmin(db, { email: 'admin@cafe.local', password: DEMO_PASSWORD });
   seedDemo(db);
   server = createApp(db).listen(0);
@@ -17,6 +18,13 @@ before(async () => {
 });
 
 after(() => server.close());
+
+// Ticks "See the dashboard" for the built-in Staff set (it's off for staff by default).
+const giveStaffDashboard = (db) => {
+  const set = db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in = 'staff'`).get();
+  db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...JSON.parse(set.permissions), 'dashboard.view']), set.id);
+};
+
 
 async function login(email) {
   const res = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: DEMO_PASSWORD }) });
@@ -37,6 +45,8 @@ test('new people can work with every site by default', async () => {
   const sites = (await floater('/locations')).data;
   assert.equal(sites.length, 7);
   assert.equal((await floater('/rota?location_id=5')).status, 200);
+  assert.equal((await floater('/dashboard')).status, 403, 'staff don’t see the dashboard unless it’s ticked for them');
+  giveStaffDashboard(db);
   const dash = (await floater('/dashboard')).data;
   assert.equal(dash.locations.length, 7, 'the dashboard shows every site');
 });

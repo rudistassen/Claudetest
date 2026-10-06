@@ -103,3 +103,33 @@ test('people who manage staff only hand out access they have, and never staff ma
   // An admin can.
   assert.equal((await admin('/users', { method: 'POST', body: body({ permission_set_id: recipesEditor.id }) })).status, 201);
 });
+
+test('seeing the dashboard: kept for managers and custom sets when added, off for the built-in Staff set', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { openDb: open } = await import('../src/db.js');
+  const dir = mkdtempSync(join(tmpdir(), 'brewly-'));
+  try {
+    const file = join(dir, 'app.db');
+    // A database from before the permission existed.
+    let db = open(file);
+    const strip = (where) => {
+      for (const ps of db.prepare(`SELECT id, permissions FROM permission_sets WHERE ${where}`).all()) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify(JSON.parse(ps.permissions).filter((p) => p !== 'dashboard.view')), ps.id);
+      }
+    };
+    db.prepare(`INSERT INTO permission_sets (name, description, permissions) VALUES ('Supervisor', '', '["rota.view"]')`).run();
+    strip('1 = 1');
+    db.exec('PRAGMA user_version = 4');
+    db.close();
+    db = open(file);
+    const has = (where) => JSON.parse(db.prepare(`SELECT permissions FROM permission_sets WHERE ${where}`).get().permissions).includes('dashboard.view');
+    assert.equal(has(`built_in = 'manager'`), true);
+    assert.equal(has(`name = 'Supervisor'`), true);
+    assert.equal(has(`built_in = 'staff'`), false);
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

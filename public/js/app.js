@@ -48,7 +48,7 @@ const RECIPES = ['recipes.view', 'recipes.costs', 'recipes.edit'];
 const SUPPLIERS = ['orders.manage', 'setup.products'];
 const ROUTES = [
   [/^$/, dashboard.render],
-  [/^dashboard$/, dashboard.render],
+  [/^dashboard$/, dashboard.render, ['dashboard.view']],
   [/^safety$/, safety.renderChecklist, SAFETY],
   [/^safety\/report$/, safety.renderReport, ['safety.report']],
   [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
@@ -93,12 +93,15 @@ const ROUTES = [
   [/^documents$/, mybrew.renderDocuments],
 ];
 
+// Where Brewly opens: the dashboard, or My Brew for people who can't see it.
+const home = () => (state.can('dashboard.view') ? 'dashboard' : 'mybrew');
+
 const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(...who));
 
 // The side menu: Dashboard, then headed groups. Items someone can't use are hidden, and so is a group left empty.
 function navGroups() {
   return [
-    [null, [['dashboard', 'Dashboard', '▦'], ['mybrew', 'My Brew', '☕']]],
+    [null, [['dashboard', 'Dashboard', '▦', ['dashboard.view']], ['mybrew', 'My Brew', '☕']]],
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
@@ -182,7 +185,7 @@ const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 // The phone icon bar: home, the everyday pages this person can use, then the full menu.
 function tabBar(items, active) {
   const has = (p) => items.some(([q]) => q === p);
-  const tabs = [['dashboard', 'Home', 'home'], has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Brew', 'mybrew']].filter(Boolean);
+  const tabs = [state.can('dashboard.view') ? ['dashboard', 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Brew', 'mybrew']].filter(Boolean);
   return `<nav class="tabbar" aria-label="Quick links">
     ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}</a>`).join('')}
     <button type="button" class="tabbar-menu">${icon('menu')}<span>Menu</span></button>
@@ -221,7 +224,7 @@ function renderShell() {
   document.getElementById('app').innerHTML = `
     <header class="topbar">
       <button class="icon-btn menu-toggle" aria-label="Menu" title="Menu">☰</button>
-      <a class="brand" href="#/dashboard" aria-label="Brewly – dashboard">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
+      <a class="brand" href="#/${home()}" aria-label="Brewly – home">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <nav class="topnav" aria-label="Main menu">
         ${groups.map(([heading, items]) => {
           if (!heading) return items.map(([p, label]) => `<a href="#/${p}" class="topnav-btn ${active === p ? 'is-active' : ''}">${label}${p === 'mybrew' ? '<span class="nav-dot" data-news-dot hidden></span>' : ''}</a>`).join('');
@@ -383,6 +386,11 @@ export async function route() {
   const match = ROUTES.map(([re, view, role]) => ({ m: path.match(re), view, role })).find((r) => r.m);
   if (!match) {
     el.innerHTML = '<div class="empty">Page not found.</div>';
+    return;
+  }
+  // People who can't see the dashboard start on My Brew.
+  if (match.view === dashboard.render && !state.can('dashboard.view')) {
+    window.location.replace('#/mybrew');
     return;
   }
   if (!allowed(match.role)) {

@@ -62,6 +62,10 @@ test('dashboard site cards: gross, net and labour against the same time last wee
   assert.ok(card.labour_cost_today >= 6);
 
   const staff = await login('staff1@cafe.local');
+  // Staff can only see the dashboard once it's ticked for them, and even then not sales or clock-ins.
+  const set = db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in = 'staff'`).get();
+  assert.ok(!JSON.parse(set.permissions).includes('dashboard.view'), 'off for staff by default');
+  db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...JSON.parse(set.permissions), 'dashboard.view']), set.id);
   const staffCard = (await staff('/dashboard')).locations[0];
   assert.equal(staffCard.gross_today, undefined, 'staff don’t see sales');
   assert.equal(staffCard.clock_ins, undefined, 'or clock-ins');
