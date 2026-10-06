@@ -121,3 +121,17 @@ test('a manager can drop someone’s shift straight to open; staff can’t', asy
   assert.ok((await login('staff1-2@cafe.local').then((c) => c('/shift-drops'))).data.open.some((d) => d.id === opened.data.id), 'open to the site');
   assert.equal((await manager(`/shifts/${shiftId}/open`, { method: 'POST', body: {} })).status, 404, 'only once');
 });
+
+test('approving a drop can delete the shift instead of opening it up', async () => {
+  const day = addDays(today(), 8);
+  const shiftId = publishedShift('staff1@cafe.local', day);
+  const staff = await login('staff1@cafe.local');
+  const manager = await login('manager1@cafe.local');
+  const asked = (await staff(`/shifts/${shiftId}/drop`, { method: 'POST', body: {} })).data;
+  const done = await manager(`/shift-drops/${asked.id}/approve`, { method: 'POST', body: { delete: true } });
+  assert.equal(done.status, 200);
+  assert.equal(done.data.status, 'deleted');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM shifts WHERE id = ?').get(shiftId).n, 0, 'off their rota');
+  assert.ok(!(await login('staff1-2@cafe.local').then((c) => c('/shift-drops'))).data.open.some((d) => d.id === asked.id), 'not offered to anyone');
+  assert.match(db.prepare(`SELECT details FROM rota_log WHERE action = 'drop' ORDER BY id DESC LIMIT 1`).get().details, /shift deleted/);
+});

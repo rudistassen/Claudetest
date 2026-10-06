@@ -76,7 +76,8 @@ export function registerShiftDropRoutes(router, db, { findClash }) {
     res.json({ ok: true });
   });
 
-  // Approve: the shift comes off the person's rota (draft and published) and becomes an open shift at the site.
+  // Approve: the shift comes off the person's rota (draft and published) and becomes an open shift at the site –
+  // or, with { delete: true }, is deleted instead (it's no longer needed, so nobody is offered it).
   router.post('/shift-drops/:id/approve', requirePerm('rota.publish'), (req, res) => {
     const d = load(req.params.id);
     assertLocation(req, d.location_id);
@@ -89,12 +90,13 @@ export function registerShiftDropRoutes(router, db, { findClash }) {
       throw badRequest(`${d.dropped_by_name}’s shift has changed on the rota since they asked to drop it, so the request has been closed.`);
     }
     if (!notStarted(d)) throw badRequest('This shift has already started');
+    const remove = req.body?.delete === true;
     tx(db, () => {
       db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
-      db.prepare(`UPDATE shift_drops SET status = 'open', decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?`)
-        .run(req.user.id, str(req.body?.note, 'note', { max: 500 }), d.id);
+      db.prepare(`UPDATE shift_drops SET status = ?, decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?`)
+        .run(remove ? 'deleted' : 'open', req.user.id, str(req.body?.note, 'note', { max: 500 }), d.id);
       logRota(db, req, { action: 'drop', location_id: d.location_id, shift: { ...d, id: shift.id, user_id: d.dropped_by },
-        details: `${shiftText(d)} — dropped by ${d.dropped_by_name}${d.reason ? ` (“${d.reason}”)` : ''}; now an open shift` });
+        details: `${shiftText(d)} — dropped by ${d.dropped_by_name}${d.reason ? ` (“${d.reason}”)` : ''}; ${remove ? 'shift deleted' : 'now an open shift'}` });
     });
     res.json(withHours(load(d.id)));
   });

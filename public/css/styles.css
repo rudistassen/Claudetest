@@ -1525,3 +1525,9 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .sick-line-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; justify-content: flex-end; }
 .sick-line.is-sick { background: color-mix(in srgb, #7c5cbf 14%, var(--surface)); }
 .sick-shifts td small { display: block; }
+@media (max-width: 640px) {
+  /* Phones: a request's buttons go on their own line under it. */
+  .drops-list li { flex-wrap: wrap; }
+  .drops-list li > div:first-child { flex: 1 1 100%; }
+  .drops-actions { margin-left: auto; }
+}

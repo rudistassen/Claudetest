@@ -37,6 +37,7 @@ export function dropsPanel(data, { open = true } = {}) {
         <div><strong>${esc(d.dropped_by_name)}</strong> wants to drop <strong>${esc(when(d))}</strong>
           <small>${site(d)} · ${hrs(d.hours)}${d.reason ? ` · “${esc(d.reason)}”` : ''}</small></div>
         <div class="drops-actions"><button class="btn btn-small btn-primary" data-drop-approve="${d.id}">Approve</button>
+          <button class="btn btn-small" data-drop-delete="${d.id}" title="Approve, but delete the shift instead of offering it to others">Delete shift</button>
           <button class="btn btn-small" data-drop-decline="${d.id}">Decline</button></div></li>`).join('')}</ul>` : ''}
     ${openList.length ? `<h2>Open shifts <span class="badge badge-new">${openList.length}</span></h2>
       <ul class="drops-list">${openList.map((d) => `<li>
@@ -84,6 +85,20 @@ export function wireDrops(el, data, done) {
     toast(`Approved – ${when(d)} is now an open shift at ${d.location_name}`);
     done();
   });
+  el.querySelectorAll('[data-drop-delete]').forEach((b) => b.addEventListener('click', () => {
+    const d = find(b.dataset.dropDelete);
+    openModal({
+      title: 'Approve and delete the shift?',
+      body: `<p><strong>${esc(d.dropped_by_name)}</strong> · ${esc(when(d))} at ${esc(d.location_name)}</p>
+        <p class="muted small">It comes off ${esc(d.dropped_by_name)}’s rota and is deleted – it isn’t offered to anyone else. Use this when the shift isn’t needed any more.</p>`,
+      submitLabel: 'Delete shift',
+      onSubmit: async () => {
+        await api(`/shift-drops/${d.id}/approve`, { method: 'POST', body: { delete: true } });
+        toast('Approved – the shift has been deleted');
+        done();
+      },
+    });
+  }));
   el.querySelectorAll('[data-drop-decline]').forEach((b) => b.addEventListener('click', () => {
     const d = find(b.dataset.dropDecline);
     openModal({
