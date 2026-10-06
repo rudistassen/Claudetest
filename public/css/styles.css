@@ -1533,3 +1533,16 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
   .drops-list li > div:first-child { flex: 1 1 100%; }
   .drops-actions { margin-left: auto; }
 }
+/* A menu section's page of tiles (e.g. Stock & Ordering) */
+.hub-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.8rem; }
+.hub-tile { display: flex; align-items: center; gap: 0.9rem; padding: 1.1rem 1rem; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); text-decoration: none; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); transition: border-color 0.15s, transform 0.15s; }
+.hub-tile:hover, .hub-tile:focus-visible { border-color: var(--brand); transform: translateY(-1px); }
+.hub-icon { flex-shrink: 0; display: grid; place-items: center; width: 2.8rem; height: 2.8rem; border-radius: 12px; font-size: 1.3rem;
+  background: var(--tone-stock, var(--surface-2)); color: var(--tone-stock-ink, var(--text)); }
+.hub-text { flex: 1; min-width: 0; }
+.hub-text strong { display: block; font-size: 1.05rem; }
+.hub-text small { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 0.15rem; }
+.hub-go { color: var(--muted); font-size: 1.4rem; }
+@media (max-width: 640px) { .hub-tiles { grid-template-columns: 1fr 1fr; gap: 0.6rem; } .hub-tile { flex-direction: column; align-items: flex-start; gap: 0.6rem; padding: 0.9rem; } .hub-go { display: none; } }
+.sidebar a.nav-hub .nav-caret { margin-left: auto; color: var(--muted); }

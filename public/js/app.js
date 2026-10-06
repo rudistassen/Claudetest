@@ -90,6 +90,7 @@ const ROUTES = [
   [/^invoices\/(\d+)$/, invoices.renderInvoice, ['orders.manage']],
   [/^admin\/email-reports$/, reports.renderEmailReports, 'admin'],
   [/^account$/, admin.renderAccount],
+  [/^hub\/([\w-]+)$/, renderHub],
   [/^documents$/, mybrew.renderDocuments],
 ];
 
@@ -171,6 +172,32 @@ function foldedGroups() {
 // Short names for the menu across the top.
 const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 
+// Menu sections that open a page of tiles (one per page in the section) instead of a drop-down list.
+const HUBS = { 'Stock and Ordering': 'stock-ordering' };
+// The line under each page's name on its tile.
+const TILE_NOTES = {
+  stock: 'Count stock and see past stock takes',
+  wastage: 'Record what’s thrown away and see the cost',
+  orders: 'Create, send and receive supplier orders',
+  invoices: 'Upload and check supplier invoices',
+};
+
+// A section's page of tiles (see HUBS).
+function renderHub({ el, params }) {
+  const heading = Object.keys(HUBS).find((h) => HUBS[h] === params[0]);
+  const items = navGroups().find(([h]) => h === heading)?.[1] ?? [];
+  if (!heading || !items.length) {
+    el.innerHTML = '<div class="empty">You do not have access to this page.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="page-head"><h1>${esc(TOP_LABELS[heading] ?? heading)}</h1></div>
+    <div class="hub-tiles">${items.map(([p, label, ic]) => `<a class="hub-tile" href="#/${p}">
+      <span class="hub-icon" aria-hidden="true">${ic}</span>
+      <span class="hub-text"><strong>${esc(label)}</strong>${TILE_NOTES[p] ? `<small>${esc(TILE_NOTES[p])}</small>` : ''}</span>
+      <span class="hub-go" aria-hidden="true">›</span></a>`).join('')}</div>`;
+}
+
 // Line icons for the bar along the bottom on phones.
 const ICON = {
   home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
@@ -228,7 +255,8 @@ function renderShell() {
       <nav class="topnav" aria-label="Main menu">
         ${groups.map(([heading, items]) => {
           if (!heading) return items.map(([p, label]) => `<a href="#/${p}" class="topnav-btn ${active === p ? 'is-active' : ''}">${label}${p === 'mybrew' ? '<span class="nav-dot" data-news-dot hidden></span>' : ''}</a>`).join('');
-          const here = items.some(([p]) => p === active);
+          const here = items.some(([p]) => p === active) || path === `hub/${HUBS[heading]}`;
+          if (HUBS[heading]) return `<a href="#/hub/${HUBS[heading]}" class="topnav-btn ${here ? 'is-active' : ''}">${esc(TOP_LABELS[heading] ?? heading)}</a>`;
           const hasNews = items.some(([p]) => p === 'mybrew');
           return `<div class="topnav-group" data-tone="${NAV_TONES[heading] ?? ''}">
             <button type="button" class="topnav-btn ${here ? 'is-active' : ''}" aria-haspopup="true" aria-expanded="false">${esc(TOP_LABELS[heading] ?? heading)}${hasNews ? '<span class="nav-dot" data-news-dot hidden></span>' : ''}<span class="topnav-caret" aria-hidden="true">▾</span></button>
@@ -260,6 +288,10 @@ function renderShell() {
         ${groups.map(([heading, items]) => {
           const links = items.map(link).join('');
           if (!heading) return links;
+          if (HUBS[heading]) {
+            const here = items.some(([p]) => p === active) || path === `hub/${HUBS[heading]}`;
+            return `<div class="nav-group" data-tone="${NAV_TONES[heading] ?? ''}"><a href="#/hub/${HUBS[heading]}" class="nav-hub ${here ? 'active' : ''}"><span class="nav-icon">▦</span><span class="nav-label">${esc(TOP_LABELS[heading] ?? heading)}</span><span class="nav-caret" aria-hidden="true">›</span></a></div>`;
+          }
           // The section holding the current page always stays open.
           const open = !folded.has(heading) || items.some(([p]) => p === active);
           return `<div class="nav-group ${open ? '' : 'is-folded'}" data-tone="${NAV_TONES[heading] ?? ''}">
