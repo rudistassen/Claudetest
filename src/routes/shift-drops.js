@@ -105,8 +105,13 @@ export function registerShiftDropRoutes(router, db, { findClash }) {
     const d = load(req.params.id);
     assertLocation(req, d.location_id);
     if (d.status !== 'pending') throw badRequest('This request has already been dealt with');
-    db.prepare(`UPDATE shift_drops SET status = 'declined', decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?`)
-      .run(req.user.id, str(req.body?.note, 'note', { max: 500 }), d.id);
+    const note = str(req.body?.note, 'note', { max: 500 });
+    tx(db, () => {
+      db.prepare(`UPDATE shift_drops SET status = 'declined', decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?`)
+        .run(req.user.id, note, d.id);
+      logRota(db, req, { action: 'drop_decline', location_id: d.location_id, shift: { ...d, id: d.shift_id, user_id: d.dropped_by },
+        details: `${shiftText(d)} — ${d.dropped_by_name}’s request to drop it declined${note ? ` (“${note}”)` : ''}; it stays on their rota` });
+    });
     res.json(withHours(load(d.id)));
   });
 

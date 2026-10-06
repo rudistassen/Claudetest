@@ -1,4 +1,5 @@
 import { can, requirePerm } from '../auth.js';
+import { fmtDay, logRota } from '../rota-log.js';
 import { addDays, badRequest, date, forbidden, id, notFound, oneOf, str, time, today } from '../util.js';
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -109,8 +110,15 @@ export function registerLeaveRoutes(router, db) {
     }
     const status = oneOf(req.body.status, 'status', ['approved', 'declined'], { required: true });
     if (r.status !== 'pending' && !(r.status === 'approved' && status === 'declined')) throw badRequest('This request has already been dealt with');
+    const note = str(req.body.note, 'note', { max: 500 });
     db.prepare(`UPDATE leave_requests SET status = ?, decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?`)
-      .run(status, req.user.id, str(req.body.note, 'note', { max: 500 }), r.id);
+      .run(status, req.user.id, note, r.id);
+    // Recorded in Rota → Rota changes, at the person's home site.
+    const person = db.prepare('SELECT location_id FROM users WHERE id = ?').get(r.user_id);
+    const days = daysBetween(r.start_date, r.end_date);
+    const onRota = status === 'approved' ? db.prepare('SELECT COUNT(*) AS n FROM draft_shifts WHERE user_id = ? AND date BETWEEN ? AND ?').get(r.user_id, r.start_date, r.end_date).n : 0;
+    logRota(db, req, { action: 'holiday', location_id: person?.location_id ?? null, staff_id: r.user_id, date: r.start_date,
+      details: `Holiday ${r.start_date === r.end_date ? fmtDay(r.start_date) : `${fmtDay(r.start_date)} – ${fmtDay(r.end_date)}`} (${days} day${days === 1 ? '' : 's'}) ${r.status === 'approved' && status === 'declined' ? 'cancelled after being approved' : status}${note ? ` – “${note}”` : ''}${onRota ? `; ${onRota} shift${onRota === 1 ? ' is' : 's are'} still on the rota then` : ''}` });
     res.json(withDays(db.prepare(`${withNames} WHERE r.id = ?`).get(r.id)));
   });
 

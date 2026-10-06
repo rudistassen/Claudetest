@@ -15,10 +15,13 @@ export const ACTIONS = {
   timecard_site: ['Clock-in moved', 'log-change'],
   timecard_breaks: ['Breaks changed', 'log-change'],
   drop: ['Shift dropped', 'log-remove'],
+  drop_decline: ['Drop declined', 'log-change'],
+  holiday: ['Holiday', 'log-publish'],
+  sick: ['Sickness', 'log-change'],
   claim: ['Open shift picked up', 'log-add'],
   withdraw: ['Open shift withdrawn', 'log-remove'],
 };
-const FILTERS = [['', 'All changes'], ['add', 'Added'], ['change', 'Changed'], ['remove', 'Removed'], ['restore', 'Put back'], ['publish', 'Published'], ['discard', 'Discarded'], ['copy', 'Copied week'], ['drop', 'Dropped'], ['claim', 'Picked up'], ['timecard_site', 'Clock-ins moved'], ['timecard_breaks', 'Breaks changed']];
+const FILTERS = [['', 'All changes'], ['add', 'Added'], ['change', 'Changed'], ['remove', 'Removed'], ['restore', 'Put back'], ['publish', 'Published'], ['discard', 'Discarded'], ['copy', 'Copied week'], ['drop', 'Drop requests'], ['claim', 'Picked up'], ['holiday', 'Holiday'], ['sick', 'Sickness'], ['timecard_site', 'Clock-ins moved'], ['timecard_breaks', 'Breaks changed']];
 
 const when = (at) => new Date(`${at.replace(' ', 'T')}Z`);
 const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' });
@@ -70,7 +73,7 @@ export async function render(ctx) {
       </table></div>
       ${data.more ? '<p class="muted small">Showing the latest 1,000 changes – narrow the dates to see earlier ones.</p>' : ''}`
       : '<p class="muted">No rota changes in these dates.</p>'}
-      <p class="muted small">Every shift added, changed, removed, put back or published, and every week copied or discarded, with who did it and when (UK time). Changes made before this log started aren’t included.</p>
+      <p class="muted small">Every shift added, changed, removed, put back or published, every week copied or discarded, and every holiday and shift-drop decision, with who did it and when (UK time). Changes made before this log started aren’t included.</p>
     </section>`;
 
   const form = el.querySelector('#log-filters');

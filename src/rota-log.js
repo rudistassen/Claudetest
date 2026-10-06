@@ -27,14 +27,17 @@ export function shiftChanges(db, before, after) {
 }
 
 /**
- * Records one change. entry: { action, location_id, shift (the shift it's about, for its person and day), details }.
- * Actions: add, change, remove, restore, publish_shift, publish, discard, copy, drop, claim, withdraw, sick.
+ * Records one change. entry: { action, location_id, shift (the shift it's about, for its person and day), details },
+ * or for something about a person but not one shift (a holiday), staff_id and date instead of shift.
+ * Actions: add, change, remove, restore, publish_shift, publish, discard, copy, drop, drop_decline, claim, withdraw,
+ * sick, holiday.
  */
-export function logRota(db, req, { action, location_id, shift = null, details = '' }) {
+export function logRota(db, req, { action, location_id, shift = null, staff_id = null, date = null, details = '' }) {
+  const staffId = shift?.user_id ?? staff_id;
   db.prepare(`INSERT INTO rota_log (actor_id, actor_name, action, location_id, location_name, shift_id, staff_id, staff_name, shift_date, hours, details)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     req.user.id, req.user.name, action, location_id, nameOf(db, 'locations', location_id),
-    shift?.id ?? null, shift?.user_id ?? null, shift ? nameOf(db, 'users', shift.user_id) : null, shift?.date ?? null,
+    shift?.id ?? null, staffId ?? null, staffId ? nameOf(db, 'users', staffId) : null, shift?.date ?? date,
     shift ? Math.round(shiftHours(shift.start_time, shift.end_time, shift.break_minutes ?? 0) * 100) / 100 : null, details,
   );
 }

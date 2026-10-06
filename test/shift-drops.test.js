@@ -135,3 +135,25 @@ test('approving a drop can delete the shift instead of opening it up', async () 
   assert.ok(!(await login('staff1-2@cafe.local').then((c) => c('/shift-drops'))).data.open.some((d) => d.id === asked.id), 'not offered to anyone');
   assert.match(db.prepare(`SELECT details FROM rota_log WHERE action = 'drop' ORDER BY id DESC LIMIT 1`).get().details, /shift deleted/);
 });
+
+test('holiday decisions and declined drop requests are recorded in Rota changes', async () => {
+  const staff = await login('staff1@cafe.local');
+  const manager = await login('manager1@cafe.local');
+  const from = addDays(today(), 30);
+  const asked = await staff('/leave', { method: 'POST', body: { start_date: from, end_date: addDays(from, 2), note: 'Wedding' } });
+  assert.equal(asked.status, 201);
+  assert.equal((await manager(`/leave/${asked.data.id}/decide`, { method: 'POST', body: { status: 'approved' } })).status, 200);
+  const staffId = db.prepare(`SELECT id FROM users WHERE email = 'staff1@cafe.local'`).get().id;
+  const holiday = db.prepare(`SELECT * FROM rota_log WHERE action = 'holiday' ORDER BY id DESC LIMIT 1`).get();
+  assert.equal(holiday.staff_id, staffId);
+  assert.equal(holiday.shift_date, from);
+  assert.match(holiday.details, /\(3 days\) approved/);
+  const listed = (await manager(`/rota/log?action=holiday`)).data.entries;
+  assert.ok(listed.some((e) => e.id === holiday.id), 'shown in Rota changes');
+
+  const shiftId = publishedShift('staff1@cafe.local', addDays(today(), 9));
+  const drop = (await staff(`/shifts/${shiftId}/drop`, { method: 'POST', body: {} })).data;
+  await manager(`/shift-drops/${drop.id}/decline`, { method: 'POST', body: { note: 'Short staffed' } });
+  const declined = (await manager('/rota/log?action=drop')).data.entries.find((e) => e.action === 'drop_decline');
+  assert.match(declined.details, /declined \(“Short staffed”\); it stays on their rota/);
+});
