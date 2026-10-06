@@ -4,7 +4,7 @@ import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, o
 function trailTabs(state, active) {
   const items = [['safety', 'Checklist', true], ['safety/report', 'Compliance report', state.can('safety.report')], ['safety/setup', 'Set up', state.can('safety.manage')]]
     .filter(([, , ok]) => ok);
-  return items.length > 1 ? `<div class="tabs">${items.map(([p, l]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${l}</a>`).join('')}</div>` : '';
+  return items.length > 1 ? `<div class="tabs trail-tabs">${items.map(([p, l]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${l}</a>`).join('')}</div>` : '';
 }
 
 function rangeText(t) {

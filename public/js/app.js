@@ -114,6 +114,7 @@ function navGroups() {
     ['Trail', [
       ['safety', 'Checklist', '✓', SAFETY],
       ['safety/report', 'Compliance', '▤', ['safety.report']],
+      ['safety/setup', 'Set up checks', '☑', ['safety.manage']],
     ]],
     ['Stock and Ordering', [
       ['stock', 'Stock takes', '☰', STOCK],
@@ -202,9 +203,12 @@ function foldedGroups() {
 const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 
 // Menu sections that open a page of tiles (one per page in the section) instead of a drop-down list.
-const HUBS = { Rota: 'rota-menu', 'Stock and Ordering': 'stock-ordering' };
+const HUBS = { Rota: 'rota-menu', Trail: 'trail', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
+  safety: 'Today’s checks – tick them off as you go',
+  'safety/report': 'How each site is doing, and every failed check',
+  'safety/setup': 'Add and change the checks for each site',
   rota: 'See and plan the week’s shifts',
   'rota/requests': 'Holiday and shift drops waiting for you',
   'rota/log': 'Every change to the rota, and who made it',

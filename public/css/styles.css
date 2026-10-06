@@ -1540,6 +1540,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .hub-tile:hover, .hub-tile:focus-visible { border-color: var(--brand); transform: translateY(-1px); }
 .hub-icon { flex-shrink: 0; display: grid; place-items: center; width: 2.8rem; height: 2.8rem; border-radius: 12px; font-size: 1.3rem;
   background: var(--surface-2); color: var(--text); }
+.hub-tiles[data-tone="trail"] .hub-icon { background: var(--tone-trail); color: var(--tone-trail-ink); }
 .hub-tiles[data-tone="stock"] .hub-icon { background: var(--tone-stock); color: var(--tone-stock-ink); }
 .hub-tiles[data-tone="team"] .hub-icon { background: var(--tone-team); color: var(--tone-team-ink); }
 .hub-text { flex: 1; min-width: 0; }
@@ -1621,3 +1622,6 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .undo-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0 0 0.75rem; padding: 0.45rem 0.6rem 0.45rem 0.9rem;
   border-radius: 10px; background: var(--surface); border: 1px dashed var(--border); font-size: 0.9rem; }
 .undo-bar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* With Trail's tiles down the side, its own tabs aren't needed. */
+.hub-main .trail-tabs { display: none; }
