@@ -122,6 +122,15 @@ export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
   const [shifts, news, drops] = await Promise.all([api('/my-shifts'), api('/news'), api('/shift-drops')]);
   if (stale()) return;
+  // For My tasks: today's Trail checks where they're working (their shift today, or for a manager their site),
+  // and requests waiting for managers.
+  const todayShift = shifts.find((s) => s.date === todayISO());
+  const checkSite = state.can('safety.complete') ? (todayShift?.location_id ?? (state.can('safety.manage') ? state.locationId : null)) : null;
+  const [checklist, leaveCount] = await Promise.all([
+    checkSite ? api(`/safety/checklist?location_id=${checkSite}`).catch(() => null) : null,
+    state.can('leave.manage') ? api('/leave/pending-count').catch(() => ({ count: 0 })) : { count: 0 },
+  ]);
+  if (stale()) return;
   const u = state.user;
   const today = todayISO();
   const next = shifts.slice(0, 10);
@@ -160,6 +169,18 @@ export async function renderMyBrew(ctx) {
     can('dashboard.view') ? { href: '#/dashboard', icon: '📊', label: 'Dashboard', detail: 'Today at every site', c: ['#38c3d6', '#16879a'] } : null,
     { href: '#/documents', icon: '📄', label: 'Documents', detail: 'Policies and handbooks', c: ['#9aa5b8', '#5f6b80'] },
   ].filter(Boolean);
+  // My tasks: things waiting for this person, each with a way straight to it.
+  const checksLeft = checklist ? checklist.tasks.filter((t) => !t.check && t.frequency === 'daily').length : 0;
+  const weeklyLeft = checklist ? checklist.tasks.filter((t) => !t.check && t.frequency !== 'daily').length : 0;
+  const checkSiteName = state.locations.find((l) => l.id === checkSite)?.name ?? '';
+  const claimable = drops.open.filter((d) => d.can_claim).length;
+  const toReview = leaveCount.count + drops.to_approve.length;
+  const tasks = [
+    toRead ? { icon: '📌', title: `Confirm you’ve read ${toRead} update${toRead === 1 ? '' : 's'}`, detail: 'In the newsfeed below', action: 'Read', go: 'news', primary: true } : null,
+    checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} Trail check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety', primary: true } : null,
+    toReview ? { icon: '✉', title: `${toReview} request${toReview === 1 ? '' : 's'} to review`, detail: [leaveCount.count ? `${leaveCount.count} holiday` : '', drops.to_approve.length ? `${drops.to_approve.length} shift drop${drops.to_approve.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), action: 'Review', href: '#/rota/requests', primary: true } : null,
+    claimable ? { icon: '🙋', title: `${claimable} open shift${claimable === 1 ? '' : 's'} you could pick up`, detail: 'Extra hours, if you want them', action: 'See shifts', go: 'open' } : null,
+  ].filter(Boolean);
   // Big cards (like Spotify's mixes): each shift in its site's colour, with the site on a label strip.
   const shiftCard = (s) => `<div class="mb-card">
       <div class="mb-cover ${s.date === today ? 'is-today' : ''}" style="--site: ${siteColour(s.location_name, s.location_id)}">
@@ -185,14 +206,21 @@ export async function renderMyBrew(ctx) {
     <div class="page-head">
       <div><h1>My Brew</h1><p class="muted my-greeting">${greeting()}, ${esc(firstName(u.name))} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
     </div>
-    ${toRead ? `<p class="notice">📌 <strong>${toRead} ${toRead === 1 ? 'update needs' : 'updates need'}</strong> you to confirm you’ve read ${toRead === 1 ? 'it' : 'them'} – see the news below.</p>` : ''}
     <div class="mb-pills" role="group" aria-label="Show">
-      ${[['all', 'All'], ['shifts', 'Shifts'], ['news', 'News']].map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
+      ${[['all', 'All'], ['shifts', 'Shifts'], ['tasks', 'My tasks'], ['news', 'Newsfeed']].map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
     </div>
     <div class="mybrew">
         <div class="mb-shortcuts" data-mb="all">${shortcuts.map((t) => `<a class="mb-shortcut" href="${t.href}">
           <span class="mb-art" style="--c1: ${t.c[0]}; --c2: ${t.c[1]}" aria-hidden="true">${t.icon}</span>
           <span class="mb-shortcut-text"><strong>${esc(t.label)}</strong><small>${esc(t.detail)}</small></span></a>`).join('')}</div>
+        <section class="mb-section" data-mb="tasks" id="mb-tasks">
+          <div class="mb-section-head"><h2>My tasks</h2>${tasks.length ? `<span class="small muted">${tasks.length} to do</span>` : ''}</div>
+          ${tasks.length ? `<ul class="mb-tasks">${tasks.map((t) => `<li class="mb-task">
+            <span class="mb-task-icon" aria-hidden="true">${t.icon}</span>
+            <span class="mb-task-text"><strong>${esc(t.title)}</strong>${t.detail ? `<small>${esc(t.detail)}</small>` : ''}</span>
+            ${t.href ? `<a class="btn btn-small ${t.primary ? 'btn-primary' : ''}" href="${t.href}">${esc(t.action)}</a>` : `<button type="button" class="btn btn-small ${t.primary ? 'btn-primary' : ''}" data-task-go="${t.go}">${esc(t.action)}</button>`}
+          </li>`).join('')}</ul>` : '<p class="card mb-tasks-done">✓ Nothing to do right now – you’re all caught up.</p>'}
+        </section>
         <div data-mb="shifts">${dropsPanel({ ...drops, open: [] })}</div>
         <section class="mb-section" data-mb="shifts">
           <div class="mb-section-head"><h2>Your week</h2><a class="small" href="#/rota?view=mine">All my shifts</a></div>
@@ -206,7 +234,7 @@ export async function renderMyBrew(ctx) {
         </section>` : ''}
         <section class="mybrew-news" data-mb="news">
         <div class="news-head">
-          <h2>News</h2>
+          <h2>Newsfeed</h2>
           <div class="seg" role="group" aria-label="Show">
             ${[['all', 'All'], ['announcement', 'Announcements'], ['policy', 'Policies'], ['event', 'Events'], ['reminder', 'Reminders']]
               .filter(([k]) => k === 'all' || news.some((p) => p.category === k))
@@ -223,6 +251,10 @@ export async function renderMyBrew(ctx) {
     const show = b.dataset.mbShow;
     el.querySelectorAll('[data-mb-show]').forEach((x) => x.classList.toggle('is-on', x === b));
     el.querySelectorAll('[data-mb]').forEach((sec) => { sec.hidden = show !== 'all' && sec.dataset.mb !== show; });
+  }));
+  el.querySelectorAll('[data-task-go]').forEach((b) => b.addEventListener('click', () => {
+    const target = b.dataset.taskGo === 'news' ? el.querySelector('.mybrew-news .needs-read') ?? el.querySelector('.mybrew-news') : el.querySelector('#mb-open');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
   el.querySelector('.mb-shortcut[href="#/mybrew"]')?.addEventListener('click', (e) => {
     e.preventDefault();
