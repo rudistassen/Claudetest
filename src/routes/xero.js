@@ -33,7 +33,8 @@ export function registerXeroRoutes(router, db, xero) {
   });
 
   // Account codes and tracking categories, from Xero.
-  router.get('/xero/options', requireAdmin, async (_req, res) => {
+  // (Also for whoever sets up product categories, to pick each one's account code.)
+  router.get('/xero/options', requirePerm('setup.products'), async (_req, res) => {
     needXero();
     res.json(await xero.options());
   });

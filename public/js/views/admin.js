@@ -12,6 +12,8 @@ const activeBox = (v) => field('Active', `<input type="checkbox" name="active" $
 const searchText = new Map();
 function listPage(ctx, { title, rows, columns, canEdit = true, addLabel, form, save, extraActions = '', search = false, bulk = null }) {
   const key = title.split(' · ')[0];
+  // A search can be opened from a link (?q=…), e.g. a category's products.
+  if (search && ctx.query?.q) searchText.set(key, ctx.query.q);
   const selectable = canEdit && !!bulk && rows.length > 0;
   const cellText = (r) => columns.map((c) => (c.value ? c.value(r) : r[c.key] ?? '')).join(' ').toLowerCase();
   ctx.el.innerHTML = `
@@ -475,7 +477,7 @@ export async function renderSuppliers(ctx) {
 
 export async function renderProducts(ctx) {
   const { state } = ctx;
-  const [rows, suppliers, meta] = await Promise.all([api('/products'), api('/suppliers'), api('/recipes/meta')]);
+  const [rows, suppliers, meta, cats] = await Promise.all([api('/products'), api('/suppliers'), api('/recipes/meta'), api('/product-categories')]);
   const ALLERGEN_LIST = meta.allergens;
   if (ctx.stale()) return;
   listPage(ctx, {
@@ -487,7 +489,7 @@ export async function renderProducts(ctx) {
     extraActions: `${rows.length ? '<button class="btn" id="export-products">Export</button>' : ''}${state.can('setup.products') ? '<button class="btn" id="import-products">Import</button>' : ''}`,
     columns: [
       { label: 'Name', key: 'name' },
-      { label: 'Category', key: 'category' },
+      { label: 'Category', value: (r) => r.category ?? '', html: (r) => (r.category ? esc(r.category) : '<span class="tone-warn">No category</span>') },
       { label: 'Unit', key: 'unit' },
       { label: 'Supplier', key: 'supplier_name' },
       { label: 'Unit cost', num: true, value: (r) => money(r.unit_cost) },
@@ -498,10 +500,10 @@ export async function renderProducts(ctx) {
     form: (p) => `
       <div class="row">${field('Name', input('name', p.name, 'required'))}${field('SKU / supplier code', input('sku', p.sku))}</div>
       <div class="row">
-        ${field('Category', input('category', p.category, 'list="categories"'))}
+        ${field('Category', select('category', [['', cats.length ? '— Choose —' : '— Add categories first —'], ...cats.map((c) => [c.name, c.name])], p.category ?? '', cats.length ? 'required' : ''),
+          { hint: 'Manage them under Product categories' })}
         ${field('Unit', input('unit', p.unit ?? 'each', 'required placeholder="each, case, kg…"'))}
       </div>
-      <datalist id="categories">${[...new Set(rows.map((r) => r.category).filter(Boolean))].map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
       <div class="row">
         ${field('Supplier', select('supplier_id', [['', '—'], ...suppliers.map((s) => [s.id, s.name])], p.supplier_id))}
         ${field('Unit cost (£)', input('unit_cost', p.unit_cost ?? 0, 'type="number" min="0" step="0.01"'))}

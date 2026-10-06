@@ -1,6 +1,6 @@
 // Importing products from a spreadsheet (CSV, Excel, or rows pasted from Excel). The browser reads the file into
 // a header row plus data rows; this works out what each row means, previews it, then applies it.
-import { tx } from './db.js';
+import { syncProductCategories, tx } from './db.js';
 import { ALLERGENS } from './recipes.js';
 import { badRequest } from './util.js';
 
@@ -204,6 +204,8 @@ export function applyImport(db, plan) {
         db.prepare(`UPDATE products SET ${use.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...use.map((c) => set[c]), r.id);
       }
     }
+    // New categories in the spreadsheet join the list.
+    syncProductCategories(db);
   });
   return { ...plan.counts, suppliers_added: plan.new_suppliers.length };
 }

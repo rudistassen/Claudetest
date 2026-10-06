@@ -475,7 +475,8 @@ body.demo #print { display: none; }
 .allergen-card p { margin: 0.4rem 0; }
 .method { white-space: pre-wrap; line-height: 1.6; max-width: 65ch; }
 .allergen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.3rem 1rem; margin-bottom: 0.8rem; }
-.allergen-grid .check { font-weight: 400; font-size: 0.9rem; }
+.allergen-grid .check { font-weight: 400; font-size: 0.9rem; justify-content: flex-start; align-items: flex-start; text-align: left; }
+.allergen-grid .check input { width: auto; flex: none; margin: 0.2rem 0 0; }
 .ing-row select { max-width: 280px; width: 100%; }
 .ing-notes { width: 100%; min-width: 120px; }
 .sticky-kpis { position: sticky; top: calc(52px + env(safe-area-inset-top, 0px)); z-index: 5; background: var(--bg); padding-block: 0.5rem; margin-top: -0.5rem; }
@@ -1561,6 +1562,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 /* On a computer: a section's tiles down the left, its page to the right */
 .hub-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 1.2rem; align-items: start; }
 .hub-rail { display: flex; flex-direction: column; gap: 0.5rem; position: sticky; top: 0.8rem; }
+.hub-group-head { grid-column: 1 / -1; margin: 0.9rem 0 0; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .hub-rail-head { margin: 0.2rem 0 0.2rem; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .hub-rail .hub-tile { padding: 0.65rem 0.7rem; gap: 0.65rem; border-radius: 12px; }
 .hub-rail .hub-icon { width: 2.2rem; height: 2.2rem; font-size: 1.05rem; border-radius: 10px; }

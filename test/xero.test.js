@@ -88,7 +88,10 @@ test('Xero: connect, choose coding, and send a confirmed invoice as a draft bill
   const supplier = db.prepare('SELECT id, name FROM suppliers LIMIT 1').get();
   const invId = Number(db.prepare(`INSERT INTO invoices (location_id, supplier_id, supplier_name, invoice_number, invoice_date, due_date, subtotal, vat, total, status, file_name, file_type, file)
     VALUES (?, ?, ?, 'INV-77', '2026-10-01', '2026-10-31', 30, 2, 32, 'confirmed', 'inv 77.pdf', 'application/pdf', ?)`).run(site.id, supplier.id, supplier.name, Buffer.from('%PDF-1.4 x')).lastInsertRowid);
-  db.prepare(`INSERT INTO invoice_lines (invoice_id, line_no, description, sku, quantity, unit_price, line_total, vat_rate) VALUES (?, 1, 'Oat milk', 'OM1', 6, 1.5, 9, 0), (?, 2, 'Cups', NULL, 1, 21, 21, 20)`).run(invId, invId);
+  // Oat milk is a product in the Dairy category, which has its own account; Cups isn't matched to a product.
+  db.prepare(`INSERT INTO product_categories (name, xero_account_code) VALUES ('Dairy test', '320')`).run();
+  const oat = Number(db.prepare(`INSERT INTO products (name, category) VALUES ('Oat milk test', 'Dairy test')`).run().lastInsertRowid);
+  db.prepare(`INSERT INTO invoice_lines (invoice_id, line_no, description, sku, quantity, unit_price, line_total, vat_rate, product_id) VALUES (?, 1, 'Oat milk', 'OM1', 6, 1.5, 9, 0, ?), (?, 2, 'Cups', NULL, 1, 21, 21, 20, NULL)`).run(invId, oat, invId);
   assert.equal((await admin(`/invoices/${invId}`)).data.xero_ready, true);
 
   const sent = await admin(`/invoices/${invId}/xero`, { method: 'POST' });
@@ -100,7 +103,7 @@ test('Xero: connect, choose coding, and send a confirmed invoice as a draft bill
   assert.equal(bill.InvoiceNumber, 'INV-77');
   assert.equal(bill.Contact.ContactID, 'C1');
   assert.deepEqual(bill.LineItems.map((l) => [l.Description, l.Quantity, l.UnitAmount, l.AccountCode, l.TaxType, l.Tracking[0].Option]),
-    [['Oat milk (OM1)', 6, 1.5, '310', 'ZERORATEDINPUT', 'High St'], ['Cups', 1, 21, '310', 'INPUT2', 'High St']]);
+    [['Oat milk (OM1)', 6, 1.5, '320', 'ZERORATEDINPUT', 'High St'], ['Cups', 1, 21, '310', 'INPUT2', 'High St']]);
   const attach = calls.find((c) => c.path.startsWith('/api.xro/2.0/Invoices/INV1/Attachments/'));
   assert.equal(attach.headers['Content-Type'], 'application/pdf');
   assert.ok(calls.every((c) => !c.path.startsWith('/api.xro') || c.headers['xero-tenant-id'] === 'T1'));

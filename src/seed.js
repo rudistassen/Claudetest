@@ -1,5 +1,5 @@
 import { hashPassword, verifyPassword } from './auth.js';
-import { publishAllShifts, tx } from './db.js';
+import { publishAllShifts, syncProductCategories, tx } from './db.js';
 import { addDays, today, weekStart } from './util.js';
 
 export const DEMO_PASSWORD = 'changeme123';
@@ -214,6 +214,7 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
       productIds[name] = Number(db.prepare(`INSERT INTO products (name, category, unit, supplier_id, unit_cost, par_level, recipe_unit, units_per_pack, allergens)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, category, unit, supplierIds[sup], cost, par, recipeUnit, perPack, allergens).lastInsertRowid);
     }
+    syncProductCategories(db);
     for (const r of RECIPES) {
       const recipeId = db.prepare(`INSERT INTO recipes (name, category, method, portions, selling_price, vat_rated, may_contain, shelf_life, square_catalog_object_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(r.name, r.category, r.method, r.portions ?? 1, r.price, r.vat === false ? 0 : 1,

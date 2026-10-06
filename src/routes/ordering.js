@@ -40,6 +40,56 @@ export function registerOrderingRoutes(router, db) {
     res.json(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(Number(req.params.id)));
   });
 
+  // --- Product categories ---
+
+  const categoryByName = (name) => db.prepare('SELECT * FROM product_categories WHERE name = ?').get(name);
+  router.get('/product-categories', (_req, res) => {
+    res.json(db.prepare(`SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category = c.name AND p.active = 1) AS product_count
+      FROM product_categories c ORDER BY c.name`).all());
+  });
+
+  const categoryBody = (b) => ({
+    name: str(b.name, 'Category name', { required: true, max: 100 }),
+    xero_account_code: str(b.xero_account_code, 'Xero account code', { max: 20 }),
+  });
+
+  router.post('/product-categories', requirePerm('setup.products'), (req, res) => {
+    const c = categoryBody(req.body ?? {});
+    if (categoryByName(c.name)) throw badRequest(`There’s already a category called ${c.name}`);
+    const r = db.prepare('INSERT INTO product_categories (name, xero_account_code) VALUES (?, ?)').run(c.name, c.xero_account_code);
+    res.status(201).json(db.prepare('SELECT * FROM product_categories WHERE id = ?').get(r.lastInsertRowid));
+  });
+
+  // Renaming a category renames it on its products too.
+  router.put('/product-categories/:id', requirePerm('setup.products'), (req, res) => {
+    const old = db.prepare('SELECT * FROM product_categories WHERE id = ?').get(Number(req.params.id));
+    if (!old) throw notFound('Category');
+    const c = categoryBody({ ...old, ...(req.body ?? {}) });
+    const clash = categoryByName(c.name);
+    if (clash && clash.id !== old.id) throw badRequest(`There’s already a category called ${c.name}`);
+    tx(db, () => {
+      db.prepare('UPDATE product_categories SET name = ?, xero_account_code = ? WHERE id = ?').run(c.name, c.xero_account_code, old.id);
+      db.prepare('UPDATE products SET category = ? WHERE category = ?').run(c.name, old.name);
+    });
+    res.json(db.prepare('SELECT * FROM product_categories WHERE id = ?').get(old.id));
+  });
+
+  // { move_to: category id } moves its products to another category first; without it, only an empty one goes.
+  router.delete('/product-categories/:id', requirePerm('setup.products'), (req, res) => {
+    const c = db.prepare('SELECT * FROM product_categories WHERE id = ?').get(Number(req.params.id));
+    if (!c) throw notFound('Category');
+    const used = db.prepare('SELECT COUNT(*) AS n FROM products WHERE category = ?').get(c.name).n;
+    const moveTo = id(req.body?.move_to, 'move_to');
+    const to = moveTo ? db.prepare('SELECT * FROM product_categories WHERE id = ? AND id != ?').get(moveTo, c.id) : null;
+    if (moveTo && !to) throw notFound('Category to move to');
+    if (used && !to) throw badRequest(`${used} product${used === 1 ? ' is' : 's are'} in ${c.name} – choose a category to move ${used === 1 ? 'it' : 'them'} to`);
+    tx(db, () => {
+      if (to) db.prepare('UPDATE products SET category = ? WHERE category = ?').run(to.name, c.name);
+      db.prepare('DELETE FROM product_categories WHERE id = ?').run(c.id);
+    });
+    res.json({ ok: true, moved: to ? used : 0 });
+  });
+
   // --- Products ---
 
   router.get('/products', (_req, res) => {
@@ -62,6 +112,14 @@ export function registerOrderingRoutes(router, db) {
       active: b.active === undefined ? 1 : bool(b.active),
     };
     if (p.supplier_id && !db.prepare('SELECT 1 FROM suppliers WHERE id = ?').get(p.supplier_id)) throw notFound('Supplier');
+    // Every product goes in one of the categories (once there are any).
+    if (p.category) {
+      const c = categoryByName(p.category);
+      if (!c) throw badRequest(`“${p.category}” isn’t one of your product categories – add it under Stock & Ordering → Product categories first`);
+      p.category = c.name;
+    } else if (db.prepare('SELECT 1 FROM product_categories LIMIT 1').get()) {
+      throw badRequest('Choose a category for the product');
+    }
     return p;
   };
   const productCols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'active'];

@@ -11,6 +11,7 @@ import * as sickness from './views/sickness.js';
 import * as requests from './views/requests.js';
 import * as xeroView from './views/xero.js';
 import * as people from './views/people.js';
+import * as categories from './views/categories.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -90,6 +91,7 @@ const ROUTES = [
   [/^admin\/locations$/, admin.renderLocations, 'admin'],
   [/^admin\/suppliers$/, admin.renderSuppliers, SUPPLIERS],
   [/^admin\/products$/, admin.renderProducts, SUPPLIERS],
+  [/^admin\/product-categories$/, categories.render, SUPPLIERS],
   [/^admin\/safety-tasks$/, safety.renderSetup, ['safety.manage']],
   [/^admin\/square$/, admin.renderSquare, 'admin'],
   [/^admin\/xero$/, xeroView.render, 'admin'],
@@ -136,6 +138,9 @@ function navGroups() {
       ['wastage', 'Wastage', '⌫', WASTAGE],
       ['orders', 'Ordering', '⇄', ['orders.manage']],
       ['invoices', 'Invoices', '⎘', ['orders.manage']],
+      ['admin/suppliers', 'Suppliers', '⚑', SUPPLIERS],
+      ['admin/products', 'Products', '▥', SUPPLIERS],
+      ['admin/product-categories', 'Product categories', '◧', SUPPLIERS],
     ]],
     ['Reporting', [
       ['trading', 'Trading', '◔', ['sales.view']],
@@ -157,8 +162,6 @@ function navGroups() {
       ['admin/email-reports', 'Email reports', '✉', 'admin'],
       ['admin/news', 'News', '✎', ['news.manage']],
       ['admin/documents', 'Documents', '❐', ['news.manage']],
-      ['admin/suppliers', 'Suppliers', '⚑', SUPPLIERS],
-      ['admin/products', 'Products', '▥', SUPPLIERS],
       ['safety/setup', 'Trail checks', '☑', ['safety.manage']],
     ]],
   ].map(([heading, items]) => [heading, items.filter(([, , , who]) => allowed(who))]).filter(([, items]) => items.length);
@@ -233,6 +236,9 @@ const TILE_NOTES = {
   wastage: 'Record what’s thrown away and see the cost',
   orders: 'Create, send and receive supplier orders',
   invoices: 'Upload and check supplier invoices',
+  'admin/suppliers': 'Who you buy from, and how to order',
+  'admin/products': 'Everything you buy, with costs and pars',
+  'admin/product-categories': 'Group products, and their Xero account codes',
   'people/recruitment': 'Jobs you’re hiring for and their candidates',
   'people/training': 'Training courses and who has done them',
   'people/performance': 'One-to-ones, probation reviews and appraisals',
@@ -254,6 +260,14 @@ function hubOf(path) {
   return g ? [g[0], g[1], active] : null;
 }
 
+// Tiles shown under a "Set up" heading at the end of their section's tiles.
+const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories']);
+const hubTiles = (items, active) => {
+  const main = items.filter(([p]) => !SETUP_TILES.has(p));
+  const setup = items.filter(([p]) => SETUP_TILES.has(p));
+  return `${main.map((i) => hubTile(i, active)).join('')}${setup.length ? `<p class="hub-group-head">Set up</p>${setup.map((i) => hubTile(i, active)).join('')}` : ''}`;
+};
+
 // A section's page of tiles (see HUBS).
 function renderHub({ el, params }) {
   const heading = Object.keys(HUBS).find((h) => HUBS[h] === params[0]);
@@ -264,7 +278,7 @@ function renderHub({ el, params }) {
   }
   el.innerHTML = `
     <div class="page-head"><h1>${esc(TOP_LABELS[heading] ?? heading)}</h1></div>
-    <div class="hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}">${items.map((i) => hubTile(i, null)).join('')}</div>`;
+    <div class="hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}">${hubTiles(items, null)}</div>`;
 }
 
 // Line icons for the bar along the bottom on phones.
@@ -513,7 +527,7 @@ export async function route() {
     const [heading, items, active] = hub;
     el.innerHTML = `<div class="hub-layout">
       <nav class="hub-rail hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}" aria-label="${esc(TOP_LABELS[heading] ?? heading)}">
-        <p class="hub-rail-head">${esc(TOP_LABELS[heading] ?? heading)}</p>${items.map((i) => hubTile(i, active)).join('')}</nav>
+        <p class="hub-rail-head">${esc(TOP_LABELS[heading] ?? heading)}</p>${hubTiles(items, active)}</nav>
       <div class="hub-main"></div></div>`;
     view = el.querySelector('.hub-main');
   }

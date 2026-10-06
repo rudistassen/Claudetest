@@ -379,8 +379,9 @@ export async function renderInvoice(ctx) {
   });
   // "+ New product": add the line as a new product (name, unit and cost filled in from the invoice, to check),
   // then pick it for the line.
-  const categories = [...new Set(products.map((p) => p.category).filter(Boolean))].sort();
-  rows().forEach((tr) => tr.querySelector('.l-new')?.addEventListener('click', () => {
+  let categories = null;
+  rows().forEach((tr) => tr.querySelector('.l-new')?.addEventListener('click', async () => {
+    try { categories ??= (await api('/product-categories')).map((c) => c.name); } catch (err) { showError(err); return; }
     const l = line(tr);
     const sup = el.querySelector('#inv-supplier');
     const supplierId = Number(sup.value) || null;
@@ -395,11 +396,10 @@ export async function renderInvoice(ctx) {
           <label class="field"><span>Cost per unit (£)</span><input name="unit_cost" type="number" min="0" step="0.01" value="${price ?? ''}"></label>
         </div>
         <div class="row">
-          <label class="field"><span>Category</span><input name="category" list="new-product-categories" maxlength="100"></label>
+          <label class="field"><span>Category</span><select name="category" ${categories.length ? 'required' : ''}><option value="">${categories.length ? '— Choose —' : '— None yet —'}</option>${categories.map((c) => `<option>${esc(c)}</option>`).join('')}</select></label>
           <label class="field"><span>Supplier’s code</span><input name="sku" maxlength="50" value="${esc(l.sku ?? '')}"></label>
         </div>
-        <datalist id="new-product-categories">${categories.map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
-        <p class="muted small">${supplierName ? `From ${esc(supplierName)}. ` : 'Choose the supplier above first to link the product to them. '}You can add par levels, allergens and more later under Setup → Products.</p>`,
+        <p class="muted small">${supplierName ? `From ${esc(supplierName)}. ` : 'Choose the supplier above first to link the product to them. '}You can add par levels, allergens and more later under Stock &amp; Ordering → Products.</p>`,
       submitLabel: 'Add product',
       onSubmit: async (v) => {
         const made = await api('/products', { method: 'POST', body: { name: v.name, unit: v.unit || 'each', unit_cost: v.unit_cost === '' ? 0 : Number(v.unit_cost), category: v.category || null, sku: v.sku || null, supplier_id: supplierId } });

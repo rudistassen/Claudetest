@@ -625,6 +625,15 @@ CREATE TABLE IF NOT EXISTS square_sync_log (
   triggered_by TEXT
 );
 
+-- Product categories (Stock & Ordering → Product categories): every product is in one (products.category holds its
+-- name), and each can have the Xero account code its lines go to on a bill.
+CREATE TABLE IF NOT EXISTS product_categories (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  xero_account_code TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- People → Recruitment: jobs being hired for at each site, and the candidates for each.
 CREATE TABLE IF NOT EXISTS vacancies (
   id INTEGER PRIMARY KEY,
@@ -878,6 +887,7 @@ export function openDb(file = ':memory:') {
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_square ON locations(square_location_id)');
   repairCandidateLinks(db);
+  syncProductCategories(db);
   db.exec(VIEWS);
   // One-off data changes, tracked with SQLite's user_version.
   const version = db.prepare('PRAGMA user_version').get().user_version;
@@ -944,6 +954,17 @@ export function openDb(file = ':memory:') {
   }
   ensureDefaultSets(db);
   return db;
+}
+
+/**
+ * Every category a product is in is on the list of categories (products added before the list existed, from a
+ * spreadsheet or by the demo), and each product uses its category's exact name.
+ */
+export function syncProductCategories(db) {
+  db.exec(`INSERT OR IGNORE INTO product_categories (name)
+      SELECT DISTINCT trim(category) FROM products WHERE category IS NOT NULL AND trim(category) != '';
+    UPDATE products SET category = (SELECT c.name FROM product_categories c WHERE c.name = trim(products.category))
+      WHERE category IS NOT NULL AND trim(category) != '' AND category IS NOT (SELECT c.name FROM product_categories c WHERE c.name = trim(products.category));`);
 }
 
 /**

@@ -75,6 +75,7 @@ export async function render(ctx) {
     <h2>How bills are coded</h2>
     <label class="field"><span>Account code for supplier bills</span>
       <select name="account"><option value="">— Leave blank (choose in Xero) —</option>${opts.accounts.map((a) => `<option value="${esc(a.code)}" ${a.code === x.account_code ? 'selected' : ''}>${esc(a.code)} – ${esc(a.name)}</option>`).join('')}</select></label>
+    <p class="muted small">Product categories can have their own account – set those under <a href="#/admin/product-categories">Stock &amp; Ordering → Product categories</a>. This one is used for everything else.</p>
     <label class="field"><span>Site tracking category</span>
       <select name="tracking"><option value="">— None —</option>${opts.tracking.map((t) => `<option value="${esc(t.id)}" ${t.id === x.tracking_category_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
     <div id="xero-site-rows">${siteRows()}</div>

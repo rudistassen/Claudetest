@@ -176,19 +176,22 @@ export class Xero {
       const options = (() => { try { return JSON.parse(c.site_options ?? '{}'); } catch { return {}; } })();
       const option = options[inv.location_id] ?? inv.location_name;
       const tracking = c.tracking_category_name && option ? [{ Name: c.tracking_category_name, Option: option }] : undefined;
-      const lines = db.prepare('SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY line_no').all(inv.id);
-      const item = (description, quantity, unit, vat) => ({
+      // Each line goes to its product's category's account code, if it has one; otherwise the usual account.
+      const lines = db.prepare(`SELECT il.*, pc.xero_account_code AS category_account FROM invoice_lines il
+        LEFT JOIN products p ON p.id = il.product_id LEFT JOIN product_categories pc ON pc.name = p.category
+        WHERE il.invoice_id = ? ORDER BY il.line_no`).all(inv.id);
+      const item = (description, quantity, unit, vat, account = null) => ({
         Description: description.slice(0, 4000),
         Quantity: quantity,
         UnitAmount: unit,
-        ...(c.account_code ? { AccountCode: c.account_code } : {}),
+        ...(account || c.account_code ? { AccountCode: account || c.account_code } : {}),
         ...(TAX_TYPES[vat] ? { TaxType: TAX_TYPES[vat] } : {}),
         ...(tracking ? { Tracking: tracking } : {}),
       });
       const items = lines.length ? lines.map((l) => {
         const qty = l.quantity && l.quantity > 0 ? l.quantity : 1;
         const unit = l.unit_price ?? (l.line_total !== null ? round2(l.line_total / qty) : 0);
-        return item(`${l.description}${l.sku ? ` (${l.sku})` : ''}`, qty, unit, l.vat_rate);
+        return item(`${l.description}${l.sku ? ` (${l.sku})` : ''}`, qty, unit, l.vat_rate, l.category_account);
       }) : [item(`Invoice ${inv.invoice_number ?? ''}`.trim(), 1, inv.subtotal ?? inv.total ?? 0, null)];
       const bill = {
         Type: 'ACCPAY',
