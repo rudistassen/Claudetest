@@ -174,6 +174,35 @@ export function registerEventRoutes(router, db, { mailbox = null, reader = null 
     res.json({ ...(await checkEvents(db, { mailbox, reader })), ...status() });
   });
 
+  // The summary at the top of Enquiries: enquiries waiting for a reply (their latest email is from the customer,
+  // oldest waiting first), the next fortnight's events, and a few counts. ?location_id narrows it to one site.
+  router.get('/events/summary', perm, (req, res) => {
+    const site = id(req.query.location_id, 'location_id');
+    const mine = (e) => canSee(req, e) && (!site || e.location_id === site);
+    const waiting = db.prepare(`SELECT e.id, e.title, e.name, e.email, e.status, e.event_date, e.guests, e.location_id, e.unread, l.name AS location_name,
+        m.created_at AS waiting_since, substr(COALESCE(m.body, ''), 1, 200) AS last_text
+      FROM event_enquiries e
+      JOIN enquiry_messages m ON m.id = (SELECT m2.id FROM enquiry_messages m2 WHERE m2.enquiry_id = e.id AND m2.direction != 'note' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1)
+      LEFT JOIN locations l ON l.id = e.location_id
+      WHERE m.direction = 'in' AND e.status NOT IN ('completed', 'lost')
+      ORDER BY m.created_at, e.id`).all().filter(mine);
+    const upcoming = db.prepare(`SELECT e.id, e.title, e.name, e.status, e.event_date, e.start_time, e.end_time, e.guests, e.location_id, l.name AS location_name
+      FROM event_enquiries e LEFT JOIN locations l ON l.id = e.location_id
+      WHERE e.event_date BETWEEN date('now') AND date('now', '+13 days') AND e.status IN ('provisional', 'confirmed')
+      ORDER BY e.event_date, COALESCE(e.start_time, '99:99')`).all().filter(mine);
+    const count = (sql) => db.prepare(`SELECT location_id FROM event_enquiries WHERE ${sql}`).all().filter(mine).length;
+    res.json({
+      needs_reply: waiting,
+      upcoming,
+      counts: {
+        needs_reply: waiting.length,
+        new_this_week: count(`created_at >= datetime('now', '-7 days')`),
+        provisional: count(`status = 'provisional'`),
+        confirmed_ahead: count(`status = 'confirmed' AND event_date >= date('now')`),
+      },
+    });
+  });
+
   router.get('/events/unread', perm, (req, res) => {
     const rows = db.prepare(`SELECT location_id FROM event_enquiries WHERE unread = 1`).all();
     res.json({ count: rows.filter((e) => canSee(req, e)).length });

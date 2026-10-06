@@ -111,3 +111,22 @@ test('Microsoft 365: replies and new emails, and what to change without permissi
     label: 'events inbox' });
   await assert.rejects(no.reply('M1', 'x'), /Mail\.Send/);
 });
+
+test('the summary: who needs a reply (oldest first), and the next fortnight', async () => {
+  const a = await login('admin@cafe.local');
+  const s = (await a('/events/summary')).data;
+  // Sarah has been replied to; Priya's email is still waiting.
+  assert.deepEqual(s.needs_reply.map((e) => e.email), ['priya@acme.example']);
+  assert.equal(s.counts.needs_reply, 1);
+  const soon = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  const id = (await a('/events/enquiries', { method: 'POST', body: { name: 'Soon', title: 'Soon party', event_date: soon, status: 'confirmed' } })).data.id;
+  const s2 = (await a('/events/summary')).data;
+  assert.ok(s2.upcoming.some((e) => e.id === id));
+  assert.ok(s2.counts.confirmed_ahead >= 1);
+  // A note doesn't count as a reply.
+  const priya = db.prepare(`SELECT id FROM event_enquiries WHERE email = 'priya@acme.example'`).get().id;
+  await a(`/events/enquiries/${priya}/messages`, { method: 'POST', body: { kind: 'note', body: 'Check the screen' } });
+  assert.equal((await a('/events/summary')).data.counts.needs_reply, 1);
+  await a(`/events/enquiries/${priya}/messages`, { method: 'POST', body: { kind: 'email', body: 'Yes we can!' } });
+  assert.equal((await a('/events/summary')).data.counts.needs_reply, 0);
+});

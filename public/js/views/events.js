@@ -44,6 +44,16 @@ export function newEnquiryDialog(state, navigate, preset = {}) {
 
 // ---- Enquiries ----
 
+// How long someone has been waiting for a reply, from when their email arrived (SQLite UTC time).
+const hoursSince = (sqlUtc) => (Date.now() - new Date(`${String(sqlUtc).replace(' ', 'T')}Z`).getTime()) / 3600000;
+function waitedFor(sqlUtc) {
+  const h = hoursSince(sqlUtc);
+  if (h < 1) return 'under an hour';
+  if (h < 24) return `${Math.floor(h)} hour${Math.floor(h) === 1 ? '' : 's'}`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? '' : 's'}`;
+}
+
 const SHOW = [['open', 'Open'], ['confirmed', 'Confirmed'], ['closed', 'Completed & lost'], ['all', 'All']];
 
 function inboxCard(inbox) {
@@ -70,14 +80,41 @@ export async function renderEnquiries(ctx) {
   const { el, state, query, stale, navigate, rerender } = ctx;
   const show = SHOW.some(([k]) => k === query.show) ? query.show : 'open';
   const scope = siteScope(state, query.scope);
-  const [rows, inbox] = await Promise.all([
-    api(`/events/enquiries${qs({ show, location_id: scope === 'all' ? undefined : state.locationId })}`),
+  const siteId = scope === 'all' ? undefined : state.locationId;
+  const [rows, inbox, sum] = await Promise.all([
+    api(`/events/enquiries${qs({ show, location_id: siteId })}`),
     api('/events/inbox').catch(() => null),
+    api(`/events/summary${qs({ location_id: siteId })}`),
   ]);
   if (stale()) return;
+  const c = sum.counts;
 
   el.innerHTML = `
     <div class="page-head"><h1>Enquiries</h1><div class="actions"><button class="btn btn-primary" id="ev-new">+ New enquiry</button></div></div>
+    <div class="kpis ev-kpis">
+      <button type="button" class="kpi kpi-button ${c.needs_reply ? 'kpi-bad' : 'kpi-good'}" data-icon="✉" id="ev-to-reply"><span>Need a reply</span><strong>${c.needs_reply}</strong>
+        <small>${c.needs_reply ? `oldest waiting ${esc(waitedFor(sum.needs_reply[0].waiting_since))}` : 'All caught up'}</small></button>
+      <div class="kpi" data-icon="✦"><span>New this week</span><strong>${c.new_this_week}</strong></div>
+      <div class="kpi ${c.provisional ? 'kpi-warn' : ''}" data-icon="◔"><span>Provisional</span><strong>${c.provisional}</strong><small>to firm up</small></div>
+      <a class="kpi" data-icon="✓" href="#/events/calendar"><span>Confirmed events ahead</span><strong>${c.confirmed_ahead}</strong></a>
+    </div>
+    <div class="ev-summary">
+      <section class="card" id="ev-reply">
+        <h2>Needs a reply <span class="badge ${c.needs_reply ? 'badge-sent' : ''}">${c.needs_reply}</span></h2>
+        ${sum.needs_reply.length ? `<ul class="ev-mini">${sum.needs_reply.map((e) => `<li><a href="#/events/enquiries/${e.id}">
+          <span><strong>${esc(e.name)}</strong>${e.title ? ` <span class="muted">${esc(e.title)}</span>` : ''}
+            <small class="muted">${esc((e.last_text ?? '').replace(/\s+/g, ' ').slice(0, 110))}</small></span>
+          <span class="ev-wait ${hoursSince(e.waiting_since) >= 24 ? 'is-late' : ''}">${esc(waitedFor(e.waiting_since))}</span></a></li>`).join('')}</ul>`
+          : '<p class="muted small">✓ Nobody is waiting for a reply.</p>'}
+      </section>
+      <section class="card">
+        <h2>Next two weeks</h2>
+        ${sum.upcoming.length ? `<ul class="ev-mini">${sum.upcoming.map((e) => `<li><a href="#/events/enquiries/${e.id}">
+          <span><strong>${esc(e.title || e.name)}</strong><small class="muted">${esc(when(e))}${e.guests ? ` · ${e.guests} guests` : ''}${e.location_name ? ` · ${esc(e.location_name)}` : ''}</small></span>
+          ${statusBadge(e.status)}</a></li>`).join('')}</ul>`
+          : '<p class="muted small">No events in the next two weeks.</p>'}
+      </section>
+    </div>
     <form class="filters" id="ev-filters">
       <div class="seg" role="group" aria-label="Show">${SHOW.map(([k, l]) => `<button type="button" data-show="${k}" class="${k === show ? 'is-on' : ''}">${l}</button>`).join('')}</div>
       ${siteFilter(state, scope)}
@@ -100,6 +137,7 @@ export async function renderEnquiries(ctx) {
   form.addEventListener('submit', (e) => { e.preventDefault(); navigate(`events/enquiries${qs({ show: show === 'open' ? undefined : show, scope: form.scope?.value })}`); });
   form.querySelectorAll('[data-show]').forEach((b) => b.addEventListener('click', () => navigate(`events/enquiries${qs({ show: b.dataset.show === 'open' ? undefined : b.dataset.show, scope: query.scope })}`)));
   el.querySelector('#ev-new').addEventListener('click', () => newEnquiryDialog(state, navigate));
+  el.querySelector('#ev-to-reply').addEventListener('click', () => el.querySelector('#ev-reply').scrollIntoView({ behavior: 'smooth', block: 'start' }));
   el.querySelector('#ev-check')?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     try {

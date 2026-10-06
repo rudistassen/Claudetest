@@ -1807,3 +1807,18 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 @media (max-width: 700px) { .cal-grid { display: none; } .cal-agenda { display: block; } }
 .ev-details .card-head { margin-bottom: 0.4rem; }
 .ev-details .ev-filled { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface)); }
+
+/* Events → Enquiries: the summary at the top */
+.ev-kpis a.kpi { color: inherit; text-decoration: none; }
+.ev-kpis a.kpi:hover { border-color: var(--brand); }
+.ev-summary { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem; }
+@media (max-width: 900px) { .ev-summary { grid-template-columns: minmax(0, 1fr); } }
+.ev-summary > section { min-width: 0; }
+.ev-mini { list-style: none; margin: 0; padding: 0; }
+.ev-mini li + li { border-top: 1px solid var(--border); }
+.ev-mini a { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.55rem 0.2rem; color: var(--text); text-decoration: none; }
+.ev-mini a:hover strong { color: var(--brand); }
+.ev-mini a > span:first-child { min-width: 0; }
+.ev-mini small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-wait { flex: none; font-size: 0.78rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 99px; background: var(--warn-soft); color: var(--warn); white-space: nowrap; }
+.ev-wait.is-late { background: var(--bad-soft); color: var(--bad); }
