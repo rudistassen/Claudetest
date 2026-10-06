@@ -9,6 +9,7 @@ import * as reviews from './views/reviews.js';
 import * as openorders from './views/openorders.js';
 import * as sickness from './views/sickness.js';
 import * as requests from './views/requests.js';
+import * as xeroView from './views/xero.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -84,6 +85,7 @@ const ROUTES = [
   [/^admin\/products$/, admin.renderProducts, SUPPLIERS],
   [/^admin\/safety-tasks$/, safety.renderSetup, ['safety.manage']],
   [/^admin\/square$/, admin.renderSquare, 'admin'],
+  [/^admin\/xero$/, xeroView.render, 'admin'],
   [/^admin\/payment-links$/, paymentlinks.render, ['payments.send']],
   [/^mybrew$/, mybrew.renderMyBrew],
   [/^admin\/news$/, mybrew.renderNewsSetup, ['news.manage']],
@@ -137,6 +139,7 @@ function navGroups() {
       ['admin/permissions', 'Permissions', '⚿', 'admin'],
       ['admin/locations', 'Locations', '⌂', 'admin'],
       ['admin/square', 'Square', '▢', 'admin'],
+      ['admin/xero', 'Xero', '⇄', 'admin'],
       ['admin/payment-links', 'Payment links', '£', ['payments.send']],
       ['admin/email-reports', 'Email reports', '✉', 'admin'],
       ['admin/news', 'News', '✎', ['news.manage']],

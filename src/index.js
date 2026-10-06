@@ -3,6 +3,7 @@ import path from 'node:path';
 import { openDb } from './db.js';
 import { cleanEnv, DEMO_PASSWORD, ensureAdmin, isEmpty, lockDemoAccounts, seedAdmin, seedDemo, seedSafetyTasks } from './seed.js';
 import { createApp, publicDir } from './server.js';
+import { xeroConfig } from './xero.js';
 import { appVersion } from './app-version.js';
 import { brevoMailer, emailConfig } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
@@ -99,4 +100,6 @@ if (places) {
 }
 
 const version = appVersion(publicDir);
-createApp(db, { square, mailer, invoiceReader, mailbox, places, version }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));
+const xeroSettings = xeroConfig();
+if (xeroSettings) console.log('Xero: set up – connect it under Setup → Xero.');
+createApp(db, { square, mailer, invoiceReader, mailbox, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));

@@ -270,6 +270,11 @@ export async function renderInvoice(ctx) {
       </div>
     </div>
     ${editable ? '' : `<p class="publish-ok">✓ Confirmed by ${esc(inv.confirmed_by_name ?? 'someone')} on ${fmtDateTime(inv.confirmed_at)}</p>`}
+    ${!editable && (inv.xero_url || inv.xero_ready) ? `<div class="xero-bar ${inv.xero_url ? 'is-sent' : ''}">
+      ${inv.xero_url ? `<span>✓ In Xero as a draft bill${inv.xero_sent_at ? ` · sent ${fmtDateTime(inv.xero_sent_at)}` : ''}</span><a class="btn btn-small" href="${esc(inv.xero_url)}" target="_blank" rel="noopener">Open in Xero ↗</a>`
+        : `<span>Not in Xero yet</span><button class="btn btn-small btn-primary" id="send-xero">Send to Xero</button>`}
+      ${inv.xero_error ? `<small class="${inv.xero_url ? 'muted' : 'tone-bad'}">${esc(inv.xero_error)}</small>` : ''}
+    </div>` : ''}
     ${inv.warnings.map((w) => `<p class="notice notice-warn">⚠ ${esc(w.text)}${w.id ? ` – <a href="#/invoices/${w.id}">open it</a>` : ''}</p>`).join('')}
     <div class="invoice-layout">
       <section class="card invoice-doc"><div id="doc" class="loading">Loading the invoice…</div>
@@ -331,6 +336,15 @@ export async function renderInvoice(ctx) {
 
   if (!editable) {
     el.querySelector('#delete')?.addEventListener('click', () => remove());
+    el.querySelector('#send-xero')?.addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      e.target.textContent = 'Sending…';
+      try {
+        const r = await api(`/invoices/${inv.id}/xero`, { method: 'POST' });
+        toast(r.warning ?? 'Sent to Xero as a draft bill');
+      } catch (err) { showError(err); }
+      ctx.rerender();
+    });
     return;
   }
 

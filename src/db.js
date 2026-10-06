@@ -448,6 +448,25 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status, created_at);
 
+-- The connection to Xero (one organisation), and how bills are coded there. Tokens never leave the server.
+-- site_options: JSON { locationId: tracking option name }.
+CREATE TABLE IF NOT EXISTS xero_connection (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  tenant_id TEXT,
+  tenant_name TEXT,
+  access_token TEXT,
+  refresh_token TEXT,
+  expires_at INTEGER,
+  connected_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  connected_at TEXT,
+  last_error TEXT,
+  account_code TEXT,
+  tracking_category_id TEXT,
+  tracking_category_name TEXT,
+  site_options TEXT,
+  auto_send INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS invoice_lines (
   id INTEGER PRIMARY KEY,
   invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -640,6 +659,11 @@ const MIGRATIONS = [
   ['invoices', 'source', "ALTER TABLE invoices ADD COLUMN source TEXT NOT NULL DEFAULT 'upload'"],
   ['invoices', 'email_from', 'ALTER TABLE invoices ADD COLUMN email_from TEXT'],
   ['invoices', 'email_subject', 'ALTER TABLE invoices ADD COLUMN email_subject TEXT'],
+  // Sent to Xero as a draft bill (its id there), when, and the last problem sending it.
+  ['invoices', 'xero_invoice_id', `ALTER TABLE invoices ADD COLUMN xero_invoice_id TEXT;
+    ALTER TABLE invoices ADD COLUMN xero_sent_at TEXT;
+    ALTER TABLE invoices ADD COLUMN xero_error TEXT;`],
+  ['suppliers', 'xero_contact_id', 'ALTER TABLE suppliers ADD COLUMN xero_contact_id TEXT'],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],

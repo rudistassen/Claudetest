@@ -3,6 +3,7 @@
 import { assertLocation, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { badRequest, date, forbidden, id, notFound, num, round2, str } from '../util.js';
+import { autoSendToXero, xeroInvoiceInfo } from './xero.js';
 
 export const MAX_INVOICE_BYTES = 10 * 1024 * 1024;
 export const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -119,11 +120,11 @@ export function saveReadInvoice(db, { locationId, read, fileName, mediaType, byt
   return { invoiceId, supplierMatch: supplier.how };
 }
 
-export function registerInvoiceRoutes(router, db, reader) {
+export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) {
   const load = (req) => {
     const inv = db.prepare(`SELECT i.id, i.location_id, i.supplier_id, i.supplier_name, i.supplier_details, i.invoice_number, i.invoice_date,
         i.due_date, i.subtotal, i.vat, i.total, i.status, i.file_name, i.file_type, i.notes, i.created_at, i.confirmed_at,
-        i.source, i.email_from, i.email_subject, l.name AS location_name, s.name AS matched_supplier_name, cu.name AS created_by_name, co.name AS confirmed_by_name
+        i.source, i.email_from, i.email_subject, i.xero_invoice_id, i.xero_sent_at, i.xero_error, l.name AS location_name, s.name AS matched_supplier_name, cu.name AS created_by_name, co.name AS confirmed_by_name
       FROM invoices i JOIN locations l ON l.id = i.location_id LEFT JOIN suppliers s ON s.id = i.supplier_id
       LEFT JOIN users cu ON cu.id = i.created_by LEFT JOIN users co ON co.id = i.confirmed_by WHERE i.id = ?`).get(Number(req.params.id));
     if (!inv) throw notFound('Invoice');
@@ -146,7 +147,7 @@ export function registerInvoiceRoutes(router, db, reader) {
     const unmatched = lines.filter((l) => !l.product_id).length;
     let details = null;
     try { details = inv.supplier_details ? JSON.parse(inv.supplier_details) : null; } catch { /* ignore */ }
-    return { ...inv, supplier_details: details, lines, lines_total: sum, unmatched, warnings };
+    return { ...inv, supplier_details: details, lines, lines_total: sum, unmatched, warnings, ...xeroInvoiceInfo(xero, inv) };
   };
 
   router.get('/invoices', requirePerm('orders.manage'), (req, res) => {
@@ -292,6 +293,7 @@ export function registerInvoiceRoutes(router, db, reader) {
       db.prepare(`UPDATE invoices SET status = 'confirmed', confirmed_by = ?, confirmed_at = datetime('now') WHERE id = ?`).run(req.user.id, inv.id);
       return { supplier_added: supplierAdded, products_added: productsAdded, costs_updated: costsUpdated, learnt };
     });
+    autoSendToXero(xero, inv.id);
     res.json({ ...summary, invoice: withLines(load(req)) });
   });
 

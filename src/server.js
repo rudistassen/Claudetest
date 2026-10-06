@@ -14,6 +14,8 @@ import { registerTradingRoutes } from './routes/trading.js';
 import { registerOpenOrderRoutes } from './routes/open-orders.js';
 import { registerReportRoutes } from './reports.js';
 import { registerInvoiceRoutes } from './routes/invoices.js';
+import { registerXeroRoutes } from './routes/xero.js';
+import { Xero } from './xero.js';
 import { registerNewsRoutes } from './routes/news.js';
 import { registerDocumentRoutes } from './routes/documents.js';
 import { registerBreakRoutes } from './routes/breaks.js';
@@ -38,7 +40,9 @@ export function trustProxy(env) {
 // mailbox: the shared invoice inbox (see mailbox.js), or null when it isn't connected.
 // places: Google Maps, for each site's rating and reviews (see google-reviews.js), or null when it isn't set up.
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, places = null, version = null, weather = londonWeather() } = {}) {
+// xero: { config, fetch? } when Xero is set up (see xero.js), otherwise null.
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
+  const xeroClient = xero ? new Xero(db, xero.config, xero.fetch) : null;
   const app = express();
   app.disable('x-powered-by');
   // Browser protections: only this site's own scripts run, pages can't be shown inside other sites (stops
@@ -91,7 +95,8 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerOpenOrderRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, mailer);
-  registerInvoiceRoutes(api, db, invoiceReader);
+  registerInvoiceRoutes(api, db, invoiceReader, { xero: xeroClient });
+  registerXeroRoutes(api, db, xeroClient);
   registerNewsRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);

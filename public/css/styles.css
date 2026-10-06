@@ -1625,3 +1625,11 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 
 /* With Trail's tiles down the side, its own tabs aren't needed. */
 .hub-main .trail-tabs { display: none; }
+
+/* Invoices: Xero */
+.xero-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin: 0 0 1rem; padding: 0.6rem 0.9rem; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--border); }
+.xero-bar.is-sent { border-color: color-mix(in srgb, #13b5ea 45%, var(--border)); background: color-mix(in srgb, #13b5ea 7%, var(--surface)); }
+.xero-bar small { flex-basis: 100%; }
+.xero-sites { width: 100%; margin: 0.4rem 0 0.8rem; }
+.xero-sites select { width: 100%; }
