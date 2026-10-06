@@ -207,6 +207,7 @@ main { flex: 1; min-width: 0; padding: 1rem 1.25rem 2.5rem; }
 .topnav-menu a.active { background: var(--menu-soft, var(--brand-soft)); color: var(--brand); font-weight: 700; }
 .topnav-menu .nav-icon { color: var(--menu-ink, var(--muted)); }
 .topnav-group[data-tone="team"] { --menu-tone: var(--tone-team-ink); --menu-ink: var(--tone-team-ink); --menu-soft: var(--tone-team); }
+.topnav-group[data-tone="people"] { --menu-tone: var(--tone-people-ink); --menu-ink: var(--tone-people-ink); --menu-soft: var(--tone-people); }
 .topnav-group[data-tone="trail"] { --menu-tone: var(--tone-trail-ink); --menu-ink: var(--tone-trail-ink); --menu-soft: var(--tone-trail); }
 .topnav-group[data-tone="stock"] { --menu-tone: var(--tone-stock-ink); --menu-ink: var(--tone-stock-ink); --menu-soft: var(--tone-stock); }
 .topnav-group[data-tone="reporting"] { --menu-tone: var(--tone-reporting-ink); --menu-ink: var(--tone-reporting-ink); --menu-soft: var(--tone-reporting); }
@@ -812,13 +813,16 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 
 /* Menu sections in colour: Team green, Trail blue, Stock and Ordering light yellow, Reporting light green */
 :root { --tone-team: #dcefe2; --tone-team-ink: #1c6b3c; --tone-trail: #dde9f8; --tone-trail-ink: #1d5a9e;
-  --tone-stock: #fbf3cf; --tone-stock-ink: #876a00; --tone-reporting: #eaf5d3; --tone-reporting-ink: #557515; }
+  --tone-stock: #fbf3cf; --tone-stock-ink: #876a00; --tone-reporting: #eaf5d3; --tone-reporting-ink: #557515;
+  --tone-people: #efe7fa; --tone-people-ink: #6a3fa8; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --tone-team: #1d3527; --tone-team-ink: #8fd6a9; --tone-trail: #1c2c42; --tone-trail-ink: #93bdf0;
-    --tone-stock: #3a3317; --tone-stock-ink: #e9cf6a; --tone-reporting: #2a3519; --tone-reporting-ink: #bfe07c; }
+    --tone-stock: #3a3317; --tone-stock-ink: #e9cf6a; --tone-reporting: #2a3519; --tone-reporting-ink: #bfe07c;
+    --tone-people: #2b2240; --tone-people-ink: #c7aef0; }
 }
 :root[data-theme="dark"] { --tone-team: #1d3527; --tone-team-ink: #8fd6a9; --tone-trail: #1c2c42; --tone-trail-ink: #93bdf0;
-  --tone-stock: #3a3317; --tone-stock-ink: #e9cf6a; --tone-reporting: #2a3519; --tone-reporting-ink: #bfe07c; }
+  --tone-stock: #3a3317; --tone-stock-ink: #e9cf6a; --tone-reporting: #2a3519; --tone-reporting-ink: #bfe07c;
+    --tone-people: #2b2240; --tone-people-ink: #c7aef0; }
 .nav-group[data-tone] { margin: 0.45rem 0; padding: 0.1rem 0.25rem 0.3rem; border-radius: 10px; }
 .nav-group[data-tone] .nav-heading { margin-top: 0.4rem; font-weight: 700; }
 .nav-group[data-tone="team"] { background: var(--tone-team); }
@@ -828,6 +832,8 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 .nav-group[data-tone="stock"] { background: var(--tone-stock); }
 .nav-group[data-tone="stock"] .nav-heading { color: var(--tone-stock-ink); }
 .nav-group[data-tone="reporting"] { background: var(--tone-reporting); }
+.nav-group[data-tone="people"] { background: var(--tone-people); }
+.nav-group[data-tone="people"] .nav-heading { color: var(--tone-people-ink); }
 .nav-group[data-tone="reporting"] .nav-heading { color: var(--tone-reporting-ink); }
 .nav-group[data-tone] a:hover { background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .nav-group[data-tone] a.active { background: var(--surface); }
@@ -1056,6 +1062,7 @@ main > :nth-child(n+4) { animation-delay: 0.09s; }
 /* Section label above each page title (Team, Trail, …). */
 body { --section-ink: var(--muted); }
 body[data-section="team"] { --section-ink: var(--tone-team-ink); }
+body[data-section="people"] { --section-ink: var(--tone-people-ink); }
 body[data-section="trail"] { --section-ink: var(--tone-trail-ink); }
 body[data-section="stock"] { --section-ink: var(--tone-stock-ink); }
 body[data-section="reporting"] { --section-ink: var(--tone-reporting-ink); }
@@ -1543,6 +1550,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .hub-tiles[data-tone="trail"] .hub-icon { background: var(--tone-trail); color: var(--tone-trail-ink); }
 .hub-tiles[data-tone="stock"] .hub-icon { background: var(--tone-stock); color: var(--tone-stock-ink); }
 .hub-tiles[data-tone="team"] .hub-icon { background: var(--tone-team); color: var(--tone-team-ink); }
+.hub-tiles[data-tone="people"] .hub-icon { background: var(--tone-people); color: var(--tone-people-ink); }
 .hub-text { flex: 1; min-width: 0; }
 .hub-text strong { display: block; font-size: 1.05rem; }
 .hub-text small { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 0.15rem; }
@@ -1633,3 +1641,33 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .xero-bar small { flex-basis: 100%; }
 .xero-sites { width: 100%; margin: 0.4rem 0 0.8rem; }
 .xero-sites select { width: 100%; }
+
+/* People: recruitment, training matrix, performance and areas */
+.pp-job-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.pp-job-head h2 { margin-bottom: 0.15rem; }
+.pp-job-head .actions { display: flex; gap: 0.4rem; align-items: center; }
+.pp-cands td small, .pp-perf td small, .pp-matrix th small { display: block; font-weight: 400; }
+.pp-cands tr.is-out td { opacity: 0.55; }
+.pp-cands select { width: auto; min-width: 8.5rem; }
+.pp-matrix th, .pp-matrix td { white-space: nowrap; }
+.pp-matrix thead th { vertical-align: bottom; text-transform: none; letter-spacing: 0; }
+.pp-matrix .link-btn { color: var(--text); text-decoration: none; font-weight: 600; font-size: 0.92rem; text-align: left; }
+.pp-matrix .link-btn:hover { color: var(--brand); text-decoration: underline; }
+.pp-matrix tbody th { text-align: left; }
+.pp-matrix td { text-align: center; padding: 0.3rem; }
+.pp-cell { width: 100%; min-width: 6.5rem; padding: 0.35rem 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--muted); font: inherit; font-size: 0.85rem; cursor: pointer; }
+.pp-cell:hover { border-color: var(--brand); }
+.pp-cell.pp-done, .pp-cell.pp-trained { background: var(--good-soft); color: var(--good); border-color: transparent; font-weight: 600; }
+.pp-cell.pp-due_soon, .pp-cell.pp-learning { background: var(--warn-soft); color: var(--warn); border-color: transparent; font-weight: 600; }
+.pp-cell.pp-expired { background: var(--bad-soft); color: var(--bad); border-color: transparent; font-weight: 600; }
+.pp-areas tfoot th, .pp-areas tfoot td { border-top: 2px solid var(--border); }
+.pp-pick { border: 0; padding: 0; margin: 0 0 0.75rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.35rem 0.75rem; }
+.pp-pick legend { font-weight: 600; margin-bottom: 0.35rem; font-size: 0.9rem; }
+.pp-history { list-style: none; margin: 0; padding: 0; }
+.pp-history li { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+.pp-history small { display: block; }
+.pp-stars { color: #e0a100; letter-spacing: 0.05em; white-space: nowrap; }
+.pp-stars span { color: var(--border); }
+.pp-review h3 { font-size: 0.9rem; margin: 0.9rem 0 0.2rem; color: var(--muted); }
+.pp-text { white-space: pre-wrap; margin: 0; }

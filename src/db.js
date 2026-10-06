@@ -624,6 +624,81 @@ CREATE TABLE IF NOT EXISTS square_sync_log (
   message TEXT,
   triggered_by TEXT
 );
+
+-- People → Recruitment: jobs being hired for at each site, and the candidates for each.
+CREATE TABLE IF NOT EXISTS vacancies (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id),
+  title TEXT NOT NULL,
+  hours TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'filled', 'closed')),
+  notes TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS candidates (
+  id INTEGER PRIMARY KEY,
+  vacancy_id INTEGER NOT NULL REFERENCES vacancies(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  stage TEXT NOT NULL DEFAULT 'applied' CHECK (stage IN ('applied', 'interview', 'trial', 'offer', 'hired', 'rejected')),
+  next_step_on TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_candidates_vacancy ON candidates(vacancy_id);
+
+-- People → Learning and development: training courses (some need doing again every so many months) and who has
+-- done them.
+CREATE TABLE IF NOT EXISTS training_courses (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  renew_months INTEGER,
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS training_records (
+  id INTEGER PRIMARY KEY,
+  course_id INTEGER NOT NULL REFERENCES training_courses(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  completed_on TEXT NOT NULL,
+  notes TEXT,
+  recorded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_training_records_user ON training_records(user_id, course_id);
+
+-- People → Performance: one-to-ones, probation reviews and appraisals.
+CREATE TABLE IF NOT EXISTS performance_reviews (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  review_date TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'one_to_one' CHECK (kind IN ('one_to_one', 'probation', 'appraisal')),
+  rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+  went_well TEXT,
+  to_improve TEXT,
+  goals TEXT,
+  next_review_on TEXT,
+  reviewer_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_performance_reviews_user ON performance_reviews(user_id, review_date);
+
+-- People → Areas: the areas of work (e.g. Bar, Kitchen, Floor) and who is learning or trained in each.
+CREATE TABLE IF NOT EXISTS work_areas (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS user_areas (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  area_id INTEGER NOT NULL REFERENCES work_areas(id) ON DELETE CASCADE,
+  level TEXT NOT NULL CHECK (level IN ('learning', 'trained')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, area_id)
+);
 `;
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
@@ -801,6 +876,16 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 5');
+  }
+  if (version < 6) {
+    // The People section was added: whoever could manage staff can use it.
+    for (const ps of db.prepare('SELECT id, permissions FROM permission_sets').all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (perms.includes('staff.manage') && !perms.includes('people.manage')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...perms, 'people.manage']), ps.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 6');
   }
   ensureDefaultSets(db);
   return db;

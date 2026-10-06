@@ -20,6 +20,7 @@ import { registerReportRoutes } from '../src/reports.js';
 import { demoInvoiceReader } from '../src/invoice-demo.js';
 import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { registerXeroRoutes } from '../src/routes/xero.js';
+import { registerPeopleRoutes } from '../src/routes/people.js';
 import { registerNewsRoutes } from '../src/routes/news.js';
 import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { registerBreakRoutes } from '../src/routes/breaks.js';
@@ -132,6 +133,7 @@ async function boot() {
   registerInvoiceRoutes(api, db, invoiceReader);
   // Xero isn't connected in the demo: Setup → Xero shows how to set it up.
   registerXeroRoutes(api, db, null);
+  registerPeopleRoutes(api, db);
   // A pretend shared inbox with a few emails waiting, so "Check now" under Invoices can be tried.
   const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
   const fakePdf = btoa('%PDF-1.4 demo invoice %%EOF');

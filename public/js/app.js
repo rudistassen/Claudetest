@@ -10,6 +10,7 @@ import * as openorders from './views/openorders.js';
 import * as sickness from './views/sickness.js';
 import * as requests from './views/requests.js';
 import * as xeroView from './views/xero.js';
+import * as people from './views/people.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -75,6 +76,11 @@ const ROUTES = [
   [/^open-orders$/, openorders.render, ['sales.view']],
   [/^sickness$/, sickness.renderReport, ['rota.edit', 'staff.manage']],
   [/^rota\/requests$/, requests.render, ['rota.publish', 'leave.manage']],
+  [/^people\/recruitment$/, people.renderRecruitment, ['people.manage']],
+  [/^people\/training$/, people.renderTraining, ['people.manage']],
+  [/^people\/performance$/, people.renderPerformance, ['people.manage']],
+  [/^people\/performance\/(\d+)$/, people.renderPerson, ['people.manage']],
+  [/^people\/areas$/, people.renderAreas, ['people.manage']],
   [/^orders$/, orders.renderList, ['orders.manage']],
   [/^orders\/new$/, orders.renderNew, ['orders.manage']],
   [/^orders\/(\d+)$/, orders.renderOrder, ['orders.manage']],
@@ -118,6 +124,12 @@ function navGroups() {
       ['safety/report', 'Compliance', '▤', ['safety.report']],
       ['safety/setup', 'Set up checks', '☑', ['safety.manage']],
     ]],
+    ['People', [
+      ['people/recruitment', 'Recruitment', '✎', ['people.manage']],
+      ['people/training', 'Learning & development', '✦', ['people.manage']],
+      ['people/performance', 'Performance', '★', ['people.manage']],
+      ['people/areas', 'Areas', '◫', ['people.manage']],
+    ]],
     ['Stock and Ordering', [
       ['stock', 'Stock takes', '☰', STOCK],
       ['wastage', 'Wastage', '⌫', WASTAGE],
@@ -152,7 +164,7 @@ function navGroups() {
 }
 
 // Each menu section's colour.
-const NAV_TONES = { Rota: 'team', Trail: 'trail', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
+const NAV_TONES = { Rota: 'team', Trail: 'trail', People: 'people', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
 
 // A little red bell beside Rota in the menus while requests are waiting.
 const BELL = '<span class="req-bell" data-req-bell hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-1.7 1.7A1 1 0 0 0 4 19.4h16a1 1 0 0 0 .7-1.7Z"/></svg></span>';
@@ -206,7 +218,7 @@ function foldedGroups() {
 const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 
 // Menu sections that open a page of tiles (one per page in the section) instead of a drop-down list.
-const HUBS = { Rota: 'rota-menu', Trail: 'trail', 'Stock and Ordering': 'stock-ordering' };
+const HUBS = { Rota: 'rota-menu', Trail: 'trail', People: 'people', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
   safety: 'Today’s checks – tick them off as you go',
@@ -220,6 +232,10 @@ const TILE_NOTES = {
   wastage: 'Record what’s thrown away and see the cost',
   orders: 'Create, send and receive supplier orders',
   invoices: 'Upload and check supplier invoices',
+  'people/recruitment': 'Jobs you’re hiring for and their candidates',
+  'people/training': 'Training courses and who has done them',
+  'people/performance': 'One-to-ones, probation reviews and appraisals',
+  'people/areas': 'Who is trained to work in each area',
 };
 
 // On a computer, a section's tiles run down the left and its pages open to the right of them; on a phone the
