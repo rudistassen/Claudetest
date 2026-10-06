@@ -150,6 +150,8 @@ function navGroups() {
 // Each menu section's colour.
 const NAV_TONES = { Rota: 'team', Trail: 'trail', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
 
+// A little red bell beside Rota in the menus while requests are waiting.
+const BELL = '<span class="req-bell" data-req-bell hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-1.7 1.7A1 1 0 0 0 4 19.4h16a1 1 0 0 0 .7-1.7Z"/></svg></span>';
 // Requests waiting for this person (holiday, and shifts asked to be dropped), shown on Rota → Requests.
 let pendingRequests = { count: 0, at: 0, user: null };
 async function showRequestBadge(force = false) {
@@ -166,6 +168,10 @@ async function showRequestBadge(force = false) {
     b.hidden = !pendingRequests.count;
     b.textContent = pendingRequests.count;
     b.title = `${pendingRequests.count} request${pendingRequests.count === 1 ? '' : 's'} to review`;
+  });
+  document.querySelectorAll('[data-req-bell]').forEach((b) => {
+    b.hidden = !pendingRequests.count;
+    b.title = `${pendingRequests.count} request${pendingRequests.count === 1 ? '' : 's'} waiting – see Rota → Requests`;
   });
 }
 window.addEventListener('requests:changed', () => showRequestBadge(true));
@@ -253,7 +259,7 @@ function tabBar(items, active) {
   const has = (p) => items.some(([q]) => q === p);
   const tabs = [state.can('dashboard.view') ? ['dashboard', 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Brew', 'mybrew']].filter(Boolean);
   return `<nav class="tabbar" aria-label="Quick links">
-    ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}</a>`).join('')}
+    ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'rota' ? BELL : ''}</a>`).join('')}
     <button type="button" class="tabbar-menu">${icon('menu')}<span>Menu</span></button>
   </nav>`;
 }
@@ -295,7 +301,7 @@ function renderShell() {
         ${groups.map(([heading, items]) => {
           if (!heading) return items.map(([p, label]) => `<a href="#/${p}" class="topnav-btn ${active === p ? 'is-active' : ''}">${label}${p === 'mybrew' ? '<span class="nav-dot" data-news-dot hidden></span>' : ''}</a>`).join('');
           const here = items.some(([p]) => p === active) || path === `hub/${HUBS[heading]}`;
-          if (HUBS[heading]) return `<a href="#/hub/${HUBS[heading]}" class="topnav-btn ${here ? 'is-active' : ''}">${esc(TOP_LABELS[heading] ?? heading)}</a>`;
+          if (HUBS[heading]) return `<a href="#/hub/${HUBS[heading]}" class="topnav-btn ${here ? 'is-active' : ''}">${esc(TOP_LABELS[heading] ?? heading)}${heading === 'Rota' ? BELL : ''}</a>`;
           const hasNews = items.some(([p]) => p === 'mybrew');
           return `<div class="topnav-group" data-tone="${NAV_TONES[heading] ?? ''}">
             <button type="button" class="topnav-btn ${here ? 'is-active' : ''}" aria-haspopup="true" aria-expanded="false">${esc(TOP_LABELS[heading] ?? heading)}${hasNews ? '<span class="nav-dot" data-news-dot hidden></span>' : ''}<span class="topnav-caret" aria-hidden="true">▾</span></button>
@@ -329,7 +335,7 @@ function renderShell() {
           if (!heading) return links;
           if (HUBS[heading]) {
             const here = items.some(([p]) => p === active) || path === `hub/${HUBS[heading]}`;
-            return `<div class="nav-group" data-tone="${NAV_TONES[heading] ?? ''}"><a href="#/hub/${HUBS[heading]}" class="nav-hub ${here ? 'active' : ''}"><span class="nav-icon">▦</span><span class="nav-label">${esc(TOP_LABELS[heading] ?? heading)}</span><span class="nav-caret" aria-hidden="true">›</span></a></div>`;
+            return `<div class="nav-group" data-tone="${NAV_TONES[heading] ?? ''}"><a href="#/hub/${HUBS[heading]}" class="nav-hub ${here ? 'active' : ''}"><span class="nav-icon">▦</span><span class="nav-label">${esc(TOP_LABELS[heading] ?? heading)}</span>${heading === 'Rota' ? BELL : ''}<span class="nav-caret" aria-hidden="true">›</span></a></div>`;
           }
           // The section holding the current page always stays open.
           const open = !folded.has(heading) || items.some(([p]) => p === active);
@@ -353,6 +359,7 @@ function renderShell() {
     e.preventDefault();
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
     state.user = null;
+    pendingRequests = { count: 0, at: 0, user: null };
     location.hash = '';
     start();
   }));

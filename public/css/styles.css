@@ -1597,3 +1597,13 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .mb-asked { margin-left: auto; color: #b45f06; font-weight: 700; }
 .mb-card-sub { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; min-height: 1.6rem; }
 .mybrew [data-mb][hidden] { display: none; }
+
+/* The red bell beside Rota in the menus while requests are waiting */
+.req-bell { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 0.35rem; border-radius: 50%; background: var(--bad); color: #fff;
+  vertical-align: -3px; box-shadow: 0 0 0 2px var(--surface); animation: req-ring 2.4s ease-in-out 1; }
+.req-bell[hidden] { display: none; }
+.req-bell svg { width: 11px; height: 11px; }
+.tabbar a { position: relative; }
+.tabbar .req-bell { position: absolute; top: 2px; left: calc(50% + 6px); margin: 0; }
+@keyframes req-ring { 0%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(-14deg); } 20%, 40% { transform: rotate(14deg); } 50% { transform: rotate(0); } }
+@media (prefers-reduced-motion: reduce) { .req-bell { animation: none; } }
