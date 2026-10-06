@@ -185,6 +185,21 @@ const TILE_NOTES = {
   invoices: 'Upload and check supplier invoices',
 };
 
+// On a computer, a section's tiles run down the left and its pages open to the right of them; on a phone the
+// section opens on its page of tiles.
+const railScreen = window.matchMedia('(min-width: 900px)');
+const hubTile = ([p, label, ic], active) => `<a class="hub-tile ${p === active ? 'is-active' : ''}" href="#/${p}" ${p === active ? 'aria-current="page"' : ''}>
+  <span class="hub-icon" aria-hidden="true">${ic}</span>
+  <span class="hub-text"><strong>${esc(label)}</strong>${TILE_NOTES[p] ? `<small>${esc(TILE_NOTES[p])}</small>` : ''}</span>
+  <span class="hub-go" aria-hidden="true">›</span></a>`;
+// The tiles-section a page belongs to: [heading, items, active item] or null.
+function hubOf(path) {
+  const groups = navGroups();
+  const active = activeItem(path, groups.flatMap(([, items]) => items));
+  const g = groups.find(([h, items]) => HUBS[h] && items.some(([p]) => p === active));
+  return g ? [g[0], g[1], active] : null;
+}
+
 // A section's page of tiles (see HUBS).
 function renderHub({ el, params }) {
   const heading = Object.keys(HUBS).find((h) => HUBS[h] === params[0]);
@@ -195,10 +210,7 @@ function renderHub({ el, params }) {
   }
   el.innerHTML = `
     <div class="page-head"><h1>${esc(TOP_LABELS[heading] ?? heading)}</h1></div>
-    <div class="hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}">${items.map(([p, label, ic]) => `<a class="hub-tile" href="#/${p}">
-      <span class="hub-icon" aria-hidden="true">${ic}</span>
-      <span class="hub-text"><strong>${esc(label)}</strong>${TILE_NOTES[p] ? `<small>${esc(TILE_NOTES[p])}</small>` : ''}</span>
-      <span class="hub-go" aria-hidden="true">›</span></a>`).join('')}</div>`;
+    <div class="hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}">${items.map((i) => hubTile(i, null)).join('')}</div>`;
 }
 
 // Line icons for the bar along the bottom on phones.
@@ -432,10 +444,26 @@ export async function route() {
     el.innerHTML = '<div class="empty">You do not have access to this page.</div>';
     return;
   }
+  // On a computer, a tiles-section opens on its first page, with the tiles down the side.
+  if (match.view === renderHub && railScreen.matches) {
+    const heading = Object.keys(HUBS).find((h) => HUBS[h] === match.m[1]);
+    const first = navGroups().find(([h]) => h === heading)?.[1]?.[0]?.[0];
+    if (first) { window.location.replace(`#/${first}`); return; }
+  }
   const seq = ++routeSeq;
-  el.innerHTML = '<div class="loading">Loading…</div>';
+  let view = el;
+  const hub = railScreen.matches ? hubOf(path) : null;
+  if (hub) {
+    const [heading, items, active] = hub;
+    el.innerHTML = `<div class="hub-layout">
+      <nav class="hub-rail hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}" aria-label="${esc(TOP_LABELS[heading] ?? heading)}">
+        <p class="hub-rail-head">${esc(TOP_LABELS[heading] ?? heading)}</p>${items.map((i) => hubTile(i, active)).join('')}</nav>
+      <div class="hub-main"></div></div>`;
+    view = el.querySelector('.hub-main');
+  }
+  view.innerHTML = '<div class="loading">Loading…</div>';
   const ctx = {
-    el,
+    el: view,
     state,
     params: match.m.slice(1),
     query,
@@ -447,7 +475,7 @@ export async function route() {
     await match.view(ctx);
   } catch (err) {
     if (seq !== routeSeq) return;
-    el.innerHTML = `<div class="empty">Could not load this page: ${esc(err.message)}</div>`;
+    view.innerHTML = `<div class="empty">Could not load this page: ${esc(err.message)}</div>`;
     showError(err);
   }
 }
