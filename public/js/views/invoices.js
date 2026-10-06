@@ -295,7 +295,7 @@ export async function renderInvoice(ctx) {
         <div class="row">
           <label class="field"><span>Invoice number</span>${input('invoice_number', inv.invoice_number)}</label>
           <label class="field"><span>Invoice date</span>${input('invoice_date', inv.invoice_date, 'type="date"')}</label>
-          <label class="field"><span>Due date</span>${input('due_date', inv.due_date, 'type="date"')}</label>
+          <label class="field"><span>Due date</span>${input('due_date', inv.due_date, 'type="date"')}<small class="muted" id="due-hint"></small></label>
         </div>
         ${inv.notes ? `<p class="small muted">Note: ${esc(inv.notes)}</p>` : ''}
         <h2 class="spaced">Items <span class="muted small">${inv.lines.length} line${inv.lines.length === 1 ? '' : 's'}${inv.unmatched ? ` · <span class="alert-text">${inv.unmatched} not matched</span>` : ''}</span></h2>
@@ -426,6 +426,31 @@ export async function renderInvoice(ctx) {
       },
     });
   }));
+  // The due date from the supplier's payment terms (Suppliers → Accounting & payments), when the invoice doesn't
+  // print one: kept up to date as the supplier or invoice date changes, unless someone has typed a due date.
+  const dueFor = () => {
+    const s = suppliers.find((x) => x.id === Number(el.querySelector('#inv-supplier')?.value));
+    const on = el.querySelector('[name=invoice_date]')?.value;
+    if (!s || s.payment_terms_days == null || !on) return null;
+    const d = new Date(`${on}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + s.payment_terms_days);
+    return { date: d.toISOString().slice(0, 10), days: s.payment_terms_days };
+  };
+  const dueInput = el.querySelector('[name=due_date]');
+  const dueHint = el.querySelector('#due-hint');
+  let dueFromTerms = !!dueInput && (!dueInput.value || dueInput.value === dueFor()?.date);
+  const refreshDue = () => {
+    if (!dueInput || !editable) return;
+    const t = dueFor();
+    if (dueFromTerms && t) dueInput.value = t.date;
+    dueHint.textContent = t && dueInput.value === t.date ? `From their ${t.days}-day payment terms` : '';
+  };
+  if (dueInput && editable) {
+    dueInput.addEventListener('input', () => { dueFromTerms = !dueInput.value; refreshDue(); });
+    el.querySelector('[name=invoice_date]')?.addEventListener('change', refreshDue);
+    el.querySelector('#inv-supplier')?.addEventListener('change', refreshDue);
+    refreshDue();
+  }
   // Picking a different supplier re-sorts each line's product list to put their products first.
   el.querySelector('#inv-supplier').addEventListener('change', (e) => {
     const sid = Number(e.target.value) || null;

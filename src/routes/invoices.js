@@ -2,7 +2,7 @@
 // checked by a person, then confirmed – which can add the supplier or products and update product costs.
 import { assertLocation, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
-import { badRequest, date, forbidden, id, notFound, num, round2, str } from '../util.js';
+import { addDays, badRequest, date, forbidden, id, notFound, num, round2, str } from '../util.js';
 import { autoSendToXero, xeroInvoiceInfo } from './xero.js';
 import { cleanVatCode, vatCodeForRate } from '../vat-codes.js';
 
@@ -116,12 +116,15 @@ export function saveReadInvoice(db, { locationId, read, fileName, mediaType, byt
   if (bySite && sites && !sites.includes(bySite)) bySite = null;
   if (bySite) locationId = bySite;
   const lines = (Array.isArray(read.lines) ? read.lines : []).filter((l) => l && String(l.description ?? '').trim());
+  // No due date printed: the supplier's payment terms from the invoice date.
+  const terms = supplier.supplier_id ? db.prepare('SELECT payment_terms_days FROM suppliers WHERE id = ?').get(supplier.supplier_id)?.payment_terms_days : null;
+  const dueDate = dateOrNull(read.due_date) ?? (terms != null && dateOrNull(read.invoice_date) ? addDays(dateOrNull(read.invoice_date), terms) : null);
   const invoiceId = tx(db, () => {
     const r = db.prepare(`INSERT INTO invoices (location_id, supplier_id, supplier_name, supplier_details, invoice_number, invoice_date, due_date,
         subtotal, vat, total, file_name, file_type, file, extracted, notes, created_by, source, email_from, email_subject)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       locationId, supplier.supplier_id, read.supplier?.name ?? null, JSON.stringify(read.supplier ?? {}),
-      str(read.invoice_number, 'invoice_number', { max: 100 }), dateOrNull(read.invoice_date), dateOrNull(read.due_date),
+      str(read.invoice_number, 'invoice_number', { max: 100 }), dateOrNull(read.invoice_date), dueDate,
       numOrNull(read.subtotal), numOrNull(read.vat), numOrNull(read.total), fileName, mediaType, bytes, JSON.stringify(read),
       [read.notes, read.order_reference ? `Order reference: ${read.order_reference}` : null].filter(Boolean).join(' · ') || null, userId,
       email ? 'email' : 'upload', email?.from ?? null, email?.subject ?? null);

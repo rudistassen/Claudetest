@@ -78,3 +78,17 @@ test('New order only offers suppliers set up for ordering, and orders go to the 
   assert.equal(got.supplier_email, 'po@valley.example');
   assert.equal(got.supplier_cc, 'boss@cafe.example');
 });
+
+test('an imported invoice without a due date gets one from the supplier’s payment terms', async () => {
+  const { saveReadInvoice } = await import('../src/routes/invoices.js');
+  const s = db.prepare('SELECT id, name FROM suppliers ORDER BY id LIMIT 1').get();
+  db.prepare('UPDATE suppliers SET payment_terms_days = 30 WHERE id = ?').run(s.id);
+  const loc = db.prepare('SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1').get().id;
+  const save = (read) => {
+    const { invoiceId } = saveReadInvoice(db, { locationId: loc, read: { supplier: { name: s.name }, lines: [], ...read }, fileName: 'x.pdf', mediaType: 'application/pdf', bytes: Buffer.from('x') });
+    return db.prepare('SELECT due_date FROM invoices WHERE id = ?').get(invoiceId).due_date;
+  };
+  assert.equal(save({ invoice_date: '2026-10-01' }), '2026-10-31');
+  assert.equal(save({ invoice_date: '2026-10-01', due_date: '2026-10-15' }), '2026-10-15', 'a printed due date wins');
+  assert.equal(save({}), null, 'no invoice date, no due date');
+});
