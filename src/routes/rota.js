@@ -130,7 +130,46 @@ export function registerRotaRoutes(router, db) {
     });
   }
 
-  registerShiftDropRoutes(router, db, { findClash });
+  registerShiftDropRoutes(router, db, { findClash, clearUndo: (req) => clearUndo(req) });
+
+  // --- Undo: each editor's last unpublished change, until their next change or a publish (rota_undo) ---
+  const rowsById = (ids) => (ids.length ? db.prepare(`SELECT * FROM shifts WHERE id IN (${ids.map(() => '?').join(', ')})`).all(...ids).map((r) => ({ ...r })) : []);
+  const shiftColumns = db.prepare('PRAGMA table_info(shifts)').all().map((c) => c.name);
+  const personName = (userId) => db.prepare('SELECT name FROM users WHERE id = ?').get(userId)?.name ?? 'Someone';
+  function clearUndo(req) { db.prepare('DELETE FROM rota_undo WHERE user_id = ?').run(req.user.id); }
+  /** Remembers a change for undo: before = the touched shifts' rows beforehand, created = ids of new shifts. */
+  function rememberUndo(req, label, locationId, before, created = []) {
+    const after = rowsById([...new Set([...before.map((r) => r.id), ...created])]);
+    db.prepare(`INSERT INTO rota_undo (user_id, label, location_id, before, after, created) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET label = excluded.label, location_id = excluded.location_id, before = excluded.before,
+        after = excluded.after, created = excluded.created, at = datetime('now')`)
+      .run(req.user.id, label, locationId, JSON.stringify(before), JSON.stringify(after), JSON.stringify(created));
+  }
+  const undoFor = (userId) => db.prepare('SELECT label, at FROM rota_undo WHERE user_id = ?').get(userId) ?? null;
+
+  router.post('/rota/undo', requirePerm('rota.edit'), (req, res) => {
+    const u = db.prepare('SELECT * FROM rota_undo WHERE user_id = ?').get(req.user.id);
+    if (!u) throw badRequest('There’s nothing to undo');
+    const before = JSON.parse(u.before);
+    const after = JSON.parse(u.after);
+    const created = JSON.parse(u.created);
+    // Only if those shifts are exactly as this change left them (nobody has edited or published them since).
+    const now = rowsById([...new Set([...before.map((r) => r.id), ...created])]);
+    const key = (r) => JSON.stringify(shiftColumns.map((c) => r[c] ?? null));
+    const same = now.length === after.length && after.every((a) => { const n = now.find((r) => r.id === a.id); return n && key(n) === key(a); });
+    if (!same) {
+      clearUndo(req);
+      throw badRequest('Those shifts have changed since (edited or published), so this can’t be undone any more.');
+    }
+    tx(db, () => {
+      if (created.length) db.prepare(`DELETE FROM shifts WHERE id IN (${created.map(() => '?').join(', ')})`).run(...created);
+      const put = db.prepare(`INSERT OR REPLACE INTO shifts (${shiftColumns.join(', ')}) VALUES (${shiftColumns.map(() => '?').join(', ')})`);
+      for (const r of before) put.run(...shiftColumns.map((c) => r[c] ?? null));
+      clearUndo(req);
+      logRota(db, req, { action: 'undo', location_id: u.location_id, details: `Undid: ${u.label}` });
+    });
+    res.json({ undone: u.label });
+  });
 
   function shiftBody(req) {
     const b = req.body;
@@ -297,6 +336,8 @@ export function registerRotaRoutes(router, db) {
       forecast: manager ? salesForecast(db, ids, ws) : undefined,
       bank_holidays: Object.fromEntries(days.map((d) => [d, bankHoliday(d)]).filter(([, n]) => n)),
       can_publish: editor ? can(req.user, 'rota.publish') : undefined,
+      // Their last change, if it can still be undone.
+      undo: editor ? undoFor(req.user.id) : undefined,
       // Dropped shifts that are open for anyone at the site to pick up, and shifts someone has asked to drop.
       open_shifts: drops.open,
       drop_requested: drops.pending_shift_ids,
@@ -313,6 +354,7 @@ export function registerRotaRoutes(router, db) {
     const ids = rotaSites(req, req.body.location_id);
     const day = date(req.body.date, 'date');
     const ws = day ? null : weekStart(date(req.body.week, 'week', { required: true }));
+    clearUndo(req);
     const [from, to, label] = day ? [day, day, fmtDay(day)] : [ws, addDays(ws, 6), `the week of ${fmtDay(ws)}`];
     let published = 0;
     for (const id of ids) {
@@ -331,6 +373,7 @@ export function registerRotaRoutes(router, db) {
     if (!s) throw notFound('Shift');
     assertLocation(req, s.location_id);
     if (s.pub_location_id && s.pub_location_id !== s.location_id) assertLocation(req, s.pub_location_id);
+    clearUndo(req);
     tx(db, () => {
       if (s.removed) db.prepare('DELETE FROM shifts WHERE id = ?').run(s.id);
       else db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS} WHERE id = ?`).run(s.id);
@@ -346,6 +389,7 @@ export function registerRotaRoutes(router, db) {
     const where = `location_id IN (${ids.map(() => '?').join(', ')}) AND date BETWEEN ? AND ?`;
     const args = [...ids, ws, addDays(ws, 6)];
     const n = db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE ${where} AND (${UNPUBLISHED})`).get(...args).n;
+    clearUndo(req);
     tx(db, () => {
       for (const id of ids) {
         const here = pendingAt(id, ws, addDays(ws, 6));
@@ -419,6 +463,7 @@ export function registerRotaRoutes(router, db) {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(s.location_id, s.user_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes);
       logRota(db, req, { action: 'add', location_id: s.location_id, shift: { ...s, id: ins.lastInsertRowid }, details: shiftText(s) });
+      rememberUndo(req, `Added ${personName(s.user_id)}’s shift ${shiftText(s)}`, s.location_id, [], [Number(ins.lastInsertRowid)]);
       return ins;
     });
     res.status(201).json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(r.lastInsertRowid));
@@ -437,8 +482,10 @@ export function registerRotaRoutes(router, db) {
     assertNoClash(s, existing.id);
     const changes = shiftChanges(db, existing, s);
     tx(db, () => {
+      const before = rowsById([existing.id]);
       db.prepare(`UPDATE shifts SET location_id = ?, user_id = ?, date = ?, start_time = ?, end_time = ?, break_minutes = ?, position = ?, notes = ?, removed = 0 WHERE id = ?`)
         .run(s.location_id, s.user_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes, existing.id);
+      rememberUndo(req, `Changed ${personName(existing.user_id)}’s shift ${shiftText(existing)}${existing.user_id !== s.user_id ? ` (gave it to ${personName(s.user_id)})` : ''}`, s.location_id, before);
       if (changes.length) {
         logRota(db, req, { action: 'change', location_id: s.location_id, shift: { ...s, id: existing.id }, details: `${shiftText(s)} — ${changes.join('; ')}` });
       }
@@ -450,10 +497,12 @@ export function registerRotaRoutes(router, db) {
   router.delete('/shifts/:id', requirePerm('rota.edit'), (req, res) => {
     const shift = loadShift(req);
     tx(db, () => {
+      const before = rowsById([shift.id]);
       if (shift.pub_date === null) db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
       else db.prepare('UPDATE shifts SET removed = 1 WHERE id = ?').run(shift.id);
       logRota(db, req, { action: 'remove', location_id: shift.location_id, shift,
         details: `${shiftText(shift)}${shift.pub_date === null ? ' (never published)' : ' (staff see it until the rota is published)'}` });
+      rememberUndo(req, `Removed ${personName(shift.user_id)}’s shift ${shiftText(shift)}`, shift.location_id, before);
     });
     res.json({ ok: true });
   });
@@ -464,6 +513,7 @@ export function registerRotaRoutes(router, db) {
     const shift = loadShift(req);
     const sick = req.body?.sick !== false;
     const note = sick ? str(req.body?.note, 'note', { max: 500 }) : null;
+    clearUndo(req);
     tx(db, () => {
       db.prepare(`UPDATE shifts SET sick = ?, sick_note = ?, sick_by = ?, sick_at = ${sick ? "datetime('now')" : 'NULL'} WHERE id = ?`)
         .run(sick ? 1 : 0, note, sick ? req.user.id : null, shift.id);
@@ -507,7 +557,9 @@ export function registerRotaRoutes(router, db) {
     assertNoClash(shift, shift.id);
     if (onHoliday(db, shift.user_id, shift.date)) throw badRequest('They are on holiday that day');
     tx(db, () => {
+      const before = rowsById([shift.id]);
       db.prepare('UPDATE shifts SET removed = 0 WHERE id = ?').run(shift.id);
+      rememberUndo(req, `Put back ${personName(shift.user_id)}’s shift ${shiftText(shift)}`, shift.location_id, before);
       logRota(db, req, { action: 'restore', location_id: shift.location_id, shift, details: shiftText(shift) });
     });
     res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(shift.id));
@@ -523,6 +575,8 @@ export function registerRotaRoutes(router, db) {
 
     const result = tx(db, () => {
       const inList = ids.map(() => '?').join(', ') || 'NULL';
+      const before = db.prepare(`SELECT * FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?`).all(...ids, to, addDays(to, 6)).map((r) => ({ ...r }));
+      const created = [];
       if (req.body.replace) {
         db.prepare(`DELETE FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND pub_date IS NULL`).run(...ids, to, addDays(to, 6));
         db.prepare(`UPDATE shifts SET removed = 1 WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?`).run(...ids, to, addDays(to, 6));
@@ -539,7 +593,7 @@ export function registerRotaRoutes(router, db) {
         const next = { ...s, date: addDays(s.date, offset) };
         const site = bySite.get(s.location_id);
         if (findClash(next, 0) || onHoliday(db, s.user_id, next.date)) { skipped++; if (site) site.skipped++; continue; }
-        insert.run(s.location_id, s.user_id, next.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes);
+        created.push(Number(insert.run(s.location_id, s.user_id, next.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes).lastInsertRowid));
         copied++;
         if (site) site.copied++;
       }
@@ -548,6 +602,7 @@ export function registerRotaRoutes(router, db) {
         logRota(db, req, { action: 'copy', location_id: id,
           details: `Copied ${plural(n.copied, 'shift')} from the week of ${fmtDay(from)} to the week of ${fmtDay(to)}${req.body.replace ? ', replacing that week' : ''}${n.skipped ? ` (${n.skipped} skipped: already booked or on holiday)` : ''}` });
       }
+      rememberUndo(req, `Copied the week of ${fmtDay(from)} to the week of ${fmtDay(to)}${req.body.replace ? ', replacing it' : ''}`, ids.length === 1 ? ids[0] : null, before, created);
       return { copied, skipped };
     });
     res.json(result);

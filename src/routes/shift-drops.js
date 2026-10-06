@@ -15,7 +15,7 @@ const SELECT = `SELECT d.*, l.name AS location_name, u.name AS dropped_by_name, 
   FROM shift_drops d JOIN locations l ON l.id = d.location_id JOIN users u ON u.id = d.dropped_by
   LEFT JOIN users a ON a.id = d.decided_by LEFT JOIN users c ON c.id = d.claimed_by`;
 
-export function registerShiftDropRoutes(router, db, { findClash }) {
+export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () => {} }) {
   const withHours = (d) => ({ ...d, hours: round2(shiftHours(d.start_time, d.end_time, d.break_minutes)) });
   const load = (id) => {
     const d = db.prepare(`${SELECT} WHERE d.id = ?`).get(Number(id));
@@ -148,6 +148,7 @@ export function registerShiftDropRoutes(router, db, { findClash }) {
     if (shift.sick) throw badRequest('This shift is marked as sickness – take that off first if someone else should cover it');
     const reason = str(req.body?.reason, 'reason', { max: 500 });
     const person = db.prepare('SELECT name FROM users WHERE id = ?').get(shift.user_id)?.name ?? 'Someone';
+    clearUndo(req);
     const id = tx(db, () => {
       db.prepare(`UPDATE shift_drops SET status = 'cancelled', decided_by = ?, decided_at = datetime('now'), decision_note = 'Opened up by a manager' WHERE shift_id = ? AND status = 'pending'`)
         .run(req.user.id, shift.id);

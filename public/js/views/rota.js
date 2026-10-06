@@ -5,6 +5,15 @@ import { openStaffEditor } from './admin.js';
 import { askToDrop, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
 import { sickDialog } from './sickness.js';
 
+// Ctrl+Z / ⌘Z on the rota undoes the last change (when there's one to undo and no form is open).
+let undoNow = null;
+document.addEventListener('keydown', (e) => {
+  if (!undoNow || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return;
+  if (!location.hash.startsWith('#/rota') || document.querySelector('.modal') || e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  e.preventDefault();
+  undoNow();
+});
+
 export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   if (query.view === 'mine') return renderMine(ctx, weekStart(query.week || todayISO()));
@@ -564,6 +573,21 @@ export async function render(ctx) {
   // Drop requests to approve (and your own) above the rota; open shifts are picked up from the grid.
   el.querySelector('.page-head')?.insertAdjacentHTML('afterend', dropsPanel(drops, { open: false }));
   wireDrops(el, drops, () => ctx.rerender());
+  // Undo: their last unpublished change, until they make another or publish.
+  if (canEdit && data.undo) {
+    el.querySelector('.page-head')?.insertAdjacentHTML('afterend', `<div class="undo-bar" role="status">
+      <span><span class="muted">Last change:</span> ${esc(data.undo.label)}</span>
+      <button type="button" class="btn btn-small" id="rota-undo" title="Undo (Ctrl+Z)">↶ Undo</button></div>`);
+  }
+  undoNow = data.undo ? async () => {
+    undoNow = null;
+    try {
+      const r = await api('/rota/undo', { method: 'POST' });
+      toast(`Undone: ${r.undone}`);
+    } catch (err) { showError(err); }
+    ctx.rerender();
+  } : null;
+  el.querySelector('#rota-undo')?.addEventListener('click', () => undoNow?.());
   el.querySelectorAll('[data-open-shift]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const id = Number(b.dataset.openShift);

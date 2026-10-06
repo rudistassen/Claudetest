@@ -17,6 +17,7 @@ export const ACTIONS = {
   drop: ['Shift dropped', 'log-remove'],
   drop_decline: ['Drop declined', 'log-change'],
   holiday: ['Holiday', 'log-publish'],
+  undo: ['Undone', 'log-change'],
   sick: ['Sickness', 'log-change'],
   claim: ['Open shift picked up', 'log-add'],
   withdraw: ['Open shift withdrawn', 'log-remove'],

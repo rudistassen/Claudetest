@@ -364,6 +364,19 @@ CREATE TABLE IF NOT EXISTS rota_log (
 CREATE INDEX IF NOT EXISTS idx_rota_log_at ON rota_log(at);
 CREATE INDEX IF NOT EXISTS idx_rota_log_shift ON rota_log(shift_id);
 
+-- Each rota editor's last unpublished change, so it can be undone until they do something else or publish:
+-- the shifts it touched as they were before (before), as they were after (after, to check nobody has changed them
+-- since) and the ids of shifts it created. All JSON.
+CREATE TABLE IF NOT EXISTS rota_undo (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  location_id INTEGER,
+  before TEXT NOT NULL,
+  after TEXT NOT NULL,
+  created TEXT NOT NULL,
+  at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Dropped shifts: someone asks to drop a published shift; a manager approves (it comes off their rota and becomes
 -- an open shift at that site) or declines; anyone at the site can then claim it. The shift's details are copied
 -- in, as they were when it was dropped. status: pending, open, claimed, declined, cancelled, withdrawn, deleted
