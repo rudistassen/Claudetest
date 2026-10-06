@@ -10,6 +10,7 @@ export class MailboxError extends Error {}
 
 export const MAILBOX_VARIABLES = ['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET', 'INVOICE_MAILBOX'];
 export const CAREERS_VARIABLES = ['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET', 'CAREERS_MAILBOX'];
+export const EVENTS_VARIABLES = ['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET', 'EVENTS_MAILBOX'];
 
 /**
  * Which of the inbox's settings Brewly can see (names only, never values), for the Invoices page while it isn't
@@ -44,10 +45,22 @@ export function careersMailboxConfig(env = process.env) {
   return { tenant, clientId, secret, address, minutes: Math.max(2, Number(cleanEnv(env.CAREERS_INBOX_MINUTES)) || 10) };
 }
 
+/** The events inbox: the same Microsoft app, and EVENTS_MAILBOX. Replies are sent from it (Mail.Send). */
+export function eventsMailboxConfig(env = process.env) {
+  const tenant = cleanEnv(env.MS_TENANT_ID);
+  const clientId = cleanEnv(env.MS_CLIENT_ID);
+  const secret = cleanEnv(env.MS_CLIENT_SECRET);
+  const address = cleanEnv(env.EVENTS_MAILBOX);
+  if (!tenant || !clientId || !secret || !address) return null;
+  return { tenant, clientId, secret, address, minutes: Math.max(2, Number(cleanEnv(env.EVENTS_INBOX_MINUTES)) || 5) };
+}
+
 /**
  * The mailbox: listNew(sinceISO) → messages received since then that have attachments, oldest first;
  * attachments(id) → the message's file attachments (base64 data); body(id) → the email's text;
- * replyDraft(id, text) → a reply saved in the mailbox's Drafts, not sent ({ id, webLink }).
+ * replyDraft(id, text) → a reply saved in the mailbox's Drafts, not sent ({ id, webLink });
+ * reply(id, text) → sends a reply to that email, in its thread; send({ to, subject, text }) → sends a new email.
+ * (Sending needs the app's Mail.Send permission.)
  * withAttachmentsOnly: only list emails with something attached (the invoice inbox); label names it in errors.
  */
 export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = fetch, withAttachmentsOnly = true, label = 'invoice mailbox', variable = 'INVOICE_MAILBOX' } = {}) {
@@ -76,6 +89,9 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
     });
     const body = await res.json().catch(() => ({}));
     if (res.ok) return body;
+    if ((res.status === 401 || res.status === 403) && writing === 'send') {
+      throw new MailboxError(`Brewly can read the ${label} but isn’t allowed to send from it. In Microsoft Entra, give the app the Mail.Send application permission (with admin consent).`);
+    }
     if ((res.status === 401 || res.status === 403) && writing) {
       throw new MailboxError(`Brewly can read the ${label} but isn’t allowed to save draft replies in it. In Microsoft Entra, give the app the Mail.ReadWrite application permission (with admin consent).`);
     }
@@ -93,7 +109,7 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
       const filter = `receivedDateTime ge ${new Date(since).toISOString().replace(/\.\d+Z$/, 'Z')}${withAttachmentsOnly ? ' and hasAttachments eq true' : ''}`;
       let url = `${user}/mailFolders/inbox/messages?${new URLSearchParams({
         $filter: filter, $orderby: 'receivedDateTime asc', $top: '50',
-        $select: 'id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,hasAttachments',
+        $select: 'id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,hasAttachments,conversationId',
       })}`;
       const out = [];
       for (let page = 0; url && page < 5; page++) {
@@ -108,6 +124,7 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
             receivedAt: m.receivedDateTime,
             preview: m.bodyPreview ?? '',
             hasAttachments: m.hasAttachments !== false,
+            conversationId: m.conversationId ?? null,
           });
         }
         url = body['@odata.nextLink'] ?? null;
@@ -128,6 +145,15 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
       const d = await call(`${user}/messages/${encodeURIComponent(messageId)}/createReply`, { method: 'POST', body: { comment: text }, writing: true });
       return { id: d.id, webLink: d.webLink ?? null };
     },
+    async reply(messageId, text) {
+      await call(`${user}/messages/${encodeURIComponent(messageId)}/reply`, { method: 'POST', body: { comment: text }, writing: 'send' });
+    },
+    async send({ to, subject, text }) {
+      await call(`${user}/sendMail`, { method: 'POST', writing: 'send', body: {
+        message: { subject, body: { contentType: 'Text', content: text }, toRecipients: [{ emailAddress: { address: to } }] },
+        saveToSentItems: true,
+      } });
+    },
   };
 }
 
@@ -146,5 +172,8 @@ export function memoryMailbox(messages = [], address = 'invoices@example.com') {
       this.drafts.push({ id, text });
       return { id: `draft-${this.drafts.length}`, webLink: null };
     },
+    sent: [],
+    async reply(id, text) { this.sent.push({ reply_to: id, text }); },
+    async send(email) { this.sent.push(email); },
   };
 }

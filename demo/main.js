@@ -22,6 +22,7 @@ import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { registerXeroRoutes } from '../src/routes/xero.js';
 import { registerPeopleRoutes } from '../src/routes/people.js';
 import { registerCareersRoutes } from '../src/careers-inbox.js';
+import { registerEventRoutes } from '../src/events.js';
 import { registerNewsRoutes } from '../src/routes/news.js';
 import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { registerBreakRoutes } from '../src/routes/breaks.js';
@@ -146,6 +147,16 @@ async function boot() {
   ], 'careers@brewandbarrel.example');
   registerPeopleRoutes(api, db, { careers: careersInbox });
   registerCareersRoutes(api, db, { mailbox: careersInbox });
+  // A pretend events inbox with a few enquiries waiting, so Events → Enquiries' "Check now" can be tried.
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString();
+  registerEventRoutes(api, db, { mailbox: memoryMailbox([
+    { id: 'ev-1', conversationId: 'conv-1', subject: '40th birthday party – Harbour', from: 'sarah.jones@example.com', fromName: 'Sarah Jones', receivedAt: hoursAgo(30),
+      body: 'Hi,\n\nI’m looking to book a space for my husband’s 40th birthday on Saturday 14th November, around 7pm until late. We’d be about 40 people.\n\nCould you send me some options for food and drinks packages?\n\nThanks,\nSarah\n07700 900456' },
+    { id: 'ev-2', conversationId: 'conv-2', subject: 'Corporate breakfast meeting', from: 'events@acme.example', fromName: 'Priya at Acme', receivedAt: hoursAgo(6),
+      body: 'Hello – do you host breakfast meetings for around 15 people? We’d need a screen. Looking at early December, weekday mornings.\n\nPriya' },
+    { id: 'ev-3', conversationId: 'conv-1', subject: 'Re: 40th birthday party – Harbour', from: 'sarah.jones@example.com', fromName: 'Sarah Jones', receivedAt: hoursAgo(2),
+      body: 'Just to add – a couple of the guests are vegan, is that ok?\n\nSarah' },
+  ], 'events@brewandbarrel.example') });
   // A pretend shared inbox with a few emails waiting, so "Check now" under Invoices can be tried.
   const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
   const fakePdf = btoa('%PDF-1.4 demo invoice %%EOF');

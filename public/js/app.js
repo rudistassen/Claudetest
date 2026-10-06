@@ -13,6 +13,7 @@ import * as xeroView from './views/xero.js';
 import * as people from './views/people.js';
 import * as categories from './views/categories.js';
 import * as supplierViews from './views/suppliers.js';
+import * as events from './views/events.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as login from './views/login.js';
@@ -84,6 +85,9 @@ const ROUTES = [
   [/^people\/performance$/, people.renderPerformance, ['people.manage']],
   [/^people\/performance\/(\d+)$/, people.renderPerson, ['people.manage']],
   [/^people\/areas$/, people.renderAreas, ['people.manage']],
+  [/^events\/enquiries$/, events.renderEnquiries, ['events.manage']],
+  [/^events\/enquiries\/(\d+)$/, events.renderEnquiry, ['events.manage']],
+  [/^events\/calendar$/, events.renderCalendar, ['events.manage']],
   [/^orders$/, orders.renderList, ['orders.manage']],
   [/^orders\/new$/, orders.renderNew, ['orders.manage']],
   [/^orders\/(\d+)$/, orders.renderOrder, ['orders.manage']],
@@ -129,6 +133,10 @@ function navGroups() {
       ['safety/report', 'Compliance', '▤', ['safety.report']],
       ['safety/setup', 'Set up checks', '☑', ['safety.manage']],
     ]],
+    ['Events', [
+      ['events/enquiries', 'Enquiries', '✉', ['events.manage']],
+      ['events/calendar', 'Calendar', '▦', ['events.manage']],
+    ]],
     ['People', [
       ['people/recruitment', 'Recruitment', '✎', ['people.manage']],
       ['people/training', 'Learning & development', '✦', ['people.manage']],
@@ -170,7 +178,7 @@ function navGroups() {
 }
 
 // Each menu section's colour.
-const NAV_TONES = { Rota: 'team', Trail: 'trail', People: 'people', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
+const NAV_TONES = { Rota: 'team', Trail: 'trail', Events: 'events', People: 'people', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
 
 // A little red bell beside Rota in the menus while requests are waiting.
 const BELL = '<span class="req-bell" data-req-bell hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-1.7 1.7A1 1 0 0 0 4 19.4h16a1 1 0 0 0 .7-1.7Z"/></svg></span>';
@@ -198,6 +206,21 @@ async function showRequestBadge(force = false) {
 }
 window.addEventListener('requests:changed', () => showRequestBadge(true));
 
+// Event enquiries with something new to read, shown on Events → Enquiries.
+let eventsUnread = { count: 0, at: 0, user: null };
+async function showEventsBadge(force = false) {
+  if (!state.can('events.manage')) return;
+  if (force || eventsUnread.user !== state.user?.id || Date.now() - eventsUnread.at > 60000) {
+    try { eventsUnread = { count: (await api('/events/unread')).count, at: Date.now(), user: state.user?.id }; } catch { return; }
+  }
+  document.querySelectorAll('[data-events-badge]').forEach((b) => {
+    b.hidden = !eventsUnread.count;
+    b.textContent = eventsUnread.count;
+    b.title = `${eventsUnread.count} enquir${eventsUnread.count === 1 ? 'y' : 'ies'} with something new`;
+  });
+}
+window.addEventListener('events:changed', () => showEventsBadge(true));
+
 // The number of news posts waiting for this person to confirm they've read them, shown on My Brew in the menu.
 let newsUnread = { count: 0, at: 0, user: null };
 async function showNewsBadge(force = false) {
@@ -224,7 +247,7 @@ function foldedGroups() {
 const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 
 // Menu sections that open a page of tiles (one per page in the section) instead of a drop-down list.
-const HUBS = { Rota: 'rota-menu', Trail: 'trail', People: 'people', 'Stock and Ordering': 'stock-ordering' };
+const HUBS = { Rota: 'rota-menu', Trail: 'trail', Events: 'events', People: 'people', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
   safety: 'Today’s checks – tick them off as you go',
@@ -241,6 +264,8 @@ const TILE_NOTES = {
   'admin/suppliers': 'Who you buy from, and how to order',
   'admin/products': 'Everything you buy, with costs and pars',
   'admin/product-categories': 'Group products, and their Xero account codes',
+  'events/enquiries': 'Enquiries from the events inbox, and your replies',
+  'events/calendar': 'Every event, month by month',
   'people/recruitment': 'Jobs you’re hiring for and their candidates',
   'people/training': 'Training courses and who has done them',
   'people/performance': 'One-to-ones, probation reviews and appraisals',
@@ -252,7 +277,7 @@ const TILE_NOTES = {
 const railScreen = window.matchMedia('(min-width: 900px)');
 const hubTile = ([p, label, ic], active) => `<a class="hub-tile ${p === active ? 'is-active' : ''}" href="#/${p}" ${p === active ? 'aria-current="page"' : ''}>
   <span class="hub-icon" aria-hidden="true">${ic}</span>
-  <span class="hub-text"><strong>${esc(label)}${p === 'rota/requests' ? ' <span class="nav-badge" data-req-badge hidden></span>' : ''}</strong>${TILE_NOTES[p] ? `<small>${esc(TILE_NOTES[p])}</small>` : ''}</span>
+  <span class="hub-text"><strong>${esc(label)}${p === 'rota/requests' ? ' <span class="nav-badge" data-req-badge hidden></span>' : ''}${p === 'events/enquiries' ? ' <span class="nav-badge" data-events-badge hidden></span>' : ''}</strong>${TILE_NOTES[p] ? `<small>${esc(TILE_NOTES[p])}</small>` : ''}</span>
   <span class="hub-go" aria-hidden="true">›</span></a>`;
 // The tiles-section a page belongs to: [heading, items, active item] or null.
 function hubOf(path) {
@@ -394,12 +419,14 @@ function renderShell() {
     ${tabBar(groups.flatMap(([, items]) => items), active)}`;
   showNewsBadge();
   showRequestBadge();
+  showEventsBadge();
   document.querySelectorAll('[data-install]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); install(); }));
   document.querySelectorAll('[data-logout]').forEach((a) => a.addEventListener('click', async (e) => {
     e.preventDefault();
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
     state.user = null;
     pendingRequests = { count: 0, at: 0, user: null };
+    eventsUnread = { count: 0, at: 0, user: null };
     location.hash = '';
     start();
   }));
@@ -546,6 +573,7 @@ export async function route() {
   try {
     await match.view(ctx);
     showRequestBadge();
+    showEventsBadge();
   } catch (err) {
     if (seq !== routeSeq) return;
     view.innerHTML = `<div class="empty">Could not load this page: ${esc(err.message)}</div>`;

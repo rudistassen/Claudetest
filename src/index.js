@@ -7,7 +7,8 @@ import { xeroConfig } from './xero.js';
 import { appVersion } from './app-version.js';
 import { brevoMailer, emailConfig } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
-import { careersMailboxConfig, graphMailbox, mailboxConfig, mailboxSetup } from './mailbox.js';
+import { careersMailboxConfig, eventsMailboxConfig, graphMailbox, mailboxConfig, mailboxSetup } from './mailbox.js';
+import { startEventsInbox } from './events.js';
 import { startCareersInbox } from './careers-inbox.js';
 import { startInvoiceInbox } from './invoice-inbox.js';
 import { googlePlaces, placesConfig, startReviewSync } from './google-reviews.js';
@@ -100,6 +101,14 @@ if (careers) {
   startCareersInbox(db, { mailbox: careers, minutes: careersSettings.minutes });
 }
 
+// The shared events inbox (Microsoft 365, the same app): event enquiries and the conversations about them.
+const eventsSettings = eventsMailboxConfig();
+const events = eventsSettings ? graphMailbox(eventsSettings, { withAttachmentsOnly: false, label: 'events inbox', variable: 'EVENTS_MAILBOX' }) : null;
+if (events) {
+  console.log(`Events inbox connected (${eventsSettings.address}); checking every ${eventsSettings.minutes} minutes.`);
+  startEventsInbox(db, { mailbox: events, minutes: eventsSettings.minutes });
+}
+
 // Google reviews for each site.
 const placesSettings = placesConfig();
 const places = placesSettings ? googlePlaces(placesSettings.key) : null;
@@ -111,4 +120,4 @@ if (places) {
 const version = appVersion(publicDir);
 const xeroSettings = xeroConfig();
 if (xeroSettings) console.log('Xero: set up – connect it under Setup → Xero.');
-createApp(db, { square, mailer, invoiceReader, mailbox, careers, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, mailbox, careers, events, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));

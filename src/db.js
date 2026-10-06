@@ -625,6 +625,74 @@ CREATE TABLE IF NOT EXISTS square_sync_log (
   triggered_by TEXT
 );
 
+-- Events: enquiries (from the events inbox, or added by hand) that become events on the calendar, with the
+-- conversation about each one – emails in and out, and notes.
+CREATE TABLE IF NOT EXISTS event_enquiries (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+  title TEXT,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  event_type TEXT,
+  event_date TEXT,
+  start_time TEXT,
+  end_time TEXT,
+  guests INTEGER,
+  budget REAL,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'replied', 'provisional', 'confirmed', 'completed', 'lost')),
+  notes TEXT,
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'email')),
+  conversation_id TEXT,
+  assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  unread INTEGER NOT NULL DEFAULT 0,
+  last_message_at TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_event_enquiries_date ON event_enquiries(event_date);
+CREATE INDEX IF NOT EXISTS idx_event_enquiries_email ON event_enquiries(email);
+CREATE TABLE IF NOT EXISTS enquiry_messages (
+  id INTEGER PRIMARY KEY,
+  enquiry_id INTEGER NOT NULL REFERENCES event_enquiries(id) ON DELETE CASCADE,
+  direction TEXT NOT NULL CHECK (direction IN ('in', 'out', 'note')),
+  from_address TEXT,
+  from_name TEXT,
+  to_address TEXT,
+  subject TEXT,
+  body TEXT,
+  email_message_id TEXT,
+  sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'logged', 'failed')),
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_enquiry_messages ON enquiry_messages(enquiry_id, created_at);
+CREATE TABLE IF NOT EXISTS enquiry_files (
+  id INTEGER PRIMARY KEY,
+  enquiry_id INTEGER NOT NULL REFERENCES event_enquiries(id) ON DELETE CASCADE,
+  message_id INTEGER REFERENCES enquiry_messages(id) ON DELETE SET NULL,
+  file_name TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  file BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_enquiry_files ON enquiry_files(enquiry_id);
+-- Each email in the events inbox, handled once.
+CREATE TABLE IF NOT EXISTS events_emails (
+  message_id TEXT PRIMARY KEY,
+  received_at TEXT,
+  from_address TEXT,
+  subject TEXT,
+  status TEXT NOT NULL CHECK (status IN ('added', 'skipped', 'failed')),
+  enquiry_id INTEGER REFERENCES event_enquiries(id) ON DELETE SET NULL,
+  detail TEXT,
+  attempts INTEGER NOT NULL DEFAULT 1,
+  processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- A supplier's references for each site – e.g. the account number they print on that site's invoices – so an
 -- invoice from them is put against the right site automatically.
 CREATE TABLE IF NOT EXISTS supplier_site_refs (
@@ -981,6 +1049,16 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 6');
+  }
+  if (version < 7) {
+    // Events were added: whoever could manage staff can manage events.
+    for (const ps of db.prepare('SELECT id, permissions FROM permission_sets').all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (perms.includes('staff.manage') && !perms.includes('events.manage')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...perms, 'events.manage']), ps.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 7');
   }
   ensureDefaultSets(db);
   return db;

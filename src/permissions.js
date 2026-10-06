@@ -43,6 +43,9 @@ export const PERMISSION_AREAS = [
     ['timecards.move', 'Move a clock-in to another site they manage (changes the timecard in Square too)'],
     ['timecards.breaks', 'Add, change and remove breaks on clock-ins (changes the timecard in Square too, so it affects pay)'],
   ]],
+  ['Events', [
+    ['events.manage', 'See and answer event enquiries from the events inbox, and manage the events calendar'],
+  ]],
   ['People', [
     ['people.manage', 'Use the People section for their sites: recruitment, training records, performance reviews and areas'],
   ]],

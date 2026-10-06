@@ -25,6 +25,7 @@ import { registerPaymentLinkRoutes } from './routes/payment-links.js';
 import { londonWeather, registerWeatherRoutes } from './weather.js';
 import { registerInvoiceInboxRoutes } from './invoice-inbox.js';
 import { registerCareersRoutes } from './careers-inbox.js';
+import { registerEventRoutes } from './events.js';
 import { registerReviewRoutes } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from './invites.js';
 import { HttpError } from './util.js';
@@ -41,10 +42,11 @@ export function trustProxy(env) {
 // invoiceReader: reads uploaded supplier invoices (see invoice-reader.js), or null when it isn't set up.
 // mailbox: the shared invoice inbox (see mailbox.js), or null when it isn't connected.
 // careers: the shared careers inbox (see careers-inbox.js), or null when it isn't connected.
+// events: the shared events inbox (see events.js), or null when it isn't connected.
 // places: Google Maps, for each site's rating and reviews (see google-reviews.js), or null when it isn't set up.
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
 // xero: { config, fetch? } when Xero is set up (see xero.js), otherwise null.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, events = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
   const xeroClient = xero ? new Xero(db, xero.config, xero.fetch) : null;
   const app = express();
   app.disable('x-powered-by');
@@ -104,6 +106,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerXeroRoutes(api, db, xeroClient);
   registerPeopleRoutes(api, db, { careers });
   registerCareersRoutes(api, db, { mailbox: careers });
+  registerEventRoutes(api, db, { mailbox: events });
   registerNewsRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);
