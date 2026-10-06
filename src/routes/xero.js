@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { requireAdmin, requirePerm } from '../auth.js';
 import { badRequest, bool, notFound, str } from '../util.js';
 import { billUrl } from '../xero.js';
+import { STANDARD_VAT_CODES } from '../vat-codes.js';
 
 const STATE_MINUTES = 10;
 
@@ -37,6 +38,17 @@ export function registerXeroRoutes(router, db, xero) {
   router.get('/xero/options', requirePerm('setup.products'), async (_req, res) => {
     needXero();
     res.json(await xero.options());
+  });
+
+  // The VAT codes products can have: Xero's own when it's connected, else the standard UK ones.
+  router.get('/vat-codes', async (_req, res) => {
+    if (xero?.connected()) {
+      try {
+        const codes = await xero.vatCodes();
+        if (codes.length) return res.json({ from_xero: true, codes });
+      } catch { /* Xero unreachable: the standard list will do */ }
+    }
+    res.json({ from_xero: false, codes: STANDARD_VAT_CODES });
   });
 
   // Starts connecting: off to Xero's sign-in, which comes back to /api/xero/callback.

@@ -3,6 +3,7 @@
 // (OAuth 2.0, a "Web app" made at developer.xero.com); Brewly keeps the tokens fresh. Set XERO_CLIENT_ID and
 // XERO_CLIENT_SECRET (and XERO_REDIRECT_URI if APP_URL isn't set).
 import { HttpError, round2 } from './util.js';
+import { vatCodeForRate } from './vat-codes.js';
 import { appUrl } from './reports.js';
 
 const IDENTITY = 'https://identity.xero.com';
@@ -24,8 +25,6 @@ export function xeroConfig(env = process.env) {
 }
 
 // UK VAT rates on supplier bills → Xero's tax types.
-const TAX_TYPES = { 20: 'INPUT2', 5: 'RRINPUT', 0: 'ZERORATEDINPUT' };
-
 const message = (data, fallback) => {
   const v = data?.Elements?.flatMap((e) => [...(e.ValidationErrors ?? []), ...(e.LineItems ?? []).flatMap((l) => l.ValidationErrors ?? [])]).map((e) => e.Message).filter(Boolean);
   return (v?.length ? [...new Set(v)].join('; ') : null) ?? data?.Detail ?? data?.Message ?? data?.error_description ?? data?.error ?? fallback;
@@ -148,6 +147,13 @@ export class Xero {
     };
   }
 
+  /** Xero's VAT rates that can go on bills: [{ code, name, rate }]. */
+  async vatCodes() {
+    const r = await this.api('GET', '/TaxRates');
+    return (r.TaxRates ?? []).filter((t) => t.Status === 'ACTIVE' && t.CanApplyToExpenses !== false && t.TaxType)
+      .map((t) => ({ code: t.TaxType, name: t.Name, rate: Number(t.EffectiveRate ?? t.DisplayTaxRate ?? 0) }));
+  }
+
   /** The supplier's Xero contact: remembered, else found by name, else added. */
   async contactFor(supplier, name) {
     if (supplier?.xero_contact_id) return supplier.xero_contact_id;
@@ -177,21 +183,22 @@ export class Xero {
       const option = options[inv.location_id] ?? inv.location_name;
       const tracking = c.tracking_category_name && option ? [{ Name: c.tracking_category_name, Option: option }] : undefined;
       // Each line goes to its product's category's account code, if it has one; otherwise the usual account.
-      const lines = db.prepare(`SELECT il.*, pc.xero_account_code AS category_account FROM invoice_lines il
+      // …and with its product's VAT code; otherwise the VAT rate read off the invoice.
+      const lines = db.prepare(`SELECT il.*, pc.xero_account_code AS category_account, p.vat_code FROM invoice_lines il
         LEFT JOIN products p ON p.id = il.product_id LEFT JOIN product_categories pc ON pc.name = p.category
         WHERE il.invoice_id = ? ORDER BY il.line_no`).all(inv.id);
-      const item = (description, quantity, unit, vat, account = null) => ({
+      const item = (description, quantity, unit, taxType, account = null) => ({
         Description: description.slice(0, 4000),
         Quantity: quantity,
         UnitAmount: unit,
         ...(account || c.account_code ? { AccountCode: account || c.account_code } : {}),
-        ...(TAX_TYPES[vat] ? { TaxType: TAX_TYPES[vat] } : {}),
+        ...(taxType ? { TaxType: taxType } : {}),
         ...(tracking ? { Tracking: tracking } : {}),
       });
       const items = lines.length ? lines.map((l) => {
         const qty = l.quantity && l.quantity > 0 ? l.quantity : 1;
         const unit = l.unit_price ?? (l.line_total !== null ? round2(l.line_total / qty) : 0);
-        return item(`${l.description}${l.sku ? ` (${l.sku})` : ''}`, qty, unit, l.vat_rate, l.category_account);
+        return item(`${l.description}${l.sku ? ` (${l.sku})` : ''}`, qty, unit, l.vat_code || vatCodeForRate(l.vat_rate), l.category_account);
       }) : [item(`Invoice ${inv.invoice_number ?? ''}`.trim(), 1, inv.subtotal ?? inv.total ?? 0, null)];
       const bill = {
         Type: 'ACCPAY',

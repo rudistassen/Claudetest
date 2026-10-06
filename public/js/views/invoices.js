@@ -214,7 +214,13 @@ function openUpload(ctx, dropped = []) {
 export async function renderInvoice(ctx) {
   const { el, state, params, stale, navigate, rerender } = ctx;
   const invId = Number(params[0]);
-  const [inv, suppliers, products] = await Promise.all([api(`/invoices/${invId}`), api('/suppliers'), api('/products')]);
+  const [inv, suppliers, products, cats, vat] = await Promise.all([api(`/invoices/${invId}`), api('/suppliers'), api('/products'),
+    api('/product-categories').catch(() => []), api('/vat-codes').catch(() => ({ codes: [] }))]);
+  const categories = cats.map((c) => c.name);
+  // A new product's VAT code: what was chosen, else the usual one for the VAT rate on the invoice line.
+  const vatForRate = (rate) => ({ 20: 'INPUT2', 5: 'RRINPUT', 0: 'ZERORATEDINPUT' })[Number(rate)] ?? '';
+  const vatSelect = (cls, chosen) => `<select class="${cls}" aria-label="VAT code"><option value="">VAT code…</option>${vat.codes.map((v) => `<option value="${esc(v.code)}" ${v.code === chosen ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select>`;
+  const catSelect = (cls, chosen) => `<select class="${cls}" aria-label="Category"><option value="">Category…</option>${categories.map((c) => `<option ${c === chosen ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
   if (stale()) return;
   const editable = inv.status === 'review';
   const canAdd = state.can('setup.products');
@@ -302,6 +308,7 @@ export async function renderInvoice(ctx) {
             <td class="num">${numIn('l-price', l.unit_price)}</td>
             <td class="num">${numIn('l-total', l.line_total)}</td>
             <td class="inv-product">${editable ? `<select class="l-product">${productOptions(inv.supplier_id, l.product_id ?? (l.match === 'new' ? 'new' : null))}</select>` : esc(l.product_name ?? '— Not a stock item —')}
+              ${editable ? `<span class="l-newbits" ${l.match === 'new' && !l.product_id ? '' : 'hidden'}>${catSelect('l-newcat', l.new_category)}${vatSelect('l-newvat', l.new_vat_code ?? vatForRate(l.vat_rate))}</span>` : ''}
               <span class="l-badge">${matchBadge(l.match)}</span>
               ${editable && canAdd && (!l.product_id || l.match === 'similar') ? '<button type="button" class="link-btn l-new" title="Add this as a new product, choosing its name, unit and cost">+ New product</button>' : ''}</td>
             <td class="l-cost">${costCell(l, l.product_id, !!l.update_cost)}</td></tr>`).join('')}</tbody>
@@ -362,6 +369,9 @@ export async function renderInvoice(ctx) {
     tr.querySelector('.l-cost').innerHTML = costCell({ ...l, unit_price: price }, productId, keep);
     const match = productId === 'new' ? 'new' : !productId ? null : productId === l.product_id ? l.match : 'manual';
     tr.querySelector('.l-badge').innerHTML = matchBadge(match);
+    // Adding it as a new product: choose its category and VAT code here.
+    const bits = tr.querySelector('.l-newbits');
+    if (bits) bits.hidden = productId !== 'new';
   };
   const refreshSum = () => {
     const sum = rows().reduce((t, tr) => t + (val(tr, '.l-total') ?? 0), 0);
@@ -379,9 +389,7 @@ export async function renderInvoice(ctx) {
   });
   // "+ New product": add the line as a new product (name, unit and cost filled in from the invoice, to check),
   // then pick it for the line.
-  let categories = null;
   rows().forEach((tr) => tr.querySelector('.l-new')?.addEventListener('click', async () => {
-    try { categories ??= (await api('/product-categories')).map((c) => c.name); } catch (err) { showError(err); return; }
     const l = line(tr);
     const sup = el.querySelector('#inv-supplier');
     const supplierId = Number(sup.value) || null;
@@ -397,12 +405,13 @@ export async function renderInvoice(ctx) {
         </div>
         <div class="row">
           <label class="field"><span>Category</span><select name="category" ${categories.length ? 'required' : ''}><option value="">${categories.length ? '— Choose —' : '— None yet —'}</option>${categories.map((c) => `<option>${esc(c)}</option>`).join('')}</select></label>
-          <label class="field"><span>Supplier’s code</span><input name="sku" maxlength="50" value="${esc(l.sku ?? '')}"></label>
+          <label class="field"><span>VAT code</span>${vatSelect('', vatForRate(l.vat_rate)).replace('<select class=""', '<select name="vat_code" required')}</label>
         </div>
+        <label class="field"><span>Supplier’s code</span><input name="sku" maxlength="50" value="${esc(l.sku ?? '')}"></label>
         <p class="muted small">${supplierName ? `From ${esc(supplierName)}. ` : 'Choose the supplier above first to link the product to them. '}You can add par levels, allergens and more later under Stock &amp; Ordering → Products.</p>`,
       submitLabel: 'Add product',
       onSubmit: async (v) => {
-        const made = await api('/products', { method: 'POST', body: { name: v.name, unit: v.unit || 'each', unit_cost: v.unit_cost === '' ? 0 : Number(v.unit_cost), category: v.category || null, sku: v.sku || null, supplier_id: supplierId } });
+        const made = await api('/products', { method: 'POST', body: { name: v.name, unit: v.unit || 'each', unit_cost: v.unit_cost === '' ? 0 : Number(v.unit_cost), category: v.category || null, vat_code: v.vat_code || null, sku: v.sku || null, supplier_id: supplierId } });
         products.push(made);
         productById.set(made.id, made);
         // Every line's list gets the new product; this line picks it.
@@ -455,6 +464,8 @@ export async function renderInvoice(ctx) {
           unit_price: val(tr, '.l-price'),
           line_total: val(tr, '.l-total'),
           product: raw === 'new' ? 'new' : raw ? Number(raw) : null,
+          new_category: raw === 'new' ? tr.querySelector('.l-newcat')?.value || null : null,
+          new_vat_code: raw === 'new' ? tr.querySelector('.l-newvat')?.value || null : null,
           update_cost: !!tr.querySelector('[data-update-cost]')?.checked,
         };
       }),

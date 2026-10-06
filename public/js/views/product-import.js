@@ -3,10 +3,10 @@ import { api, esc, openModal, toast } from '../lib.js';
 // Setup → Products → Import: products from a spreadsheet (Excel or CSV) or rows pasted from Excel. The file is
 // read here in the browser, previewed by the server, and only imported once confirmed.
 
-const TEMPLATE_HEADERS = ['Name', 'SKU', 'Category', 'Unit', 'Supplier', 'Unit cost', 'Par level', 'Recipe unit', 'Recipe units per pack', 'Allergens', 'Active'];
+const TEMPLATE_HEADERS = ['Name', 'SKU', 'Category', 'Unit', 'Supplier', 'Unit cost', 'Par level', 'Recipe unit', 'Recipe units per pack', 'Allergens', 'VAT code', 'Active'];
 const TEMPLATE_EXAMPLES = [
-  ['Whole milk 4L', 'MLK-4L', 'Dairy', 'bottle', 'Valley Dairy', '3.20', '6', 'ml', '4000', 'Milk', 'yes'],
-  ['Espresso beans 1kg', 'ESP-1KG', 'Coffee', 'bag', 'Origin Coffee Roasters', '18.50', '4', 'g', '1000', '', 'yes'],
+  ['Whole milk 4L', 'MLK-4L', 'Dairy', 'bottle', 'Valley Dairy', '3.20', '6', 'ml', '4000', 'Milk', 'ZERORATEDINPUT', 'yes'],
+  ['Espresso beans 1kg', 'ESP-1KG', 'Coffee', 'bag', 'Origin Coffee Roasters', '18.50', '4', 'g', '1000', '', 'ZERORATEDINPUT', 'yes'],
 ];
 const XLSX_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
 
@@ -53,7 +53,7 @@ export function downloadFile(name, content, type = 'text/csv;charset=utf-8') {
 export function exportProducts(products, allergenLabels) {
   const label = new Map(allergenLabels);
   const rows = products.map((p) => [p.name, p.sku ?? '', p.category ?? '', p.unit ?? '', p.supplier_name ?? '', p.unit_cost ?? 0, p.par_level ?? 0,
-    p.recipe_unit ?? '', p.units_per_pack ?? 1, (p.allergens ?? '').split(',').filter(Boolean).map((k) => label.get(k) ?? k).join(', '), p.active ? 'yes' : 'no']);
+    p.recipe_unit ?? '', p.units_per_pack ?? 1, (p.allergens ?? '').split(',').filter(Boolean).map((k) => label.get(k) ?? k).join(', '), p.vat_code ?? '', p.active ? 'yes' : 'no']);
   downloadFile(`Brewly products ${new Date().toISOString().slice(0, 10)}.csv`, toCsv([TEMPLATE_HEADERS, ...rows]));
 }
 
@@ -121,6 +121,7 @@ export function openProductImport(ctx) {
           <li>A blank cell leaves that detail as it is. Nothing is deleted – to stop using a product, put <strong>no</strong> in the Active column.</li>
           <li>A supplier that isn’t set up yet is added for you.</li>
           <li>Allergens: the names separated by commas, e.g. <em>Milk, Gluten, Soya</em>. Put <em>none</em> to clear them.</li>
+          <li>VAT code: the Xero code, e.g. <em>INPUT2</em> (20%) or <em>ZERORATEDINPUT</em> – or just <em>20%</em>, <em>5%</em>, <em>zero</em>, <em>exempt</em> or <em>no VAT</em>.</li>
           <li>You’ll see exactly what will change before anything is saved. To edit everything in Excel, use <strong>Export</strong> on the Products page, change it, and import it back.</li>
         </ul>
       </details>`,

@@ -97,8 +97,14 @@ test('invoices: upload, check, confirm – adding the supplier and products, upd
   const body = {
     supplier_id: dairy.id, invoice_number: 'VD-1001', invoice_date: '2026-09-26', subtotal: 28, vat: 2.6, total: 30.6,
     lines: inv.lines.map((l, i) => ({ id: l.id, description: l.description, sku: l.sku, unit: l.unit, quantity: l.quantity, unit_price: l.unit_price, line_total: l.line_total,
-      product: i === 0 ? a.id : i === 1 ? b.id : 'new', update_cost: i === 0 })),
+      vat_rate: l.vat_rate, product: i === 0 ? a.id : i === 1 ? b.id : 'new', update_cost: i === 0 })),
   };
+  // A new product needs a category.
+  const noCategory = await (await login('admin@cafe.local'))(`/invoices/${inv.id}/confirm`, { method: 'POST', body });
+  assert.equal(noCategory.status, 400);
+  assert.match(noCategory.data.error, /category for the new product on line 3/);
+  const category = db.prepare('SELECT name FROM product_categories ORDER BY name LIMIT 1').get().name;
+  body.lines[2].new_category = category;
   const done = await manager(`/invoices/${inv.id}/confirm`, { method: 'POST', body });
   assert.equal(done.status, 403, 'managers without the products permission can’t add products');
   const admin = await login('admin@cafe.local');
@@ -109,6 +115,7 @@ test('invoices: upload, check, confirm – adding the supplier and products, upd
   assert.equal(db.prepare('SELECT unit_cost FROM products WHERE id = ?').get(b.id).unit_cost, b.unit_cost, 'not ticked, not changed');
   const syrup = db.prepare(`SELECT * FROM products WHERE sku = 'MS-750'`).get();
   assert.deepEqual([syrup.name, syrup.supplier_id, syrup.unit_cost, syrup.unit], ['Mystery syrup 750ml', dairy.id, 6.5, 'bottle']);
+  assert.deepEqual([syrup.category, syrup.vat_code], [category, 'INPUT2'], 'its category, and its VAT code from the 20% on the invoice');
   assert.equal((await admin(`/invoices/${inv.id}`, { method: 'PUT', body })).status, 400, 'confirmed invoices are locked');
 
   // The same supplier again: the hand match is remembered, the new product is known, and it's flagged as a duplicate.

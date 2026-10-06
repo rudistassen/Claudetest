@@ -66,3 +66,19 @@ test('staff can’t change categories', async () => {
   const s = await login('staff1@cafe.local');
   assert.equal((await s('/product-categories', { method: 'POST', body: { name: 'Nope' } })).status, 403);
 });
+
+test('VAT codes: on products, set for many at once, and the list to choose from', async () => {
+  const a = await login('admin@cafe.local');
+  const v = (await a('/vat-codes')).data;
+  assert.equal(v.from_xero, false);
+  assert.ok(v.codes.some((c) => c.code === 'INPUT2'));
+  const category = db.prepare('SELECT name FROM product_categories LIMIT 1').get().name;
+  assert.equal((await a('/products', { method: 'POST', body: { name: 'Bad VAT', category, vat_code: '20% please' } })).status, 400);
+  const p = (await a('/products', { method: 'POST', body: { name: 'Napkins', category, vat_code: 'input2' } })).data;
+  assert.equal(p.vat_code, 'INPUT2');
+  const q = (await a('/products', { method: 'POST', body: { name: 'Bread', category, vat_code: 'INPUT2' } })).data;
+  const r = await a('/products/bulk', { method: 'POST', body: { ids: [p.id, q.id], vat_code: 'ZERORATEDINPUT' } });
+  assert.equal(r.data.changed, 2);
+  assert.equal(db.prepare('SELECT vat_code FROM products WHERE id = ?').get(q.id).vat_code, 'ZERORATEDINPUT');
+  assert.equal((await a('/products/bulk', { method: 'POST', body: { ids: [p.id], category: 'Not a category' } })).status, 400);
+});

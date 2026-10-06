@@ -3,6 +3,7 @@ import { assertLocation, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { applyImport, planImport } from '../product-import.js';
 import { badRequest, bool, date, id, notFound, num, round2, str } from '../util.js';
+import { cleanVatCode } from '../vat-codes.js';
 
 export function registerOrderingRoutes(router, db) {
   // --- Suppliers ---
@@ -109,8 +110,10 @@ export function registerOrderingRoutes(router, db) {
       recipe_unit: str(b.recipe_unit, 'recipe_unit', { max: 30 }),
       units_per_pack: num(b.units_per_pack, 'units_per_pack', { min: 0.0001 }) ?? 1,
       allergens: cleanAllergens(b.allergens ?? []),
+      vat_code: cleanVatCode(b.vat_code),
       active: b.active === undefined ? 1 : bool(b.active),
     };
+    if (p.vat_code === undefined) throw badRequest('That isn’t a VAT code Xero uses');
     if (p.supplier_id && !db.prepare('SELECT 1 FROM suppliers WHERE id = ?').get(p.supplier_id)) throw notFound('Supplier');
     // Every product goes in one of the categories (once there are any).
     if (p.category) {
@@ -122,7 +125,7 @@ export function registerOrderingRoutes(router, db) {
     }
     return p;
   };
-  const productCols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'active'];
+  const productCols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'vat_code', 'active'];
 
   router.post('/products', requirePerm('setup.products'), (req, res) => {
     const p = productBody(req.body);
@@ -137,6 +140,28 @@ export function registerOrderingRoutes(router, db) {
       .run(...productCols.map((c) => p[c]), Number(req.params.id));
     if (!r.changes) throw notFound('Product');
     res.json(db.prepare('SELECT * FROM products WHERE id = ?').get(Number(req.params.id)));
+  });
+
+  // Several products at once: { ids, category?, vat_code? }.
+  router.post('/products/bulk', requirePerm('setup.products'), (req, res) => {
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map((v) => id(v, 'id', { required: true }));
+    if (!ids.length) throw badRequest('Tick some products first');
+    const set = {};
+    if (req.body.category !== undefined) {
+      const c = categoryByName(str(req.body.category, 'Category', { required: true, max: 100 }));
+      if (!c) throw badRequest('Choose one of your product categories');
+      set.category = c.name;
+    }
+    if (req.body.vat_code !== undefined) {
+      const v = cleanVatCode(req.body.vat_code);
+      if (!v) throw badRequest('Choose a VAT code');
+      set.vat_code = v;
+    }
+    if (!Object.keys(set).length) throw badRequest('Nothing to change');
+    const update = db.prepare(`UPDATE products SET ${Object.keys(set).map((k) => `${k} = ?`).join(', ')} WHERE id = ?`);
+    let changed = 0;
+    tx(db, () => { for (const pid of ids) changed += update.run(...Object.values(set), pid).changes; });
+    res.json({ changed });
   });
 
   // Import from a spreadsheet: { headers, rows } previews what would happen; with apply: true it's done.

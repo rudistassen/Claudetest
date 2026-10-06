@@ -4,6 +4,7 @@ import { assertLocation, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { badRequest, date, forbidden, id, notFound, num, round2, str } from '../util.js';
 import { autoSendToXero, xeroInvoiceInfo } from './xero.js';
+import { cleanVatCode, vatCodeForRate } from '../vat-codes.js';
 
 export const MAX_INVOICE_BYTES = 10 * 1024 * 1024;
 export const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -217,6 +218,9 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
         line_total: num(l.line_total, `line ${i + 1} total`),
         vat_rate: num(l.vat_rate, 'vat_rate', { min: 0, max: 100 }),
         product,
+        // A new product's category and VAT code, chosen on the line.
+        new_category: product === 'new' ? str(l.new_category, 'category', { max: 100 }) : null,
+        new_vat_code: product === 'new' ? str(l.new_vat_code, 'VAT code', { max: 40 }) : null,
         update_cost: l.update_cost ? 1 : 0,
         was: l.id ? db.prepare('SELECT product_id, match FROM invoice_lines WHERE id = ? AND invoice_id = ?').get(Number(l.id), inv.id) : null,
       };
@@ -227,12 +231,12 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
         str(b.invoice_number, 'invoice_number', { max: 100 }), date(b.invoice_date, 'invoice_date'), date(b.due_date, 'due_date'),
         num(b.subtotal, 'subtotal'), num(b.vat, 'vat'), num(b.total, 'total'), str(b.notes, 'notes', { max: 1000 }), inv.id);
       db.prepare('DELETE FROM invoice_lines WHERE invoice_id = ?').run(inv.id);
-      const ins = db.prepare(`INSERT INTO invoice_lines (invoice_id, line_no, description, sku, quantity, unit, unit_price, line_total, vat_rate, product_id, match, update_cost)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      const ins = db.prepare(`INSERT INTO invoice_lines (invoice_id, line_no, description, sku, quantity, unit, unit_price, line_total, vat_rate, product_id, match, update_cost, new_category, new_vat_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
       clean.forEach((l, i) => {
         const productId = typeof l.product === 'number' ? l.product : null;
         const match = l.product === 'new' ? 'new' : !productId ? null : l.was?.product_id === productId ? l.was.match : 'manual';
-        ins.run(inv.id, i + 1, l.description, l.sku, l.quantity, l.unit, l.unit_price, l.line_total, l.vat_rate, productId, match, l.update_cost);
+        ins.run(inv.id, i + 1, l.description, l.sku, l.quantity, l.unit, l.unit_price, l.line_total, l.vat_rate, productId, match, l.update_cost, l.new_category, l.new_vat_code);
       });
     });
     return clean;
@@ -253,6 +257,15 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
     const canAddProducts = req.user.role === 'admin' || req.user.permissions.includes('setup.products');
     const lines = save(req, inv);
     if (!canAddProducts && lines.some((l) => l.product === 'new')) throw forbidden('Adding new products needs the “Add and edit suppliers and products” permission');
+    // Each new product goes in one of the categories (once there are any).
+    const hasCategories = !!db.prepare('SELECT 1 FROM product_categories LIMIT 1').get();
+    const categoryFor = new Map();
+    lines.forEach((l, i) => {
+      if (l.product !== 'new') return;
+      const c = l.new_category ? db.prepare('SELECT name FROM product_categories WHERE name = ?').get(l.new_category) : null;
+      if (hasCategories && !c) throw badRequest(`Choose a category for the new product on line ${i + 1} (“${l.description.slice(0, 40)}”)`);
+      categoryFor.set(i, c?.name ?? null);
+    });
     const summary = tx(db, () => {
       let supplierId = id(req.body.supplier_id, 'supplier_id');
       let supplierAdded = false;
@@ -273,8 +286,9 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
       rows.forEach((row, i) => {
         const l = lines[i];
         if (l?.product === 'new') {
-          const productId = db.prepare('INSERT INTO products (name, sku, unit, supplier_id, unit_cost) VALUES (?, ?, ?, ?, ?)')
-            .run(row.description.slice(0, 150), row.sku, row.unit ?? 'each', supplierId, row.unit_price ?? 0).lastInsertRowid;
+          const vatCode = cleanVatCode(l.new_vat_code) || vatCodeForRate(row.vat_rate);
+          const productId = db.prepare('INSERT INTO products (name, sku, unit, supplier_id, unit_cost, category, vat_code) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            .run(row.description.slice(0, 150), row.sku, row.unit ?? 'each', supplierId, row.unit_price ?? 0, categoryFor.get(i) ?? null, vatCode).lastInsertRowid;
           db.prepare(`UPDATE invoice_lines SET product_id = ?, match = 'new' WHERE id = ?`).run(productId, row.id);
           productsAdded++;
           return;

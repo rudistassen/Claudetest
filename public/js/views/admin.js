@@ -477,7 +477,10 @@ export async function renderSuppliers(ctx) {
 
 export async function renderProducts(ctx) {
   const { state } = ctx;
-  const [rows, suppliers, meta, cats] = await Promise.all([api('/products'), api('/suppliers'), api('/recipes/meta'), api('/product-categories')]);
+  const [rows, suppliers, meta, cats, vat] = await Promise.all([api('/products'), api('/suppliers'), api('/recipes/meta'), api('/product-categories'), api('/vat-codes')]);
+  const vatName = new Map(vat.codes.map((v) => [v.code, v.name]));
+  const vatOptions = (code) => [['', '— Choose —'], ...vat.codes.map((v) => [v.code, `${v.name} (${v.code})`]), ...(code && !vatName.has(code) ? [[code, code]] : [])];
+  const catOptions = [['', cats.length ? '— Choose —' : '— Add categories first —'], ...cats.map((c) => [c.name, c.name])];
   const ALLERGEN_LIST = meta.allergens;
   if (ctx.stale()) return;
   listPage(ctx, {
@@ -486,10 +489,17 @@ export async function renderProducts(ctx) {
     search: true,
     canEdit: state.can('setup.products'),
     addLabel: 'Add product',
+    bulk: {
+      label: 'Set VAT code',
+      run: (picked) => bulkSet(picked, 'vat_code', 'VAT code', vatOptions(null)),
+      more: [{ label: 'Set category', run: (picked) => bulkSet(picked, 'category', 'Category', catOptions) }],
+    },
     extraActions: `${rows.length ? '<button class="btn" id="export-products">Export</button>' : ''}${state.can('setup.products') ? '<button class="btn" id="import-products">Import</button>' : ''}`,
     columns: [
       { label: 'Name', key: 'name' },
       { label: 'Category', value: (r) => r.category ?? '', html: (r) => (r.category ? esc(r.category) : '<span class="tone-warn">No category</span>') },
+      { label: 'VAT', value: (r) => (r.vat_code ? vatName.get(r.vat_code) ?? r.vat_code : 'No VAT code'),
+        html: (r) => (r.vat_code ? `<span title="${esc(r.vat_code)}">${esc(vatName.get(r.vat_code) ?? r.vat_code)}</span>` : '<span class="tone-warn">Not set</span>') },
       { label: 'Unit', key: 'unit' },
       { label: 'Supplier', key: 'supplier_name' },
       { label: 'Unit cost', num: true, value: (r) => money(r.unit_cost) },
@@ -500,10 +510,10 @@ export async function renderProducts(ctx) {
     form: (p) => `
       <div class="row">${field('Name', input('name', p.name, 'required'))}${field('SKU / supplier code', input('sku', p.sku))}</div>
       <div class="row">
-        ${field('Category', select('category', [['', cats.length ? '— Choose —' : '— Add categories first —'], ...cats.map((c) => [c.name, c.name])], p.category ?? '', cats.length ? 'required' : ''),
-          { hint: 'Manage them under Product categories' })}
-        ${field('Unit', input('unit', p.unit ?? 'each', 'required placeholder="each, case, kg…"'))}
+        ${field('Category', select('category', catOptions, p.category ?? '', cats.length ? 'required' : ''), { hint: 'Manage them under Product categories' })}
+        ${field('VAT code', select('vat_code', vatOptions(p.vat_code), p.vat_code ?? '', 'required'), { hint: vat.from_xero ? 'Your VAT rates in Xero' : 'As Xero names them' })}
       </div>
+      <div class="row">${field('Unit', input('unit', p.unit ?? 'each', 'required placeholder="each, case, kg…"'))}</div>
       <div class="row">
         ${field('Supplier', select('supplier_id', [['', '—'], ...suppliers.map((s) => [s.id, s.name])], p.supplier_id))}
         ${field('Unit cost (£)', input('unit_cost', p.unit_cost ?? 0, 'type="number" min="0" step="0.01"'))}
@@ -522,6 +532,19 @@ export async function renderProducts(ctx) {
       return row ? api(`/products/${row.id}`, { method: 'PUT', body }) : api('/products', { method: 'POST', body });
     },
   });
+
+  // Ticked products: give them all the same VAT code or category.
+  function bulkSet(picked, key, label, options) {
+    openModal({
+      title: `${label} for ${picked.length} product${picked.length === 1 ? '' : 's'}`,
+      body: field(label, select(key, options, '', 'required')),
+      onSubmit: async (v) => {
+        const r = await api('/products/bulk', { method: 'POST', body: { ids: picked.map((p) => p.id), [key]: v[key] } });
+        toast(`${r.changed} product${r.changed === 1 ? '' : 's'} updated`);
+        ctx.rerender();
+      },
+    });
+  }
 
   ctx.el.querySelector('#import-products')?.addEventListener('click', () => openProductImport(ctx));
   ctx.el.querySelector('#export-products')?.addEventListener('click', () => exportProducts(rows, ALLERGEN_LIST));

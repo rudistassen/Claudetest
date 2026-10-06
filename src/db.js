@@ -802,6 +802,16 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_candidates_vacancy ON candidates(vacancy_id);
       COMMIT; PRAGMA foreign_keys = ON;`);
   }],
+  // Each product's VAT code, as Xero names it (e.g. INPUT2 for 20% VAT on expenses), for coding bills. Products
+  // already bought get a best guess from the VAT on the last invoice they were on.
+  ['products', 'vat_code', (db) => {
+    db.exec('ALTER TABLE products ADD COLUMN vat_code TEXT');
+    db.exec(`UPDATE products SET vat_code = CASE (SELECT il.vat_rate FROM invoice_lines il WHERE il.product_id = products.id AND il.vat_rate IS NOT NULL ORDER BY il.id DESC LIMIT 1)
+      WHEN 20 THEN 'INPUT2' WHEN 5 THEN 'RRINPUT' WHEN 0 THEN 'ZERORATEDINPUT' END`);
+  }],
+  // The category (and VAT code) chosen for an invoice line that becomes a new product when the invoice is confirmed.
+  ['invoice_lines', 'new_category', `ALTER TABLE invoice_lines ADD COLUMN new_category TEXT;
+    ALTER TABLE invoice_lines ADD COLUMN new_vat_code TEXT;`],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],

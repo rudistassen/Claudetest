@@ -779,6 +779,9 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .invoice-lines .inv-desc small { display: block; }
 .invoice-lines .inv-product { min-width: 170px; }
 .invoice-lines .inv-product select { width: 100%; font-size: 0.88rem; padding: 0.3rem; }
+.invoice-lines .l-newbits { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.3rem; }
+.invoice-lines .l-newbits[hidden] { display: none; }
+.invoice-lines .l-newbits select { min-width: 0; flex: 1; }
 .invoice-lines .l-badge { display: block; margin-top: 0.25rem; }
 .cost-change { display: flex; gap: 0.35rem; align-items: flex-start; font-size: 0.85rem; white-space: nowrap; }
 .cost-change input { width: auto; margin-top: 0.15rem; }

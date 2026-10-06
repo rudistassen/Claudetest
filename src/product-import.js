@@ -3,6 +3,7 @@
 import { syncProductCategories, tx } from './db.js';
 import { ALLERGENS } from './recipes.js';
 import { badRequest } from './util.js';
+import { cleanVatCode } from './vat-codes.js';
 
 export const MAX_IMPORT_ROWS = 5000;
 
@@ -18,10 +19,11 @@ const COLUMNS = {
   recipe_unit: ['recipe unit'],
   units_per_pack: ['recipe units per pack', 'units per pack', 'pack size', 'pack quantity', 'qty per pack'],
   allergens: ['allergens', 'allergen'],
+  vat_code: ['vat code', 'vat', 'vat rate', 'tax rate', 'tax type', 'tax code', 'xero tax rate', 'xero vat code'],
   active: ['active', 'in use', 'status'],
 };
-export const TEMPLATE_HEADERS = ['Name', 'SKU', 'Category', 'Unit', 'Supplier', 'Unit cost', 'Par level', 'Recipe unit', 'Recipe units per pack', 'Allergens', 'Active'];
-const LABELS = { name: 'name', sku: 'SKU', category: 'category', unit: 'unit', supplier: 'supplier', unit_cost: 'unit cost', par_level: 'par level', recipe_unit: 'recipe unit', units_per_pack: 'recipe units per pack', allergens: 'allergens', active: 'active' };
+export const TEMPLATE_HEADERS = ['Name', 'SKU', 'Category', 'Unit', 'Supplier', 'Unit cost', 'Par level', 'Recipe unit', 'Recipe units per pack', 'Allergens', 'VAT code', 'Active'];
+const LABELS = { name: 'name', sku: 'SKU', category: 'category', unit: 'unit', supplier: 'supplier', unit_cost: 'unit cost', par_level: 'par level', recipe_unit: 'recipe unit', units_per_pack: 'recipe units per pack', allergens: 'allergens', vat_code: 'VAT code', active: 'active' };
 
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9£]+/g, ' ').trim();
 const lookup = new Map(Object.entries(COLUMNS).flatMap(([key, names]) => names.map((n) => [norm(n), key])));
@@ -68,6 +70,18 @@ function allergens(v) {
   });
   const order = ALLERGENS.map(([k]) => k);
   return [...new Set(keys)].sort((a, b) => order.indexOf(a) - order.indexOf(b)).join(',') || null;
+}
+
+// A Xero VAT code (INPUT2), or a rate people write instead: 20%, 5%, zero, exempt, no VAT.
+function vatCode(v) {
+  if (blank(v)) return undefined;
+  const t = String(v).trim().toLowerCase().replace(/\s+/g, ' ');
+  const byWords = { '20': 'INPUT2', '20%': 'INPUT2', 'standard': 'INPUT2', '5': 'RRINPUT', '5%': 'RRINPUT', 'reduced': 'RRINPUT',
+    '0': 'ZERORATEDINPUT', '0%': 'ZERORATEDINPUT', 'zero': 'ZERORATEDINPUT', 'zero rated': 'ZERORATEDINPUT', 'exempt': 'EXEMPTINPUT', 'no vat': 'NONE', 'none': 'NONE' };
+  if (byWords[t]) return byWords[t];
+  const code = cleanVatCode(t);
+  if (!code) throw new Error(`VAT code “${String(v).trim()}” isn’t one Brewly knows – use a Xero code like INPUT2, or 20%, 5%, zero, exempt or no VAT`);
+  return code;
 }
 
 function yesNo(v) {
@@ -127,6 +141,7 @@ export function planImport(db, { headers, rows, heading_line: headingLine = 1 })
         recipe_unit: text(raw.recipe_unit, 'Recipe unit', 30),
         units_per_pack: number(raw.units_per_pack, 'Recipe units per pack', { min: 0.0001 }),
         allergens: allergens(raw.allergens),
+        vat_code: vatCode(raw.vat_code),
         active: yesNo(raw.active),
       };
       if (!v.name) throw new Error('No product name');
@@ -184,7 +199,7 @@ export function planImport(db, { headers, rows, heading_line: headingLine = 1 })
 
 /** Applies a plan from planImport. Returns the counts. */
 export function applyImport(db, plan) {
-  const cols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'active'];
+  const cols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'vat_code', 'active'];
   tx(db, () => {
     const supplierIds = new Map();
     for (const name of plan.new_suppliers) {

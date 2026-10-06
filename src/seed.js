@@ -215,6 +215,8 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, category, unit, supplierIds[sup], cost, par, recipeUnit, perPack, allergens).lastInsertRowid);
     }
     syncProductCategories(db);
+    // VAT codes as Xero names them: packaging, drinks and cleaning at 20%, food zero-rated.
+    db.exec(`UPDATE products SET vat_code = CASE WHEN category IN ('Packaging', 'Drinks', 'Cleaning') THEN 'INPUT2' ELSE 'ZERORATEDINPUT' END WHERE vat_code IS NULL`);
     for (const r of RECIPES) {
       const recipeId = db.prepare(`INSERT INTO recipes (name, category, method, portions, selling_price, vat_rated, may_contain, shelf_life, square_catalog_object_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(r.name, r.category, r.method, r.portions ?? 1, r.price, r.vat === false ? 0 : 1,
