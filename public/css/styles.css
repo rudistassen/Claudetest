@@ -1591,7 +1591,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
     --tile-1: #1f3427; --tile-2: #3b2230; --tile-3: #3a311b; --tile-4: #2a2541;
     --glow-1: #3a1f2a; --glow-2: #1d3226;
     --card-shadow: 0 12px 30px -16px rgba(0, 0, 0, 0.7);
-    --series-1: #e8c39e; --prev-bar: #5a4a3e; --open-bar: #ff7a9c;
+    --series-1: #e8c39e; --prev-bar: #5a4a3e; --open-bar: #ff7a9c; --kpi-bg: var(--surface);
   }
 }
 :root[data-theme="dark"] {
@@ -1601,7 +1601,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
   --tile-1: #1f3427; --tile-2: #3b2230; --tile-3: #3a311b; --tile-4: #2a2541;
   --glow-1: #3a1f2a; --glow-2: #1d3226;
   --card-shadow: 0 12px 30px -16px rgba(0, 0, 0, 0.7);
-  --series-1: #e8c39e; --prev-bar: #5a4a3e; --open-bar: #ff7a9c;
+  --series-1: #e8c39e; --prev-bar: #5a4a3e; --open-bar: #ff7a9c; --kpi-bg: var(--surface);
 }
 :root { --font: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; --font-display: 'Fraunces', Georgia, serif; }
 
@@ -1629,11 +1629,9 @@ h2 { font-weight: 700; letter-spacing: -0.01em; }
 .site-card { border-top: 5px solid var(--site, var(--border)); }
 .modal { border-radius: 24px; }
 
-/* Bold: headline figures are pastel stickers with an ink outline and offset shadow */
-.kpi { border: 1.5px solid var(--ink); border-radius: 22px; box-shadow: 4px 4px 0 var(--ink); background: var(--tile-1); padding-right: 2.4rem; }
-.kpi:nth-of-type(4n+2) { background: var(--tile-2); }
-.kpi:nth-of-type(4n+3) { background: var(--tile-3); }
-.kpi:nth-of-type(4n+4) { background: var(--tile-4); }
+/* Bold: headline figures are sticker tiles with an ink outline and offset shadow */
+/* White in the light theme (the dark coffee-brown card colour at night), so the figures – and red warnings – stand out. */
+.kpi { border: 1.5px solid var(--ink); border-radius: 22px; box-shadow: 4px 4px 0 var(--ink); background: var(--kpi-bg, #ffffff); padding-right: 2.4rem; }
 .kpi > span:first-child { text-transform: none; letter-spacing: 0; font-weight: 700; color: var(--muted); }
 .kpi strong { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; }
 .kpi-button:hover { border-color: var(--ink); transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
