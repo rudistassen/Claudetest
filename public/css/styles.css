@@ -1539,7 +1539,9 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
   background: var(--surface); color: var(--text); text-decoration: none; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); transition: border-color 0.15s, transform 0.15s; }
 .hub-tile:hover, .hub-tile:focus-visible { border-color: var(--brand); transform: translateY(-1px); }
 .hub-icon { flex-shrink: 0; display: grid; place-items: center; width: 2.8rem; height: 2.8rem; border-radius: 12px; font-size: 1.3rem;
-  background: var(--tone-stock, var(--surface-2)); color: var(--tone-stock-ink, var(--text)); }
+  background: var(--surface-2); color: var(--text); }
+.hub-tiles[data-tone="stock"] .hub-icon { background: var(--tone-stock); color: var(--tone-stock-ink); }
+.hub-tiles[data-tone="team"] .hub-icon { background: var(--tone-team); color: var(--tone-team-ink); }
 .hub-text { flex: 1; min-width: 0; }
 .hub-text strong { display: block; font-size: 1.05rem; }
 .hub-text small { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 0.15rem; }

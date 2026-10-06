@@ -173,9 +173,12 @@ function foldedGroups() {
 const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 
 // Menu sections that open a page of tiles (one per page in the section) instead of a drop-down list.
-const HUBS = { 'Stock and Ordering': 'stock-ordering' };
+const HUBS = { Rota: 'rota-menu', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
+  rota: 'See and plan the week’s shifts',
+  'rota/log': 'Every change to the rota, and who made it',
+  timeoff: 'Ask for holiday and see your requests',
   stock: 'Count stock and see past stock takes',
   wastage: 'Record what’s thrown away and see the cost',
   orders: 'Create, send and receive supplier orders',
@@ -192,7 +195,7 @@ function renderHub({ el, params }) {
   }
   el.innerHTML = `
     <div class="page-head"><h1>${esc(TOP_LABELS[heading] ?? heading)}</h1></div>
-    <div class="hub-tiles">${items.map(([p, label, ic]) => `<a class="hub-tile" href="#/${p}">
+    <div class="hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}">${items.map(([p, label, ic]) => `<a class="hub-tile" href="#/${p}">
       <span class="hub-icon" aria-hidden="true">${ic}</span>
       <span class="hub-text"><strong>${esc(label)}</strong>${TILE_NOTES[p] ? `<small>${esc(TILE_NOTES[p])}</small>` : ''}</span>
       <span class="hub-go" aria-hidden="true">›</span></a>`).join('')}</div>`;
