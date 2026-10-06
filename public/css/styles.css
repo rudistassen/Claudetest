@@ -1822,3 +1822,11 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .ev-mini small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev-wait { flex: none; font-size: 0.78rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 99px; background: var(--warn-soft); color: var(--warn); white-space: nowrap; }
 .ev-wait.is-late { background: var(--bad-soft); color: var(--bad); }
+.ev-mini-side { flex: none; display: grid; justify-items: end; gap: 0.2rem; }
+.ev-mini-side .link-btn { font-size: 0.75rem; color: var(--muted); }
+.ev-mini-side .link-btn:hover { color: var(--brand); }
+#ev-reply .card-head { margin-bottom: 0.4rem; }
+.ev-mkt { list-style: none; margin: 0; padding: 0; max-height: 55vh; overflow-y: auto; }
+.ev-mkt li + li { border-top: 1px solid var(--border); }
+.ev-mkt small { display: block; margin-top: 0.15rem; }
+.ev-reply-state { margin: -0.4rem 0 0.8rem; }

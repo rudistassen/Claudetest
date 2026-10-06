@@ -6,7 +6,7 @@ import { checkEvents, fillFromEmails } from '../src/events.js';
 import { memoryMailbox } from '../src/mailbox.js';
 import { seedDemo } from '../src/seed.js';
 
-const fakeReader = (out, calls = []) => ({ async read(input) { calls.push(input); return { is_enquiry: true, title: null, event_type: null, event_date: null, start_time: null,
+const fakeReader = (out, calls = []) => ({ async read(input) { calls.push(input); return { kind: 'enquiry', kind_reason: 'Event enquiry', needs_reply: true, title: null, event_type: null, event_date: null, start_time: null,
   end_time: null, guests: null, budget: null, contact_name: null, phone: null, site: null, ...out }; } });
 
 test('a new enquiry’s details are filled in from the email, and marked to check', async () => {
@@ -24,6 +24,8 @@ test('a new enquiry’s details are filled in from the email, and marked to chec
     ['Sam’s 40th', 'Birthday party', '2026-11-14', '19:00', null, 40, 1500, '07700 900123', site.id], 'a time that isn’t HH:MM is left out');
   assert.deepEqual(JSON.parse(e.filled_fields).sort(), ['budget', 'event_date', 'event_type', 'guests', 'location_id', 'phone', 'start_time', 'title']);
   assert.equal(calls[0].emails[0].body, 'Hi, 40 people on 14 Nov at 7pm, budget £1,500. 07700 900123');
+  assert.equal(calls[0].emails[0].direction, 'in');
+  assert.equal(e.ai_kind, 'enquiry');
   assert.ok(calls[0].sites.includes(site.name));
   assert.match(calls[0].today, /^\d{4}-\d{2}-\d{2}$/);
 });
@@ -51,13 +53,14 @@ test('a reader that fails doesn’t stop the enquiry arriving', async () => {
 test('the Claude request: structured output, the emails, today and the venues', async () => {
   let sent;
   const client = { beta: { messages: { create: async (req) => { sent = req; return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({
-    is_enquiry: true, title: 'Acme breakfast', event_type: 'Meeting', event_date: '', start_time: '08:00', end_time: '', guests: 15, budget: null, contact_name: 'Priya', phone: '', site: '' }) }] }; } } } };
+    kind: 'enquiry', kind_reason: 'Meeting', needs_reply: true, title: 'Acme breakfast', event_type: 'Meeting', event_date: '', start_time: '08:00', end_time: '', guests: 15, budget: null, contact_name: 'Priya', phone: '', site: '' }) }] }; } } } };
   const out = await claudeEnquiryReader({ client }).read({ emails: [{ from: 'p@acme.example', subject: 'Breakfast', body: '15 people at 8am' }], sites: ['Harbour', 'High Street'], today: '2026-10-06' });
   assert.equal(sent.model, 'claude-opus-5-5');
   assert.deepEqual(sent.output_config.format, { type: 'json_schema', schema: ENQUIRY_SCHEMA });
   assert.match(sent.system, /Today is 2026-10-06/);
   assert.match(sent.system, /Harbour; High Street/);
   assert.match(sent.messages[0].content, /15 people at 8am/);
+  assert.match(sent.messages[0].content, /from the customer/);
   assert.deepEqual([out.title, out.guests, out.event_date, out.phone], ['Acme breakfast', 15, null, null], 'blanks come back as null');
   const refused = { beta: { messages: { create: async () => ({ stop_reason: 'refusal', content: [] }) } } };
   await assert.rejects(claudeEnquiryReader({ client: refused }).read({ emails: [], sites: [], today: '2026-10-06' }), /declined/);

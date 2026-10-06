@@ -680,6 +680,11 @@ CREATE TABLE IF NOT EXISTS enquiry_files (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_enquiry_files ON enquiry_files(enquiry_id);
+-- Senders whose emails were filed as marketing: their later emails are filed straight away.
+CREATE TABLE IF NOT EXISTS events_marketing_senders (
+  email TEXT PRIMARY KEY COLLATE NOCASE,
+  filed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 -- Each email in the events inbox, handled once.
 CREATE TABLE IF NOT EXISTS events_emails (
   message_id TEXT PRIMARY KEY,
@@ -902,6 +907,11 @@ const MIGRATIONS = [
     ALTER TABLE invoice_lines ADD COLUMN new_vat_code TEXT;`],
   // Which of an enquiry's details were filled in by reading their emails (JSON list), to check.
   ['event_enquiries', 'filled_fields', 'ALTER TABLE event_enquiries ADD COLUMN filled_fields TEXT'],
+  // What reading the emails made of it (enquiry, marketing or other, and why), and whether a reply is owed: set when
+  // the reader or someone decides none is needed, cleared when the customer emails again.
+  ['event_enquiries', 'ai_kind', `ALTER TABLE event_enquiries ADD COLUMN ai_kind TEXT;
+    ALTER TABLE event_enquiries ADD COLUMN ai_reason TEXT;
+    ALTER TABLE event_enquiries ADD COLUMN no_reply_needed INTEGER NOT NULL DEFAULT 0;`],
   ['wastage', 'recipe_id', 'ALTER TABLE wastage ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL'],
   // Which sites someone can work with: every site (the default), or their home site plus those in user_sites.
   ['users', 'all_sites', 'ALTER TABLE users ADD COLUMN all_sites INTEGER NOT NULL DEFAULT 1'],

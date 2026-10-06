@@ -153,6 +153,8 @@ async function boot() {
   const demoEnquiryReader = {
     async read({ emails, sites }) {
       const text = emails.map((e) => `${e.subject} ${e.body}`).join(' ');
+      const last = emails.at(-1);
+      const marketing = /unsubscribe|newsletter|webinar|talked about|special offer/i.test(text);
       const people = text.match(/(?:about|around|for)?\s*(\d{1,4})\s*(?:people|guests)/i);
       const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
       const d = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i);
@@ -168,7 +170,8 @@ async function boot() {
       const type = /birthday/i.test(text) ? 'Birthday party' : /breakfast|meeting/i.test(text) ? 'Meeting' : /wedding/i.test(text) ? 'Wedding / reception' : null;
       const phone = text.match(/0\d{4}\s?\d{6}/);
       return {
-        is_enquiry: true, title: null, event_type: type, event_date: date, start_time: t ? `${Number(t[1]) + 12}:00` : null, end_time: null,
+        kind: marketing ? 'marketing' : 'enquiry', kind_reason: marketing ? 'A newsletter from a software company' : 'Asking about an event',
+        needs_reply: !marketing && last.direction === 'in' && !/found somewhere|no longer need|thanks so much/i.test(last.body ?? ''), title: null, event_type: type, event_date: date, start_time: t ? `${Number(t[1]) + 12}:00` : null, end_time: null,
         guests: people ? Number(people[1]) : null, budget: null, contact_name: null, phone: phone ? phone[0] : null,
         site: sites.find((s) => text.toLowerCase().includes(s.toLowerCase())) ?? null,
       };
@@ -179,6 +182,14 @@ async function boot() {
       body: 'Hi,\n\nI’m looking to book a space for my husband’s 40th birthday on Saturday 14th November, around 7pm until late. We’d be about 40 people.\n\nCould you send me some options for food and drinks packages?\n\nThanks,\nSarah\n07700 900456' },
     { id: 'ev-2', conversationId: 'conv-2', subject: 'Corporate breakfast meeting', from: 'events@acme.example', fromName: 'Priya at Acme', receivedAt: hoursAgo(6),
       body: 'Hello – do you host breakfast meetings for around 15 people? We’d need a screen. Looking at early December, weekday mornings.\n\nPriya' },
+    { id: 'ev-4', conversationId: 'conv-4', subject: 'Your restaurant is being talked about on Reddit. Are you there?', from: 'hello@sevenrooms.example', fromName: 'SevenRooms', receivedAt: hoursAgo(20),
+      body: 'Learn what Reddit communities are saying about restaurants like yours — and how to show up in a way that actually helps. Join our webinar.\n\nUnsubscribe' },
+    { id: 'ev-5', conversationId: 'conv-5', subject: 'Xmas drinks enquiry', from: 'kate@example.com', fromName: 'Kate Cramer', receivedAt: hoursAgo(26),
+      body: 'Hi, do you have space for 25 for Christmas drinks on 18th December?' },
+    { id: 'ev-6', folder: 'sent', conversationId: 'conv-5', subject: 'Re: Xmas drinks enquiry', to: ['kate@example.com'], sentAt: hoursAgo(25),
+      body: 'Hi Kate, yes – our back room would be perfect. Shall I hold it for you?\n\nFrom: Kate Cramer\nSent: yesterday\nHi, do you have space…' },
+    { id: 'ev-7', conversationId: 'conv-5', subject: 'Re: Xmas drinks enquiry', from: 'kate@example.com', fromName: 'Kate Cramer', receivedAt: hoursAgo(4),
+      body: 'Thanks so much, we’ve found somewhere else this time but will definitely bear you in mind.' },
     { id: 'ev-3', conversationId: 'conv-1', subject: 'Re: 40th birthday party – Harbour', from: 'sarah.jones@example.com', fromName: 'Sarah Jones', receivedAt: hoursAgo(2),
       body: 'Just to add – a couple of the guests are vegan, is that ok?\n\nSarah' },
   ], 'events@brewandbarrel.example') });

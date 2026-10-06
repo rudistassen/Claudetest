@@ -8,7 +8,8 @@ import { EVENTS_VARIABLES, mailboxSetup } from './mailbox.js';
 import { fromBase64 } from './routes/invoices.js';
 import { badRequest, date, HttpError, id, notFound, num, oneOf, str, time, today } from './util.js';
 
-const KEY = { since: 'events_inbox_since', lastCheck: 'events_inbox_last_check', lastError: 'events_inbox_last_error' };
+const KEY = { since: 'events_inbox_since', sentSince: 'events_inbox_sent_since', lastCheck: 'events_inbox_last_check', lastError: 'events_inbox_last_error' };
+export const MARKETING_FOLDER = 'Marketing';
 const MAX_ATTEMPTS = 3;
 const FIRST_DAYS = 14;
 export const STATUSES = ['new', 'replied', 'provisional', 'confirmed', 'completed', 'lost'];
@@ -33,6 +34,11 @@ async function handle(db, mailbox, m) {
   if (!from) return { status: 'skipped', detail: 'No sender' };
   if (from.toLowerCase() === String(mailbox.address).toLowerCase()) return { status: 'skipped', detail: 'Sent from the events inbox itself' };
   if (AUTO_SUBJECT.test(m.subject ?? '') || AUTO_SENDER.test(from)) return { status: 'skipped', detail: 'An automatic email' };
+  // A sender filed as marketing before: filed again, straight away.
+  if (db.prepare('SELECT 1 FROM events_marketing_senders WHERE email = ?').get(from)) {
+    try { await mailbox.moveToFolder?.([m.id], MARKETING_FOLDER); } catch { /* left in the inbox – it's still not an enquiry */ }
+    return { status: 'skipped', detail: 'From a marketing sender – filed' };
+  }
   const body = cleanBody(await mailbox.body(m.id));
   const files = cvAttachments(m.hasAttachments === false ? [] : await mailbox.attachments(m.id));
   return tx(db, () => {
@@ -47,7 +53,7 @@ async function handle(db, mailbox, m) {
         VALUES (?, ?, ?, ?, 'email', ?, 1, ?)`).run(pickSite(db, `${m.subject} ${body.slice(0, 800)}`), cleanSubject(m.subject).slice(0, 200) || null, name,
         from.slice(0, 200), m.conversationId ?? null, sqlTime(m.receivedAt) ?? sqlTime(new Date().toISOString())).lastInsertRowid);
     } else {
-      db.prepare(`UPDATE event_enquiries SET unread = 1, last_message_at = ?, conversation_id = COALESCE(conversation_id, ?), updated_at = datetime('now') WHERE id = ?`)
+      db.prepare(`UPDATE event_enquiries SET unread = 1, no_reply_needed = 0, last_message_at = ?, conversation_id = COALESCE(conversation_id, ?), updated_at = datetime('now') WHERE id = ?`)
         .run(sqlTime(m.receivedAt) ?? sqlTime(new Date().toISOString()), m.conversationId ?? null, enquiryId);
     }
     const msgId = Number(db.prepare(`INSERT INTO enquiry_messages (enquiry_id, direction, from_address, from_name, to_address, subject, body, email_message_id, created_at)
@@ -85,12 +91,18 @@ function readDetails(db, out) {
 export async function fillFromEmails(db, reader, enquiryId) {
   const e = db.prepare('SELECT * FROM event_enquiries WHERE id = ?').get(enquiryId);
   if (!e) return [];
-  const emails = db.prepare(`SELECT from_address AS "from", subject, body FROM enquiry_messages WHERE enquiry_id = ? AND direction = 'in'
-    ORDER BY created_at DESC, id DESC LIMIT 10`).all(e.id).reverse();
-  if (!emails.length) return [];
+  const emails = db.prepare(`SELECT direction, from_address AS "from", created_at AS at, subject, body FROM enquiry_messages WHERE enquiry_id = ? AND direction != 'note'
+    ORDER BY created_at DESC, id DESC LIMIT 12`).all(e.id).reverse();
+  if (!emails.some((m) => m.direction === 'in')) return [];
   const sites = db.prepare('SELECT name FROM locations WHERE active = 1 ORDER BY name').all().map((l) => l.name);
-  const found = readDetails(db, await reader.read({ emails, sites, today: today() }));
-  const subjectTitle = !e.title || e.title === cleanSubject(emails[0].subject).slice(0, 200);
+  const out = await reader.read({ emails, sites, today: today() });
+  // What it is, and whether a reply is owed (the reader only ever clears that; a new email from them sets it again).
+  db.prepare(`UPDATE event_enquiries SET ai_kind = ?, ai_reason = ?, no_reply_needed = CASE WHEN ? THEN 1 ELSE no_reply_needed END WHERE id = ?`)
+    .run(['enquiry', 'marketing', 'other'].includes(out.kind) ? out.kind : null, out.kind_reason ? String(out.kind_reason).slice(0, 200) : null,
+      out.needs_reply === false ? 1 : 0, e.id);
+  if (out.kind === 'marketing') return [];
+  const found = readDetails(db, out);
+  const subjectTitle = !e.title || e.title === cleanSubject(emails.find((m) => m.direction === 'in').subject).slice(0, 200);
   const filled = DETAIL_FIELDS.filter((k) => found[k] !== null && (k === 'title' ? subjectTitle && found.title !== e.title : e[k] === null || e[k] === undefined));
   if (!filled.length) return [];
   const before = (() => { try { return JSON.parse(e.filled_fields ?? '[]'); } catch { return []; } })();
@@ -130,6 +142,8 @@ export function checkEvents(db, { mailbox, reader = null, now = new Date() }) {
         save.run(m.id, m.receivedAt ?? null, m.from ?? null, m.subject ?? null, result.status, result.enquiryId ?? null, result.detail ?? null, (before?.attempts ?? 0) + 1);
         summary[result.status]++;
       }
+      // Replies sent from the inbox in Outlook, so the conversation here is complete and nobody's shown as waiting.
+      if (mailbox.listSent) summary.replies = await syncSent(db, mailbox, getSetting(db, KEY.sentSince) ?? since, now);
       setSetting(db, KEY.lastError, null);
     } catch (err) {
       setSetting(db, KEY.lastError, err.message);
@@ -140,6 +154,37 @@ export function checkEvents(db, { mailbox, reader = null, now = new Date() }) {
     return summary;
   })().finally(() => { running = null; });
   return running;
+}
+
+// The reply someone wrote, without the earlier emails Outlook quotes beneath it.
+const ownPart = (t) => cleanBody(String(t ?? '').split(/\n\s*(?:From:\s|-{3,}\s*Original Message|On .{5,80} wrote:|_{10,})/i)[0]);
+
+/** Adds emails sent from the inbox (in Outlook) to their enquiry's conversation. Returns how many were added. */
+async function syncSent(db, mailbox, since, now) {
+  let added = 0;
+  for (const m of await mailbox.listSent(since)) {
+    if (!m.conversationId || db.prepare('SELECT 1 FROM enquiry_messages WHERE email_message_id = ?').get(m.id)) continue;
+    const e = db.prepare('SELECT id FROM event_enquiries WHERE conversation_id = ?').get(m.conversationId);
+    if (!e) continue;
+    const at = sqlTime(m.sentAt);
+    // One Brewly sent itself (it's in Sent Items too): just note which email it was.
+    const own = db.prepare(`SELECT id FROM enquiry_messages WHERE enquiry_id = ? AND direction = 'out' AND status = 'sent' AND email_message_id IS NULL
+      AND abs(strftime('%s', created_at) - strftime('%s', ?)) <= 900 ORDER BY id LIMIT 1`).get(e.id, at);
+    if (own) {
+      db.prepare('UPDATE enquiry_messages SET email_message_id = ? WHERE id = ?').run(m.id, own.id);
+      continue;
+    }
+    const body = ownPart(await mailbox.body(m.id));
+    tx(db, () => {
+      db.prepare(`INSERT INTO enquiry_messages (enquiry_id, direction, from_address, to_address, subject, body, email_message_id, status, created_at)
+        VALUES (?, 'out', ?, ?, ?, ?, ?, 'logged', ?)`).run(e.id, mailbox.address, m.to?.[0] ?? null, (m.subject ?? '').slice(0, 300), body || null, m.id, at);
+      db.prepare(`UPDATE event_enquiries SET status = CASE WHEN status = 'new' THEN 'replied' ELSE status END,
+        last_message_at = max(COALESCE(last_message_at, ''), ?), updated_at = datetime('now') WHERE id = ?`).run(at, e.id);
+    });
+    added++;
+  }
+  setSetting(db, KEY.sentSince, now.toISOString());
+  return added;
 }
 
 export function startEventsInbox(db, { mailbox, reader = null, minutes = 5, log = console }) {
@@ -166,6 +211,7 @@ export function registerEventRoutes(router, db, { mailbox = null, reader = null 
     mailbox: mailbox?.address ?? null,
     last_check: getSetting(db, KEY.lastCheck),
     last_error: getSetting(db, KEY.lastError),
+    marketing_senders: db.prepare('SELECT COUNT(*) AS n FROM events_marketing_senders').get().n,
   });
 
   router.get('/events/inbox', perm, (_req, res) => res.json(status()));
@@ -184,7 +230,7 @@ export function registerEventRoutes(router, db, { mailbox = null, reader = null 
       FROM event_enquiries e
       JOIN enquiry_messages m ON m.id = (SELECT m2.id FROM enquiry_messages m2 WHERE m2.enquiry_id = e.id AND m2.direction != 'note' ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1)
       LEFT JOIN locations l ON l.id = e.location_id
-      WHERE m.direction = 'in' AND e.status NOT IN ('completed', 'lost')
+      WHERE m.direction = 'in' AND e.status NOT IN ('completed', 'lost') AND e.no_reply_needed = 0 AND COALESCE(e.ai_kind, '') != 'marketing'
       ORDER BY m.created_at, e.id`).all().filter(mine);
     const upcoming = db.prepare(`SELECT e.id, e.title, e.name, e.status, e.event_date, e.start_time, e.end_time, e.guests, e.location_id, l.name AS location_name
       FROM event_enquiries e LEFT JOIN locations l ON l.id = e.location_id
@@ -199,8 +245,67 @@ export function registerEventRoutes(router, db, { mailbox = null, reader = null 
         new_this_week: count(`created_at >= datetime('now', '-7 days')`),
         provisional: count(`status = 'provisional'`),
         confirmed_ahead: count(`status = 'confirmed' AND event_date >= date('now')`),
+        marketing: count(`ai_kind = 'marketing' AND status IN ('new', 'replied')`),
       },
+      can_check_marketing: !!reader,
     });
+  });
+
+  // Someone has decided this one doesn't need a reply (or does after all). { no_reply_needed: true | false }
+  router.post('/events/enquiries/:id/no-reply', perm, (req, res) => {
+    const e = enquiry(req, Number(req.params.id));
+    db.prepare('UPDATE event_enquiries SET no_reply_needed = ?, unread = 0 WHERE id = ?').run(req.body?.no_reply_needed === false ? 0 : 1, e.id);
+    res.json({ ok: true });
+  });
+
+  // Marketing: enquiries nobody has answered are read (any not read yet) and those that look like marketing listed,
+  // with why, to be filed and deleted (below).
+  const unanswered = (req) => db.prepare(`SELECT e.* FROM event_enquiries e WHERE e.source = 'email' AND e.status IN ('new', 'replied')
+      AND NOT EXISTS (SELECT 1 FROM enquiry_messages m WHERE m.enquiry_id = e.id AND m.direction = 'out')
+    ORDER BY e.id`).all().filter((e) => canSee(req, e));
+  router.post('/events/marketing/check', perm, async (req, res) => {
+    if (!reader) throw badRequest('Checking emails needs ANTHROPIC_API_KEY (the same key as the invoice reader)');
+    const todo = unanswered(req).filter((e) => !e.ai_kind).slice(0, 40);
+    let failed = 0;
+    // A few at a time, to keep it quick without overloading the reader.
+    for (let i = 0; i < todo.length; i += 4) {
+      const results = await Promise.allSettled(todo.slice(i, i + 4).map((e) => fillFromEmails(db, reader, e.id)));
+      failed += results.filter((r) => r.status === 'rejected').length;
+    }
+    const list = unanswered(req).filter((e) => e.ai_kind === 'marketing').map((e) => ({
+      id: e.id, name: e.name, email: e.email, title: e.title, reason: e.ai_reason,
+      preview: db.prepare(`SELECT substr(COALESCE(body, ''), 1, 160) AS t FROM enquiry_messages WHERE enquiry_id = ? AND direction = 'in' ORDER BY created_at DESC LIMIT 1`).get(e.id)?.t ?? '',
+    }));
+    res.json({ checked: todo.length, failed, marketing: list, more: unanswered(req).some((e) => !e.ai_kind) });
+  });
+
+  // { ids }: their emails are moved to the events inbox's Marketing folder, the senders remembered (so later emails
+  // from them are filed straight away), and the enquiries deleted from Brewly.
+  router.post('/events/marketing/file', perm, async (req, res) => {
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map((v) => id(v, 'id', { required: true }));
+    if (!ids.length) throw badRequest('Tick the emails to file');
+    const list = ids.map((i) => enquiry(req, i));
+    const emailIds = list.flatMap((e) => db.prepare(`SELECT email_message_id FROM enquiry_messages WHERE enquiry_id = ? AND direction = 'in' AND email_message_id IS NOT NULL`)
+      .all(e.id).map((m) => m.email_message_id));
+    let outlook = null;
+    if (mailbox?.moveToFolder && emailIds.length) {
+      try { await mailbox.moveToFolder(emailIds, MARKETING_FOLDER); outlook = 'filed'; } catch (err) { outlook = err.message; }
+    }
+    tx(db, () => {
+      for (const e of list) {
+        if (e.email) db.prepare('INSERT OR IGNORE INTO events_marketing_senders (email) VALUES (?)').run(e.email.toLowerCase());
+        db.prepare('DELETE FROM event_enquiries WHERE id = ?').run(e.id);
+      }
+    });
+    res.json({ deleted: list.length, filed_in_outlook: outlook === 'filed', outlook_error: outlook && outlook !== 'filed' ? outlook : null, folder: MARKETING_FOLDER });
+  });
+
+  router.get('/events/marketing/senders', perm, (_req, res) => {
+    res.json(db.prepare('SELECT email, filed_at FROM events_marketing_senders ORDER BY email').all());
+  });
+  router.delete('/events/marketing/senders/:email', perm, (req, res) => {
+    db.prepare('DELETE FROM events_marketing_senders WHERE email = ?').run(String(req.params.email));
+    res.json({ ok: true });
   });
 
   router.get('/events/unread', perm, (req, res) => {

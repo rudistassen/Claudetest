@@ -9,9 +9,11 @@ const nullable = (type) => ({ anyOf: [{ type }, { type: 'null' }] });
 export const ENQUIRY_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['is_enquiry', 'title', 'event_type', 'event_date', 'start_time', 'end_time', 'guests', 'budget', 'contact_name', 'phone', 'site'],
+  required: ['kind', 'kind_reason', 'needs_reply', 'title', 'event_type', 'event_date', 'start_time', 'end_time', 'guests', 'budget', 'contact_name', 'phone', 'site'],
   properties: {
-    is_enquiry: { type: 'boolean', description: 'False if the email isn’t about booking or holding an event (e.g. a newsletter or a supplier)' },
+    kind: { type: 'string', enum: ['enquiry', 'marketing', 'other'], description: 'enquiry: someone asking about (or arranging) an event; marketing: newsletters, sales pitches, promotions, cold outreach; other: anything else (suppliers, invoices, admin)' },
+    kind_reason: { type: 'string', description: 'A few words on why, e.g. "Newsletter from a booking platform"' },
+    needs_reply: { type: 'boolean', description: 'Whether the venue still owes the customer a reply' },
     title: { type: 'string', description: 'A short name for the event, e.g. "Sarah’s 40th birthday" or "Acme breakfast meeting"' },
     event_type: { type: 'string' },
     event_date: { type: 'string', description: 'YYYY-MM-DD, or empty' },
@@ -29,7 +31,9 @@ const EVENT_TYPES = 'Birthday party, Wedding / reception, Corporate, Meeting, Pr
 
 const system = (today, sites) => `You read event enquiry emails sent to a group of UK cafés and venues, and pick out the booking details so staff don't have to type them.
 
-Today is ${today}. Take only what the email (and any earlier emails in the thread) says; leave a field empty (or null for numbers) when it isn't stated – never guess.
+Today is ${today}. The emails are the conversation so far, oldest first; each says whether it is from the customer or from the venue. Take only what they say; leave a field empty (or null for numbers) when it isn't stated – never guess.
+- kind: "enquiry" if a person is asking about, booking or arranging an event or private hire; "marketing" if it is a newsletter, promotion, sales pitch or cold outreach to the venue (e.g. software, listings, suppliers looking for business); "other" for anything else. Give kind_reason in a few words.
+- needs_reply: true if the venue still owes them an answer – the customer's latest email asks something or moves the booking on and the venue hasn't answered it. False if the venue wrote last and nothing new was asked, if the customer's latest email just says thanks, confirms, or says they no longer need it, and for marketing.
 - event_date: the date they want, as YYYY-MM-DD. Resolve relative or partial dates ("next Saturday", "14th November") to the next such date on or after today. If they give a range or several options, leave it empty.
 - start_time / end_time: 24-hour HH:MM ("7pm" is 19:00). "Until late" or "all day" leaves end_time empty.
 - guests: the number of people; for a range ("30-40") use the higher number.
@@ -51,11 +55,11 @@ export function claudeEnquiryReader({ client, model = DEFAULT_MODEL }) {
   return {
     model,
     /**
-     * emails: [{ from, subject, body }] oldest first; sites: the venue names; today: YYYY-MM-DD.
+     * emails: [{ direction: 'in' | 'out', from, at, subject, body }] oldest first; sites: the venue names; today: YYYY-MM-DD.
      * Returns the details (ENQUIRY_SCHEMA, blanks as null). Throws on any API problem – the caller carries on without.
      */
     async read({ emails, sites, today }) {
-      const text = emails.map((e, i) => `--- Email ${i + 1}${e.from ? ` from ${e.from}` : ''} ---\nSubject: ${e.subject ?? ''}\n\n${e.body ?? ''}`).join('\n\n');
+      const text = emails.map((e, i) => `--- Email ${i + 1} · from the ${e.direction === 'out' ? 'venue' : 'customer'}${e.from ? ` (${e.from})` : ''}${e.at ? ` · ${e.at}` : ''} ---\nSubject: ${e.subject ?? ''}\n\n${e.body ?? ''}`).join('\n\n');
       const response = await client.beta.messages.create({
         model,
         max_tokens: 16000,

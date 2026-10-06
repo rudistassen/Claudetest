@@ -73,7 +73,55 @@ function inboxCard(inbox) {
     <p class="small">Emails to <strong>${esc(inbox.mailbox)}</strong> are added every few minutes, and replies are sent from it.
       ${inbox.last_check ? `Last checked ${fmtDateTime(inbox.last_check.replace('T', ' ').slice(0, 19))}.` : 'Not checked yet.'}</p>
     ${inbox.last_error ? `<p class="notice notice-warn">${esc(inbox.last_error)}</p>` : ''}
+    ${inbox.marketing_senders ? `<p class="small muted">Emails from ${inbox.marketing_senders} marketing sender${inbox.marketing_senders === 1 ? ' are' : 's are'} filed straight away.
+      <button type="button" class="link-btn" id="ev-senders">See or change them</button></p>` : ''}
   </section>`;
+}
+
+// Find marketing among the emails nobody has answered, show it to check, then file it in Outlook and delete it here.
+async function clearMarketing(button, done) {
+  button.disabled = true;
+  button.textContent = 'Checking emails…';
+  let r;
+  try { r = await api('/events/marketing/check', { method: 'POST' }); } catch (err) { showError(err); button.disabled = false; button.textContent = '🧹 Clear out marketing'; return; }
+  button.disabled = false;
+  button.textContent = '🧹 Clear out marketing';
+  if (!r.marketing.length) {
+    toast(`Checked ${r.checked} email${r.checked === 1 ? '' : 's'} – none look like marketing${r.more ? ' (press again to check more)' : ''}`);
+    done();
+    return;
+  }
+  openModal({
+    title: `${r.marketing.length} email${r.marketing.length === 1 ? ' looks' : 's look'} like marketing`,
+    wide: true,
+    body: `<p class="muted small">Untick any that are real enquiries. The rest are moved to the <strong>Marketing</strong> folder of the events inbox in Outlook, deleted here, and later emails from the same senders are filed straight away.</p>
+      <ul class="ev-mkt">${r.marketing.map((e) => `<li><label class="check-row"><input type="checkbox" data-mkt="${e.id}" checked>
+        <span><strong>${esc(e.name)}</strong> <span class="muted">${esc(e.email ?? '')}</span>${e.title ? `<br>${esc(e.title)}` : ''}
+          <small class="muted">🤖 ${esc(e.reason ?? 'Looks like marketing')} · “${esc(e.preview.replace(/\s+/g, ' ').slice(0, 120))}”</small></span></label></li>`).join('')}</ul>
+      ${r.more ? '<p class="small muted">There are more emails to check – press the button again afterwards.</p>' : ''}`,
+    submitLabel: 'File and delete',
+    onSubmit: async (_v, form) => {
+      const ids = [...form.querySelectorAll('[data-mkt]:checked')].map((b) => Number(b.dataset.mkt));
+      if (!ids.length) throw new Error('Nothing is ticked');
+      const res = await api('/events/marketing/file', { method: 'POST', body: { ids } });
+      toast(res.filed_in_outlook ? `${res.deleted} filed in “${res.folder}” in Outlook and deleted here`
+        : `${res.deleted} deleted here${res.outlook_error ? ` – but not filed in Outlook: ${res.outlook_error}` : ''}`, res.outlook_error ? 'error' : 'ok');
+      changed();
+      done();
+    },
+  });
+}
+
+async function marketingSenders(done) {
+  const list = await api('/events/marketing/senders');
+  const { form } = openModal({
+    title: 'Marketing senders',
+    body: `<p class="muted small">Emails from these addresses go straight to the Marketing folder. Remove one to bring their emails in again.</p>
+      <ul class="pp-history">${list.map((s) => `<li><span>${esc(s.email)}</span><button type="button" class="btn btn-small btn-ghost" data-unblock="${esc(s.email)}">Remove</button></li>`).join('')}</ul>`,
+  });
+  form.querySelectorAll('[data-unblock]').forEach((b) => b.addEventListener('click', async () => {
+    try { await api(`/events/marketing/senders/${encodeURIComponent(b.dataset.unblock)}`, { method: 'DELETE' }); b.closest('li').remove(); toast('Removed'); done(); } catch (err) { showError(err); }
+  }));
 }
 
 export async function renderEnquiries(ctx) {
@@ -100,11 +148,14 @@ export async function renderEnquiries(ctx) {
     </div>
     <div class="ev-summary">
       <section class="card" id="ev-reply">
-        <h2>Needs a reply <span class="badge ${c.needs_reply ? 'badge-sent' : ''}">${c.needs_reply}</span></h2>
+        <div class="card-head"><h2>Needs a reply <span class="badge ${c.needs_reply ? 'badge-sent' : ''}">${c.needs_reply}</span></h2>
+          ${sum.can_check_marketing ? '<button type="button" class="btn btn-small" id="ev-marketing" title="Find emails that are marketing, file them in Outlook and delete them here">🧹 Clear out marketing</button>' : ''}</div>
+        ${c.marketing ? `<p class="small muted">${c.marketing} email${c.marketing === 1 ? ' looks' : 's look'} like marketing and ${c.marketing === 1 ? 'isn’t' : 'aren’t'} counted here.</p>` : ''}
         ${sum.needs_reply.length ? `<ul class="ev-mini">${sum.needs_reply.map((e) => `<li><a href="#/events/enquiries/${e.id}">
           <span><strong>${esc(e.name)}</strong>${e.title ? ` <span class="muted">${esc(e.title)}</span>` : ''}
             <small class="muted">${esc((e.last_text ?? '').replace(/\s+/g, ' ').slice(0, 110))}</small></span>
-          <span class="ev-wait ${hoursSince(e.waiting_since) >= 24 ? 'is-late' : ''}">${esc(waitedFor(e.waiting_since))}</span></a></li>`).join('')}</ul>`
+          <span class="ev-mini-side"><span class="ev-wait ${hoursSince(e.waiting_since) >= 24 ? 'is-late' : ''}">${esc(waitedFor(e.waiting_since))}</span>
+            <button type="button" class="link-btn small" data-no-reply="${e.id}" title="Take it off this list – e.g. you answered by phone">No reply needed</button></span></a></li>`).join('')}</ul>`
           : '<p class="muted small">✓ Nobody is waiting for a reply.</p>'}
       </section>
       <section class="card">
@@ -138,6 +189,13 @@ export async function renderEnquiries(ctx) {
   form.querySelectorAll('[data-show]').forEach((b) => b.addEventListener('click', () => navigate(`events/enquiries${qs({ show: b.dataset.show === 'open' ? undefined : b.dataset.show, scope: query.scope })}`)));
   el.querySelector('#ev-new').addEventListener('click', () => newEnquiryDialog(state, navigate));
   el.querySelector('#ev-to-reply').addEventListener('click', () => el.querySelector('#ev-reply').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  el.querySelector('#ev-marketing')?.addEventListener('click', (ev) => clearMarketing(ev.currentTarget, rerender));
+  el.querySelector('#ev-senders')?.addEventListener('click', () => marketingSenders(() => {}).catch(showError));
+  el.querySelectorAll('[data-no-reply]').forEach((b) => b.addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    try { await api(`/events/enquiries/${b.dataset.noReply}/no-reply`, { method: 'POST', body: { no_reply_needed: true } }); toast('Taken off the list'); changed(); rerender(); } catch (err) { showError(err); }
+  }));
   el.querySelector('#ev-check')?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     try {
@@ -159,6 +217,7 @@ export async function renderEnquiry(ctx) {
   const fileUrl = (f) => `/api/events/enquiries/${e.id}/files/${f.id}`;
   const filesFor = (mid) => e.files.filter((f) => f.message_id === mid);
   const hasThread = e.messages.some((m) => m.direction === 'in');
+  const lastIn = e.messages.filter((m) => m.direction !== 'note').at(-1)?.direction === 'in';
 
   const bubble = (m) => {
     const files = filesFor(m.id);
@@ -178,6 +237,9 @@ export async function renderEnquiry(ctx) {
     <div class="page-head"><div><h1>${esc(e.title || e.name)}</h1>
       <p class="muted small">${e.title ? `${esc(e.name)} · ` : ''}${when(e) || 'No date yet'}${e.guests ? ` · ${e.guests} guests` : ''}${e.location_name ? ` · ${esc(e.location_name)}` : ''}</p></div>
       <div class="actions"><label class="ev-status-pick">${statusBadge(e.status)}<select id="ev-status" aria-label="Status">${STATUSES.map(([k, l]) => `<option value="${k}" ${k === e.status ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div></div>
+    ${e.ai_kind === 'marketing' ? `<p class="notice small">🤖 This looks like marketing${e.ai_reason ? ` – ${esc(e.ai_reason)}` : ''}. Use 🧹 Clear out marketing on Enquiries to file it.</p>` : ''}
+    ${lastIn ? `<p class="small ev-reply-state">${e.no_reply_needed ? '✓ Marked as not needing a reply. <button type="button" class="link-btn" data-reply-state="0">It does need one</button>'
+      : '<button type="button" class="link-btn" data-reply-state="1">No reply needed</button> <span class="muted">– e.g. you answered by phone, or they’ve said thanks</span>'}</p>` : ''}
     <div class="ev-layout">
       <section class="card ev-thread-card">
         <h2>Conversation</h2>
@@ -203,6 +265,13 @@ export async function renderEnquiry(ctx) {
       </form>
     </div>`;
 
+  el.querySelector('[data-reply-state]')?.addEventListener('click', async (ev) => {
+    try {
+      await api(`/events/enquiries/${e.id}/no-reply`, { method: 'POST', body: { no_reply_needed: ev.target.dataset.replyState === '1' } });
+      changed();
+      rerender();
+    } catch (err) { showError(err); }
+  });
   const thread = el.querySelector('.ev-thread');
   if (thread) thread.lastElementChild?.scrollIntoView({ block: 'nearest' });
 

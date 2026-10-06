@@ -93,7 +93,7 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
       throw new MailboxError(`Brewly can read the ${label} but isn’t allowed to send from it. In Microsoft Entra, give the app the Mail.Send application permission (with admin consent).`);
     }
     if ((res.status === 401 || res.status === 403) && writing) {
-      throw new MailboxError(`Brewly can read the ${label} but isn’t allowed to save draft replies in it. In Microsoft Entra, give the app the Mail.ReadWrite application permission (with admin consent).`);
+      throw new MailboxError(`Brewly can read the ${label} but isn’t allowed to change it (save drafts or file emails). In Microsoft Entra, give the app the Mail.ReadWrite application permission (with admin consent).`);
     }
     if (res.status === 401 || res.status === 403) {
       throw new MailboxError(`Brewly isn’t allowed to read the ${label}. In Microsoft Entra, give the app the Mail.Read application permission with admin consent, and make sure any mailbox access policy includes it.`);
@@ -131,6 +131,32 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
       }
       return out;
     },
+    // Emails sent from the mailbox since then (e.g. replies written in Outlook), oldest first.
+    async listSent(since) {
+      let url = `${user}/mailFolders/sentitems/messages?${new URLSearchParams({
+        $filter: `sentDateTime ge ${new Date(since).toISOString().replace(/\.\d+Z$/, 'Z')}`, $orderby: 'sentDateTime asc', $top: '50',
+        $select: 'id,subject,toRecipients,sentDateTime,conversationId',
+      })}`;
+      const out = [];
+      for (let page = 0; url && page < 5; page++) {
+        const body = await get(url);
+        for (const m of body.value ?? []) {
+          out.push({ id: m.id, subject: m.subject ?? '', to: (m.toRecipients ?? []).map((r) => r.emailAddress?.address).filter(Boolean),
+            sentAt: m.sentDateTime, conversationId: m.conversationId ?? null });
+        }
+        url = body['@odata.nextLink'] ?? null;
+      }
+      return out;
+    },
+    // Moves emails into a folder of the mailbox (made if it isn't there), e.g. "Marketing". Needs Mail.ReadWrite.
+    async moveToFolder(messageIds, folderName) {
+      const found = await call(`${user}/mailFolders?${new URLSearchParams({ $filter: `displayName eq '${folderName.replace(/'/g, "''")}'` })}`);
+      const folderId = found.value?.[0]?.id
+        ?? (await call(`${user}/mailFolders`, { method: 'POST', body: { displayName: folderName }, writing: true })).id;
+      for (const mid of messageIds) {
+        await call(`${user}/messages/${encodeURIComponent(mid)}/move`, { method: 'POST', body: { destinationId: folderId }, writing: true });
+      }
+    },
     async attachments(messageId) {
       const body = await get(`${user}/messages/${encodeURIComponent(messageId)}/attachments`);
       return (body.value ?? [])
@@ -157,14 +183,21 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
   };
 }
 
-/** A pretend mailbox for the demo and tests. messages: [{ id, subject, from, fromName, to, receivedAt, preview, attachments }] */
+/**
+ * A pretend mailbox for the demo and tests. messages: [{ id, subject, from, fromName, to, receivedAt, preview, attachments }];
+ * ones with folder: 'sent' (and sentAt) are in Sent Items.
+ */
 export function memoryMailbox(messages = [], address = 'invoices@example.com') {
   return {
     address,
     messages,
     async listNew(since) {
-      return messages.filter((m) => m.receivedAt >= since).sort((a, b) => a.receivedAt.localeCompare(b.receivedAt)).map(({ attachments, ...m }) => m);
+      return messages.filter((m) => m.folder !== 'sent' && !m.movedTo && m.receivedAt >= since).sort((a, b) => a.receivedAt.localeCompare(b.receivedAt)).map(({ attachments, ...m }) => m);
     },
+    async listSent(since) {
+      return messages.filter((m) => m.folder === 'sent' && m.sentAt >= since).sort((a, b) => a.sentAt.localeCompare(b.sentAt)).map(({ attachments, ...m }) => m);
+    },
+    async moveToFolder(ids, folder) { for (const m of messages) if (ids.includes(m.id)) m.movedTo = folder; },
     async attachments(id) { return messages.find((m) => m.id === id)?.attachments ?? []; },
     async body(id) { return messages.find((m) => m.id === id)?.body ?? messages.find((m) => m.id === id)?.preview ?? ''; },
     drafts: [],
