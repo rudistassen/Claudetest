@@ -44,8 +44,9 @@ export function ingredientRows(db, recipeIds = null) {
     SELECT ri.id, ri.recipe_id, ri.product_id, ri.sub_recipe_id, ri.quantity, ri.notes, ri.sort_order,
       COALESCE(p.name, sr.name) AS product_name, p.unit, p.unit_cost, p.units_per_pack,
       CASE WHEN ri.sub_recipe_id IS NOT NULL THEN COALESCE(sr.yield_unit, 'portion') ELSE COALESCE(p.recipe_unit, p.unit) END AS recipe_unit,
-      p.allergens, COALESCE(p.active, sr.active) AS product_active
+      p.allergens, COALESCE(p.active, sr.active) AS product_active, su.name AS supplier_name
     FROM recipe_ingredients ri LEFT JOIN products p ON p.id = ri.product_id LEFT JOIN recipes sr ON sr.id = ri.sub_recipe_id
+    LEFT JOIN suppliers su ON su.id = p.supplier_id
     ${where} ORDER BY ri.recipe_id, ri.sort_order, ri.id`).all(...(recipeIds ?? []))
     .map((r) => ({ ...r, line_cost: r.sub_recipe_id ? null : round2(r.quantity * unitCost(r)) }));
 }

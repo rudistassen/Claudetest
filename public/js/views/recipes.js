@@ -99,7 +99,8 @@ export async function renderRecipe(ctx) {
   const portions = prep ? 1 : r.portions || 1;
   const perPortion = (q) => q / portions;
   const costs = state.can('recipes.costs', 'recipes.edit');
-  const ingName = (i) => (i.sub_recipe_id ? `<a href="#/recipes/prep/${i.sub_recipe_id}">${esc(i.product_name)}</a> <span class="badge badge-sent">Prepped</span>` : esc(i.product_name));
+  const ingName = (i) => (i.sub_recipe_id ? `<a href="#/recipes/prep/${i.sub_recipe_id}">${esc(i.product_name)}</a> <span class="badge badge-sent">Prepped</span>`
+    : `${esc(i.product_name)}${i.supplier_name ? ` <small class="muted ing-supplier">${esc(i.supplier_name)}</small>` : ''}`);
 
   el.innerHTML = `
     <div class="page-head">
@@ -190,19 +191,22 @@ export async function renderEdit(ctx, newKind = 'sold') {
   });
   if (currentSquare && !squareOptions.some(([v]) => v === currentSquare)) squareOptions.unshift([currentSquare, r.square_item_name ?? r.square_catalog_object_id]);
 
-  // An ingredient is a product ("p:12") or a prepped recipe ("r:5"); prepped recipes are listed first.
-  const productOptions = (selected) => {
-    const groups = new Map();
-    for (const p of products.filter((x) => x.active || `p:${x.id}` === selected)) groups.set(p.category ?? 'Other', [...(groups.get(p.category ?? 'Other') ?? []), p]);
-    const prepList = preps.filter((x) => x.active || `r:${x.id}` === selected);
-    return `<option value="">Choose…</option>
-      ${prepList.length ? `<optgroup label="Prepped recipes">${prepList.map((x) => `<option value="r:${x.id}" ${`r:${x.id}` === selected ? 'selected' : ''}>${esc(x.name)} (${esc(x.yield_unit)})</option>`).join('')}</optgroup>` : ''}
-      ${[...groups].map(([c, list]) => `<optgroup label="${esc(c)}">${list.map((p) => `<option value="p:${p.id}" ${`p:${p.id}` === selected ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>`).join('')}`;
-  };
+  // An ingredient is a product ("p:12") or a prepped recipe ("r:5"), picked by typing part of its name, supplier or
+  // category. Prepped recipes are listed first; each product shows its supplier.
+  const choices = [
+    ...preps.map((x) => ({ value: `r:${x.id}`, name: x.name, meta: `Prepped recipe · measured in ${x.yield_unit}`, prep: true, active: x.active })),
+    ...products.map((p) => ({ value: `p:${p.id}`, name: p.name, meta: [p.supplier_name ?? 'No supplier', p.category].filter(Boolean).join(' · '), active: p.active })),
+  ].map((c) => ({ ...c, search: `${c.name} ${c.meta}`.toLowerCase() }));
+  const choiceByValue = new Map(choices.map((c) => [c.value, c]));
   const lineValue = (i) => (i.sub_recipe_id ? `r:${i.sub_recipe_id}` : i.product_id ? `p:${i.product_id}` : '');
   const row = (i = {}) => `
     <tr class="ing-row">
-      <td><select class="ing-product" aria-label="Ingredient">${productOptions(lineValue(i))}</select></td>
+      <td><div class="ing-pick">
+        <input class="ing-search" type="search" autocomplete="off" placeholder="Search ingredients or suppliers…" aria-label="Ingredient" value="${esc(choiceByValue.get(lineValue(i))?.name ?? '')}">
+        <input type="hidden" class="ing-product" value="${lineValue(i)}">
+        <small class="ing-picked muted">${esc(choiceByValue.get(lineValue(i))?.meta ?? '')}</small>
+        <ul class="ing-options" role="listbox" hidden></ul>
+      </div></td>
       <td class="num"><input class="ing-qty qty-input" type="number" min="0" step="any" value="${i.quantity ?? ''}" aria-label="Quantity"> <span class="ing-unit muted">${esc(i.recipe_unit ?? '')}</span></td>
       <td><input class="ing-notes" value="${esc(i.notes ?? '')}" placeholder="e.g. grated" aria-label="Notes"></td>
       <td class="num ing-cost"></td>
@@ -311,16 +315,88 @@ export async function renderEdit(ctx, newKind = 'sold') {
     }
     el.querySelector('#k-allergens').textContent = [...allergens].map((a) => allergenName(m, a)).join(', ') || 'None';
   };
+  // The search box: matches every word typed against the name, supplier and category.
+  const bindPicker = (tr) => {
+    const search = tr.querySelector('.ing-search');
+    const hidden = tr.querySelector('.ing-product');
+    const picked = tr.querySelector('.ing-picked');
+    // The list lives on the page itself, so no card or scrolling table around the row can move or cut it off.
+    const list = tr.querySelector('.ing-options');
+    list.classList.add('ing-options-page');
+    document.body.append(list);
+    tr.addEventListener('ing:removed', () => list.remove());
+    let shown = [];
+    let at = -1;
+    const choose = (c) => {
+      hidden.value = c?.value ?? '';
+      search.value = c?.name ?? '';
+      picked.textContent = c?.meta ?? '';
+      list.hidden = true;
+      update();
+    };
+    // On focus everything is listed; typing narrows it down.
+    const draw = (all = false) => {
+      const words = all ? [] : search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      shown = choices.filter((c) => (c.active || c.value === hidden.value) && words.every((w) => c.search.includes(w))).slice(0, 60);
+      at = shown.length ? 0 : -1;
+      list.innerHTML = shown.length ? shown.map((c, n) => `<li role="option" data-n="${n}" class="${n === at ? 'is-at' : ''}">
+          <strong>${esc(c.name)}</strong>${c.prep ? ' <span class="badge badge-sent">Prepped</span>' : ''}<small>${esc(c.meta)}</small></li>`).join('')
+        : '<li class="ing-none">No ingredient matches – add it under Stock & Ordering → Products</li>';
+      // Fixed to the screen, so the table's scrolling box doesn't cut it off.
+      const box = search.getBoundingClientRect();
+      const below = window.innerHeight - box.bottom;
+      Object.assign(list.style, { left: `${box.left}px`, width: `${Math.min(Math.max(box.width, 300), window.innerWidth - box.left - 8)}px`, maxHeight: `${Math.max(160, Math.min(320, below > 200 ? below - 12 : box.top - 12))}px` });
+      if (below > 200) { list.style.top = `${box.bottom + 2}px`; list.style.bottom = ''; } else { list.style.bottom = `${window.innerHeight - box.top + 2}px`; list.style.top = ''; }
+      list.hidden = false;
+    };
+    const move = (d) => {
+      if (!shown.length) return;
+      at = (at + d + shown.length) % shown.length;
+      list.querySelectorAll('li[data-n]').forEach((li) => li.classList.toggle('is-at', Number(li.dataset.n) === at));
+      list.querySelector('.is-at')?.scrollIntoView({ block: 'nearest' });
+    };
+    search.addEventListener('focus', () => { search.select(); draw(true); });
+    search.addEventListener('input', () => draw());
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) draw(); else move(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+      else if (e.key === 'Enter') { if (!list.hidden && shown[at]) { e.preventDefault(); choose(shown[at]); tr.querySelector('.ing-qty').focus(); } }
+      else if (e.key === 'Escape') { list.hidden = true; }
+    });
+    // Mousedown, so picking happens before the box loses focus.
+    list.addEventListener('mousedown', (e) => {
+      const li = e.target.closest('li[data-n]');
+      if (!li) return;
+      e.preventDefault();
+      choose(shown[Number(li.dataset.n)]);
+      tr.querySelector('.ing-qty').focus();
+    });
+    search.addEventListener('blur', () => {
+      list.hidden = true;
+      // Typed text that wasn't picked goes back to what was chosen (or clears it, if the box was emptied).
+      if (!search.value.trim()) choose(null);
+      else search.value = choiceByValue.get(hidden.value)?.name ?? '';
+    });
+  };
+  // Scrolling the page closes an open list (it's fixed to the screen); scrolling the list itself doesn't.
+  const closeLists = (e) => {
+    if (!el.isConnected) { window.removeEventListener('scroll', closeLists, true); document.querySelectorAll('.ing-options-page').forEach((l) => l.remove()); return; }
+    if (!e.target.closest?.('.ing-options')) document.querySelectorAll('.ing-options-page').forEach((l) => { l.hidden = true; });
+  };
+  window.addEventListener('scroll', closeLists, { passive: true, capture: true });
+  // Leaving the page takes its lists with it.
+  document.querySelectorAll('.ing-options-page').forEach((l) => l.remove());
+  window.addEventListener('hashchange', () => document.querySelectorAll('.ing-options-page').forEach((l) => l.remove()), { once: true });
   const bindRow = (tr) => {
-    tr.querySelector('.ing-product').addEventListener('change', update);
+    bindPicker(tr);
     tr.querySelector('.ing-qty').addEventListener('input', update);
-    tr.querySelector('.ing-remove').addEventListener('click', () => { tr.remove(); update(); });
+    tr.querySelector('.ing-remove').addEventListener('click', () => { tr.dispatchEvent(new Event('ing:removed')); tr.remove(); update(); });
   };
   body.querySelectorAll('.ing-row').forEach(bindRow);
   el.querySelector('#add-ing').addEventListener('click', () => {
     body.insertAdjacentHTML('beforeend', row());
     bindRow(body.lastElementChild);
-    body.lastElementChild.querySelector('select').focus();
+    body.lastElementChild.querySelector('.ing-search').focus();
   });
   if (prep) ['yield_quantity', 'yield_unit'].forEach((n) => form[n].addEventListener('input', update));
   else {

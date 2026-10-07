@@ -1961,3 +1961,15 @@ td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
 /* Prep kitchen ordering. */
 .po-table td:first-child small { display: block; }
 .po-table .po-qty { width: 6rem; }
+
+/* Recipe editor: searchable ingredient picker. */
+.ing-pick { position: relative; min-width: 240px; }
+@media (max-width: 700px) { .ing-pick { min-width: 0; } }
+.ing-pick .ing-search { width: 100%; }
+.ing-picked { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
+.ing-options { position: fixed; z-index: 40; margin: 0; padding: 0.25rem; list-style: none; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
+.ing-options li { padding: 0.4rem 0.6rem; border-radius: 7px; cursor: pointer; line-height: 1.25; }
+.ing-options li small { display: block; color: var(--muted); font-size: 0.78rem; }
+.ing-options li.is-at, .ing-options li[data-n]:hover { background: var(--brand-soft); }
+.ing-options li.ing-none { color: var(--muted); cursor: default; font-size: 0.85rem; }
+.ing-supplier { margin-left: 0.25rem; }
