@@ -90,7 +90,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       if (t) {
         const status = t.end_at ? 'done' : breakInfo(t, breaksToday.get(t.id), dayEnd).on_break ? 'on_break' : 'in';
         const late = att.byCard.get(t.id)?.late_minutes ?? 0;
-        return { ...base, status, clock: `${timeFormat.format(new Date(t.start))}–${t.end_at ? timeFormat.format(new Date(t.end)) : 'now'}`, late_minutes: late };
+        return { ...base, card_id: t.id, status, clock: `${timeFormat.format(new Date(t.start))}–${t.end_at ? timeFormat.format(new Date(t.end)) : 'now'}`, late_minutes: late };
       }
       if (!labourSynced) return { ...base, status: 'rota' };
       if (att.clockedIn.has(s.user_id)) {
@@ -109,9 +109,9 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
       const rotaSite = att.shiftSiteForCard.get(t.id);
       if (rotaSite && rotaSite !== locationId) {
         const status = t.end_at ? 'done' : breakInfo(t, breaksToday.get(t.id), dayEnd).on_break ? 'on_break' : 'in';
-        out.push({ name: t.name, rota: info.rota ?? null, rota_site: siteName.get(rotaSite) ?? 'another site', status, clock, late_minutes: info.late_minutes ?? 0 });
+        out.push({ card_id: t.id, name: t.name, rota: info.rota ?? null, rota_site: siteName.get(rotaSite) ?? 'another site', status, clock, late_minutes: info.late_minutes ?? 0 });
       } else {
-        out.push({ name: t.name, rota: null, status: 'extra', clock, clocked_out: !!t.end_at });
+        out.push({ card_id: t.id, name: t.name, rota: null, status: 'extra', clock, clocked_out: !!t.end_at });
       }
     }
     return out;

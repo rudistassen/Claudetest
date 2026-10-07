@@ -106,7 +106,7 @@ export function openModal({ title, body, submitLabel = 'Save', onSubmit, danger,
         <footer>
           ${danger ? `<button type="button" class="btn btn-danger" data-danger>${esc(danger)}</button>` : ''}
           <span class="spacer"></span>
-          <button type="button" class="btn" data-close>Cancel</button>
+          <button type="button" class="btn" data-close>${onSubmit ? 'Cancel' : 'Close'}</button>
           ${onSubmit ? `<button type="submit" class="btn btn-primary">${esc(submitLabel)}</button>` : ''}
         </footer>
       </form>

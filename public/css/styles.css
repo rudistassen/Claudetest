@@ -1874,3 +1874,16 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .lt-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--site); margin-right: 0.3rem; }
 @media (max-width: 640px) { .lt-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lt-figures strong { font-size: 1.1rem; } }
 @media print { .labour-track { display: none; } }
+
+/* Dashboard: a name opens that clock-in's timecard. */
+.card-link { color: inherit; text-align: left; }
+.card-link:hover strong, .card-link:focus-visible strong { text-decoration: underline; color: var(--accent, inherit); }
+.tc-details { display: grid; gap: 0.1rem; margin: 0.6rem 0; }
+.tc-details > div { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid var(--border); }
+.tc-details dt { color: var(--muted); font-size: 0.9rem; }
+.tc-details dd { margin: 0; }
+.tc-breaks { list-style: none; margin: 0; padding: 0; }
+.tc-actions .clock-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.tc-actions .link-btn { padding: 0.4rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; text-decoration: none; font-weight: 600; }
+.tc-actions [data-edit-breaks]::before { content: '☕ '; }
+@media (max-width: 480px) { .tc-details > div { grid-template-columns: 6.5rem minmax(0, 1fr); } }

@@ -57,7 +57,7 @@ function rosterRow(p) {
   // Rota editors can tap someone on the rota to mark them as sick (or change it).
   const sickable = shown.canSick && p.shift_id && !p.rota_site && ['due', 'late', 'missed', 'rota', 'sick'].includes(p.status);
   return `<tr class="roster-row ${tone}">
-    <td>${sickable ? `<button class="link-btn roster-sick" ${sickAttrs({ ...p, name: shortName(p.name), date: shown.day, sick: p.status === 'sick' })} title="${p.status === 'sick' ? 'Off sick – tap to change' : 'Tap to mark as sick'}">${esc(shortName(p.name))}</button>` : esc(shortName(p.name))}</td>
+    <td>${sickable ? `<button class="link-btn roster-sick" ${sickAttrs({ ...p, name: shortName(p.name), date: shown.day, sick: p.status === 'sick' })} title="${p.status === 'sick' ? 'Off sick – tap to change' : 'Tap to mark as sick'}">${esc(shortName(p.name))}</button>` : p.card_id ? cardLink(p.card_id, p.name) : esc(shortName(p.name))}</td>
     <td>${p.rota ? `${p.rota}${p.rota_site ? ` <span class="muted">at ${esc(p.rota_site)}</span>` : ''}` : '<span class="muted">–</span>'}</td>
     <td>${p.clock ? p.clock.replace('–now', '–<span class="muted">now</span>') : '<span class="muted">–</span>'}</td>
     <td><span class="roster-status">${label}</span>${note ? ` <span class="muted">${note}</span>` : ''}</td>
@@ -137,6 +137,28 @@ const siteInitials = (name) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).f
 const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`);
 
 
+// A name that opens their timecard for the day.
+const cardLink = (id, name) => `<button type="button" class="link-btn card-link" data-timecard="${esc(id)}" title="See ${esc(shortName(name))}’s timecard"><strong>${esc(shortName(name))}</strong></button>`;
+
+// One clock-in in full: their rota, when they clocked in and out, each break, and the hours it comes to.
+function timecardBody(c, loc) {
+  const row = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+  const breaks = c.breaks?.length
+    ? `<ul class="tc-breaks">${c.breaks.map((b) => `<li>${b.start}–${b.end ?? '<span class="muted">now</span>'} · ${mins(b.minutes)} · ${b.paid ? 'paid' : 'unpaid'}${b.name ? ` <span class="muted">(${esc(b.name)})</span>` : ''}</li>`).join('')}</ul>`
+    : c.breaks_known === false && c.unpaid_break_minutes ? `${mins(c.unpaid_break_minutes)} unpaid <span class="muted">(times not recorded)</span>`
+      : '<span class="muted">No breaks</span>';
+  return `<p class="muted">${esc(loc.name)} · ${fmtDate(shown.day, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+    <dl class="tc-details">
+      ${row('Rota', c.rota ?? (c.not_on_rota ? '<span class="tone-warn">Not on the rota</span>' : '<span class="muted">–</span>'))}
+      ${row('Clocked in', `${c.start}${c.late_minutes ? ` <span class="mini-tag is-warn">${mins(c.late_minutes)} late</span>` : ''}`)}
+      ${row('Clocked out', `${c.end ?? `<span class="muted">Still in${c.on_break ? ' – on a break' : ''}</span>`}${c.over_minutes ? ` <span class="mini-tag is-warn">+${mins(c.over_minutes)} after shift</span>` : ''}`)}
+      ${row('Breaks', breaks)}
+      ${c.paid_break_minutes || c.unpaid_break_minutes ? row('Break time', [c.unpaid_break_minutes ? `${mins(c.unpaid_break_minutes)} unpaid` : '', c.paid_break_minutes ? `${mins(c.paid_break_minutes)} paid` : ''].filter(Boolean).join(' · ')) : ''}
+      ${row(c.end ? 'Hours worked' : 'Hours so far', `<strong>${duration(c.hours)}</strong> <span class="muted">(unpaid breaks taken off)</span>`)}
+    </dl>
+    ${c.break_flag ? `<p class="notice tone-bad">⚠ Worked over 6 hours ${c.break_flag === 'none' ? 'without a break' : 'without a 20-minute break'}.</p>` : ''}`;
+}
+
 // One-line version for the site cards: short tags, with the details (rota, breaks) on hover.
 function clockTags(c) {
   const tags = [];
@@ -183,7 +205,7 @@ function card(loc, state, data) {
           <h3>Clocked in ${dayWord()} (${loc.clock_ins.length})</h3>
           ${loc.clock_ins.length
             ? `<ul class="clock-rows">${inFirst(loc.clock_ins).map((c) => `<li class="clock-row ${c.end ? '' : 'is-in'}" title="${esc(clockTitle(c))}">
-                <span class="cr-main"><strong>${esc(shortName(c.name))}</strong> <span class="muted">${c.start}–${c.end ?? 'now'}</span></span>${clockTags(c) ? `<span class="cr-tags">${clockTags(c)}</span>` : ''}
+                <span class="cr-main">${cardLink(c.id, c.name)} <span class="muted">${c.start}–${c.end ?? 'now'}</span></span>${clockTags(c) ? `<span class="cr-tags">${clockTags(c)}</span>` : ''}
                 <span class="cr-hours">${!c.end && c.on_break ? '<span class="badge badge-on-break">Break</span> ' : ''}${duration(c.hours)}</span>
                 ${clockInActions(state, c, loc.id, { compact: true })}</li>`).join('')}</ul>
               <p class="small muted">${duration(loc.clock_ins.reduce((n, c) => n + c.hours, 0))} in total</p>`
@@ -397,12 +419,13 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       body: sites.length ? sites.map(({ l, people }) => `<div class="clocked-site" style="--site: ${siteColour(l.name, l.id)}">
           <h3>${esc(l.name)} <span class="muted">${people.length}${shown.isToday ? ' in' : ''}</span></h3>
           <ul class="clocked-list">${people.sort((a, b) => a.start.localeCompare(b.start)).map((c) => `<li>
-            <strong>${esc(shortName(c.name))}</strong>
+            ${cardLink(c.id, c.name)}
             <span class="muted">${c.end ? `${c.start}–${c.end}` : `since ${c.start}`}${c.rota ? ` · rota ${c.rota}` : c.not_on_rota ? ' · not on the rota' : ''}</span>
             <span>${c.end ? '' : c.on_break ? '<span class="badge badge-on-break">On break</span> ' : '<span class="badge badge-received">In</span> '}${duration(c.hours)}</span>
           </li>`).join('')}</ul></div>`).join('')
         : `<p class="muted">${shown.isToday ? 'Nobody is clocked in right now.' : 'Nobody clocked in that day.'}</p>`,
     });
+    document.querySelectorAll('#modal-root [data-timecard]').forEach((b) => b.addEventListener('click', () => openTimecard(b.dataset.timecard)));
   });
   // London's 7-day forecast (loaded after the page, and simply left out if the weather service is unavailable).
   const weatherBox = el.querySelector('#weather');
@@ -445,6 +468,21 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     }).catch(() => { if (chartBox.isConnected) chartBox.innerHTML = '<p class="muted small">Couldn’t load the hourly chart.</p>'; });
   }
   wireClockInActions(el, { state, rerender });
+  // Tapping a name opens that clock-in's timecard (from the site cards, Who's in, or the Clocked in list).
+  const openTimecard = (id) => {
+    for (const l of locs) {
+      const c = (l.clock_ins ?? []).find((x) => String(x.id) === id);
+      if (!c) continue;
+      openModal({ title: `${c.name} – timecard`, body: `${timecardBody(c, l)}${clockInActions(state, c, l.id) ? `<p class="tc-actions">${clockInActions(state, c, l.id)}</p>` : ''}` });
+      wireClockInActions(document.getElementById('modal-root'), { state, rerender });
+      return;
+    }
+    toast('That timecard isn’t available any more', 'error');
+  };
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-timecard]');
+    if (b) openTimecard(b.dataset.timecard);
+  });
   wireSickButtons(el, rerender);
   el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
     try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }
