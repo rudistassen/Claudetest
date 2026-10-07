@@ -26,11 +26,11 @@ function setupHelp(data) {
   return `
     <section class="card email-setup">
       <h2>First, switch on invoice reading (one-off, about 5 minutes)</h2>
-      <p>Brewly uses <strong>Claude</strong>, an AI model from Anthropic, to read invoices – any supplier’s layout, PDFs or photos. It costs roughly <strong>5–10p per invoice</strong>, paid to Anthropic.</p>
+      <p>Atlas uses <strong>Claude</strong>, an AI model from Anthropic, to read invoices – any supplier’s layout, PDFs or photos. It costs roughly <strong>5–10p per invoice</strong>, paid to Anthropic.</p>
       <ol>
         <li>Go to <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> and sign up (or sign in).</li>
         <li>Under <strong>Billing</strong>, add a card and some credit (£5 goes a long way).</li>
-        <li>Under <strong>API keys</strong>, click <strong>Create key</strong>, name it “Brewly” and copy it (it starts with <code>sk-ant-</code>).</li>
+        <li>Under <strong>API keys</strong>, click <strong>Create key</strong>, name it “Atlas” and copy it (it starts with <code>sk-ant-</code>).</li>
         <li>In Railway, open your app → <strong>Variables</strong>, add <code>ANTHROPIC_API_KEY</code> = the key, then click <strong>Deploy</strong>.</li>
       </ol>
     </section>`;
@@ -86,7 +86,7 @@ export async function renderList(ctx) {
 
 const EMAIL_STATUS = { imported: ['Added', 'badge-received'], skipped: ['Skipped', ''], failed: ['Couldn’t read', 'badge-cancelled'] };
 
-// What Brewly can see of the inbox settings in Railway (names only), so a missing or misspelt one stands out.
+// What Atlas can see of the inbox settings in Railway (names only), so a missing or misspelt one stands out.
 function setupChecklist(setup) {
   if (!setup?.some((v) => v.status !== 'missing')) return '';
   const line = (v) => {
@@ -95,7 +95,7 @@ function setupChecklist(setup) {
     if (v.status === 'misnamed') return `<li class="tone-bad">✗ <code>${esc(v.name)}</code> not found – there’s one called <code>${esc(v.found)}</code>${/\s/.test(v.found) ? ' (it has a space in it)' : v.found !== v.found.toUpperCase() ? ' (it needs capital letters)' : ''}; rename it to exactly <code>${esc(v.name)}</code></li>`;
     return `<li class="tone-bad">✗ <code>${esc(v.name)}</code> not found – add it in Railway → Variables</li>`;
   };
-  return `<div class="notice inbox-setup"><strong>Nearly there – Brewly can see some of the settings:</strong><ul>${setup.map(line).join('')}</ul>
+  return `<div class="notice inbox-setup"><strong>Nearly there – Atlas can see some of the settings:</strong><ul>${setup.map(line).join('')}</ul>
     <span class="small">After changing Variables in Railway, click <strong>Deploy</strong> (or <strong>Apply changes</strong>) and wait a couple of minutes.</span></div>`;
 }
 
@@ -103,11 +103,11 @@ function inboxCard(inbox, state) {
   if (!inbox.configured) {
     return `<details class="card inbox-card" ${inbox.setup?.some((v) => v.status !== 'missing') ? 'open' : ''}><summary><strong>✉ Invoice inbox</strong> <span class="muted small">– have emailed invoices added automatically</span></summary>
       <p>Invoices emailed to a shared Microsoft 365 inbox (for example <em>invoices@yourcompany.co.uk</em>) can be read and added here on their own, every few minutes.
-      To switch it on, an admin registers Brewly in Microsoft Entra with permission to read that mailbox, then adds these settings in Railway:</p>
+      To switch it on, an admin registers Atlas in Microsoft Entra with permission to read that mailbox, then adds these settings in Railway:</p>
       <ul class="small"><li><code>MS_TENANT_ID</code>, <code>MS_CLIENT_ID</code>, <code>MS_CLIENT_SECRET</code> – from the app registration</li>
         <li><code>INVOICE_MAILBOX</code> – the shared inbox’s email address</li></ul>
       ${setupChecklist(inbox.setup)}
-      <p class="muted small">Brewly only reads the mailbox – it never sends, moves or deletes emails.</p></details>`;
+      <p class="muted small">Atlas only reads the mailbox – it never sends, moves or deletes emails.</p></details>`;
   }
   const sites = state.locations.filter((l) => l.active);
   return `<section class="card inbox-card">

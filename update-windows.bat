@@ -1,12 +1,12 @@
 @echo off
-rem Double-click to update Brewly to the latest version from GitHub.
+rem Double-click to update Atlas to the latest version from GitHub.
 rem Your data (the data folder) and your Square token are kept; the database is backed up first.
 cd /d "%~dp0"
-title Update Brewly
+title Update Atlas
 
 netstat -ano | findstr /r /c:":3000 .*LISTENING" >nul
 if not errorlevel 1 (
-  echo Brewly is still running. Close the black Brewly window first, then double-click this file again.
+  echo Atlas is still running. Close the black Atlas window first, then double-click this file again.
   pause
   exit /b
 )
@@ -25,7 +25,7 @@ call npm.cmd install --omit=dev --no-audit --no-fund
 if errorlevel 1 goto failed
 
 echo.
-echo Brewly is up to date. Double-click start-windows to start it, then refresh your browser.
+echo Atlas is up to date. Double-click start-windows to start it, then refresh your browser.
 pause
 exit /b
 

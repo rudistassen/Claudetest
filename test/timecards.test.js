@@ -6,7 +6,7 @@ import { createApp } from '../src/server.js';
 import { SquareClient } from '../src/square.js';
 import { today } from '../src/util.js';
 
-// A pretend Square with one clock-in, recording what Brewly sends.
+// A pretend Square with one clock-in, recording what Atlas sends.
 const sent = [];
 let refuse = false;
 const card = {
@@ -65,7 +65,7 @@ async function login(email) {
   };
 }
 
-test('a clock-in can be moved to another site: changed in Square, in Brewly and in the rota changes log', async () => {
+test('a clock-in can be moved to another site: changed in Square, in Atlas and in the rota changes log', async () => {
   const staff = await login('staff1@cafe.local');
   assert.equal((await staff('/timecards/TC1/location', { method: 'PUT', body: { location_id: siteB } })).status, 403);
 
@@ -97,7 +97,7 @@ test('a clock-in can be moved to another site: changed in Square, in Brewly and 
   assert.equal((await admin('/timecards/TC1/location', { method: 'PUT', body: { location_id: siteB } })).status, 400, 'already there');
 });
 
-test('a clock-in moved to a site that isn’t in Square (e.g. HQ) is counted there in Brewly only, and stays there after syncing', async () => {
+test('a clock-in moved to a site that isn’t in Square (e.g. HQ) is counted there in Atlas only, and stays there after syncing', async () => {
   const admin = await login('admin@cafe.local');
   const hq = db.prepare('SELECT id FROM locations WHERE square_location_id IS NULL AND active = 1 LIMIT 1').get().id;
   const squareSite = db.prepare(`SELECT location_id FROM timecards WHERE id = 'TC1'`).get().location_id;
@@ -107,7 +107,7 @@ test('a clock-in moved to a site that isn’t in Square (e.g. HQ) is counted the
   assert.equal(moved.data.brewly_only, true);
   assert.equal(sent.length, sentBefore, 'Square isn’t changed');
   assert.equal(db.prepare(`SELECT location_id FROM timecards WHERE id = 'TC1'`).get().location_id, hq);
-  assert.match(db.prepare(`SELECT details FROM rota_log WHERE action = 'timecard_site' ORDER BY id DESC LIMIT 1`).get().details, /Brewly only/);
+  assert.match(db.prepare(`SELECT details FROM rota_log WHERE action = 'timecard_site' ORDER BY id DESC LIMIT 1`).get().details, /Atlas only/);
 
   // The next sync from Square rebuilds the clock-ins: it stays counted at HQ.
   const { syncSales } = await import('../src/square.js');
@@ -123,7 +123,7 @@ test('a clock-in moved to a site that isn’t in Square (e.g. HQ) is counted the
   assert.deepEqual({ ...db.prepare('SELECT status, timecards, message FROM square_sync_log ORDER BY id DESC LIMIT 1').get() }, { status: 'ok', timecards: 1, message: null }, 'the sync rebuilt the clock-ins');
   assert.equal(db.prepare(`SELECT location_id FROM timecards WHERE id = 'TC1'`).get().location_id, hq, 'still at HQ after syncing');
 
-  // Moving it back to the Square site it's really at is Brewly only too.
+  // Moving it back to the Square site it's really at is Atlas only too.
   const back = await admin('/timecards/TC1/location', { method: 'PUT', body: { location_id: squareSite } });
   assert.equal(back.status, 200);
   assert.equal(sent.length, sentBefore);
@@ -168,7 +168,7 @@ test('moving clock-ins is its own permission: in the Manager set, not Staff, and
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('breaks can be added, changed and removed on a clock-in, in Square and Brewly', async () => {
+test('breaks can be added, changed and removed on a clock-in, in Square and Atlas', async () => {
   const admin = await login('admin@cafe.local');
   const staff = await login('staff1@cafe.local');
   const url = '/timecards/TC1/breaks';

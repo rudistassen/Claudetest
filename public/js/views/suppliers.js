@@ -3,7 +3,7 @@ import { DAY_NAMES, scheduleSummary } from '../delivery.js';
 
 // Stock & Ordering → Suppliers: the list, and each supplier's page with four tabs – General (address and contact
 // details), Ordering (where orders go, the minimum, delivery days and cut-offs, and whether they're used for
-// ordering), Accounting and payments (Xero contact, payment terms, and the references that tell Brewly which site an
+// ordering), Accounting and payments (Xero contact, payment terms, and the references that tell Atlas which site an
 // invoice is for) and Products.
 
 const TABS = [['general', 'General'], ['ordering', 'Ordering'], ['accounting', 'Accounting & payments'], ['products', 'Products']];

@@ -307,7 +307,7 @@ export async function renderStaff(ctx) {
       { label: 'Role', value: (r) => r.rota_group ?? '' },
       { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
       { label: 'Active', value: (r) => yesNo(r.active) },
-      { label: 'Brewly', value: (r) => joinStatus(r).label, html: (r) => joinBadge(r) },
+      { label: 'Atlas', value: (r) => joinStatus(r).label, html: (r) => joinBadge(r) },
       ...(invites.square_ready ? [{ label: 'Square', value: (r) => (r.square_member_id ? 'Linked' : '–') }] : []),
     ],
     form: editor.form,
@@ -323,12 +323,12 @@ export async function renderStaff(ctx) {
   ctx.el.querySelector('#import-square')?.addEventListener('click', () => openSquareImport(ctx));
   ctx.el.querySelector('#join-filter').addEventListener('change', (e) => ctx.navigate(`admin/staff${qs({ scope: ctx.query.scope, status: e.target.value || undefined })}`));
 
-  // Who has joined Brewly, and inviting everyone who hasn't been invited yet.
+  // Who has joined Atlas, and inviting everyone who hasn't been invited yet.
   const active = everyone.filter((u) => u.active);
   const count = (k) => active.filter((u) => joinStatus(u).key === k).length;
   const notInvited = active.filter((u) => joinStatus(u).key === 'none' && u.id !== state.user.id);
   ctx.el.querySelector('.page-head').insertAdjacentHTML('afterend', `<div class="join-summary card">
-    <div><strong>${count('joined')}</strong> of ${active.length} have joined Brewly
+    <div><strong>${count('joined')}</strong> of ${active.length} have joined Atlas
       <span class="muted">· ${count('invited')} invited, not signed in yet · ${count('none')} not invited</span></div>
     ${invites.email_ready ? '' : '<p class="muted small">Email isn’t set up yet, so invites can’t be emailed – open a person and use “Copy invite link” to send it by text or WhatsApp.</p>'}
     ${notInvited.length && invites.email_ready ? `<button class="btn btn-small" id="invite-rest">Invite ${notInvited.length} ${notInvited.length === 1 ? 'person' : 'people'} not invited yet</button>` : ''}
@@ -352,14 +352,14 @@ function squareToast(saved, settings) {
   const r = saved?.square_sync;
   if (!r) return;
   const later = (m, kind) => setTimeout(() => toast(m, kind), 2600);
-  if (r.status === 'error') later(`Saved in Brewly, but Square didn’t accept the change: ${r.error}`, 'error');
+  if (r.status === 'error') later(`Saved in Atlas, but Square didn’t accept the change: ${r.error}`, 'error');
   else if (r.status === 'created') later(`${saved.name} added to Square – now set their POS passcode in the Square Dashboard.`);
   else if (r.status === 'linked') later(`${saved.name} was already in Square, so they’re now linked.`);
   else if (r.status === 'owner') later('The Square account owner can only be changed in Square itself.');
   if (r.warning) setTimeout(() => toast(r.warning, 'error'), 5200);
 }
 
-// Whether someone has signed in to Brewly yet.
+// Whether someone has signed in to Atlas yet.
 const JOIN_STATUS = [['none', 'Not invited'], ['invited', 'Invited, not joined'], ['joined', 'Joined']];
 const shortDay = (sql) => fmtDate(String(sql).slice(0, 10), { day: 'numeric', month: 'short' });
 export function joinStatus(u) {
@@ -372,7 +372,7 @@ const joinBadge = (u) => { const s = joinStatus(u); return `<span class="badge b
 function inviteBox(u) {
   const s = joinStatus(u);
   return `<div class="invite-box" data-user="${u.id}">
-    <div><span class="muted small">Brewly</span> ${joinBadge(u)}</div>
+    <div><span class="muted small">Atlas</span> ${joinBadge(u)}</div>
     <div class="invite-actions">
       <button type="button" class="btn btn-small" data-invite-email>${s.key === 'none' ? 'Email an invite' : 'Email a new invite'}</button>
       <button type="button" class="btn btn-small btn-ghost" data-invite-link>Copy invite link</button>
@@ -411,7 +411,7 @@ async function sendInvites(ctx, people) {
   const list = people.filter((p) => p.active);
   if (!list.length) { toast('Nobody active to invite', 'error'); return; }
   const again = list.filter((p) => joinStatus(p).key !== 'none').length;
-  const ok = await confirmDialog(`Email an invite to join Brewly to ${list.length === 1 ? list[0].name : `${list.length} people`}?${again ? ` ${again} of them ${again === 1 ? 'has' : 'have'} been invited or joined before – their old links will stop working.` : ''} Each person gets a link to choose their own password.`,
+  const ok = await confirmDialog(`Email an invite to join Atlas to ${list.length === 1 ? list[0].name : `${list.length} people`}?${again ? ` ${again} of them ${again === 1 ? 'has' : 'have'} been invited or joined before – their old links will stop working.` : ''} Each person gets a link to choose their own password.`,
     { title: 'Send invites', confirmLabel: `Send ${list.length} invite${list.length === 1 ? '' : 's'}` });
   if (!ok) return;
   try {
@@ -576,7 +576,7 @@ function cleanupSection(c) {
   return `
     <section class="card" id="cleanup">
       <h2>Remove what isn’t in Square</h2>
-      ${!c.ready ? `<p class="notice">${!c.linked_sites.length ? 'Link your sites to Square locations above first.' : 'Import your staff from Square first (Setup → Staff → Import from Square), so Brewly knows who to keep.'}</p>` : ''}
+      ${!c.ready ? `<p class="notice">${!c.linked_sites.length ? 'Link your sites to Square locations above first.' : 'Import your staff from Square first (Setup → Staff → Import from Square), so Atlas knows who to keep.'}</p>` : ''}
       <p class="muted">Deletes sites that aren’t linked to a Square location and staff who aren’t in your Square team, such as the made-up demo data, along with their rotas and records. Sites linked to Square (${esc(c.linked_sites.join(', ') || 'none yet')}) and you are always kept. A backup copy of your data is saved first.</p>
       ${c.locations.length ? `
         <label class="check-row"><input type="checkbox" name="remove_locations" ${c.linked_sites.length ? '' : 'disabled'}>
@@ -604,7 +604,7 @@ function wireCleanup(ctx, c) {
   staff?.addEventListener('change', update);
   btn.addEventListener('click', async () => {
     const parts = [sites?.checked && plural(c.locations.length, 'site'), staff?.checked && plural(c.staff.length, 'staff member')].filter(Boolean);
-    const ok = await confirmDialog(`This permanently deletes ${parts.join(' and ')} and their records. A backup copy of your data is saved first.`, { confirmLabel: 'Delete', title: 'Remove from Brewly?' });
+    const ok = await confirmDialog(`This permanently deletes ${parts.join(' and ')} and their records. A backup copy of your data is saved first.`, { confirmLabel: 'Delete', title: 'Remove from Atlas?' });
     if (!ok) return;
     btn.disabled = true;
     try {
@@ -642,7 +642,7 @@ export async function renderSquare(ctx) {
            ${squareError ? `<p class="alert-text">${esc(squareError)}</p>` : ''}`
         : `<p><span class="badge badge-draft">Not connected</span></p>
            <ol class="steps">
-             <li>Go to <strong>developer.squareup.com</strong>, sign in with your Square account and create an application (e.g. “Brewly”).</li>
+             <li>Go to <strong>developer.squareup.com</strong>, sign in with your Square account and create an application (e.g. “Atlas”).</li>
              <li>Switch the app to <strong>Production</strong> and copy the <strong>Production access token</strong>.</li>
              <li>Set it where the app runs: <code>SQUARE_ACCESS_TOKEN=…</code> then restart the app.</li>
            </ol>

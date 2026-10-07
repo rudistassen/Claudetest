@@ -1,4 +1,4 @@
-// In-browser build of Brewly: the real server routes run against SQLite (sql.js) inside the page,
+// In-browser build of Atlas: the real server routes run against SQLite (sql.js) inside the page,
 // and window.fetch('/api/...') is answered locally instead of by a server.
 import initSqlJs from 'sql.js/dist/sql-asm.js';
 import { loadUser, registerAuthRoutes, requireAuth } from '../src/auth.js';

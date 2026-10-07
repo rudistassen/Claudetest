@@ -4,7 +4,7 @@
 // Set in the environment:
 //   BREVO_API_KEY   the API key from Brevo (SMTP & API → API keys)
 //   EMAIL_FROM      the sender address, verified in Brevo (Senders, domains & dedicated IPs → Senders)
-//   EMAIL_FROM_NAME optional, defaults to "Brewly"
+//   EMAIL_FROM_NAME optional, defaults to "Atlas"
 
 import { cleanEnv } from './seed.js';
 import { HttpError } from './util.js';
@@ -13,7 +13,7 @@ export function emailConfig(env = process.env) {
   const apiKey = cleanEnv(env.BREVO_API_KEY);
   const from = cleanEnv(env.EMAIL_FROM);
   if (!apiKey || !from) return null;
-  return { apiKey, from, fromName: cleanEnv(env.EMAIL_FROM_NAME) || 'Brewly' };
+  return { apiKey, from, fromName: cleanEnv(env.EMAIL_FROM_NAME) || 'Atlas' };
 }
 
 /** A mailer: { from, send({ to, name, subject, html, text }) }. */

@@ -144,7 +144,7 @@ function timecardFor(shift, now) {
   };
 }
 
-// Clock-ins moved to another site from Brewly (timecard id → Square location id).
+// Clock-ins moved to another site from Atlas (timecard id → Square location id).
 // …and ones whose breaks were changed (timecard id → changes).
 const movedCards = new Map();
 const withMove = (t) => (t && movedCards.has(t.id) ? { ...t, ...movedCards.get(t.id) } : t);
@@ -164,7 +164,7 @@ function page(items, q, key, size) {
 
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-// Team members added or changed from Brewly (Setup → Staff), on top of the ones made from the demo's staff.
+// Team members added or changed from Atlas (Setup → Staff), on top of the ones made from the demo's staff.
 const addedMembers = [];
 const memberEdits = new Map();
 const wageSettings = new Map();

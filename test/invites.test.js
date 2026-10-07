@@ -101,7 +101,7 @@ test('forgot password emails a 2-hour link without saying whether the email has 
   assert.deepEqual(known.data, unknown.data);
   assert.equal(mailer.sent.length, before + 1);
   const email = mailer.sent.at(-1);
-  assert.equal(email.subject, 'Reset your Brewly password');
+  assert.equal(email.subject, 'Reset your Atlas password');
   const token = tokenFrom(email);
   assert.equal((await guest(`/auth/token?token=${token}`)).data.purpose, 'reset');
 

@@ -1300,7 +1300,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--muted); box-shad
 .set-pw-title { font-size: 1.25rem; margin: 0.4rem 0 0.3rem; }
 .login .btn-block + .btn-block { margin-top: 0.5rem; }
 
-/* Staff: who has joined Brewly, and invites */
+/* Staff: who has joined Atlas, and invites */
 .join-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; padding: 0.8rem 1rem; }
 .join-summary p { margin: 0; flex-basis: 100%; }
 .invite-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.75rem 0.9rem; margin-bottom: 0.8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }

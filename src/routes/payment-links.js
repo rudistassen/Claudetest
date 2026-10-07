@@ -1,5 +1,5 @@
 // Setup → Payment links: ask a customer to pay a set amount (a deposit, a catering order, private hire) through a
-// Square Checkout link. Brewly creates the link in Square for the chosen site, can email it to the customer, and
+// Square Checkout link. Atlas creates the link in Square for the chosen site, can email it to the customer, and
 // keeps a list showing whether each has been paid. Card details only ever go to Square.
 import { randomBytes } from 'node:crypto';
 import { requirePerm, resolveLocation } from '../auth.js';
@@ -35,7 +35,7 @@ function linkEmail({ name, site, description, amount, url, sender }) {
 }
 
 export function registerPaymentLinkRoutes(router, db, square, mailer) {
-  const siteName = (locationId) => db.prepare('SELECT name FROM locations WHERE id = ?').get(locationId)?.name ?? 'Brewly';
+  const siteName = (locationId) => db.prepare('SELECT name FROM locations WHERE id = ?').get(locationId)?.name ?? 'Atlas';
   const visible = (req) => db.prepare(`SELECT p.*, l.name AS location_name FROM payment_links p JOIN locations l ON l.id = p.location_id
     ORDER BY p.created_at DESC, p.id DESC LIMIT 300`).all().filter((p) => req.user.site_ids.includes(p.location_id));
   const load = (req) => {
@@ -96,7 +96,7 @@ export function registerPaymentLinkRoutes(router, db, square, mailer) {
         quick_pay: { name: description, price_money: { amount: Math.round(amount * 100), currency: 'GBP' }, location_id: site.square_location_id },
         ...(customerEmail ? { pre_populated_data: { buyer_email: customerEmail } } : {}),
         ...(base ? { checkout_options: { redirect_url: `${base}/paid.html` } } : {}),
-        payment_note: `Brewly payment link${customerName ? ` – ${customerName}` : ''}`.slice(0, 500),
+        payment_note: `Atlas payment link${customerName ? ` – ${customerName}` : ''}`.slice(0, 500),
       }));
     } catch (err) {
       throw squareProblem(err);

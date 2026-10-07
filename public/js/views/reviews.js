@@ -108,7 +108,7 @@ export async function render(ctx) {
       ${shown.length ? `<ul class="review-list">${shown.map((r, i) => reviewItem(r, names[r.site], multi, i >= FIRST)).join('')}</ul>
         ${shown.length > FIRST ? `<button type="button" class="btn btn-small review-more" id="rv-more">Show all ${shown.length} reviews</button>` : ''}`
         : `<p class="muted">${low && all.length ? 'No reviews of 3 stars or fewer – nice.' : 'No reviews yet.'}</p>`}
-      <p class="muted small">Google shares each place’s five most relevant recent reviews at a time, so Brewly shows the ones it has seen over the last month. To see every review or reply, open the site on Google Maps.</p>
+      <p class="muted small">Google shares each place’s five most relevant recent reviews at a time, so Atlas shows the ones it has seen over the last month. To see every review or reply, open the site on Google Maps.</p>
     </section>`;
 
   const form = el.querySelector('#rv-filters');

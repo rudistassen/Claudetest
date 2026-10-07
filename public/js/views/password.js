@@ -9,7 +9,7 @@ export async function renderSetPassword(root, token, onDone) {
     link = await api(`/auth/token?token=${encodeURIComponent(token ?? '')}`);
   } catch (err) {
     root.innerHTML = `<div class="login-wrap"><div class="card login">
-      <h1 class="login-logo" aria-label="Brewly">${logo(40)}</h1>
+      <h1 class="login-logo" aria-label="Atlas">${logo(40)}</h1>
       <p><strong>${esc(err.message)}</strong></p>
       <p class="muted">Invite links work for 14 days and password reset links for 2 hours, and each only works once.
         Ask your manager to send a new invite, or use “Forgot password?” on the sign-in page.</p>
@@ -21,15 +21,15 @@ export async function renderSetPassword(root, token, onDone) {
   root.innerHTML = `
     <div class="login-wrap">
       <form class="login card" novalidate>
-        <h1 class="login-logo" aria-label="Brewly">${logo(40)}</h1>
+        <h1 class="login-logo" aria-label="Atlas">${logo(40)}</h1>
         <h2 class="set-pw-title">${invite ? `Welcome, ${esc(link.name.split(' ')[0])}!` : 'Choose a new password'}</h2>
-        <p class="muted">${invite ? 'Choose a password for Brewly. You’ll sign in with' : 'For'} <strong>${esc(link.email)}</strong>.</p>
+        <p class="muted">${invite ? 'Choose a password for Atlas. You’ll sign in with' : 'For'} <strong>${esc(link.email)}</strong>.</p>
         <input type="email" name="username" value="${esc(link.email)}" autocomplete="username" hidden>
         <label class="field"><span>New password</span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
         <label class="field"><span>Type it again</span><input name="again" type="password" autocomplete="new-password" required></label>
         <p class="muted small">At least 8 characters.</p>
         <p class="form-error" hidden></p>
-        <button class="btn btn-primary btn-block" type="submit">${invite ? 'Join Brewly' : 'Save password and sign in'}</button>
+        <button class="btn btn-primary btn-block" type="submit">${invite ? 'Join Atlas' : 'Save password and sign in'}</button>
       </form>
     </div>`;
   const form = root.querySelector('form');
@@ -56,7 +56,7 @@ export async function renderSetPassword(root, token, onDone) {
 // "Forgot password?" on the sign-in page.
 export function openForgot(root, email, back) {
   root.querySelector('.login').outerHTML = `<form class="login card forgot" novalidate>
-    <h1 class="login-logo" aria-label="Brewly">${logo(40)}</h1>
+    <h1 class="login-logo" aria-label="Atlas">${logo(40)}</h1>
     <h2 class="set-pw-title">Forgot your password?</h2>
     <p class="muted">Enter the email you sign in with and we’ll email you a link to choose a new one.</p>
     <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required value="${esc(email)}"></label>
@@ -74,12 +74,12 @@ export function openForgot(root, email, back) {
     form.querySelector('button').disabled = true;
     try {
       const r = await api('/auth/forgot', { method: 'POST', body: { email: form.email.value.trim() } });
-      form.innerHTML = `<h1 class="login-logo" aria-label="Brewly">${logo(40)}</h1>
+      form.innerHTML = `<h1 class="login-logo" aria-label="Atlas">${logo(40)}</h1>
         <h2 class="set-pw-title">Check your email</h2>
         ${r.email_ready
-          ? `<p>If <strong>${esc(form.email.value.trim())}</strong> has a Brewly account, we’ve sent it a link to choose a new password. It works for 2 hours.</p>
+          ? `<p>If <strong>${esc(form.email.value.trim())}</strong> has a Atlas account, we’ve sent it a link to choose a new password. It works for 2 hours.</p>
              <p class="muted small">Nothing arrived after a few minutes? Check your junk folder, or ask your manager to set a new password for you.</p>`
-          : '<p>Brewly can’t send emails yet, so ask your manager to set a new password for you (Setup → Staff).</p>'}
+          : '<p>Atlas can’t send emails yet, so ask your manager to set a new password for you (Setup → Staff).</p>'}
         <button class="btn btn-block" type="button" data-back>Back to sign in</button>`;
       form.querySelector('[data-back]').addEventListener('click', () => back());
     } catch (ex) {

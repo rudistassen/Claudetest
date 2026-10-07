@@ -1,7 +1,7 @@
 // Moving a clock-in (Square timecard) to another site, for when someone clocked in on the wrong site's till.
-// The change is made in Square, so Square, payroll and Brewly's labour figures all agree, and it's recorded
+// The change is made in Square, so Square, payroll and Atlas's labour figures all agree, and it's recorded
 // under Rota → Rota changes. A site that isn't in Square (e.g. an HQ) can't hold a timecard there, so a clock-in
-// moved to one stays put in Square and Brewly just counts it at that site (timecard_allocations). Breaks can be added, changed or removed the same way.
+// moved to one stays put in Square and Atlas just counts it at that site (timecard_allocations). Breaks can be added, changed or removed the same way.
 import { requirePerm } from '../auth.js';
 import { summariseTimecard } from '../square.js';
 import { BUSINESS_TZ, badRequest, forbidden, HttpError, id, localDate, notFound, zonedTimeUTC } from '../util.js';
@@ -24,7 +24,7 @@ function writable(tc, squareLocationId) {
   return out;
 }
 
-/** Stores Square's copy of a timecard (after Brewly changed it) over Brewly's, breaks included. */
+/** Stores Square's copy of a timecard (after Atlas changed it) over Atlas's, breaks included. */
 function saveTimecard(db, cardId, tc, locationId) {
   const t = summariseTimecard(tc);
   db.prepare(`UPDATE timecards SET location_id = ?, date = ?, start_at = ?, end_at = ?, unpaid_break_minutes = ?, hourly_rate = ?, status = ?,
@@ -164,7 +164,7 @@ export function registerTimecardRoutes(router, db, square) {
     const site = db.prepare('SELECT id, name, square_location_id, active FROM locations WHERE id = ?').get(to);
     if (!site?.active) throw notFound('Site');
     const fromName = db.prepare('SELECT name FROM locations WHERE id = ?').get(card.location_id)?.name ?? 'another site';
-    // Already counted at a site that isn't in Square: the Brewly site whose Square location it's really at.
+    // Already counted at a site that isn't in Square: the Atlas site whose Square location it's really at.
     const allocation = db.prepare('SELECT * FROM timecard_allocations WHERE timecard_id = ?').get(card.id);
     const squareSite = allocation?.square_site_id ?? card.location_id;
     const log = (t, details) => {
@@ -175,8 +175,8 @@ export function registerTimecardRoutes(router, db, square) {
     };
     const times = (t) => `${timeFormat.format(new Date(t.start_at))}–${t.end_at ? timeFormat.format(new Date(t.end_at)) : 'still clocked in'}`;
 
-    // A site that isn't in Square (or the Square site it's really at): only Brewly changes – the timecard stays
-    // where it is in Square, and Brewly counts its hours and cost at the chosen site.
+    // A site that isn't in Square (or the Square site it's really at): only Atlas changes – the timecard stays
+    // where it is in Square, and Atlas counts its hours and cost at the chosen site.
     if (!site.square_location_id || (allocation && to === squareSite)) {
       if (to === squareSite) db.prepare('DELETE FROM timecard_allocations WHERE timecard_id = ?').run(card.id);
       else {
@@ -185,7 +185,7 @@ export function registerTimecardRoutes(router, db, square) {
           .run(card.id, to, squareSite, req.user.id);
       }
       db.prepare('UPDATE timecards SET location_id = ? WHERE id = ?').run(to, card.id);
-      log(card, `Clock-in ${times(card)} counted at ${site.name} instead of ${fromName}${to === squareSite ? '' : ' (in Brewly only – Square is unchanged)'}`);
+      log(card, `Clock-in ${times(card)} counted at ${site.name} instead of ${fromName}${to === squareSite ? '' : ' (in Atlas only – Square is unchanged)'}`);
       return res.json({ ok: true, location_id: to, location_name: site.name, from_name: fromName, brewly_only: true });
     }
 

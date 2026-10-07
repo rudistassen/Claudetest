@@ -1,6 +1,6 @@
 // Reading a shared Microsoft 365 mailbox through Microsoft Graph, with an app registration. The invoice inbox is
 // switched on by MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET and INVOICE_MAILBOX (the shared inbox's address); the
-// careers inbox by the same app and CAREERS_MAILBOX. Brewly only reads, except for drafting replies to job
+// careers inbox by the same app and CAREERS_MAILBOX. Atlas only reads, except for drafting replies to job
 // applicants in the careers inbox (which needs Mail.ReadWrite).
 import { cleanEnv } from './seed.js';
 
@@ -13,7 +13,7 @@ export const CAREERS_VARIABLES = ['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SEC
 export const EVENTS_VARIABLES = ['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET', 'EVENTS_MAILBOX'];
 
 /**
- * Which of the inbox's settings Brewly can see (names only, never values), for the Invoices page while it isn't
+ * Which of the inbox's settings Atlas can see (names only, never values), for the Invoices page while it isn't
  * connected: [{ name, status: 'ok' | 'missing' | 'empty' | 'misnamed', found? }]. "misnamed" is a variable that's
  * nearly right, e.g. lower case or with a space, and found is the name it was given.
  */
@@ -90,13 +90,13 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
     const body = await res.json().catch(() => ({}));
     if (res.ok) return body;
     if ((res.status === 401 || res.status === 403) && writing === 'send') {
-      throw new MailboxError(`Brewly can read the ${label} but isn’t allowed to send from it. In Microsoft Entra, give the app the Mail.Send application permission (with admin consent).`);
+      throw new MailboxError(`Atlas can read the ${label} but isn’t allowed to send from it. In Microsoft Entra, give the app the Mail.Send application permission (with admin consent).`);
     }
     if ((res.status === 401 || res.status === 403) && writing) {
-      throw new MailboxError(`Brewly can read the ${label} but isn’t allowed to change it (save drafts or file emails). In Microsoft Entra, give the app the Mail.ReadWrite application permission (with admin consent).`);
+      throw new MailboxError(`Atlas can read the ${label} but isn’t allowed to change it (save drafts or file emails). In Microsoft Entra, give the app the Mail.ReadWrite application permission (with admin consent).`);
     }
     if (res.status === 401 || res.status === 403) {
-      throw new MailboxError(`Brewly isn’t allowed to read the ${label}. In Microsoft Entra, give the app the Mail.Read application permission with admin consent, and make sure any mailbox access policy includes it.`);
+      throw new MailboxError(`Atlas isn’t allowed to read the ${label}. In Microsoft Entra, give the app the Mail.Read application permission with admin consent, and make sure any mailbox access policy includes it.`);
     }
     if (res.status === 404) throw new MailboxError(`The mailbox ${address} wasn’t found. Check ${variable} is the shared inbox’s email address.`);
     throw new MailboxError(`Microsoft 365 returned an error (${res.status}): ${body.error?.message ?? 'unknown'}`);

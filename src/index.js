@@ -123,4 +123,4 @@ if (places) {
 const version = appVersion(publicDir);
 const xeroSettings = xeroConfig();
 if (xeroSettings) console.log('Xero: set up – connect it under Setup → Xero.');
-createApp(db, { square, mailer, invoiceReader, mailbox, careers, events, enquiryReader, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Brewly running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, mailbox, careers, events, enquiryReader, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Atlas running at http://localhost:${port}`));

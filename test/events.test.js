@@ -57,7 +57,7 @@ test('emails become enquiries, and replies in the same thread join them', async 
   assert.equal((await checkEvents(db, { mailbox: box })).added, 0, 'each email once');
 });
 
-test('replying sends from the events inbox in their thread; notes stay in Brewly', async () => {
+test('replying sends from the events inbox in their thread; notes stay in Atlas', async () => {
   const a = await login('admin@cafe.local');
   const sarah = db.prepare(`SELECT id FROM event_enquiries WHERE email = 'sarah@example.com'`).get();
   assert.equal((await a(`/events/enquiries/${sarah.id}/messages`, { method: 'POST', body: { kind: 'note', body: 'Check the vegan menu with the kitchen' } })).status, 201);

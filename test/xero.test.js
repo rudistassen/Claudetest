@@ -4,7 +4,7 @@ import { openDb } from '../src/db.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { createApp } from '../src/server.js';
 
-// A pretend Xero, recording what Brewly sends.
+// A pretend Xero, recording what Atlas sends.
 const calls = [];
 let refreshOk = true;
 let tokenN = 0;

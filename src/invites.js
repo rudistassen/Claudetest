@@ -1,4 +1,4 @@
-// Inviting staff to Brewly and "forgot password": both email a one-off link to a page where the person chooses
+// Inviting staff to Atlas and "forgot password": both email a one-off link to a page where the person chooses
 // their own password, then they're signed in. Invite links last 14 days, reset links 2 hours; each works once.
 // The Staff page shows who hasn't been invited, who's been invited but not signed in yet, and who has joined.
 import { createHash, randomBytes } from 'node:crypto';
@@ -41,14 +41,14 @@ const linkFor = (base, token) => `${base}/#/set-password?token=${token}`;
 function inviteEmail({ name, inviter, site, link }) {
   const first = String(name).split(' ')[0];
   return {
-    subject: 'You’re invited to Brewly',
-    text: `Hi ${first},\n\n${inviter} has invited you to Brewly${site ? ` for ${site}` : ''} – where you’ll see your rota, company news and more.\n\nChoose your password here (the link works for 14 days):\n${link}\n\nThen add Brewly to your phone’s home screen so it’s always to hand.\n`,
+    subject: 'You’re invited to Atlas',
+    text: `Hi ${first},\n\n${inviter} has invited you to Atlas${site ? ` for ${site}` : ''} – where you’ll see your rota, company news and more.\n\nChoose your password here (the link works for 14 days):\n${link}\n\nThen add Atlas to your phone’s home screen so it’s always to hand.\n`,
     html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:520px;margin:auto;color:#0c1014">
-      <h1 style="font-size:22px">Welcome to Brewly ☕</h1>
+      <h1 style="font-size:22px">Welcome to Atlas ☕</h1>
       <p>Hi ${escHtml(first)},</p>
-      <p>${escHtml(inviter)} has invited you to Brewly${site ? ` for <strong>${escHtml(site)}</strong>` : ''} – where you’ll see your rota, company news and more.</p>
+      <p>${escHtml(inviter)} has invited you to Atlas${site ? ` for <strong>${escHtml(site)}</strong>` : ''} – where you’ll see your rota, company news and more.</p>
       <p style="margin:28px 0"><a href="${escHtml(link)}" style="background:#0095f6;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600">Choose your password</a></p>
-      <p style="color:#737373;font-size:13px">The button works for 14 days. Once you’re in, add Brewly to your phone’s home screen so it’s always to hand.</p>
+      <p style="color:#737373;font-size:13px">The button works for 14 days. Once you’re in, add Atlas to your phone’s home screen so it’s always to hand.</p>
       <p style="color:#737373;font-size:13px">Button not working? Copy this link into your browser:<br>${escHtml(link)}</p></div>`,
   };
 }
@@ -56,11 +56,11 @@ function inviteEmail({ name, inviter, site, link }) {
 function resetEmail({ name, link }) {
   const first = String(name).split(' ')[0];
   return {
-    subject: 'Reset your Brewly password',
-    text: `Hi ${first},\n\nChoose a new Brewly password here (the link works for 2 hours):\n${link}\n\nIf you didn’t ask for this, you can ignore this email – your password hasn’t changed.\n`,
+    subject: 'Reset your Atlas password',
+    text: `Hi ${first},\n\nChoose a new Atlas password here (the link works for 2 hours):\n${link}\n\nIf you didn’t ask for this, you can ignore this email – your password hasn’t changed.\n`,
     html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:520px;margin:auto;color:#0c1014">
       <p>Hi ${escHtml(first)},</p>
-      <p>Someone (hopefully you) asked to reset your Brewly password.</p>
+      <p>Someone (hopefully you) asked to reset your Atlas password.</p>
       <p style="margin:28px 0"><a href="${escHtml(link)}" style="background:#0095f6;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600">Choose a new password</a></p>
       <p style="color:#737373;font-size:13px">The button works for 2 hours. If you didn’t ask for this, ignore this email – your password hasn’t changed.</p>
       <p style="color:#737373;font-size:13px">Button not working? Copy this link into your browser:<br>${escHtml(link)}</p></div>`,

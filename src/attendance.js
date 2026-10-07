@@ -42,7 +42,7 @@ export function attendance(db, locationId, date, cards, now = Date.now()) {
     const pool = here.length ? here : mine;
     const shift = pool.sort((a, b) => Math.abs(a.start - t.start) - Math.abs(b.start - t.start))[0];
     if (!shift) {
-      // Only someone Brewly knows can be "not on the rota" (an unlinked Square team member might be).
+      // Only someone Atlas knows can be "not on the rota" (an unlinked Square team member might be).
       byCard.set(t.id, { rota: null, late_minutes: 0, over_minutes: 0, not_on_rota: !!t.user_id });
       continue;
     }

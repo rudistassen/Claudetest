@@ -32,14 +32,14 @@ const band = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8')
 const favicon = `data:image/svg+xml;base64,${fs.readFileSync(path.join(root, 'public/img/brewly.svg')).toString('base64')}`;
 const html = `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Brewly</title>
+<title>Atlas</title>
 <link rel="icon" href="${favicon}" type="image/svg+xml">
 <meta name="theme-color" content="#ffffff">
 <style>
 ${css}
 </style>
 ${band}
-<div id="app"><div class="loading">Loading Brewly demo…</div></div>
+<div id="app"><div class="loading">Loading Atlas demo…</div></div>
 <div id="modal-root"></div>
 <div id="toasts" aria-live="polite"></div>
 <script>window.CAFE_OPS_DEMO = true; document.body.classList.add('demo');</script>

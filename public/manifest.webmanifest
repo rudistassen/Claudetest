@@ -1,6 +1,6 @@
 {
-  "name": "Brewly",
-  "short_name": "Brewly",
+  "name": "Atlas",
+  "short_name": "Atlas",
   "description": "Rota, Trail checks, stock, ordering, invoices and trading for Brew & Barrel, Common, Buddy’s and Omnibus Theatre.",
   "id": "/",
   "start_url": "/#/dashboard",

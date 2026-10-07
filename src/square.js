@@ -370,7 +370,7 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
 
     // Today's open orders (tabs and tickets not paid yet) are added to today's totals too. Every sync rebuilds the
     // totals from scratch, so when an order is paid it's counted once as a completed sale, and one that's voided
-    // simply drops out. Only till orders count (see isTillOrder); payment links sent from Brewly are left out too.
+    // simply drops out. Only till orders count (see isTillOrder); payment links sent from Atlas are left out too.
     const day = localDate(Date.now(), tz);
     let openCount = 0;
     if (day >= from && day <= to) {

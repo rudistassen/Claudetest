@@ -218,7 +218,7 @@ function downloadPdf(state, date) {
   const page = document.createElement('style');
   page.textContent = '@page { size: A4 landscape; margin: 10mm; }';
   document.head.append(page);
-  document.title = `Brewly dashboard - ${state.multiSite ? 'All sites' : state.location?.name ?? ''} - ${date}`;
+  document.title = `Atlas dashboard - ${state.multiSite ? 'All sites' : state.location?.name ?? ''} - ${date}`;
   const restore = () => {
     document.title = title;
     page.remove();
@@ -349,7 +349,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         <button class="btn dash-pdf" id="dash-pdf">Download PDF</button>
       </div>
     </div>
-    <p class="print-only print-meta">Brewly dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
+    <p class="print-only print-meta">Atlas dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     ${hasSales ? `<div class="dash-hero">
       <div class="kpi kpi-feature" data-icon="£"><span>Gross sales ${shown.isToday ? 'today' : ''}</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>

@@ -31,7 +31,7 @@ export function breaksFor(db, timecardIds) {
  * breaks_known is false for clock-ins synced before break details were kept (re-syncing those days fills them in).
  */
 export function breakInfo(card, breaks = [], now = Date.now()) {
-  // Clock-ins synced before Brewly kept break details: only the unpaid total is known, so nothing is flagged.
+  // Clock-ins synced before Atlas kept break details: only the unpaid total is known, so nothing is flagged.
   if (card.breaks_synced === 0) {
     const unpaid = Math.round(card.unpaid_break_minutes ?? 0);
     return { breaks: [], break_minutes: unpaid, paid_break_minutes: 0, unpaid_break_minutes: unpaid, on_break: false, break_flag: null, breaks_known: false };

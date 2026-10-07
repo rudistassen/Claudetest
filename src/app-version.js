@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /** A short fingerprint of the app's screens (everything in public/). It changes whenever a new version is deployed,
- *  so open copies of Brewly (phones especially) can tell they're out of date and refresh themselves. */
+ *  so open copies of Atlas (phones especially) can tell they're out of date and refresh themselves. */
 export function appVersion(dir) {
   const hash = createHash('sha1');
   const walk = (d) => {

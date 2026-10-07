@@ -60,12 +60,12 @@ function inboxCard(inbox) {
   if (!inbox) return '';
   if (!inbox.configured) {
     const have = new Set(inbox.setup?.filter((v) => v.status === 'ok').map((v) => v.name));
-    return `<details class="card inbox-card"><summary><strong>✉ Events inbox</strong> <span class="muted small">– have enquiries added here, and reply from Brewly</span></summary>
+    return `<details class="card inbox-card"><summary><strong>✉ Events inbox</strong> <span class="muted small">– have enquiries added here, and reply from Atlas</span></summary>
       <p>Emails to your events address (for example <em>events@yourcompany.co.uk</em>) are added here every few minutes, and your replies are sent from that address – in the same email thread.</p>
       <p>It uses the same Microsoft 365 app as the invoice and careers inboxes. In Railway, add:</p>
       <ul><li><code>EVENTS_MAILBOX</code> – the events inbox’s email address${have.has('EVENTS_MAILBOX') ? ' ✓' : ''}</li>
         ${['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET'].map((n) => `<li><code>${n}</code>${have.has(n) ? ' ✓ already there' : ' – from the Microsoft app'}</li>`).join('')}</ul>
-      <p class="muted small">To send replies from Brewly, the Microsoft app also needs the <strong>Mail.Send</strong> permission (with admin consent). Until then you can write replies here and send them from your own email.</p>
+      <p class="muted small">To send replies from Atlas, the Microsoft app also needs the <strong>Mail.Send</strong> permission (with admin consent). Until then you can write replies here and send them from your own email.</p>
     </details>`;
   }
   return `<section class="card inbox-card">

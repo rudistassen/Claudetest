@@ -6,7 +6,7 @@ import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { createApp } from '../src/server.js';
 import { SquareClient } from '../src/square.js';
 
-// A pretend Square, recording what Brewly asks it.
+// A pretend Square, recording what Atlas asks it.
 const calls = [];
 let paid = false;
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });

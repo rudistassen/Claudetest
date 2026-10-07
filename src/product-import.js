@@ -80,7 +80,7 @@ function vatCode(v) {
     '0': 'ZERORATEDINPUT', '0%': 'ZERORATEDINPUT', 'zero': 'ZERORATEDINPUT', 'zero rated': 'ZERORATEDINPUT', 'exempt': 'EXEMPTINPUT', 'no vat': 'NONE', 'none': 'NONE' };
   if (byWords[t]) return byWords[t];
   const code = cleanVatCode(t);
-  if (!code) throw new Error(`VAT code “${String(v).trim()}” isn’t one Brewly knows – use a Xero code like INPUT2, or 20%, 5%, zero, exempt or no VAT`);
+  if (!code) throw new Error(`VAT code “${String(v).trim()}” isn’t one Atlas knows – use a Xero code like INPUT2, or 20%, 5%, zero, exempt or no VAT`);
   return code;
 }
 
@@ -109,7 +109,7 @@ export function planImport(db, { headers, rows, heading_line: headingLine = 1 })
   if (!Array.isArray(headers) || !Array.isArray(rows)) throw badRequest('Nothing to import');
   if (rows.length > MAX_IMPORT_ROWS) throw badRequest(`Import at most ${MAX_IMPORT_ROWS} rows at a time`);
   const keys = mapHeaders(headers);
-  if (!keys.includes('name')) throw badRequest('The file needs a “Name” column (the product name). Download the template to see the columns Brewly understands.');
+  if (!keys.includes('name')) throw badRequest('The file needs a “Name” column (the product name). Download the template to see the columns Atlas understands.');
 
   const products = db.prepare('SELECT p.*, s.name AS supplier_name FROM products p LEFT JOIN suppliers s ON s.id = p.supplier_id').all();
   const suppliers = new Map(db.prepare('SELECT id, name FROM suppliers').all().map((s) => [norm(s.name), s]));

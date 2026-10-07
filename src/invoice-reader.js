@@ -75,7 +75,7 @@ Extract exactly what the document says; never invent values. Use an empty string
 - is_invoice: false if this isn't an invoice, credit note or priced delivery note.
 - notes: anything a person checking it should know (e.g. "handwritten amendments", "page 2 appears to be missing"), otherwise empty.`;
 
-// Empty text means "not on the invoice": the rest of Brewly treats that as null.
+// Empty text means "not on the invoice": the rest of Atlas treats that as null.
 function blanksToNull(v) {
   if (Array.isArray(v)) return v.map(blanksToNull);
   if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, blanksToNull(x)]));

@@ -1,6 +1,6 @@
-// Google reviews: each site is linked to its place on Google Maps (Setup → Locations), and every few hours Brewly
+// Google reviews: each site is linked to its place on Google Maps (Setup → Locations), and every few hours Atlas
 // fetches its star rating, number of reviews and the latest reviews through the Google Places API. Google only
-// gives out the five most relevant recent reviews at a time, so Brewly keeps the ones it has seen (for up to 30
+// gives out the five most relevant recent reviews at a time, so Atlas keeps the ones it has seen (for up to 30
 // days after they stop being shown, which is as long as Google allows copies to be kept) and a daily rating.
 // Switched on by GOOGLE_PLACES_API_KEY (GOOGLE_REVIEWS_HOURS changes how often it checks; the default is 12).
 import { requireAdmin, requirePerm, resolveLocation, reportLocations } from './auth.js';
@@ -140,7 +140,7 @@ export function startReviewSync(db, places, { hours = 12 } = {}) {
   setInterval(tick, hours * 3600 * 1000).unref?.();
 }
 
-/** Each site's Google rating now and about a month ago, and the reviews Brewly has. */
+/** Each site's Google rating now and about a month ago, and the reviews Atlas has. */
 export function reviewSummary(db, locations, { reviewsPerSite = 50, now = new Date() } = {}) {
   const latest = db.prepare('SELECT rating, review_count, date FROM google_ratings WHERE location_id = ? ORDER BY date DESC LIMIT 1');
   const earliest = db.prepare('SELECT rating, review_count, date FROM google_ratings WHERE location_id = ? AND date >= ? ORDER BY date LIMIT 1');

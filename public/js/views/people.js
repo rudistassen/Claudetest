@@ -72,7 +72,7 @@ export async function declineDialog(candidateId, done) {
   });
 }
 
-// When Brewly couldn't save the reply as a draft: the email to copy or open in their own email.
+// When Atlas couldn't save the reply as a draft: the email to copy or open in their own email.
 function sendYourself(r) {
   const mailto = `mailto:${encodeURIComponent(r.to)}?${new URLSearchParams({ subject: r.subject, body: r.body }).toString().replace(/\+/g, '%20')}`;
   const { form } = openModal({
@@ -99,7 +99,7 @@ function careersCard(inbox) {
       <p>It uses the same Microsoft 365 app as the invoice inbox. In Railway, add:</p>
       <ul><li><code>CAREERS_MAILBOX</code> – the careers inbox’s email address${have.includes('CAREERS_MAILBOX') ? ' ✓' : ''}</li>
         ${['MS_TENANT_ID', 'MS_CLIENT_ID', 'MS_CLIENT_SECRET'].map((n) => `<li><code>${n}</code>${have.includes(n) ? ' ✓ already there' : ' – from the Microsoft app (see Invoices → Invoice inbox)'}</li>`).join('')}</ul>
-      <p class="muted small">To have Brewly save turn-down replies as drafts in the careers inbox, give the Microsoft app the <strong>Mail.ReadWrite</strong> permission (not just Mail.Read).</p>
+      <p class="muted small">To have Atlas save turn-down replies as drafts in the careers inbox, give the Microsoft app the <strong>Mail.ReadWrite</strong> permission (not just Mail.Read).</p>
       <p><button type="button" class="btn btn-small" data-edit-template>Edit the turn-down email</button></p>
     </details>`;
   }
@@ -440,7 +440,7 @@ export async function renderTraining(ctx) {
             return `<td><button class="pp-cell pp-${r ? r.status : 'none'}" data-cell="${p.id}|${c.id}" title="${esc(`${p.name} – ${c.name}`)}">${label}</button></td>`;
           }).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">No staff at this site yet.</div>'}
     </section>` : `<section class="card"><h2>Add your training courses</h2>
-      <p>List the training your team needs – Brewly then shows who has done what, and what’s about to run out.</p>
+      <p>List the training your team needs – Atlas then shows who has done what, and what’s about to run out.</p>
       <p class="muted small">Quick add:</p>
       <div class="chips">${COURSE_IDEAS.map(([n, m]) => `<button class="chip chip-btn" data-idea="${esc(n)}" data-months="${m ?? ''}">+ ${esc(n)}</button>`).join('')}</div>
     </section>`}`;

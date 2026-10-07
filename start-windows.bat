@@ -1,14 +1,14 @@
 @echo off
-rem Double-click to start Brewly on Windows. Sets it up the first time, asks for your Square token once,
-rem then opens the app in your browser. Close this window to stop Brewly.
+rem Double-click to start Atlas on Windows. Sets it up the first time, asks for your Square token once,
+rem then opens the app in your browser. Close this window to stop Atlas.
 cd /d "%~dp0"
-title Brewly
+title Atlas
 
 where node >nul 2>nul
 if errorlevel 1 goto nonode
 
 if exist node_modules goto token
-echo Setting up Brewly for the first time. This takes a minute or two...
+echo Setting up Atlas for the first time. This takes a minute or two...
 echo.
 call npm.cmd install --omit=dev --no-audit --no-fund
 if errorlevel 1 goto failed
@@ -31,13 +31,13 @@ echo Saved. To change it later, delete square-token.txt in this folder.
 set "SQUARE_ACCESS_TOKEN="
 if exist square-token.txt set /p SQUARE_ACCESS_TOKEN=<square-token.txt
 echo.
-echo Starting Brewly. Your browser will open at http://localhost:3000
-echo Keep this window open while you use Brewly. Close it to stop.
+echo Starting Atlas. Your browser will open at http://localhost:3000
+echo Keep this window open while you use Atlas. Close it to stop.
 echo.
 start "" cmd /c "timeout /t 4 >nul & start http://localhost:3000"
 call npm.cmd start
 echo.
-echo Brewly has stopped.
+echo Atlas has stopped.
 pause
 exit /b
 

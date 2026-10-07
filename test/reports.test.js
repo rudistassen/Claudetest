@@ -100,7 +100,7 @@ test('email reports: admins set them up, each person gets their own sites, and t
 test('Brevo mailer sends through the web API and explains refusals', async () => {
   assert.equal(emailConfig({}), null);
   const config = emailConfig({ BREVO_API_KEY: ' "key-123" ', EMAIL_FROM: 'reports@cafe.co.uk' });
-  assert.deepEqual(config, { apiKey: 'key-123', from: 'reports@cafe.co.uk', fromName: 'Brewly' });
+  assert.deepEqual(config, { apiKey: 'key-123', from: 'reports@cafe.co.uk', fromName: 'Atlas' });
   const calls = [];
   const ok = brevoMailer(config, async (url, init) => { calls.push({ url, init }); return new Response('{}', { status: 201 }); });
   await ok.send({ to: 'sam@cafe.co.uk', name: 'Sam', subject: 'Hi', html: '<p>Hi</p>', text: 'Hi' });

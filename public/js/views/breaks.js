@@ -31,7 +31,7 @@ export function wireMoveClockIn(el, ctx) {
       submitLabel: 'Move clock-in',
       body: `<p>${esc(b.dataset.who)} clocked in at <strong>${esc(fromName)}</strong> (${esc(b.dataset.when)}). Which site were they actually working at?</p>
         <label class="field"><span>Site</span><select name="location_id" required>${sites.map((l) => `<option value="${l.id}">${esc(l.name)}${l.square_location_id ? '' : ' – count here (not in Square)'}</option>`).join('')}</select></label>
-        <p class="muted small">For a site in Square, this changes the timecard in Square too, so payroll and each site’s labour costs match. For a site that isn’t in Square (like HQ), the timecard stays where it is in Square and Brewly counts its hours and cost at that site. Either way it’s recorded under Rota → Rota changes.</p>`,
+        <p class="muted small">For a site in Square, this changes the timecard in Square too, so payroll and each site’s labour costs match. For a site that isn’t in Square (like HQ), the timecard stays where it is in Square and Atlas counts its hours and cost at that site. Either way it’s recorded under Rota → Rota changes.</p>`,
       onSubmit: async (v) => {
         const r = await api(`/timecards/${encodeURIComponent(b.dataset.moveCard)}/location`, { method: 'PUT', body: { location_id: Number(v.location_id) } });
         toast(r.brewly_only ? `Clock-in now counted at ${r.location_name} – Square is unchanged` : `Clock-in moved to ${r.location_name}`);
@@ -155,7 +155,7 @@ export async function render(ctx) {
       <div class="kpi"><span>Paid break time</span><strong>${mins(t.paid_break_minutes)}</strong>${t.paid_break_cost ? `<small>${money(t.paid_break_cost)} paid</small>` : ''}</div>
       <div class="kpi ${t.flagged ? 'kpi-bad' : ''}" data-icon="!"><span>Over 6 hours without a proper break</span><strong>${t.flagged}</strong></div>
     </div>
-    ${t.unknown ? `<p class="muted small">${t.unknown} clock-in${t.unknown === 1 ? ' was' : 's were'} synced before Brewly kept break details, so ${t.unknown === 1 ? 'its' : 'their'} breaks can’t be checked. Re-sync those days under Setup → Square to fill them in.</p>` : ''}
+    ${t.unknown ? `<p class="muted small">${t.unknown} clock-in${t.unknown === 1 ? ' was' : 's were'} synced before Atlas kept break details, so ${t.unknown === 1 ? 'its' : 'their'} breaks can’t be checked. Re-sync those days under Setup → Square to fill them in.</p>` : ''}
     <section class="card">
       ${rows.length ? `<div class="table-wrap"><table>
         <thead><tr><th>Date</th><th>Person</th>${allSites ? '<th>Site</th>' : ''}<th>Clocked</th><th class="num">Worked</th><th>Breaks</th><th class="num">Break time</th><th></th></tr></thead>

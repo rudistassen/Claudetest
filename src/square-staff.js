@@ -1,4 +1,4 @@
-// Setting staff up in Square from Brewly: adding someone on the Staff page can add them to the Square team too,
+// Setting staff up in Square from Atlas: adding someone on the Staff page can add them to the Square team too,
 // and later changes (name, email, sites, pay, active) are copied across for anyone linked to a Square team
 // member. Square doesn't let apps set POS passcodes or till permissions, so those stay in the Square Dashboard.
 import { randomBytes } from 'node:crypto';
@@ -14,14 +14,14 @@ const key = () => randomBytes(16).toString('hex');
 /** The Square Dashboard's team page, where passcodes and till permissions are set. */
 export const squareTeamUrl = (environment) => `https://${environment === 'sandbox' ? 'squareupsandbox.com' : 'squareup.com'}/dashboard/team/team-members`;
 
-/** Which Square team member a Brewly person is linked to, if any. */
+/** Which Square team member a Atlas person is linked to, if any. */
 export const linkedMember = (db, userId) => db.prepare('SELECT id FROM square_team_members WHERE user_id = ?').get(userId)?.id ?? null;
 
 const squareLocation = (db, locationId) => db.prepare('SELECT square_location_id FROM locations WHERE id = ?').get(locationId)?.square_location_id ?? null;
 
 /**
  * Where they work in Square. New people: their home site, plus any extra sites ticked for them (admins: every
- * location). Brewly's "all sites" is about what they can see in Brewly, not where they work, so it isn't copied.
+ * location). Atlas's "all sites" is about what they can see in Atlas, not where they work, so it isn't copied.
  * People already in Square keep their locations; their home site is added if it's missing.
  */
 function locationsFor(db, user, current = null) {
@@ -39,8 +39,8 @@ function locationsFor(db, user, current = null) {
 }
 
 /**
- * Their pay in Square: the job Brewly's rate came from (their best-paid one) gets the new rate; other jobs
- * they have in Square are left as they are. New people get a job matching their role in Brewly.
+ * Their pay in Square: the job Atlas's rate came from (their best-paid one) gets the new rate; other jobs
+ * they have in Square are left as they are. New people get a job matching their role in Atlas.
  */
 async function pushWage(client, member, user, { isNew = false } = {}) {
   if (!user.active || !(user.hourly_rate > 0)) return null;
@@ -92,7 +92,7 @@ export async function pushPersonToSquare(db, client, userId, { create = false } 
       ON CONFLICT(id) DO UPDATE SET name = excluded.name, email = excluded.email, user_id = excluded.user_id`);
     if (member) {
       const other = db.prepare('SELECT user_id FROM square_team_members WHERE id = ?').get(member.id)?.user_id;
-      if (other && other !== userId) throw new HttpError(409, `${user.email} is already linked to someone else in Brewly`);
+      if (other && other !== userId) throw new HttpError(409, `${user.email} is already linked to someone else in Atlas`);
       link.run(member.id, user.name, member.email_address ?? null, userId);
       memberId = member.id;
       status = 'linked';
@@ -132,7 +132,7 @@ export async function pushPersonToSquare(db, client, userId, { create = false } 
   return { status, member_id: memberId, ...(warning ? { warning } : {}) };
 }
 
-/** Like pushPersonToSquare, but reports a refusal instead of throwing (the Brewly change is already saved). */
+/** Like pushPersonToSquare, but reports a refusal instead of throwing (the Atlas change is already saved). */
 export async function trySquarePush(db, square, userId, opts) {
   if (!square) return null;
   try {

@@ -167,7 +167,7 @@ async function syncSent(db, mailbox, since, now) {
     const e = db.prepare('SELECT id FROM event_enquiries WHERE conversation_id = ?').get(m.conversationId);
     if (!e) continue;
     const at = sqlTime(m.sentAt);
-    // One Brewly sent itself (it's in Sent Items too): just note which email it was.
+    // One Atlas sent itself (it's in Sent Items too): just note which email it was.
     const own = db.prepare(`SELECT id FROM enquiry_messages WHERE enquiry_id = ? AND direction = 'out' AND status = 'sent' AND email_message_id IS NULL
       AND abs(strftime('%s', created_at) - strftime('%s', ?)) <= 900 ORDER BY id LIMIT 1`).get(e.id, at);
     if (own) {
@@ -280,7 +280,7 @@ export function registerEventRoutes(router, db, { mailbox = null, reader = null 
   });
 
   // { ids }: their emails are moved to the events inbox's Marketing folder, the senders remembered (so later emails
-  // from them are filed straight away), and the enquiries deleted from Brewly.
+  // from them are filed straight away), and the enquiries deleted from Atlas.
   router.post('/events/marketing/file', perm, async (req, res) => {
     const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map((v) => id(v, 'id', { required: true }));
     if (!ids.length) throw badRequest('Tick the emails to file');
@@ -419,7 +419,7 @@ export function registerEventRoutes(router, db, { mailbox = null, reader = null 
     }
     if (!e.email) throw badRequest('Add their email address first');
     if (kind === 'email') {
-      if (!mailbox) throw badRequest('The events inbox isn’t connected, so Brewly can’t send emails yet');
+      if (!mailbox) throw badRequest('The events inbox isn’t connected, so Atlas can’t send emails yet');
       const last = db.prepare(`SELECT email_message_id FROM enquiry_messages WHERE enquiry_id = ? AND direction = 'in' AND email_message_id IS NOT NULL
         ORDER BY created_at DESC, id DESC LIMIT 1`).get(e.id);
       try {

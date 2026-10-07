@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS timecards (
 CREATE INDEX IF NOT EXISTS idx_timecards_location_date ON timecards(location_id, date);
 
 -- Clock-ins counted at a site that isn't in Square (e.g. an HQ): the timecard stays at its Square location
--- (square_site_id, the Brewly site linked to it), but Brewly counts its hours and cost at location_id. Kept apart
+-- (square_site_id, the Atlas site linked to it), but Atlas counts its hours and cost at location_id. Kept apart
 -- from timecards so each sync from Square (which rebuilds timecards) can put it back.
 CREATE TABLE IF NOT EXISTS timecard_allocations (
   timecard_id TEXT PRIMARY KEY,
@@ -278,7 +278,7 @@ CREATE TABLE IF NOT EXISTS password_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_password_tokens_user ON password_tokens(user_id);
 
--- Payment links sent from Brewly (Setup → Payment links), each a Square Checkout link for a set amount.
+-- Payment links sent from Atlas (Setup → Payment links), each a Square Checkout link for a set amount.
 CREATE TABLE IF NOT EXISTS payment_links (
   id INTEGER PRIMARY KEY,
   location_id INTEGER NOT NULL REFERENCES locations(id),
@@ -839,7 +839,7 @@ const MIGRATIONS = [
     db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT');
     db.exec(`UPDATE users SET last_login_at = (SELECT datetime(MAX(expires_at), '-30 days') FROM sessions s WHERE s.user_id = users.id)`);
   }],
-  // When they were last sent an invite to Brewly.
+  // When they were last sent an invite to Atlas.
   ['users', 'invited_at', 'ALTER TABLE users ADD COLUMN invited_at TEXT'],
   // The site's place on Google Maps, for its reviews.
   ['locations', 'google_place_id', 'ALTER TABLE locations ADD COLUMN google_place_id TEXT'],
@@ -1043,7 +1043,7 @@ export function openDb(file = ':memory:') {
   }
   if (version < 5) {
     // Seeing the dashboard became a permission: every set keeps it except the built-in Staff set, so staff open
-    // Brewly on My Brew (an admin can tick it for them on the Permissions page).
+    // Atlas on My Brew (an admin can tick it for them on the Permissions page).
     for (const ps of db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in IS NULL OR built_in != 'staff'`).all()) {
       const perms = JSON.parse(ps.permissions || '[]');
       if (!perms.includes('dashboard.view')) {

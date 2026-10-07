@@ -5,7 +5,7 @@ import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { createApp } from '../src/server.js';
 import { SquareClient } from '../src/square.js';
 
-// A pretend Square team, recording what Brewly sends.
+// A pretend Square team, recording what Atlas sends.
 const calls = [];
 const members = new Map();
 const wages = new Map();
@@ -65,7 +65,7 @@ async function login(email) {
   return call;
 }
 
-test('adding someone in Brewly adds them to Square with their site, job and pay, and later changes follow', async () => {
+test('adding someone in Atlas adds them to Square with their site, job and pay, and later changes follow', async () => {
   const admin = await login('admin@cafe.local');
   assert.equal((await admin('/invites/settings')).data.square_ready, true);
   const site = db.prepare('SELECT id FROM locations ORDER BY id LIMIT 1').get().id;
@@ -99,7 +99,7 @@ test('adding someone in Brewly adds them to Square with their site, job and pay,
   assert.equal(members.get(m.id).status, 'INACTIVE');
 });
 
-test('someone already in Square with the same email is linked, not added twice; refusals are reported but Brewly still saves', async () => {
+test('someone already in Square with the same email is linked, not added twice; refusals are reported but Atlas still saves', async () => {
   const admin = await login('admin@cafe.local');
   members.set('TM_EXISTING', { id: 'TM_EXISTING', given_name: 'Olu', family_name: 'A', email_address: 'olu@brewly-test.co.uk', status: 'ACTIVE',
     assigned_locations: { assignment_type: 'ALL_CURRENT_AND_FUTURE_LOCATIONS' } });
@@ -118,6 +118,6 @@ test('someone already in Square with the same email is linked, not added twice; 
 
   refuseNext = 'Email address is invalid';
   const refused = await admin('/users', { method: 'POST', body: { name: 'Pat Refused', email: 'pat@brewly-test.co.uk', location_id: site, role: 'staff', add_to_square: true } });
-  assert.equal(refused.status, 201, 'saved in Brewly');
+  assert.equal(refused.status, 201, 'saved in Atlas');
   assert.deepEqual(refused.data.square_sync, { status: 'error', error: 'Email address is invalid' });
 });

@@ -1,6 +1,6 @@
 // Xero: sends confirmed supplier invoices to Xero as draft bills (with the supplier, lines, VAT, the site's
 // tracking option and the original file attached). Connecting is done once by an admin through Xero's sign-in
-// (OAuth 2.0, a "Web app" made at developer.xero.com); Brewly keeps the tokens fresh. Set XERO_CLIENT_ID and
+// (OAuth 2.0, a "Web app" made at developer.xero.com); Atlas keeps the tokens fresh. Set XERO_CLIENT_ID and
 // XERO_CLIENT_SECRET (and XERO_REDIRECT_URI if APP_URL isn't set).
 import { addDays, HttpError, round2 } from './util.js';
 import { vatCodeForRate } from './vat-codes.js';
@@ -216,7 +216,7 @@ export class Xero {
         ...(inv.due_date ? { DueDate: inv.due_date }
           : inv.invoice_date && supplier?.payment_terms_days != null ? { DueDate: addDays(inv.invoice_date, supplier.payment_terms_days) } : {}),
         ...(inv.invoice_number ? { InvoiceNumber: inv.invoice_number } : {}),
-        Reference: `Brewly #${inv.id} · ${inv.location_name}`.slice(0, 255),
+        Reference: `Atlas #${inv.id} · ${inv.location_name}`.slice(0, 255),
         Status: 'DRAFT',
         LineAmountTypes: 'Exclusive',
         LineItems: items,

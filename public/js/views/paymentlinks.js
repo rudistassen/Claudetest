@@ -97,8 +97,8 @@ function newLink(ctx, data) {
         <label class="field"><span>Customer name</span><input name="customer_name" maxlength="100"></label>
         <label class="field"><span>Customer email</span><input name="customer_email" type="email" maxlength="200"></label>
       </div>
-      <label class="field"><span>Note for your team (optional)</span><input name="note" maxlength="500" placeholder="Only shown in Brewly"></label>
-      ${data.email_ready ? '<label class="check-row"><input type="checkbox" name="send_email" checked><span><strong>Email the link to the customer</strong><small>From your Brewly email address. Untick to copy the link and send it yourself.</small></span></label>' : '<p class="muted small">Email isn’t set up, so you’ll get a link to copy and send yourself.</p>'}
+      <label class="field"><span>Note for your team (optional)</span><input name="note" maxlength="500" placeholder="Only shown in Atlas"></label>
+      ${data.email_ready ? '<label class="check-row"><input type="checkbox" name="send_email" checked><span><strong>Email the link to the customer</strong><small>From your Atlas email address. Untick to copy the link and send it yourself.</small></span></label>' : '<p class="muted small">Email isn’t set up, so you’ll get a link to copy and send yourself.</p>'}
       <p class="muted small">The customer pays on a secure Square page by card, Apple Pay or Google Pay.</p>`,
     onSubmit: async (v) => {
       if (v.send_email && !v.customer_email) throw new Error('Add the customer’s email, or untick “Email the link”');
