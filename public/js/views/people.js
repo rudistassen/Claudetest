@@ -134,7 +134,12 @@ function templateDialog(inbox, done) {
   });
 }
 
-const applicationCard = (c) => `<li class="pp-app">
+// A star to put someone on (or take them off) the To review list.
+// On the list itself it reads "Done", which takes them off.
+const reviewButton = (c, onList = false) => `<button type="button" class="btn btn-small ${c.to_review_at ? 'pp-starred' : ''}" data-review="${c.id}" data-on="${c.to_review_at ? '' : '1'}"
+  title="${c.to_review_at ? 'Take off the To review list' : 'Put on the To review list'}">${!c.to_review_at ? '☆ To review' : onList ? '✓ Done reviewing' : '★ To review'}</button>`;
+
+const applicationCard = (c, onList = false) => `<li class="pp-app">
   <div class="pp-app-main">
     <a href="#/people/recruitment/candidates/${c.id}" class="pp-app-name"><strong>${esc(c.name)}</strong></a>
     <small class="muted">${esc(received(c))}${c.job_title ? ` · for <strong>${esc(c.job_title)}</strong>` : ''}${c.site_name ? ` · ${siteTag(c.site_name, c.site_id)}` : ''}${c.files ? ` · 📎 ${c.files} file${c.files === 1 ? '' : 's'}` : ' · no CV'}</small>
@@ -143,7 +148,8 @@ const applicationCard = (c) => `<li class="pp-app">
   </div>
   <div class="pp-app-actions">
     <a class="btn btn-small btn-ghost" href="#/people/recruitment/candidates/${c.id}">View</a>
-    <button type="button" class="btn btn-small btn-primary" data-interview="${c.id}">✓ Interview</button>
+    ${reviewButton(c, onList)}
+    ${c.stage === 'applied' ? `<button type="button" class="btn btn-small btn-primary" data-interview="${c.id}">✓ Interview</button>` : ''}
     <button type="button" class="btn btn-small" data-decline="${c.id}">✕ Decline</button>
   </div></li>`;
 
@@ -159,16 +165,22 @@ export async function renderRecruitment(ctx) {
   const multi = state.multiSite && scope === 'all';
 
   el.innerHTML = `
-    <div class="page-head"><h1>Recruitment</h1><div class="actions"><button class="btn btn-primary" id="pp-new-job">+ New job</button></div></div>
+    <div class="page-head"><h1>Recruitment</h1><div class="actions"><button class="btn" id="pp-add-review">+ Add someone to review</button><button class="btn btn-primary" id="pp-new-job">+ New job</button></div></div>
     ${filters(state, scope)}
     <div class="kpis">
       <div class="kpi" data-icon="✎"><span>Open jobs</span><strong>${open.length}</strong></div>
+      <div class="kpi" data-icon="☆"><span>To review</span><strong>${apps.to_review.length}</strong></div>
       <div class="kpi" data-icon="☺"><span>Candidates in progress</span><strong>${apps.in_progress.length}</strong>
         <small>${apps.in_progress.filter((c) => c.stage === 'interview').length} to interview · ${apps.in_progress.filter((c) => c.stage === 'trial').length} on trial · ${apps.in_progress.filter((c) => c.stage === 'offer').length} offered</small></div>
     </div>
+    ${apps.to_review.length ? `<section class="card pp-apps" id="pp-to-review">
+      <div class="pp-job-head"><div><h2>☆ To review <span class="badge badge-sent">${apps.to_review.length}</span></h2>
+        <p class="muted small">People to look at properly – invite them to interview, turn them down, or tap “Done reviewing” to take them off the list.</p></div></div>
+      <ul class="pp-app-list">${apps.to_review.map((c) => applicationCard(c, true)).join('')}</ul>
+    </section>` : ''}
     ${apps.new.length || inbox?.configured ? `<section class="card pp-apps">
       <div class="pp-job-head"><h2>✉ New applications <span class="badge ${apps.new.length ? 'badge-sent' : ''}">${apps.new.length}</span></h2></div>
-      ${apps.new.length ? `<ul class="pp-app-list">${apps.new.map(applicationCard).join('')}</ul>` : '<p class="muted small">Nothing new – applications emailed to the careers inbox appear here.</p>'}
+      ${apps.new.length ? `<ul class="pp-app-list">${apps.new.map((c) => applicationCard(c)).join('')}</ul>` : '<p class="muted small">Nothing new – applications emailed to the careers inbox appear here.</p>'}
     </section>` : ''}
     ${apps.in_progress.length ? `<section class="card pp-job" id="pp-in-progress">
       <div class="pp-job-head"><div><h2>In progress <span class="badge badge-sent">${apps.in_progress.length}</span></h2>
@@ -197,22 +209,31 @@ export async function renderRecruitment(ctx) {
           <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.source === 'email' ? ' <span title="Applied by email">✉</span>' : ''}${c.files ? ` <span title="${c.files} file${c.files === 1 ? '' : 's'}">📎</span>` : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
           <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
           <td>${c.next_step_on ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</span>` : '<span class="muted">–</span>'}</td>
-          <td class="num"><button class="btn btn-small btn-ghost" data-edit-cand="${c.id}" data-job-of="${j.id}">Edit</button></td>
+          <td class="num pp-row-actions">${c.stage === 'rejected' || c.stage === 'hired' ? '' : reviewButton(c)}<button class="btn btn-small btn-ghost" data-edit-cand="${c.id}" data-job-of="${j.id}">Edit</button></td>
         </tr>`).join('')}</tbody></table></div>` : '<p class="muted small">No candidates yet.</p>'}
     </section>`).join('') : `<div class="empty">${jobs.length ? 'No open jobs right now.' : 'No jobs yet – add one when you’re hiring.'}</div>`}
     ${noJob.length ? `<section class="card pp-job">
       <div class="pp-job-head"><div><h2>Not for a particular job</h2><p class="muted small">People who applied in general – open their profile to put them forward for a job.</p></div></div>
       <div class="table-wrap"><table class="pp-cands">
-        <thead><tr><th>Candidate</th><th>Stage</th><th>Next step</th></tr></thead>
+        <thead><tr><th>Candidate</th><th>Stage</th><th>Next step</th><th></th></tr></thead>
         <tbody>${noJob.map((c) => `<tr class="${c.stage === 'rejected' ? 'is-out' : ''}">
           <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.files ? ' <span title="Has files">📎</span>' : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
           <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
           <td>${c.next_step_on ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</span>` : '<span class="muted">–</span>'}</td>
+          <td class="num">${c.stage === 'rejected' || c.stage === 'hired' ? '' : reviewButton(c)}</td>
         </tr>`).join('')}</tbody></table></div>
     </section>` : ''}
     ${careersCard(inbox)}`;
 
-  el.querySelectorAll('[data-interview]').forEach((b) => b.addEventListener('click', () => interviewDialog(apps.new.find((c) => c.id === Number(b.dataset.interview)), jobs, rerender)));
+  el.querySelectorAll('[data-interview]').forEach((b) => b.addEventListener('click', () => interviewDialog([...apps.to_review, ...apps.new].find((c) => c.id === Number(b.dataset.interview)), jobs, rerender)));
+  el.querySelectorAll('[data-review]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      await api(`/candidates/${b.dataset.review}/review`, { method: 'POST', body: { to_review: !!b.dataset.on } });
+      toast(b.dataset.on ? 'Added to To review' : 'Taken off To review');
+      rerender();
+    } catch (err) { showError(err); b.disabled = false; }
+  }));
   el.querySelectorAll('[data-decline]').forEach((b) => b.addEventListener('click', () => declineDialog(Number(b.dataset.decline), rerender)));
   el.querySelectorAll('[data-edit-template]').forEach((b) => b.addEventListener('click', () => templateDialog(inbox, rerender)));
   el.querySelector('#careers-check')?.addEventListener('click', async (e) => {
@@ -244,9 +265,10 @@ export async function renderRecruitment(ctx) {
     },
     danger: j ? 'Delete job' : null,
     onDanger: async () => {
-      if (!await confirmDialog(`Delete ${j.title} and its ${j.candidates.length} candidate${j.candidates.length === 1 ? '' : 's'}? To keep a record, set it to Filled or Closed instead.`, { confirmLabel: 'Delete' })) return;
+      const n = j.candidates.length;
+      if (!await confirmDialog(`Delete the ${j.title} job?${n ? ` Its ${n} candidate${n === 1 ? ' is' : 's are'} kept – they’ll show under “Not for a particular job” (or In progress), with their notes and CVs.` : ''}`, { confirmLabel: 'Delete job' })) return;
       await api(`/vacancies/${j.id}`, { method: 'DELETE' });
-      toast('Job deleted');
+      toast(n ? `Job deleted – ${n} candidate${n === 1 ? '' : 's'} kept` : 'Job deleted');
       rerender();
     },
   });
@@ -273,6 +295,27 @@ export async function renderRecruitment(ctx) {
   });
 
   el.querySelector('#pp-new-job').addEventListener('click', () => jobModal(null));
+  // Someone to look at who didn't come through the careers inbox – e.g. a CV handed in at the counter.
+  el.querySelector('#pp-add-review').addEventListener('click', () => openModal({
+    title: 'Add someone to review',
+    body: `${field('Name', input('name', '', 'required maxlength="100"'))}
+      <div class="row">${field('Phone', input('phone', '', 'type="tel" maxlength="50"'))}${field('Email', input('email', '', 'type="email" maxlength="200"'))}</div>
+      ${field('For the job', select('vacancy_id', [['', '— Not for a particular job —'], ...open.map((j) => [j.id, `${j.title}${j.location_name ? ` – ${j.location_name}` : ''}`])], ''))}
+      ${sites.length > 1 ? field('Site', select('location_id', sites.map((l) => [l.id, l.name]), state.locationId), { hint: 'Used when they’re not for a particular job' }) : ''}
+      ${field('Notes', textarea('notes', '', 'rows="4" maxlength="4000" placeholder="Where they came from, what stood out…"'))}`,
+    submitLabel: 'Add to To review',
+    onSubmit: async (v) => {
+      const body = { name: v.name, phone: v.phone, email: v.email, notes: v.notes };
+      if (v.vacancy_id) {
+        const r = await api(`/vacancies/${v.vacancy_id}/candidates`, { method: 'POST', body });
+        await api(`/candidates/${r.id}/review`, { method: 'POST', body: { to_review: true } });
+      } else {
+        await api('/candidates', { method: 'POST', body: { ...body, location_id: v.location_id ?? state.locationId, to_review: true } });
+      }
+      toast(`${v.name} added to To review`);
+      rerender();
+    },
+  }));
   el.querySelectorAll('[data-edit-job]').forEach((b) => b.addEventListener('click', () => jobModal(job(b.dataset.editJob))));
   el.querySelectorAll('[data-add-cand]').forEach((b) => b.addEventListener('click', () => candModal(job(b.dataset.addCand), null)));
   el.querySelectorAll('[data-edit-cand]').forEach((b) => b.addEventListener('click', () => {
@@ -303,6 +346,7 @@ export async function renderCandidate(ctx) {
       <p class="muted small">${c.job_title ? `For <strong>${esc(c.job_title)}</strong>` : 'Not for a particular job'}${c.site_name ? ` · ${siteTag(c.site_name, c.site_id)}` : ''}
         · ${c.source === 'email' ? `applied by email ${esc(received(c))}` : `added ${day(c.created_at.slice(0, 10))}`}</p></div>
       <div class="actions">
+        ${c.stage !== 'rejected' && c.stage !== 'hired' ? `<button class="btn" id="cand-review">${c.to_review_at ? '★ On To review – take off' : '☆ Add to To review'}</button>` : ''}
         ${c.stage === 'applied' ? '<button class="btn btn-primary" id="cand-interview">✓ Invite to interview</button>' : ''}
         ${c.stage !== 'rejected' && c.stage !== 'hired' ? '<button class="btn" id="cand-decline">✕ Decline</button>' : ''}
         <button class="btn btn-ghost" id="cand-edit">Edit</button></div></div>
@@ -382,6 +426,14 @@ export async function renderCandidate(ctx) {
     try { await api(`/candidates/${c.id}`, { method: 'PUT', body: { notes: el.querySelector('#cand-notes').value } }); toast('Notes saved'); } catch (err) { showError(err); }
   });
   el.querySelector('#cand-interview')?.addEventListener('click', () => interviewDialog(c, jobs, rerender));
+  el.querySelector('#cand-review')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      await api(`/candidates/${c.id}/review`, { method: 'POST', body: { to_review: !c.to_review_at } });
+      toast(c.to_review_at ? 'Taken off To review' : 'Added to To review');
+      rerender();
+    } catch (err) { showError(err); e.target.disabled = false; }
+  });
   el.querySelector('#cand-decline')?.addEventListener('click', () => declineDialog(c.id, rerender));
   el.querySelector('#cand-edit').addEventListener('click', () => openModal({
     title: `Edit ${c.name}`,

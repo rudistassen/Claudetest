@@ -2,6 +2,7 @@
 // them), performance (one-to-ones, probation reviews and appraisals) and areas (where each person can work).
 import { assertLocation, requirePerm } from '../auth.js';
 import { cvType, declineTemplate, fillTemplate, MAX_CV_BYTES } from '../careers-inbox.js';
+import { tx } from '../db.js';
 import { fromBase64 } from './invoices.js';
 import { badRequest, date, id, notFound, num, oneOf, str, today } from '../util.js';
 
@@ -13,7 +14,7 @@ const DUE_SOON_DAYS = 30;
 
 // For lists: everything about a candidate but their message (which can be long), plus how many files they have.
 const CANDIDATE_LIST = `c.id, c.vacancy_id, c.location_id, c.name, c.email, c.phone, c.stage, c.next_step_on, c.notes, c.source, c.subject,
-  substr(c.message, 1, 240) AS preview, c.received_at, c.declined_at, c.reply_drafted_at, c.created_at, c.updated_at,
+  substr(c.message, 1, 240) AS preview, c.received_at, c.declined_at, c.reply_drafted_at, c.to_review_at, c.created_at, c.updated_at,
   (SELECT COUNT(*) FROM candidate_files f WHERE f.candidate_id = c.id) AS files`;
 
 /** careers: the careers inbox (see mailbox.js), for drafting replies to candidates who emailed; or null. */
@@ -82,9 +83,15 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     res.json({ ok: true });
   });
 
+  // The job goes; its candidates stay (at the job's site), no longer for a particular job.
   router.delete('/vacancies/:id', perm, (req, res) => {
-    db.prepare('DELETE FROM vacancies WHERE id = ?').run(vacancy(req, Number(req.params.id)).id);
-    res.json({ ok: true });
+    const v = vacancy(req, Number(req.params.id));
+    const kept = tx(db, () => {
+      const r = db.prepare(`UPDATE candidates SET vacancy_id = NULL, location_id = COALESCE(location_id, ?), updated_at = datetime('now') WHERE vacancy_id = ?`).run(v.location_id, v.id);
+      db.prepare('DELETE FROM vacancies WHERE id = ?').run(v.id);
+      return Number(r.changes);
+    });
+    res.json({ ok: true, kept });
   });
 
   const candidateFields = (b) => ({
@@ -94,6 +101,18 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     stage: oneOf(b.stage ?? 'applied', 'stage', STAGES, { required: true }),
     next_step_on: date(b.next_step_on, 'Next step date'),
     notes: str(b.notes, 'Notes', { max: 4000 }),
+  });
+
+  // Someone not for a particular job (e.g. a CV handed in), at a site; with to_review they go on the To review list.
+  router.post('/candidates', perm, (req, res) => {
+    const b = req.body ?? {};
+    const f = candidateFields(b);
+    const site = id(b.location_id, 'location_id');
+    if (site) assertLocation(req, site);
+    const r = db.prepare(`INSERT INTO candidates (location_id, name, email, phone, stage, next_step_on, notes, to_review_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') END)`)
+      .run(site, f.name, f.email, f.phone, f.stage, f.next_step_on, f.notes, b.to_review ? 1 : 0);
+    res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
   router.post('/vacancies/:id/candidates', perm, (req, res) => {
@@ -124,14 +143,18 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   router.get('/applications', perm, (req, res) => {
     const rows = db.prepare(`SELECT ${CANDIDATE_LIST}, v.title AS job_title, COALESCE(v.location_id, c.location_id) AS site_id, l.name AS site_name
       FROM candidates c LEFT JOIN vacancies v ON v.id = c.vacancy_id LEFT JOIN locations l ON l.id = COALESCE(v.location_id, c.location_id)
-      WHERE (c.source = 'email' AND c.stage = 'applied') OR c.vacancy_id IS NULL OR c.stage IN ('interview', 'trial', 'offer')
+      WHERE (c.source = 'email' AND c.stage = 'applied') OR c.vacancy_id IS NULL OR c.stage IN ('interview', 'trial', 'offer') OR c.to_review_at IS NOT NULL
       ORDER BY COALESCE(c.received_at, c.created_at) DESC, c.id DESC`).all().filter((c) => canSee(req, c));
     const going = (c) => ['interview', 'trial', 'offer'].includes(c.stage);
+    // Those on the To review list show there rather than with the new applications or those not for a job.
+    const review = (c) => !!c.to_review_at && !going(c);
     res.json({
-      new: rows.filter((c) => c.source === 'email' && c.stage === 'applied'),
+      // Oldest on the list first.
+      to_review: rows.filter(review).sort((a, b) => a.to_review_at.localeCompare(b.to_review_at) || a.id - b.id),
+      new: rows.filter((c) => !review(c) && c.source === 'email' && c.stage === 'applied'),
       // Soonest next step first; those without one after.
       in_progress: rows.filter(going).sort((a, b) => (a.next_step_on ?? '9999').localeCompare(b.next_step_on ?? '9999')),
-      no_job: rows.filter((c) => !c.vacancy_id && !going(c) && !(c.source === 'email' && c.stage === 'applied')),
+      no_job: rows.filter((c) => !review(c) && !c.vacancy_id && !going(c) && !(c.source === 'email' && c.stage === 'applied')),
     });
   });
 
@@ -165,10 +188,20 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
       vacancyId = id(b.vacancy_id, 'vacancy_id');
       if (vacancyId) locationId = vacancy(req, vacancyId).location_id;
     }
+    // Moving them on (or turning them down) takes them off the To review list.
     db.prepare(`UPDATE candidates SET name = ?, email = ?, phone = ?, stage = ?, next_step_on = ?, notes = ?, vacancy_id = ?, location_id = ?,
-      declined_at = CASE WHEN ? = 'rejected' THEN declined_at ELSE NULL END, updated_at = datetime('now') WHERE id = ?`)
-      .run(f.name, f.email, f.phone, f.stage, f.next_step_on, f.notes, vacancyId, locationId, f.stage, c.id);
+      declined_at = CASE WHEN ? = 'rejected' THEN declined_at ELSE NULL END,
+      to_review_at = CASE WHEN ? = stage THEN to_review_at END, updated_at = datetime('now') WHERE id = ?`)
+      .run(f.name, f.email, f.phone, f.stage, f.next_step_on, f.notes, vacancyId, locationId, f.stage, f.stage, c.id);
     res.json({ ok: true });
+  });
+
+  // On or off the To review list: { to_review: true | false }.
+  router.post('/candidates/:id/review', perm, (req, res) => {
+    const c = candidate(req, Number(req.params.id));
+    const on = !!req.body?.to_review;
+    db.prepare(`UPDATE candidates SET to_review_at = CASE WHEN ? THEN COALESCE(to_review_at, datetime('now')) END, updated_at = datetime('now') WHERE id = ?`).run(on ? 1 : 0, c.id);
+    res.json({ ok: true, to_review: on });
   });
 
   // Not taking them further. With draft: true (and the careers inbox connected), a reply is saved in the careers
@@ -177,7 +210,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     const c = candidate(req, Number(req.params.id));
     const subject = str(req.body?.subject, 'Subject', { required: true, max: 200 });
     const body = str(req.body?.body, 'Message', { required: true, max: 5000 });
-    db.prepare(`UPDATE candidates SET stage = 'rejected', declined_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(c.id);
+    db.prepare(`UPDATE candidates SET stage = 'rejected', declined_at = datetime('now'), to_review_at = NULL, updated_at = datetime('now') WHERE id = ?`).run(c.id);
     const out = { ok: true, to: c.email, subject, body, draft: 'none' };
     if (req.body?.draft && careers && c.email_message_id) {
       try {

@@ -943,6 +943,8 @@ const MIGRATIONS = [
       }
     }
   }],
+  // Candidates put on the To review list, and when.
+  ['candidates', 'to_review_at', 'ALTER TABLE candidates ADD COLUMN to_review_at TEXT'],
 ];
 
 export const PUBLISH_COLUMNS = `pub_location_id = location_id, pub_user_id = user_id, pub_date = date,

@@ -52,8 +52,42 @@ test('recruitment: a job with candidates moving through the stages', async () =>
   assert.equal(j.candidates[0].phone, '07700 900000');
   await a(`/vacancies/${job.data.id}`, { method: 'PUT', body: { status: 'filled' } });
   assert.equal((await a(`/vacancies?location_id=${loc}`)).data.find((x) => x.id === job.data.id).status, 'filled');
-  await a(`/vacancies/${job.data.id}`, { method: 'DELETE' });
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM candidates WHERE id = ?').get(c.data.id).n, 0);
+  // Deleting the job keeps its candidates, at the job's site, no longer for a job.
+  const del = await a(`/vacancies/${job.data.id}`, { method: 'DELETE' });
+  assert.equal(del.data.kept, 1);
+  const kept = db.prepare('SELECT vacancy_id, location_id, stage, phone FROM candidates WHERE id = ?').get(c.data.id);
+  assert.deepEqual({ ...kept }, { vacancy_id: null, location_id: loc, stage: 'trial', phone: '07700 900000' });
+  assert.ok((await a('/applications')).data.in_progress.some((x) => x.id === c.data.id));
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vacancies WHERE id = ?').get(job.data.id).n, 0);
+});
+
+test('recruitment: the To review list', async () => {
+  const a = await login('admin@cafe.local');
+  const loc = staff().location_id;
+  // Someone added straight onto the list (e.g. a CV handed in), and someone put on it later.
+  const walkIn = await a('/candidates', { method: 'POST', body: { name: 'Robin Walk-In', location_id: loc, to_review: true } });
+  assert.equal(walkIn.status, 201);
+  const job = await a('/vacancies', { method: 'POST', body: { location_id: loc, title: 'Kitchen porter' } });
+  const later = await a(`/vacancies/${job.data.id}/candidates`, { method: 'POST', body: { name: 'Alex Later' } });
+  assert.equal((await a(`/candidates/${later.data.id}/review`, { method: 'POST', body: { to_review: true } })).status, 200);
+  let apps = (await a('/applications')).data;
+  assert.deepEqual(apps.to_review.filter((x) => [walkIn.data.id, later.data.id].includes(x.id)).map((x) => x.name), ['Robin Walk-In', 'Alex Later']);
+  assert.ok(!apps.no_job.some((x) => x.id === walkIn.data.id), 'shown on To review, not twice');
+  assert.ok((await a(`/candidates/${walkIn.data.id}`)).data.to_review_at);
+  // Taking them off, and moving someone on, both clear it.
+  await a(`/candidates/${walkIn.data.id}/review`, { method: 'POST', body: { to_review: false } });
+  await a(`/candidates/${later.data.id}`, { method: 'PUT', body: { stage: 'interview' } });
+  apps = (await a('/applications')).data;
+  assert.ok(!apps.to_review.some((x) => [walkIn.data.id, later.data.id].includes(x.id)));
+  assert.ok(apps.no_job.some((x) => x.id === walkIn.data.id));
+  assert.ok(apps.in_progress.some((x) => x.id === later.data.id));
+  // Saving notes without changing the stage keeps them on the list.
+  await a(`/candidates/${walkIn.data.id}/review`, { method: 'POST', body: { to_review: true } });
+  await a(`/candidates/${walkIn.data.id}`, { method: 'PUT', body: { notes: 'Good barista experience' } });
+  assert.ok((await a('/applications')).data.to_review.some((x) => x.id === walkIn.data.id));
+  // Staff can't use it.
+  const s = await login('staff1@cafe.local');
+  assert.equal((await s('/candidates', { method: 'POST', body: { name: 'X' } })).status, 403);
 });
 
 test('training: who has done what, and what has run out', async () => {
