@@ -114,12 +114,26 @@ export function registerAdminRoutes(router, db, square = null) {
     } else {
       set = db.prepare(`SELECT * FROM permission_sets WHERE built_in = 'staff'`).get();
     }
+    // Their own permissions, ticked one by one, instead of their set's: a list, or null to use the set's. Left as
+    // they are when not sent.
+    let custom = null;
+    if (b.custom_permissions === undefined) custom = existing?.custom_permissions ? parsePermissions(existing.custom_permissions) : null;
+    else if (b.custom_permissions !== null && b.custom_permissions !== false) {
+      const list = Array.isArray(b.custom_permissions) ? b.custom_permissions : String(b.custom_permissions).split(',').filter(Boolean);
+      const unknown = list.filter((p) => !ALL_PERMISSIONS.includes(p));
+      if (unknown.length) throw badRequest(`Unknown permission: ${unknown[0]}`);
+      custom = cleanPermissions(list);
+    }
     if (u.role !== 'admin') {
       u.permission_set_id = set?.id ?? null;
-      u.role = set?.built_in ?? roleForPermissions(permsOf(set));
+      u.custom_permissions = custom ? JSON.stringify(custom) : null;
+      u.role = custom ? roleForPermissions(custom) : set?.built_in ?? roleForPermissions(permsOf(set));
     } else {
       u.permission_set_id = null;
+      u.custom_permissions = null;
     }
+    // What they'll be able to do.
+    const effective = custom && u.role !== 'admin' ? custom : permsOf(set);
 
     // Sites: every site (the default), or their home site plus the ones ticked.
     // New people get every site, unless whoever adds them only has some sites themselves.
@@ -143,8 +157,8 @@ export function registerAdminRoutes(router, db, square = null) {
     if (req.user.role !== 'admin') {
       const mine = currentPerms(req.user);
       if (u.role === 'admin') throw forbidden('Only admins can make someone an admin');
-      if (permsOf(set).includes('staff.manage')) throw forbidden('Only admins can give someone access to manage staff');
-      if (!covers(mine, permsOf(set))) throw forbidden('You can only give people access you have yourself');
+      if (effective.includes('staff.manage')) throw forbidden('Only admins can give someone access to manage staff');
+      if (!covers(mine, effective)) throw forbidden('You can only give people access you have yourself');
       const mySites = new Set(req.user.site_ids);
       if (!mySites.has(u.location_id)) throw forbidden('You can only manage staff at sites you have access to');
       if (existing && (existing.role === 'admin' || !mySites.has(existing.location_id) || !covers(mine, currentPerms(existing)))) {
@@ -173,9 +187,9 @@ export function registerAdminRoutes(router, db, square = null) {
     // No password: they choose their own from an invite.
     const password = req.body.password ? validatePassword(req.body.password) : randomBytes(24).toString('hex');
     const userId = tx(db, () => {
-      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, rota_group, hourly_rate, active, permission_set_id, all_sites)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.all_sites);
+      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, rota_group, hourly_rate, active, permission_set_id, custom_permissions, all_sites)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites);
       saveSites(r.lastInsertRowid, u);
       return r.lastInsertRowid;
     });
@@ -188,12 +202,12 @@ export function registerAdminRoutes(router, db, square = null) {
     const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
     if (!existing) throw notFound('User');
     const u = userBody(req, existing);
-    if (userId === req.user.id && (u.role !== existing.role || u.permission_set_id !== existing.permission_set_id || !u.active)) {
+    if (userId === req.user.id && (u.role !== existing.role || u.permission_set_id !== existing.permission_set_id || u.custom_permissions !== existing.custom_permissions || !u.active)) {
       throw badRequest('You cannot change your own access or deactivate yourself');
     }
     tx(db, () => {
-      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, all_sites = ? WHERE id = ?`)
-        .run(u.name, u.email, u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, userId);
+      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, custom_permissions = ?, all_sites = ? WHERE id = ?`)
+        .run(u.name, u.email, u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, userId);
       saveSites(userId, u);
     });
     if (req.body.password) {
@@ -223,19 +237,21 @@ export function registerAdminRoutes(router, db, square = null) {
         rota_group: existing.rota_group, hourly_rate: existing.hourly_rate, active: existing.active,
         permission_set_id: existing.role === 'admin' ? 'admin' : existing.permission_set_id ?? setByRole(existing.role)?.id ?? null,
         ...Object.fromEntries(keys.map((k) => [k, c[k]])),
+        // Picking new access for everyone replaces anyone's own permissions.
+        custom_permissions: keys.includes('permission_set_id') ? null : undefined,
       };
       let u;
       try {
         u = userBody({ ...req, body }, existing);
-        if (userId === req.user.id && (u.role !== existing.role || u.permission_set_id !== existing.permission_set_id || !u.active)) {
+        if (userId === req.user.id && (u.role !== existing.role || u.permission_set_id !== existing.permission_set_id || u.custom_permissions !== existing.custom_permissions || !u.active)) {
           throw badRequest('You cannot change your own access or deactivate yourself');
         }
       } catch (err) {
         err.message = `${existing.name}: ${err.message}`;
         throw err;
       }
-      db.prepare(`UPDATE users SET role = ?, location_id = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, all_sites = ? WHERE id = ?`)
-        .run(u.role, u.location_id, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, userId);
+      db.prepare(`UPDATE users SET role = ?, location_id = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, custom_permissions = ?, all_sites = ? WHERE id = ?`)
+        .run(u.role, u.location_id, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, userId);
       saveSites(userId, u);
       if (!u.active) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
       return userId;
@@ -279,7 +295,7 @@ export function registerAdminRoutes(router, db, square = null) {
   }
 
   // People in a set are sorted as managers or staff by what the set allows.
-  const syncRoles = (setId, perms) => db.prepare(`UPDATE users SET role = ? WHERE permission_set_id = ? AND role != 'admin'`).run(roleForPermissions(perms), setId);
+  const syncRoles = (setId, perms) => db.prepare(`UPDATE users SET role = ? WHERE permission_set_id = ? AND role != 'admin' AND custom_permissions IS NULL`).run(roleForPermissions(perms), setId);
 
   router.post('/permission-sets', requireAdmin, (req, res) => {
     const b = setBody(req);

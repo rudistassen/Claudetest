@@ -30,14 +30,17 @@ export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id,
 // Joins a user's permission set, or the built-in set for their role when they don't have one.
 export const ACCESS_JOIN = `LEFT JOIN permission_sets ps ON ps.id = u.permission_set_id
   LEFT JOIN permission_sets dps ON u.permission_set_id IS NULL AND dps.built_in = u.role`;
-export const ACCESS_FIELDS = `CASE WHEN u.role = 'admin' THEN 'Admin' ELSE COALESCE(ps.name, dps.name) END AS access_name,
-  COALESCE(ps.id, dps.id) AS access_set_id, COALESCE(ps.permissions, dps.permissions) AS permissions_json`;
+// Someone given their own permissions (ticked one by one) uses those instead of their set's.
+export const ACCESS_FIELDS = `CASE WHEN u.role = 'admin' THEN 'Admin' WHEN u.custom_permissions IS NOT NULL THEN COALESCE(ps.name, dps.name) || ' (own permissions)'
+    ELSE COALESCE(ps.name, dps.name) END AS access_name,
+  COALESCE(ps.id, dps.id) AS access_set_id, u.custom_permissions IS NOT NULL AS custom_access,
+  COALESCE(u.custom_permissions, ps.permissions, dps.permissions) AS permissions_json`;
 
 /** Adds a user's permissions (every permission for admins) and removes the raw JSON column. */
 export function withPermissions(u) {
   if (!u) return u;
   const { permissions_json: json, ...rest } = u;
-  return { ...rest, permissions: u.role === 'admin' ? [...ALL_PERMISSIONS] : parsePermissions(json) };
+  return { ...rest, custom_access: !!rest.custom_access && u.role !== 'admin', permissions: u.role === 'admin' ? [...ALL_PERMISSIONS] : parsePermissions(json) };
 }
 
 function parseCookies(header = '') {

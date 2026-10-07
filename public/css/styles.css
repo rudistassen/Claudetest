@@ -1887,3 +1887,16 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .tc-actions .link-btn { padding: 0.4rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; text-decoration: none; font-weight: 600; }
 .tc-actions [data-edit-breaks]::before { content: '☕ '; }
 @media (max-width: 480px) { .tc-details > div { grid-template-columns: 6.5rem minmax(0, 1fr); } }
+
+/* Staff details: Details and Permissions tabs. */
+.staff-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin: -0.2rem 0 0.9rem; }
+.staff-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 0.5rem 0.9rem; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; margin-bottom: -1px; }
+.staff-tabs button.is-on { color: var(--text); border-bottom-color: var(--accent); }
+.perm-own { margin-bottom: 0.8rem; }
+.perm-areas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+.perm-area { border: 1px solid var(--border); border-radius: 10px; padding: 0.4rem 0.8rem 0.6rem; margin: 0; min-width: 0; }
+.perm-area legend { font-weight: 700; padding: 0 0.3rem; }
+.perm-area legend label { display: inline-flex; gap: 0.4rem; align-items: center; cursor: pointer; }
+.perm-area .check-row { font-size: 0.92rem; }
+.perm-area input:disabled + span { opacity: 0.75; }
+@media (max-width: 700px) { .perm-areas { grid-template-columns: minmax(0, 1fr); } }

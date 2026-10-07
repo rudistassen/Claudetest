@@ -216,9 +216,36 @@ function staffEditor(state, rows, perms, settings = {}) {
         <small>Their home site is always included.</small>
       </div></div>`;
   };
+  // Permissions tab: what they can do in each part of Atlas. By default they get whatever their Access allows;
+  // ticking "Choose their own" lets each permission be ticked for just this person. People who aren't admins can
+  // only tick what they can do themselves (and never managing staff).
+  const setPerms = Object.fromEntries(perms.sets.map((s) => [s.id, s.permissions]));
+  const grantable = (key) => state.isAdmin || (key !== 'staff.manage' && state.can(key));
+  const permsPanel = (u) => {
+    const own = !!u.custom_access;
+    const has = new Set(u.id ? u.permissions ?? [] : setPerms[staffSet?.id] ?? []);
+    const isAdmin = u.role === 'admin';
+    return `<div class="perm-panel" data-set-perms="${esc(JSON.stringify(setPerms))}">
+      <p class="perm-admin-note notice" ${isAdmin ? '' : 'hidden'}>Admins can do everything at every site, so there’s nothing to tick. Change their Access on the Details tab to choose permissions.</p>
+      <div class="perm-body" ${isAdmin ? 'hidden' : ''}>
+        <label class="check-row perm-own"><input type="checkbox" name="custom_on" ${own ? 'checked' : ''}>
+          <span><strong>Choose their own permissions</strong>
+          <small>Untick to give them exactly what their Access (on the Details tab) allows.</small></span></label>
+        <div class="perm-areas">${perms.areas.map((a) => `<fieldset class="perm-area">
+          <legend><label><input type="checkbox" class="perm-all" ${a.permissions.every((p) => has.has(p.key)) ? 'checked' : ''} ${own ? '' : 'disabled'}> ${esc(a.area)}</label></legend>
+          ${a.permissions.map((p) => `<label class="check-row"><input type="checkbox" name="perm" value="${esc(p.key)}" ${has.has(p.key) ? 'checked' : ''}
+            ${own && grantable(p.key) ? '' : 'disabled'} ${grantable(p.key) ? '' : 'data-locked'}><span>${esc(p.label)}${grantable(p.key) ? '' : ' <small class="muted">(only an admin can give this)</small>'}</span></label>`).join('')}
+        </fieldset>`).join('')}</div>
+      </div></div>`;
+  };
   // Roles already in use, plus a few common ones, to pick from.
   const rotaGroups = [...new Set([...rows.map((r) => r.rota_group).filter(Boolean), 'Management', 'Front of house', 'Kitchen', 'Bar'])].sort((a, b) => a.localeCompare(b));
   const form = (u) => `
+      <div class="staff-tabs" role="tablist">
+        <button type="button" role="tab" class="is-on" data-staff-tab="details" aria-selected="true">Details</button>
+        <button type="button" role="tab" data-staff-tab="perms" aria-selected="false">Permissions${u.custom_access ? ' <span class="badge badge-sent">Own</span>' : ''}</button>
+      </div>
+      <div data-staff-panel="details">
       <div class="row">${field('Name', input('name', u.name, 'required'))}${field('Email (used to sign in)', input('email', u.email, 'type="email" required'))}</div>
       <div class="row">
         ${field('Access', select('permission_set_id', accessOptions(u), accessValue(u)), { hint: state.isAdmin ? 'Set up what each option allows under Setup → Permissions' : '' })}
@@ -234,8 +261,14 @@ function staffEditor(state, rows, perms, settings = {}) {
       ${squareBox(u, settings)}
       ${u.id ? inviteBox(u) : ''}
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password (optional)', input('password', '', 'type="password" minlength="8" autocomplete="new-password"'), { hint: u.id ? 'At least 8 characters' : 'Leave blank and send them an invite, so they choose their own' })}
-      ${activeBox(u.active)}`;
+      ${activeBox(u.active)}
+      </div>
+      <div data-staff-panel="perms" hidden>${permsPanel(u)}</div>`;
   const save = async (v, row, formEl) => {
+    const own = formEl.querySelector('[name=custom_on]');
+    delete v.custom_on;
+    delete v.perm;
+    if (own) v.custom_permissions = own.checked ? [...formEl.querySelectorAll('input[name=perm]:checked')].map((i) => i.value) : null;
     v.site_ids = [...formEl.querySelectorAll('input[name=site_pick]:checked')].map((i) => Number(i.value));
     delete v.site_pick;
     if (v.all_sites === undefined) delete v.site_ids;
@@ -245,6 +278,46 @@ function staffEditor(state, rows, perms, settings = {}) {
   };
   return { locOptions, accessOptions, rotaGroups, form, save };
 }
+
+// The staff form's tabs and Permissions tab (the form is drawn in a pop-up, so these listen on the page).
+const permBoxes = (form) => [...form.querySelectorAll('input[name=perm]')];
+function showSetPerms(form) {
+  const panel = form.querySelector('.perm-panel');
+  const access = form.querySelector('[name=permission_set_id]')?.value;
+  const isAdmin = access === 'admin';
+  panel.querySelector('.perm-admin-note').hidden = !isAdmin;
+  panel.querySelector('.perm-body').hidden = isAdmin;
+  if (isAdmin || form.querySelector('[name=custom_on]').checked) return;
+  const set = new Set(JSON.parse(panel.dataset.setPerms)[access] ?? []);
+  for (const b of permBoxes(form)) b.checked = set.has(b.value);
+  syncAreaTicks(form);
+}
+// Each section's own tick shows whether everything in it is ticked.
+const syncAreaTicks = (form) => form.querySelectorAll('.perm-area').forEach((f) => {
+  f.querySelector('.perm-all').checked = [...f.querySelectorAll('input[name=perm]')].every((b) => b.checked);
+});
+document.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-staff-tab]');
+  if (!tab) return;
+  const form = tab.closest('form');
+  form.querySelectorAll('[data-staff-tab]').forEach((t) => { t.classList.toggle('is-on', t === tab); t.setAttribute('aria-selected', String(t === tab)); });
+  form.querySelectorAll('[data-staff-panel]').forEach((p) => { p.hidden = p.dataset.staffPanel !== tab.dataset.staffTab; });
+});
+document.addEventListener('change', (e) => {
+  const form = e.target.closest('form');
+  if (!form?.querySelector('.perm-panel')) return;
+  if (e.target.name === 'permission_set_id') showSetPerms(form);
+  if (e.target.name === 'custom_on') {
+    const on = e.target.checked;
+    for (const b of permBoxes(form)) b.disabled = !on || b.hasAttribute('data-locked');
+    form.querySelectorAll('.perm-all').forEach((b) => { b.disabled = !on; });
+    if (!on) showSetPerms(form);
+  }
+  if (e.target.classList.contains('perm-all')) {
+    for (const b of e.target.closest('fieldset').querySelectorAll('input[name=perm]:not([data-locked])')) b.checked = e.target.checked;
+  }
+  if (e.target.name === 'perm') syncAreaTicks(form);
+});
 
 /** Opens a staff member's details to edit, from anywhere (the rota's names, for admins). */
 export async function openStaffEditor(ctx, userId) {
