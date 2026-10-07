@@ -10,6 +10,7 @@ import { registerRotaRoutes } from '../src/routes/rota.js';
 import { registerSafetyRoutes } from '../src/routes/safety.js';
 import { registerSalesRoutes } from '../src/routes/sales.js';
 import { registerStockRoutes } from '../src/routes/stock.js';
+import { registerPrepOrderRoutes } from '../src/routes/prep-orders.js';
 import { registerLeaveRoutes } from '../src/routes/leave.js';
 import { registerTradingRoutes } from '../src/routes/trading.js';
 import { registerOpenOrderRoutes } from '../src/routes/open-orders.js';
@@ -124,6 +125,7 @@ async function boot() {
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
+  registerPrepOrderRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);

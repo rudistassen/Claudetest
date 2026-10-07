@@ -9,6 +9,7 @@ import { registerRotaRoutes } from './routes/rota.js';
 import { registerSalesRoutes } from './routes/sales.js';
 import { registerSafetyRoutes } from './routes/safety.js';
 import { registerStockRoutes } from './routes/stock.js';
+import { registerPrepOrderRoutes } from './routes/prep-orders.js';
 import { registerLeaveRoutes } from './routes/leave.js';
 import { registerTradingRoutes } from './routes/trading.js';
 import { registerOpenOrderRoutes } from './routes/open-orders.js';
@@ -96,6 +97,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
+  registerPrepOrderRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);

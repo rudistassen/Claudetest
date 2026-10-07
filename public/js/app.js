@@ -20,6 +20,7 @@ import * as login from './views/login.js';
 import { renderSetPassword } from './views/password.js';
 import * as orders from './views/orders.js';
 import * as recipes from './views/recipes.js';
+import * as prepOrders from './views/prep-orders.js';
 import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
 import * as reports from './views/reports.js';
@@ -64,6 +65,7 @@ const ROUTES = [
   [/^wastage$/, wastage.render, WASTAGE],
   [/^stock$/, stock.renderList, STOCK],
   [/^stock\/(\d+)$/, stock.renderTake, STOCK],
+  [/^prep-orders$/, prepOrders.render, ['orders.manage']],
   [/^recipes$/, recipes.renderList, RECIPES],
   [/^recipes\/prep$/, recipes.renderPrepList, RECIPES],
   [/^recipes\/allergens$/, recipes.renderAllergens, RECIPES],
@@ -157,6 +159,7 @@ function navGroups() {
       ['stock', 'Stock takes', '☰', STOCK],
       ['wastage', 'Wastage', '⌫', WASTAGE],
       ['orders', 'Ordering', '⇄', ['orders.manage']],
+      ['prep-orders', 'Prep kitchen ordering', '⚗', ['orders.manage']],
       ['invoices', 'Invoices', '⎘', ['orders.manage']],
       ['admin/suppliers', 'Suppliers', '⚑', SUPPLIERS],
       ['admin/products', 'Products', '▥', SUPPLIERS],
@@ -270,6 +273,7 @@ const TILE_NOTES = {
   wastage: 'Record what’s thrown away and see the cost',
   orders: 'Create, send and receive supplier orders',
   invoices: 'Upload and check supplier invoices',
+  'prep-orders': 'Order prepped recipes from the prep kitchen, and its prep list',
   'admin/suppliers': 'Who you buy from, and how to order',
   'admin/products': 'Everything you buy, with costs and pars',
   'admin/product-categories': 'Group products, and their Xero account codes',

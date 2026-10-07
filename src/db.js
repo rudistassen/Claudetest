@@ -127,6 +127,26 @@ CREATE TABLE IF NOT EXISTS stock_take_prep_lines (
   PRIMARY KEY (stock_take_id, recipe_id)
 );
 
+-- Orders from a site to the prep kitchen for prepped recipes (sauces, fillings, bakes), for a day.
+CREATE TABLE IF NOT EXISTS prep_orders (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  needed_on TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ordered' CHECK (status IN ('ordered', 'sent')),
+  notes TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  sent_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_prep_orders_day ON prep_orders(needed_on);
+CREATE TABLE IF NOT EXISTS prep_order_lines (
+  order_id INTEGER NOT NULL REFERENCES prep_orders(id) ON DELETE CASCADE,
+  recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  quantity REAL NOT NULL,
+  PRIMARY KEY (order_id, recipe_id)
+);
+
 CREATE TABLE IF NOT EXISTS wastage (
   id INTEGER PRIMARY KEY,
   location_id INTEGER NOT NULL REFERENCES locations(id),

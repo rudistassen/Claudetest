@@ -1957,3 +1957,7 @@ td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
 .gap-tag { display: block; margin-top: 0.15rem; color: var(--bad); font-weight: 600; font-size: 0.68rem; text-transform: none; letter-spacing: 0; }
 .gap-line { display: block; color: var(--bad); font-size: 0.82rem; font-weight: 600; }
 @media print { .rota-gaps { display: none; } }
+
+/* Prep kitchen ordering. */
+.po-table td:first-child small { display: block; }
+.po-table .po-qty { width: 6rem; }
