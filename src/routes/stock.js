@@ -20,9 +20,12 @@ export function registerStockRoutes(router, db) {
 
   const takeSelect = `
     SELECT t.*, l.name AS location_name, su.name AS started_by_name, cu.name AS completed_by_name,
-      (SELECT COALESCE(SUM(COALESCE(counted_quantity, 0) * unit_cost), 0) FROM stock_take_lines WHERE stock_take_id = t.id) AS total_value,
-      (SELECT COUNT(*) FROM stock_take_lines WHERE stock_take_id = t.id) AS line_count,
-      (SELECT COUNT(*) FROM stock_take_lines WHERE stock_take_id = t.id AND counted_quantity IS NOT NULL) AS counted_count
+      (SELECT COALESCE(SUM(COALESCE(counted_quantity, 0) * unit_cost), 0) FROM stock_take_lines WHERE stock_take_id = t.id)
+        + (SELECT COALESCE(SUM(COALESCE(counted_quantity, 0) * unit_cost), 0) FROM stock_take_prep_lines WHERE stock_take_id = t.id) AS total_value,
+      (SELECT COUNT(*) FROM stock_take_lines WHERE stock_take_id = t.id)
+        + (SELECT COUNT(*) FROM stock_take_prep_lines WHERE stock_take_id = t.id) AS line_count,
+      (SELECT COUNT(*) FROM stock_take_lines WHERE stock_take_id = t.id AND counted_quantity IS NOT NULL)
+        + (SELECT COUNT(*) FROM stock_take_prep_lines WHERE stock_take_id = t.id AND counted_quantity IS NOT NULL) AS counted_count
     FROM stock_takes t
     JOIN locations l ON l.id = t.location_id
     LEFT JOIN users su ON su.id = t.started_by
@@ -34,6 +37,14 @@ export function registerStockRoutes(router, db) {
     assertLocation(req, take.location_id);
     take.total_value = round2(take.total_value);
     return take;
+  }
+
+  // Adds the prepped recipes counted in stock takes to a count in progress (new ones are picked up too, and
+  // their costs kept up to date until the count is completed).
+  function addPrepLines(takeId) {
+    const ins = db.prepare(`INSERT INTO stock_take_prep_lines (stock_take_id, recipe_id, unit_cost) VALUES (?, ?, ?)
+      ON CONFLICT (stock_take_id, recipe_id) DO UPDATE SET unit_cost = excluded.unit_cost`);
+    for (const r of loadRecipes(db)) if (r.kind === 'prep' && r.active && r.in_stock_takes) ins.run(takeId, r.id, r.cost_per_unit);
   }
 
   router.get('/stocktakes', requirePerm('stock.count', 'stock.complete'), (req, res) => {
@@ -56,6 +67,7 @@ export function registerStockRoutes(router, db) {
         .run(locationId, str(req.body.notes, 'notes'), req.user.id);
       db.prepare(`INSERT INTO stock_take_lines (stock_take_id, product_id, unit_cost)
         SELECT ?, id, unit_cost FROM products WHERE active = 1`).run(r.lastInsertRowid);
+      addPrepLines(r.lastInsertRowid);
       return r.lastInsertRowid;
     });
     req.params.id = String(takeId);
@@ -63,7 +75,11 @@ export function registerStockRoutes(router, db) {
   });
 
   router.get('/stocktakes/:id', requirePerm('stock.count', 'stock.complete'), (req, res) => {
-    const take = loadTake(req);
+    let take = loadTake(req);
+    if (take.status === 'in_progress') {
+      tx(db, () => addPrepLines(take.id));
+      take = loadTake(req);
+    }
     const previous = db.prepare(`SELECT id, completed_at FROM stock_takes WHERE location_id = ? AND status = 'completed' AND id != ?
       AND (completed_at < COALESCE(?, datetime('now', '+1 day'))) ORDER BY completed_at DESC, id DESC LIMIT 1`)
       .get(take.location_id, take.id, take.completed_at);
@@ -75,7 +91,16 @@ export function registerStockRoutes(router, db) {
       JOIN products p ON p.id = stl.product_id
       LEFT JOIN stock_take_lines prev ON prev.product_id = stl.product_id AND prev.stock_take_id = ?
       WHERE stl.stock_take_id = ?
-      ORDER BY p.category, p.name`).all(previous?.id ?? 0, take.id);
+      ORDER BY p.category, p.name`).all(previous?.id ?? 0, take.id).map((l) => ({ ...l, key: `p:${l.product_id}` }));
+    // Prepped recipes come after the products, in their own group, measured in their yield unit.
+    take.lines.push(...db.prepare(`
+      SELECT spl.recipe_id, spl.counted_quantity, spl.unit_cost, r.name, 'Prepped recipes' AS category, COALESCE(r.yield_unit, 'portion') AS unit,
+        prev.counted_quantity AS previous_quantity
+      FROM stock_take_prep_lines spl
+      JOIN recipes r ON r.id = spl.recipe_id
+      LEFT JOIN stock_take_prep_lines prev ON prev.recipe_id = spl.recipe_id AND prev.stock_take_id = ?
+      WHERE spl.stock_take_id = ?
+      ORDER BY r.category, r.name`).all(previous?.id ?? 0, take.id).map((l) => ({ ...l, key: `r:${l.recipe_id}`, prepped: true })));
     res.json(take);
   });
 
@@ -85,8 +110,12 @@ export function registerStockRoutes(router, db) {
     const lines = Array.isArray(req.body.lines) ? req.body.lines : [];
     tx(db, () => {
       const update = db.prepare('UPDATE stock_take_lines SET counted_quantity = ? WHERE stock_take_id = ? AND product_id = ?');
+      const updatePrep = db.prepare('UPDATE stock_take_prep_lines SET counted_quantity = ? WHERE stock_take_id = ? AND recipe_id = ?');
       for (const l of lines) {
-        update.run(num(l.counted_quantity, 'counted_quantity', { min: 0 }), take.id, id(l.product_id, 'product_id', { required: true }));
+        const count = num(l.counted_quantity, 'counted_quantity', { min: 0 });
+        // A line is a product, or a prepped recipe (recipe_id).
+        if (l.recipe_id !== undefined && l.recipe_id !== null) updatePrep.run(count, take.id, id(l.recipe_id, 'recipe_id', { required: true }));
+        else update.run(count, take.id, id(l.product_id, 'product_id', { required: true }));
       }
     });
     res.json(loadTake(req));
@@ -101,6 +130,7 @@ export function registerStockRoutes(router, db) {
     }
     tx(db, () => {
       db.prepare('UPDATE stock_take_lines SET counted_quantity = 0 WHERE stock_take_id = ? AND counted_quantity IS NULL').run(take.id);
+      db.prepare('UPDATE stock_take_prep_lines SET counted_quantity = 0 WHERE stock_take_id = ? AND counted_quantity IS NULL').run(take.id);
       db.prepare(`UPDATE stock_takes SET status = 'completed', completed_by = ?, completed_at = datetime('now') WHERE id = ?`)
         .run(req.user.id, take.id);
     });

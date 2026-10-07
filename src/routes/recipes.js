@@ -108,6 +108,8 @@ export function registerRecipeRoutes(router, db) {
       kind,
       yield_quantity: prep ? num(b.yield_quantity, 'Yield', { required: true, min: 0.0001 }) : null,
       yield_unit: prep ? str(b.yield_unit, 'Yield unit', { required: true, max: 30 }) : null,
+      // Prepped recipes can be counted in stock takes (the default).
+      in_stock_takes: prep ? (b.in_stock_takes === undefined ? 1 : bool(b.in_stock_takes)) : 0,
       name: str(b.name, 'name', { required: true, max: 150 }),
       category: str(b.category, 'category', { max: 100 }),
       description: str(b.description, 'description', { max: 1000 }),
@@ -151,7 +153,7 @@ export function registerRecipeRoutes(router, db) {
     return db.prepare('SELECT sub_recipe_id FROM recipe_ingredients WHERE recipe_id = ? AND sub_recipe_id IS NOT NULL').all(recipeId)
       .some((l) => l.sub_recipe_id === targetId || usesRecipe(l.sub_recipe_id, targetId, seen));
   }
-  const cols = ['kind', 'yield_quantity', 'yield_unit', 'name', 'category', 'description', 'method', 'portions', 'selling_price', 'vat_rated', 'extra_allergens', 'may_contain',
+  const cols = ['kind', 'yield_quantity', 'yield_unit', 'in_stock_takes', 'name', 'category', 'description', 'method', 'portions', 'selling_price', 'vat_rated', 'extra_allergens', 'may_contain',
     'shelf_life', 'square_catalog_object_id', 'square_item_name', 'active'];
 
   function saveIngredients(recipeId, ingredients) {

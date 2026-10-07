@@ -111,7 +111,7 @@ export async function renderRecipe(ctx) {
     </div>
     <div class="kpis">
       ${prep ? `
-      <div class="kpi"><span>Each batch makes</span><strong>${esc(makes(r))}</strong></div>
+      <div class="kpi"><span>Each batch makes</span><strong>${esc(makes(r))}</strong>${r.in_stock_takes ? '<small>Counted in stock takes</small>' : ''}</div>
       ${costs ? `<div class="kpi"><span>Batch cost</span><strong>${money(r.batch_cost)}</strong></div>
       <div class="kpi"><span>Cost per ${esc(r.yield_unit)}</span><strong>${unitPrice(r.cost_per_unit)}</strong></div>` : ''}` : `
       <div class="kpi"><span>Selling price${r.vat_rated ? ' (inc VAT)' : ' (zero-rated)'}</span><strong>${money(r.selling_price)}</strong></div>
@@ -257,7 +257,10 @@ export async function renderEdit(ctx, newKind = 'sold') {
         <h3 class="group-title">Also contains</h3>${allergenBoxes('extra_allergens', extra)}
         <h3 class="group-title">May contain (cross-contamination warning)</h3>${allergenBoxes('may_contain', r.may_contain_list)}
       </section>
-      ${prep ? `<section class="card">${field('Active', `<input type="checkbox" name="active" ${r.active ? 'checked' : ''}>`, { className: 'field-inline' })}</section>` : `<section class="card">
+      ${prep ? `<section class="card">
+        <label class="check-row"><input type="checkbox" name="in_stock_takes" ${r.in_stock_takes === 0 ? '' : 'checked'}>
+          <span><strong>Count in stock takes</strong><small>Adds it to each site’s stock take, counted in ${esc(r.yield_unit ?? 'its yield unit')} and valued at its cost per unit.</small></span></label>
+        ${field('Active', `<input type="checkbox" name="active" ${r.active ? 'checked' : ''}>`, { className: 'field-inline' })}</section>` : `<section class="card">
         <h2>Square</h2>
         ${field('Square menu item', `<select name="square" id="recipe-square"><option value="">Not linked</option>${squareOptions.map(([v, l]) => `<option value="${esc(v)}" ${v === currentSquare ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`,
           { hint: squareItems.length ? 'Linking counts this item’s Square sales towards menu performance and ingredient usage' : 'Import Square sales first (Setup → Square) to choose an item' })}
@@ -336,6 +339,7 @@ export async function renderEdit(ctx, newKind = 'sold') {
       kind: r.kind,
       yield_quantity: prep ? form.yield_quantity.value : null,
       yield_unit: prep ? form.yield_unit.value : null,
+      in_stock_takes: prep ? form.in_stock_takes.checked : false,
       name: form.name.value,
       category: form.category.value || null,
       selling_price: prep ? 0 : form.selling_price.value || 0,

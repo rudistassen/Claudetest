@@ -117,6 +117,16 @@ CREATE TABLE IF NOT EXISTS stock_take_lines (
   PRIMARY KEY (stock_take_id, product_id)
 );
 
+-- Prepped recipes counted in a stock take (e.g. 1500 g of tomato sauce), in their yield unit, valued at their
+-- cost per unit when the count started.
+CREATE TABLE IF NOT EXISTS stock_take_prep_lines (
+  stock_take_id INTEGER NOT NULL REFERENCES stock_takes(id) ON DELETE CASCADE,
+  recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  counted_quantity REAL,
+  unit_cost REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (stock_take_id, recipe_id)
+);
+
 CREATE TABLE IF NOT EXISTS wastage (
   id INTEGER PRIMARY KEY,
   location_id INTEGER NOT NULL REFERENCES locations(id),
@@ -954,6 +964,8 @@ const MIGRATIONS = [
   ['recipes', 'kind', `ALTER TABLE recipes ADD COLUMN kind TEXT NOT NULL DEFAULT 'sold' CHECK (kind IN ('sold', 'prep'));
     ALTER TABLE recipes ADD COLUMN yield_quantity REAL;
     ALTER TABLE recipes ADD COLUMN yield_unit TEXT;`],
+  // Whether a prepped recipe is counted in stock takes.
+  ['recipes', 'in_stock_takes', 'ALTER TABLE recipes ADD COLUMN in_stock_takes INTEGER NOT NULL DEFAULT 1'],
   // A recipe line can be a prepped recipe instead of a product, so product_id may be empty. Built alongside and
   // swapped in (nothing else links to these lines).
   ['recipe_ingredients', 'sub_recipe_id', (db) => {

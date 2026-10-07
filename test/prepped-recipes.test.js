@@ -92,3 +92,29 @@ test('menu performance works out product usage through prepped recipes', async (
   // Prepped recipes aren't offered as Square items.
   assert.ok(!r.unlinked.some((u) => u.name === 'Egg mayo filling'));
 });
+
+test('prepped recipes are counted in stock takes, in their yield unit and valued at their cost per unit', async () => {
+  const a = await login('admin@cafe.local');
+  const site = db.prepare('SELECT id FROM locations WHERE active = 1 ORDER BY id DESC').get().id;
+  const egg = db.prepare(`SELECT id FROM recipes WHERE name = 'Egg mayo filling'`).get().id;
+  const off = await a('/recipes', { method: 'POST', body: { kind: 'prep', name: 'Not counted', yield_quantity: 1, yield_unit: 'each', in_stock_takes: false, ingredients: [] } });
+  const started = await a('/stocktakes', { method: 'POST', body: { location_id: site } });
+  assert.ok([200, 201].includes(started.status));
+  const take = (await a(`/stocktakes/${started.data.id}`)).data;
+  const line = take.lines.find((l) => l.key === `r:${egg}`);
+  assert.ok(line, 'the prepped recipe is in the count');
+  assert.equal(line.unit, 'g');
+  assert.equal(line.category, 'Prepped recipes');
+  assert.ok(!take.lines.some((l) => l.key === `r:${off.data.id}`), 'unless it isn’t counted in stock takes');
+  const costPerG = (await a(`/recipes/${egg}`)).data.cost_per_unit;
+  assert.ok(Math.abs(line.unit_cost - costPerG) < 1e-9);
+
+  await a(`/stocktakes/${take.id}/lines`, { method: 'PUT', body: { lines: [{ recipe_id: egg, counted_quantity: 960 }] } });
+  const after1 = (await a(`/stocktakes/${take.id}`)).data;
+  assert.equal(after1.lines.find((l) => l.key === `r:${egg}`).counted_quantity, 960);
+  assert.equal(after1.counted_count, 1);
+  assert.equal(after1.total_value, Math.round(960 * costPerG * 100) / 100);
+  const done = await a(`/stocktakes/${take.id}/complete`, { method: 'POST', body: { zero_uncounted: true } });
+  assert.equal(done.status, 200);
+  assert.equal(done.data.counted_count, done.data.line_count);
+});
