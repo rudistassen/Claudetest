@@ -207,6 +207,7 @@ main { flex: 1; min-width: 0; padding: 1rem 1.25rem 2.5rem; }
 .topnav-menu a.active { background: var(--menu-soft, var(--brand-soft)); color: var(--brand); font-weight: 700; }
 .topnav-menu .nav-icon { color: var(--menu-ink, var(--muted)); }
 .topnav-group[data-tone="team"] { --menu-tone: var(--tone-team-ink); --menu-ink: var(--tone-team-ink); --menu-soft: var(--tone-team); }
+.topnav-group[data-tone="menu"] { --menu-tone: var(--tone-menu-ink); --menu-ink: var(--tone-menu-ink); --menu-soft: var(--tone-menu); }
 .topnav-group[data-tone="events"] { --menu-tone: var(--tone-events-ink); --menu-ink: var(--tone-events-ink); --menu-soft: var(--tone-events); }
 .topnav-group[data-tone="people"] { --menu-tone: var(--tone-people-ink); --menu-ink: var(--tone-people-ink); --menu-soft: var(--tone-people); }
 .topnav-group[data-tone="trail"] { --menu-tone: var(--tone-trail-ink); --menu-ink: var(--tone-trail-ink); --menu-soft: var(--tone-trail); }
@@ -823,15 +824,16 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 /* Menu sections in colour: Team green, Trail blue, Stock and Ordering light yellow, Reporting light green */
 :root { --tone-team: #dcefe2; --tone-team-ink: #1c6b3c; --tone-trail: #dde9f8; --tone-trail-ink: #1d5a9e;
   --tone-stock: #fbf3cf; --tone-stock-ink: #876a00; --tone-reporting: #eaf5d3; --tone-reporting-ink: #557515;
-  --tone-people: #efe7fa; --tone-people-ink: #6a3fa8; --tone-events: #fde9e1; --tone-events-ink: #b4461b; }
+  --tone-people: #efe7fa; --tone-people-ink: #6a3fa8; --tone-events: #fde9e1; --tone-events-ink: #b4461b;
+  --tone-menu: #ddf3f1; --tone-menu-ink: #13716a; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --tone-team: #1d3527; --tone-team-ink: #8fd6a9; --tone-trail: #1c2c42; --tone-trail-ink: #93bdf0;
     --tone-stock: #3a3317; --tone-stock-ink: #e9cf6a; --tone-reporting: #2a3519; --tone-reporting-ink: #bfe07c;
-    --tone-people: #2b2240; --tone-people-ink: #c7aef0; --tone-events: #3a2219; --tone-events-ink: #f2a481; }
+    --tone-people: #2b2240; --tone-people-ink: #c7aef0; --tone-events: #3a2219; --tone-events-ink: #f2a481; --tone-menu: #16302e; --tone-menu-ink: #7fd6cd; }
 }
 :root[data-theme="dark"] { --tone-team: #1d3527; --tone-team-ink: #8fd6a9; --tone-trail: #1c2c42; --tone-trail-ink: #93bdf0;
   --tone-stock: #3a3317; --tone-stock-ink: #e9cf6a; --tone-reporting: #2a3519; --tone-reporting-ink: #bfe07c;
-    --tone-people: #2b2240; --tone-people-ink: #c7aef0; --tone-events: #3a2219; --tone-events-ink: #f2a481; }
+    --tone-people: #2b2240; --tone-people-ink: #c7aef0; --tone-events: #3a2219; --tone-events-ink: #f2a481; --tone-menu: #16302e; --tone-menu-ink: #7fd6cd; }
 .nav-group[data-tone] { margin: 0.45rem 0; padding: 0.1rem 0.25rem 0.3rem; border-radius: 10px; }
 .nav-group[data-tone] .nav-heading { margin-top: 0.4rem; font-weight: 700; }
 .nav-group[data-tone="team"] { background: var(--tone-team); }
@@ -843,6 +845,8 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 .nav-group[data-tone="reporting"] { background: var(--tone-reporting); }
 .nav-group[data-tone="people"] { background: var(--tone-people); }
 .nav-group[data-tone="events"] { background: var(--tone-events); }
+.nav-group[data-tone="menu"] { background: var(--tone-menu); }
+.nav-group[data-tone="menu"] .nav-heading { color: var(--tone-menu-ink); }
 .nav-group[data-tone="events"] .nav-heading { color: var(--tone-events-ink); }
 .nav-group[data-tone="people"] .nav-heading { color: var(--tone-people-ink); }
 .nav-group[data-tone="reporting"] .nav-heading { color: var(--tone-reporting-ink); }
@@ -1075,6 +1079,7 @@ body { --section-ink: var(--muted); }
 body[data-section="team"] { --section-ink: var(--tone-team-ink); }
 body[data-section="people"] { --section-ink: var(--tone-people-ink); }
 body[data-section="events"] { --section-ink: var(--tone-events-ink); }
+body[data-section="menu"] { --section-ink: var(--tone-menu-ink); }
 body[data-section="trail"] { --section-ink: var(--tone-trail-ink); }
 body[data-section="stock"] { --section-ink: var(--tone-stock-ink); }
 body[data-section="reporting"] { --section-ink: var(--tone-reporting-ink); }
@@ -1563,6 +1568,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .hub-tiles[data-tone="stock"] .hub-icon { background: var(--tone-stock); color: var(--tone-stock-ink); }
 .hub-tiles[data-tone="team"] .hub-icon { background: var(--tone-team); color: var(--tone-team-ink); }
 .hub-tiles[data-tone="events"] .hub-icon { background: var(--tone-events); color: var(--tone-events-ink); }
+.hub-tiles[data-tone="menu"] .hub-icon { background: var(--tone-menu); color: var(--tone-menu-ink); }
 .hub-tiles[data-tone="people"] .hub-icon { background: var(--tone-people); color: var(--tone-people-ink); }
 .hub-text { flex: 1; min-width: 0; }
 .hub-text strong { display: block; font-size: 1.05rem; }

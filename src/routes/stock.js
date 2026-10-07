@@ -153,13 +153,13 @@ export function registerStockRoutes(router, db) {
     if (recipeId && !recipe) throw notFound('Recipe');
     const itemName = product?.name ?? recipe?.name ?? str(b.item_name, 'item_name', { required: true, max: 150 });
     const quantity = num(b.quantity, 'quantity', { required: true, min: 0.001 });
-    const unitCost = recipe ? recipe.cost_per_portion : num(b.unit_cost, 'unit_cost', { min: 0 }) ?? product?.unit_cost ?? 0;
+    const unitCost = recipe ? (recipe.kind === 'prep' ? recipe.cost_per_unit : recipe.cost_per_portion) : num(b.unit_cost, 'unit_cost', { min: 0 }) ?? product?.unit_cost ?? 0;
     const entryDate = date(b.date, 'date') ?? today();
     if (entryDate > today()) throw badRequest('Wastage cannot be recorded for a future date');
     const r = db.prepare(`INSERT INTO wastage (location_id, product_id, recipe_id, item_name, quantity, unit, unit_cost, total_cost, reason, notes, date, recorded_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(locationId, product?.id ?? null, recipe?.id ?? null, itemName, quantity,
-        product?.unit ?? (recipe ? 'portion' : null) ?? str(b.unit, 'unit', { max: 30 }) ?? 'each',
+        product?.unit ?? (recipe ? (recipe.kind === 'prep' ? recipe.yield_unit : 'portion') : null) ?? str(b.unit, 'unit', { max: 30 }) ?? 'each',
         unitCost, round2(quantity * unitCost), oneOf(b.reason, 'reason', WASTAGE_REASONS, { required: true }),
         str(b.notes, 'notes'), entryDate, req.user.id);
     res.status(201).json(db.prepare('SELECT * FROM wastage WHERE id = ?').get(r.lastInsertRowid));

@@ -1,15 +1,15 @@
 import { can, reportLocations, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
-import { ALLERGENS, SALES_MATCH, TARGET_GP, cleanAllergens, enrich, ingredientRows, loadRecipes, unitCost } from '../recipes.js';
-import { addDays, badRequest, bool, date, id, notFound, num, round2, str, today } from '../util.js';
+import { ALLERGENS, SALES_MATCH, TARGET_GP, cleanAllergens, loadRecipes, productUsage, unitCost } from '../recipes.js';
+import { addDays, badRequest, bool, date, id, notFound, num, oneOf, round2, str, today } from '../util.js';
 
 const MAX_REPORT_DAYS = 366;
 
 // Staff see recipes, methods and allergens but not costs or margins.
 function forViewer(req, recipe) {
   if (can(req.user, 'recipes.costs') || can(req.user, 'recipes.edit')) return recipe;
-  const { batch_cost, cost_per_portion, gp, gp_pct, missing_costs, ...rest } = recipe;
-  if (rest.ingredients) rest.ingredients = rest.ingredients.map(({ unit_cost, line_cost, ...i }) => i);
+  const { batch_cost, cost_per_portion, cost_per_unit, gp, gp_pct, missing_costs, ...rest } = recipe;
+  if (rest.ingredients) rest.ingredients = rest.ingredients.map(({ unit_cost, line_cost, sub_cost_per_unit, ...i }) => i);
   return rest;
 }
 
@@ -24,7 +24,7 @@ export function registerRecipeRoutes(router, db) {
   router.get('/recipes/square-items', requirePerm('recipes.edit'), (_req, res) => {
     const items = db.prepare(`SELECT si.catalog_object_id, si.name, si.variation_name, SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net_sales
       FROM sales_items si WHERE si.date >= ? GROUP BY si.item_key ORDER BY net_sales DESC`).all(addDays(today(), -90));
-    const recipes = db.prepare('SELECT id, name, square_catalog_object_id, square_item_name FROM recipes WHERE active = 1').all();
+    const recipes = db.prepare(`SELECT id, name, square_catalog_object_id, square_item_name FROM recipes WHERE active = 1 AND kind = 'sold'`).all();
     res.json(items.map((i) => {
       const linked = recipes.find((r) => (r.square_catalog_object_id
         ? r.square_catalog_object_id === i.catalog_object_id
@@ -46,7 +46,7 @@ export function registerRecipeRoutes(router, db) {
     const locFilter = `AND si.location_id IN (${ids.map(() => '?').join(', ')})`;
     const params = [from, to, ...ids];
 
-    const recipes = new Map(loadRecipes(db, { activeOnly: true }).map((r) => [r.id, r]));
+    const recipes = new Map(loadRecipes(db).map((r) => [r.id, r]));
     const sold = db.prepare(`SELECT r.id AS recipe_id, SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net_sales
       FROM recipes r JOIN sales_items si ON ${SALES_MATCH}
       WHERE r.active = 1 AND si.date BETWEEN ? AND ? ${locFilter} GROUP BY r.id`).all(...params);
@@ -67,17 +67,17 @@ export function registerRecipeRoutes(router, db) {
       GROUP BY si.item_key ORDER BY net_sales DESC LIMIT 20`).all(...params)
       .map((u) => ({ ...u, quantity: round2(u.quantity), net_sales: round2(u.net_sales) }));
 
-    // Theoretical usage: units sold × each ingredient's share of one portion.
+    // Theoretical usage: units sold × each ingredient's share of one portion, working through prepped recipes down
+    // to the products they're made from.
     const usage = new Map();
-    const lines = ingredientRows(db, items.map((i) => i.recipe_id).length ? items.map((i) => i.recipe_id) : [0]);
-    for (const l of lines) {
-      const soldQty = items.find((i) => i.recipe_id === l.recipe_id).quantity;
-      const r = recipes.get(l.recipe_id);
-      const used = (l.quantity / (r.portions || 1)) * soldQty;
-      const u = usage.get(l.product_id) ?? { product_id: l.product_id, name: l.product_name, recipe_unit: l.recipe_unit, unit: l.unit, units_per_pack: l.units_per_pack, used: 0, cost: 0 };
-      u.used += used;
-      u.cost += used * unitCost(l);
-      usage.set(l.product_id, u);
+    for (const item of items) {
+      const r = recipes.get(item.recipe_id);
+      for (const { line: l, used } of productUsage(recipes, r.id, item.quantity / (r.portions || 1))) {
+        const u = usage.get(l.product_id) ?? { product_id: l.product_id, name: l.product_name, recipe_unit: l.recipe_unit, unit: l.unit, units_per_pack: l.units_per_pack, used: 0, cost: 0 };
+        u.used += used;
+        u.cost += used * unitCost(l);
+        usage.set(l.product_id, u);
+      }
     }
 
     const sales = items.reduce((s, i) => s + i.net_sales, 0);
@@ -94,46 +94,70 @@ export function registerRecipeRoutes(router, db) {
   });
 
   router.get('/recipes/:id', requirePerm('recipes.view', 'recipes.costs', 'recipes.edit'), (req, res) => {
-    const recipe = db.prepare('SELECT * FROM recipes WHERE id = ?').get(Number(req.params.id));
+    const recipe = loadRecipes(db).find((r) => r.id === Number(req.params.id));
     if (!recipe || (!recipe.active && !can(req.user, 'recipes.edit') && !can(req.user, 'recipes.costs'))) throw notFound('Recipe');
-    const ingredients = ingredientRows(db, [recipe.id]);
-    res.json(forViewer(req, { ...enrich(recipe, ingredients), ingredients }));
+    res.json(forViewer(req, recipe));
   });
 
-  function recipeBody(b) {
+  // A sold item (on the menu, linked to Square sales) or a prepped recipe (made in a batch with a yield, and used in
+  // other recipes). recipeId is the recipe being saved, so it can't end up inside itself.
+  function recipeBody(b, recipeId = null) {
+    const kind = oneOf(b.kind ?? 'sold', 'kind', ['sold', 'prep'], { required: true });
+    const prep = kind === 'prep';
     const r = {
+      kind,
+      yield_quantity: prep ? num(b.yield_quantity, 'Yield', { required: true, min: 0.0001 }) : null,
+      yield_unit: prep ? str(b.yield_unit, 'Yield unit', { required: true, max: 30 }) : null,
       name: str(b.name, 'name', { required: true, max: 150 }),
       category: str(b.category, 'category', { max: 100 }),
       description: str(b.description, 'description', { max: 1000 }),
       method: str(b.method, 'method', { max: 10000 }),
       portions: num(b.portions, 'portions', { min: 0.01 }) ?? 1,
-      selling_price: num(b.selling_price, 'selling_price', { min: 0 }) ?? 0,
+      selling_price: prep ? 0 : num(b.selling_price, 'selling_price', { min: 0 }) ?? 0,
       vat_rated: b.vat_rated === undefined ? 1 : bool(b.vat_rated),
       extra_allergens: cleanAllergens(b.extra_allergens ?? []),
       may_contain: cleanAllergens(b.may_contain ?? []),
       shelf_life: str(b.shelf_life, 'shelf_life', { max: 200 }),
-      square_catalog_object_id: str(b.square_catalog_object_id, 'square_catalog_object_id', { max: 64 }),
-      square_item_name: str(b.square_item_name, 'square_item_name', { max: 150 }),
+      square_catalog_object_id: prep ? null : str(b.square_catalog_object_id, 'square_catalog_object_id', { max: 64 }),
+      square_item_name: prep ? null : str(b.square_item_name, 'square_item_name', { max: 150 }),
       active: b.active === undefined ? 1 : bool(b.active),
     };
-    const ingredients = (Array.isArray(b.ingredients) ? b.ingredients : []).map((i, n) => ({
-      product_id: id(i.product_id, 'product_id', { required: true }),
-      quantity: num(i.quantity, 'quantity', { required: true, min: 0 }),
-      notes: str(i.notes, 'notes', { max: 200 }),
-      sort_order: n,
-    }));
+    // Each line is a product or a prepped recipe.
+    const ingredients = (Array.isArray(b.ingredients) ? b.ingredients : []).map((i, n) => {
+      const sub = id(i.sub_recipe_id, 'sub_recipe_id');
+      return {
+        product_id: sub ? null : id(i.product_id, 'product_id', { required: true }),
+        sub_recipe_id: sub,
+        quantity: num(i.quantity, 'quantity', { required: true, min: 0 }),
+        notes: str(i.notes, 'notes', { max: 200 }),
+        sort_order: n,
+      };
+    });
     for (const i of ingredients) {
-      if (!db.prepare('SELECT 1 FROM products WHERE id = ?').get(i.product_id)) throw notFound('Product');
+      if (i.product_id && !db.prepare('SELECT 1 FROM products WHERE id = ?').get(i.product_id)) throw notFound('Product');
+      if (i.sub_recipe_id) {
+        const sub = db.prepare('SELECT id, name, kind FROM recipes WHERE id = ?').get(i.sub_recipe_id);
+        if (!sub) throw notFound('Prepped recipe');
+        if (sub.kind !== 'prep') throw badRequest(`${sub.name} is a sold item – only prepped recipes can go into other recipes`);
+        if (recipeId && (sub.id === recipeId || usesRecipe(sub.id, recipeId))) throw badRequest(`${sub.name} already uses this recipe, so it can’t go into it`);
+      }
     }
     return { r, ingredients };
   }
-  const cols = ['name', 'category', 'description', 'method', 'portions', 'selling_price', 'vat_rated', 'extra_allergens', 'may_contain',
+  // Whether a recipe has another inside it, at any depth.
+  function usesRecipe(recipeId, targetId, seen = new Set()) {
+    if (seen.has(recipeId)) return false;
+    seen.add(recipeId);
+    return db.prepare('SELECT sub_recipe_id FROM recipe_ingredients WHERE recipe_id = ? AND sub_recipe_id IS NOT NULL').all(recipeId)
+      .some((l) => l.sub_recipe_id === targetId || usesRecipe(l.sub_recipe_id, targetId, seen));
+  }
+  const cols = ['kind', 'yield_quantity', 'yield_unit', 'name', 'category', 'description', 'method', 'portions', 'selling_price', 'vat_rated', 'extra_allergens', 'may_contain',
     'shelf_life', 'square_catalog_object_id', 'square_item_name', 'active'];
 
   function saveIngredients(recipeId, ingredients) {
     db.prepare('DELETE FROM recipe_ingredients WHERE recipe_id = ?').run(recipeId);
-    const ins = db.prepare('INSERT INTO recipe_ingredients (recipe_id, product_id, quantity, notes, sort_order) VALUES (?, ?, ?, ?, ?)');
-    for (const i of ingredients) ins.run(recipeId, i.product_id, i.quantity, i.notes, i.sort_order);
+    const ins = db.prepare('INSERT INTO recipe_ingredients (recipe_id, product_id, sub_recipe_id, quantity, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+    for (const i of ingredients) ins.run(recipeId, i.product_id, i.sub_recipe_id, i.quantity, i.notes, i.sort_order);
   }
 
   router.post('/recipes', requirePerm('recipes.edit'), (req, res) => {
@@ -148,8 +172,13 @@ export function registerRecipeRoutes(router, db) {
 
   router.put('/recipes/:id', requirePerm('recipes.edit'), (req, res) => {
     const recipeId = Number(req.params.id);
-    if (!db.prepare('SELECT 1 FROM recipes WHERE id = ?').get(recipeId)) throw notFound('Recipe');
-    const { r, ingredients } = recipeBody(req.body);
+    const existing = db.prepare('SELECT kind FROM recipes WHERE id = ?').get(recipeId);
+    if (!existing) throw notFound('Recipe');
+    const { r, ingredients } = recipeBody(req.body, recipeId);
+    // A prepped recipe used in others stays a prepped recipe.
+    if (existing.kind === 'prep' && r.kind !== 'prep' && db.prepare('SELECT 1 FROM recipe_ingredients WHERE sub_recipe_id = ?').get(recipeId)) {
+      throw badRequest('This prepped recipe is used in other recipes, so it can’t become a sold item');
+    }
     tx(db, () => {
       db.prepare(`UPDATE recipes SET ${cols.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...cols.map((c) => r[c]), recipeId);
       saveIngredients(recipeId, ingredients);

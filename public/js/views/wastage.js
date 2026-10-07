@@ -72,7 +72,7 @@ export async function render(ctx) {
     const made = recipes.filter((r) => r.active);
     const productSelect = `<select name="item">
       <option value="">— Other item (type below) —</option>
-      ${made.length ? `<optgroup label="Made items (costed from recipe)">${made.map((r) => `<option value="r:${r.id}">${esc(r.name)}${r.cost_per_portion !== undefined ? ` (${money(r.cost_per_portion)} each)` : ''}</option>`).join('')}</optgroup>` : ''}
+      ${made.length ? `<optgroup label="Made items (costed from recipe)">${made.map((r) => `<option value="r:${r.id}">${esc(r.name)}${r.kind === 'prep' ? ` – per ${esc(r.yield_unit)}` : ''}${r.cost_per_unit !== undefined ? ` (${r.cost_per_unit > 0 && r.cost_per_unit < 0.1 ? `£${r.cost_per_unit.toFixed(4)}` : money(r.cost_per_unit)} ${r.kind === 'prep' ? `per ${esc(r.yield_unit)}` : 'each'})` : ''}</option>`).join('')}</optgroup>` : ''}
       ${[...byCat].map(([cat, list]) => `<optgroup label="${esc(cat)}">${list.map((p) => `<option value="p:${p.id}">${esc(p.name)} (${esc(p.unit)}, ${money(p.unit_cost)})</option>`).join('')}</optgroup>`).join('')}
     </select>`;
     const { form } = openModal({

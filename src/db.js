@@ -209,10 +209,12 @@ CREATE TABLE IF NOT EXISTS recipes (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Each line is a product, or a prepped recipe (sub_recipe_id) measured in that recipe's yield unit.
 CREATE TABLE IF NOT EXISTS recipe_ingredients (
   id INTEGER PRIMARY KEY,
   recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-  product_id INTEGER NOT NULL REFERENCES products(id),
+  product_id INTEGER REFERENCES products(id),
+  sub_recipe_id INTEGER REFERENCES recipes(id),
   quantity REAL NOT NULL,
   notes TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0
@@ -947,6 +949,30 @@ const MIGRATIONS = [
   ['candidates', 'to_review_at', 'ALTER TABLE candidates ADD COLUMN to_review_at TEXT'],
   // A person's own permissions (a JSON list), used instead of their permission set's when set.
   ['users', 'custom_permissions', 'ALTER TABLE users ADD COLUMN custom_permissions TEXT'],
+  // Two kinds of recipe: sold items (linked to Square sales) and prepped recipes (sauces, fillings, bakes) that are
+  // made in a batch with a yield, and used as ingredients of sold items or other prepped recipes.
+  ['recipes', 'kind', `ALTER TABLE recipes ADD COLUMN kind TEXT NOT NULL DEFAULT 'sold' CHECK (kind IN ('sold', 'prep'));
+    ALTER TABLE recipes ADD COLUMN yield_quantity REAL;
+    ALTER TABLE recipes ADD COLUMN yield_unit TEXT;`],
+  // A recipe line can be a prepped recipe instead of a product, so product_id may be empty. Built alongside and
+  // swapped in (nothing else links to these lines).
+  ['recipe_ingredients', 'sub_recipe_id', (db) => {
+    db.exec(`PRAGMA foreign_keys = OFF; BEGIN;
+      CREATE TABLE recipe_ingredients_new (
+        id INTEGER PRIMARY KEY,
+        recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+        product_id INTEGER REFERENCES products(id),
+        sub_recipe_id INTEGER REFERENCES recipes(id),
+        quantity REAL NOT NULL,
+        notes TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0);
+      INSERT INTO recipe_ingredients_new (id, recipe_id, product_id, quantity, notes, sort_order)
+        SELECT id, recipe_id, product_id, quantity, notes, sort_order FROM recipe_ingredients;
+      DROP TABLE recipe_ingredients;
+      ALTER TABLE recipe_ingredients_new RENAME TO recipe_ingredients;
+      CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);
+      COMMIT; PRAGMA foreign_keys = ON;`);
+  }],
 ];
 
 export const PUBLISH_COLUMNS = `pub_location_id = location_id, pub_user_id = user_id, pub_date = date,

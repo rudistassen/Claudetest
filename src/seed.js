@@ -116,8 +116,10 @@ const PRODUCT_RECIPE_INFO = {
   'Napkins (5000)': ['each', 5000, null],
 };
 
-// Demo menu. Ingredient quantities are per batch in recipe units; names match the demo Square items.
+// Demo menu. Ingredient quantities are per batch in recipe units; names match the demo Square items. A prepped
+// recipe (prep: [yield, unit]) is made in a batch and used in others by name with '@' (e.g. ['@Egg mayo filling', 480]).
 const RECIPES = [
+  { name: 'Egg mayo filling', category: 'Fillings', prep: [480, 'g'], method: 'Hard boil 6 eggs (10 min), cool in iced water, peel.\nMash with softened butter, season. Label with the date and keep below 5°C.', ing: [['Free-range eggs (180)', 6], ['Salted butter 2kg', 40]], shelf: 'Use within 2 days, keep below 5°C' },
   { name: 'Flat white', category: 'Hot drinks', price: 3.6, method: 'Double ristretto (18g in, 36g out, 25–30s).\nSteam 150ml whole milk to 60–65°C with a thin, glossy microfoam.\nPour into 8oz cup, finish with a small heart.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 150], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
   { name: 'Latte', category: 'Hot drinks', price: 3.7, method: 'Double espresso (18g in, 36g out).\nSteam 220ml whole milk to 60–65°C, pour into 12oz cup with a thicker foam top.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 220], ['12oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
   { name: 'Cappuccino', category: 'Hot drinks', price: 3.6, method: 'Double espresso. Steam 160ml whole milk with plenty of foam (about 1.5cm). Dust with chocolate if requested.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 160], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
@@ -130,7 +132,7 @@ const RECIPES = [
   { name: 'Bacon roll', category: 'Hot food', price: 5.5, method: 'Grill 3 rashers (90g) until core temperature reaches 75°C.\nButter 2 slices of bloomer, fill and serve hot.', ing: [['Smoked back bacon 2kg', 90], ['Sandwich bloomer', 2], ['Salted butter 2kg', 10]] },
   { name: 'Avocado sourdough', category: 'Hot food', price: 8.95, method: 'Toast 2 slices of sourdough. Smash 1 avocado with lemon juice and salt.\nSpread, top with salad leaves.', ing: [['Sourdough loaf', 2], ['Avocado', 1], ['Lemons', 0.25], ['Mixed salad leaves 1kg', 15], ['Salted butter 2kg', 10]] },
   { name: 'Ham & cheese toastie', category: 'Hot food', price: 6.75, method: 'Butter the outside of 2 bloomer slices. Fill with 60g ham and 50g grated cheddar.\nPress in the grill for 4 minutes until core reaches 75°C.', ing: [['Sandwich bloomer', 2], ['Cooked ham 1kg', 60], ['Mature cheddar 5kg', 50], ['Salted butter 2kg', 10]] },
-  { name: 'Egg & cress sandwich', category: 'Sandwiches', price: 4.95, vat: false, portions: 4, method: 'Hard boil 6 eggs (10 min), cool in iced water, peel and mash with butter and seasoning.\nMakes 4 rounds: fill 8 slices of bloomer, top with leaves, cut into triangles, label with date and allergens.', ing: [['Free-range eggs (180)', 6], ['Sandwich bloomer', 8], ['Salted butter 2kg', 40], ['Mixed salad leaves 1kg', 40]], mayContain: 'mustard', shelf: 'Use by end of next day, keep below 5°C' },
+  { name: 'Egg & cress sandwich', category: 'Sandwiches', price: 4.95, vat: false, portions: 4, method: 'Makes 4 rounds: fill 8 slices of bloomer with the egg mayo filling, top with leaves, cut into triangles, label with date and allergens.', ing: [['@Egg mayo filling', 480], ['Sandwich bloomer', 8], ['Mixed salad leaves 1kg', 40]], mayContain: 'mustard', shelf: 'Use by end of next day, keep below 5°C' },
   { name: 'Orange juice', category: 'Cold drinks', price: 2.8, method: 'Pour 250ml chilled juice into an 8oz cup.', ing: [['Orange juice 1L', 250], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
 ];
 
@@ -217,12 +219,17 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
     syncProductCategories(db);
     // VAT codes as Xero names them: packaging, drinks and cleaning at 20%, food zero-rated.
     db.exec(`UPDATE products SET vat_code = CASE WHEN category IN ('Packaging', 'Drinks', 'Cleaning') THEN 'INPUT2' ELSE 'ZERORATEDINPUT' END WHERE vat_code IS NULL`);
+    const recipeIds = {};
     for (const r of RECIPES) {
-      const recipeId = db.prepare(`INSERT INTO recipes (name, category, method, portions, selling_price, vat_rated, may_contain, shelf_life, square_catalog_object_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(r.name, r.category, r.method, r.portions ?? 1, r.price, r.vat === false ? 0 : 1,
-        r.mayContain ?? null, r.shelf ?? null, `CAT_${r.name.replace(/\W/g, '').toUpperCase()}`).lastInsertRowid;
-      r.ing.forEach(([product, qty], i) => {
-        db.prepare('INSERT INTO recipe_ingredients (recipe_id, product_id, quantity, sort_order) VALUES (?, ?, ?, ?)').run(recipeId, productIds[product], qty, i);
+      const recipeId = db.prepare(`INSERT INTO recipes (kind, yield_quantity, yield_unit, name, category, method, portions, selling_price, vat_rated, may_contain, shelf_life, square_catalog_object_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(r.prep ? 'prep' : 'sold', r.prep?.[0] ?? null, r.prep?.[1] ?? null, r.name, r.category, r.method,
+        r.portions ?? 1, r.price ?? 0, r.vat === false ? 0 : 1, r.mayContain ?? null, r.shelf ?? null,
+        r.prep ? null : `CAT_${r.name.replace(/\W/g, '').toUpperCase()}`).lastInsertRowid;
+      recipeIds[r.name] = Number(recipeId);
+      r.ing.forEach(([item, qty], i) => {
+        const sub = item.startsWith('@') ? recipeIds[item.slice(1)] : null;
+        db.prepare('INSERT INTO recipe_ingredients (recipe_id, product_id, sub_recipe_id, quantity, sort_order) VALUES (?, ?, ?, ?, ?)')
+          .run(recipeId, sub ? null : productIds[item], sub, qty, i);
       });
     }
 
