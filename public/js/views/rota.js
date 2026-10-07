@@ -1,4 +1,4 @@
-import { fmtPct, labourTone } from './sales.js';
+import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite, siteColour } from '../lib.js';
 import { shiftHistory } from './rotalog.js';
 import { openStaffEditor } from './admin.js';
@@ -195,6 +195,35 @@ export async function render(ctx) {
   const personName = (userId, name, tag = 'span') => (state.isAdmin
     ? `<button type="button" class="person-link" data-person="${userId}" title="Edit ${esc(name)}’s details">${esc(name)}</button>`
     : `<${tag}>${esc(name)}</${tag}>`);
+  // For managers planning the week: the rota's cost so far (draft included) against a labour budget of
+  // LABOUR_TARGET% of the week's forecast sales. Every change re-draws the page, so it keeps up as shifts go in.
+  const labourTracker = () => {
+    const sales = fc ? forecastWeek(shownSites) : null;
+    if (sales === null || data.labour_cost === undefined) return '';
+    const cost = rotaCost(shownSites);
+    const budget = sales * (LABOUR_TARGET / 100);
+    const p = pctOf(cost, sales);
+    const left = budget - cost;
+    const tone = labourTone(p);
+    const fill = budget ? Math.min(100, (cost / budget) * 100) : 100;
+    const perSite = all && shownSites.length > 1 ? shownSites.map((id) => {
+      const f = forecastWeek([id]);
+      if (f === null) return '';
+      const sp = pctOf(rotaCost([id]), f);
+      return `<span class="lt-site"><span class="lt-dot" style="--site: ${siteColour(siteName(id), id)}"></span>${esc(siteName(id))} <strong class="tone-${labourTone(sp)}">${fmtPct(sp)}</strong></span>`;
+    }).filter(Boolean).join('') : '';
+    return `<section class="card labour-track tone-box-${tone}" aria-label="Labour against budget">
+      <div class="lt-figures">
+        <div><span>Labour so far</span><strong>${whole(cost)}</strong></div>
+        <div><span>Budget <small>(${LABOUR_TARGET}% of ${whole(sales)} forecast sales)</small></span><strong>${whole(budget)}</strong></div>
+        <div><span>Labour %</span><strong class="tone-${tone}">${fmtPct(p)}</strong></div>
+        <div><span>${left >= 0 ? 'Left to spend' : 'Over budget'}</span><strong class="tone-${left >= 0 ? 'good' : 'bad'}">${whole(Math.abs(left))}</strong></div>
+      </div>
+      <div class="lt-bar" role="meter" aria-valuemin="0" aria-valuemax="${Math.round(budget)}" aria-valuenow="${Math.round(cost)}" aria-label="Labour used of budget">
+        <span class="lt-fill tone-bg-${tone}" style="width:${fill}%"></span></div>
+      ${perSite ? `<div class="lt-sites">${perSite}</div>` : ''}
+    </section>`;
+  };
   const fcNote = fc ? `Forecast = each day’s average sales over the last ${fc.weeks} weeks (bank holidays and closed days left out); labour % = the rota’s cost ÷ that forecast.` : '';
 
   // --- Day view: just the shifts on one day, site by site: each person's name and a card with their times ---
@@ -305,6 +334,7 @@ export async function render(ctx) {
         ${data.can_publish ? `<button class="btn btn-primary" id="publish">Publish ${all ? 'all sites' : 'this week'}</button>` : ''}
       </span>
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
+    ${labourTracker()}
     <div class="table-wrap rota-scroll">
       <table class="rota">
         <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: 'day', day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}</th>`).join('')}<th>Hours</th></tr></thead>
