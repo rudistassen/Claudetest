@@ -36,11 +36,23 @@ function setupHelp(data) {
     </section>`;
 }
 
+// Filters and sort on the Confirmed tab, remembered while moving around the app.
+const confirmedView = { q: '', supplier: '', site: '', from: '', to: '', xero: '', min: '', max: '', sort: 'date', dir: -1 };
+const XERO_FILTERS = [['', 'Xero: all'], ['sent', 'In Xero'], ['not', 'Not in Xero yet'], ['failed', 'Couldn’t be sent']];
+const xeroState = (i) => (i.in_xero ? 'sent' : i.xero_error ? 'failed' : 'not');
+const xeroCell = (i) => (i.in_xero ? `<span class="tone-good" title="Sent ${esc(fmtDateTime(i.xero_sent_at))}">✓ ${esc(fmtDate(i.xero_sent_at.slice(0, 10), { day: 'numeric', month: 'short' }))}</span>`
+  : i.xero_error ? `<span class="tone-bad" title="${esc(i.xero_error)}">⚠ Not sent</span>` : '<span class="muted">Not yet</span>');
+
 export async function renderList(ctx) {
-  const { el, state, query, stale, navigate } = ctx;
+  const { el, state, query, stale, navigate, rerender } = ctx;
   const status = query.status === 'confirmed' ? 'confirmed' : 'review';
   const [data, inbox] = await Promise.all([api(`/invoices${qs({ status })}`), api('/invoice-inbox').catch(() => null)]);
   if (stale()) return;
+  const confirmed = status === 'confirmed';
+  const pick = confirmed && data.xero_ready;
+  const f = confirmedView;
+  const suppliers = [...new Set(data.invoices.map((i) => i.supplier_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const sites = [...new Map(data.invoices.map((i) => [i.location_id, i.location_name])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
   el.innerHTML = `
     <div class="page-head">
@@ -50,26 +62,120 @@ export async function renderList(ctx) {
     ${setupHelp(data)}
     <div class="tabs">
       <a href="#/invoices" class="${status === 'review' ? 'active' : ''}">To check${data.to_check ? ` (${data.to_check})` : ''}</a>
-      <a href="#/invoices?status=confirmed" class="${status === 'confirmed' ? 'active' : ''}">Confirmed</a>
+      <a href="#/invoices?status=confirmed" class="${confirmed ? 'active' : ''}">Confirmed</a>
     </div>
-    ${data.ready ? '<div class="drop-hint muted small">Tip: you can drag PDFs or photos of invoices straight onto this page.</div>' : ''}
+    ${data.ready && !confirmed ? '<div class="drop-hint muted small">Tip: you can drag PDFs or photos of invoices straight onto this page.</div>' : ''}
+    ${confirmed && data.invoices.length ? `<form class="inv-filters" id="inv-filters" autocomplete="off">
+      <input type="search" name="q" placeholder="Search supplier or invoice number…" value="${esc(f.q)}" aria-label="Search">
+      <select name="supplier" aria-label="Supplier"><option value="">All suppliers</option>${suppliers.map((n) => `<option ${n === f.supplier ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      ${sites.length > 1 ? `<select name="site" aria-label="Site"><option value="">All sites</option>${sites.map(([sid, n]) => `<option value="${sid}" ${String(sid) === f.site ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>` : ''}
+      <label class="inv-range"><span>Invoice date</span><input type="date" name="from" value="${esc(f.from)}" aria-label="From"><span>to</span><input type="date" name="to" value="${esc(f.to)}" aria-label="To"></label>
+      <label class="inv-range"><span>Total £</span><input type="number" name="min" min="0" step="0.01" placeholder="min" value="${esc(f.min)}" aria-label="Minimum total"><span>to</span><input type="number" name="max" min="0" step="0.01" placeholder="max" value="${esc(f.max)}" aria-label="Maximum total"></label>
+      <select name="xero" aria-label="In Xero">${XERO_FILTERS.map(([v, l]) => `<option value="${v}" ${v === f.xero ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button type="button" class="btn btn-small btn-ghost" id="inv-clear">Clear</button>
+    </form>
+    <div class="inv-bulk"><span class="muted small" id="inv-count"></span>
+      ${pick ? '<span class="bulk-bar" id="inv-bulk" hidden><strong id="inv-n"></strong><button type="button" class="btn btn-primary btn-small" id="inv-send">Send to Xero</button><button type="button" class="btn btn-ghost btn-small" id="inv-unpick">Clear</button></span>' : ''}
+      ${confirmed && !data.xero_ready ? '<span class="small muted">Connect Xero (Setup → Xero) to send invoices from here.</span>' : ''}</div>` : ''}
     <section class="card">
-      ${data.invoices.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Supplier</th><th>Invoice</th><th>Date</th>${state.multiSite ? '<th>Site</th>' : ''}<th>Lines</th><th class="num">Total</th><th>${status === 'review' ? 'Uploaded' : 'Confirmed'}</th></tr></thead>
-        <tbody>${data.invoices.map((i) => `<tr class="clickable" data-open="${i.id}">
-          <td><strong>${esc(i.supplier_name ?? 'Unknown supplier')}</strong>${i.new_supplier ? ' <span class="badge badge-sent">New supplier</span>' : ''}${i.source === 'email' ? ' <span class="badge" title="Arrived in the invoice inbox">✉ Emailed</span>' : ''}</td>
-          <td>${esc(i.invoice_number ?? '–')}</td>
-          <td>${i.invoice_date ? fmtDate(i.invoice_date) : '–'}</td>
-          ${state.multiSite ? `<td>${esc(i.location_name)}</td>` : ''}
-          <td>${i.line_count}${i.unmatched && status === 'review' ? ` <span class="small alert-text">${i.unmatched} to match</span>` : ''}</td>
-          <td class="num">${i.total === null ? '–' : money(i.total)}</td>
-          <td class="small muted">${fmtDateTime(status === 'review' ? i.created_at : i.confirmed_at)}</td></tr>`).join('')}</tbody>
+      ${data.invoices.length ? `<div class="table-wrap"><table class="${confirmed ? 'inv-table' : ''}">
+        <thead><tr>${pick ? '<th class="pick"><input type="checkbox" id="inv-all" aria-label="Tick all shown that aren’t in Xero"></th>' : ''}
+          ${[['supplier', 'Supplier'], ['number', 'Invoice'], ['date', 'Date'], ...(state.multiSite ? [['site', 'Site']] : []), ['lines', 'Lines'], ['total', 'Total', 'num'],
+            ...(confirmed ? [['due', 'Due'], ['xero', 'In Xero']] : []), ['when', status === 'review' ? 'Uploaded' : 'Confirmed']]
+            .map(([k, l, cls]) => `<th class="${cls ?? ''}">${confirmed ? `<button type="button" class="th-sort" data-sort="${k}">${l}<span>${f.sort === k ? (f.dir > 0 ? ' ▲' : ' ▼') : ''}</span></button>` : l}</th>`).join('')}</tr></thead>
+        <tbody id="inv-rows"></tbody>
       </table></div>` : `<div class="empty">${status === 'review' ? 'No invoices waiting to be checked.' : 'No confirmed invoices yet.'}</div>`}
     </section>
     ${inbox ? inboxCard(inbox, state) : ''}`;
   wireInbox(ctx);
 
-  el.querySelectorAll('[data-open]').forEach((tr) => tr.addEventListener('click', () => navigate(`invoices/${tr.dataset.open}`)));
+  const picked = new Set();
+  const row = (i) => `<tr class="clickable" data-open="${i.id}">
+    ${pick ? `<td class="pick">${i.in_xero ? '' : `<input type="checkbox" data-pick="${i.id}" ${picked.has(i.id) ? 'checked' : ''} aria-label="Tick to send">`}</td>` : ''}
+    <td><strong>${esc(i.supplier_name ?? 'Unknown supplier')}</strong>${i.new_supplier ? ' <span class="badge badge-sent">New supplier</span>' : ''}${i.source === 'email' ? ' <span class="badge" title="Arrived in the invoice inbox">✉ Emailed</span>' : ''}</td>
+    <td>${esc(i.invoice_number ?? '–')}</td>
+    <td>${i.invoice_date ? fmtDate(i.invoice_date) : '–'}</td>
+    ${state.multiSite ? `<td>${esc(i.location_name)}</td>` : ''}
+    <td>${i.line_count}${i.unmatched && status === 'review' ? ` <span class="small alert-text">${i.unmatched} to match</span>` : ''}</td>
+    <td class="num">${i.total === null ? '–' : money(i.total)}</td>
+    ${confirmed ? `<td>${i.due_date ? fmtDate(i.due_date) : '–'}</td><td>${xeroCell(i)}</td>` : ''}
+    <td class="small muted">${fmtDateTime(status === 'review' ? i.created_at : i.confirmed_at)}</td></tr>`;
+  const sortKey = {
+    supplier: (i) => (i.supplier_name ?? '').toLowerCase(), number: (i) => (i.invoice_number ?? '').toLowerCase(), date: (i) => i.invoice_date ?? '',
+    site: (i) => i.location_name, lines: (i) => i.line_count, total: (i) => i.total ?? -1, due: (i) => i.due_date ?? '', xero: (i) => xeroState(i), when: (i) => i.confirmed_at ?? '',
+  };
+  const shown = () => {
+    if (!confirmed) return data.invoices;
+    const q = f.q.trim().toLowerCase();
+    const list = data.invoices.filter((i) => (!q || `${i.supplier_name ?? ''} ${i.invoice_number ?? ''}`.toLowerCase().includes(q))
+      && (!f.supplier || i.supplier_name === f.supplier) && (!f.site || String(i.location_id) === f.site)
+      && (!f.from || (i.invoice_date && i.invoice_date >= f.from)) && (!f.to || (i.invoice_date && i.invoice_date <= f.to))
+      && (f.min === '' || (i.total ?? 0) >= Number(f.min)) && (f.max === '' || (i.total ?? 0) <= Number(f.max))
+      && (!f.xero || xeroState(i) === f.xero));
+    const k = sortKey[f.sort] ?? sortKey.date;
+    return list.sort((a, b) => (k(a) < k(b) ? -1 : k(a) > k(b) ? 1 : 0) * f.dir);
+  };
+  const tbody = el.querySelector('#inv-rows');
+  const refreshBulk = () => {
+    if (!pick) return;
+    el.querySelector('#inv-bulk').hidden = !picked.size;
+    el.querySelector('#inv-n').textContent = `${picked.size} ticked`;
+  };
+  const draw = () => {
+    if (!tbody) return;
+    const list = shown();
+    tbody.innerHTML = list.length ? list.map(row).join('') : `<tr><td colspan="12" class="muted">No invoices match these filters.</td></tr>`;
+    const c = el.querySelector('#inv-count');
+    if (c) {
+      const total = list.reduce((t, i) => t + (i.total ?? 0), 0);
+      c.textContent = `${list.length} of ${data.invoices.length} invoice${data.invoices.length === 1 ? '' : 's'} · ${money(Math.round(total * 100) / 100)}`;
+    }
+    tbody.querySelectorAll('[data-open]').forEach((tr) => tr.addEventListener('click', (e) => { if (!e.target.closest('.pick')) navigate(`invoices/${tr.dataset.open}`); }));
+    tbody.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('change', () => {
+      if (b.checked) picked.add(Number(b.dataset.pick)); else picked.delete(Number(b.dataset.pick));
+      refreshBulk();
+    }));
+    const all = el.querySelector('#inv-all');
+    if (all) {
+      const open = list.filter((i) => !i.in_xero);
+      all.checked = open.length > 0 && open.every((i) => picked.has(i.id));
+    }
+    refreshBulk();
+  };
+  draw();
+
+  const form = el.querySelector('#inv-filters');
+  if (form) {
+    const read = () => { for (const k of ['q', 'supplier', 'site', 'from', 'to', 'xero', 'min', 'max']) if (form.elements[k]) f[k] = form.elements[k].value; draw(); };
+    form.addEventListener('input', read);
+    form.addEventListener('change', read);
+    form.addEventListener('submit', (e) => e.preventDefault());
+    el.querySelector('#inv-clear').addEventListener('click', () => { Object.assign(f, { q: '', supplier: '', site: '', from: '', to: '', xero: '', min: '', max: '' }); rerender(); });
+  }
+  el.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => {
+    f.dir = f.sort === b.dataset.sort ? -f.dir : (['supplier', 'number', 'site'].includes(b.dataset.sort) ? 1 : -1);
+    f.sort = b.dataset.sort;
+    el.querySelectorAll('[data-sort] span').forEach((s) => { s.textContent = ''; });
+    b.querySelector('span').textContent = f.dir > 0 ? ' ▲' : ' ▼';
+    draw();
+  }));
+  el.querySelector('#inv-all')?.addEventListener('change', (e) => {
+    for (const i of shown()) if (!i.in_xero) { if (e.target.checked) picked.add(i.id); else picked.delete(i.id); }
+    draw();
+  });
+  el.querySelector('#inv-unpick')?.addEventListener('click', () => { picked.clear(); draw(); });
+  el.querySelector('#inv-send')?.addEventListener('click', async (e) => {
+    const ids = [...picked];
+    if (!await confirmDialog(`Send ${ids.length} invoice${ids.length === 1 ? '' : 's'} to Xero as draft bills?`, { confirmLabel: 'Send to Xero', title: 'Send to Xero' })) return;
+    e.target.disabled = true;
+    e.target.textContent = `Sending ${ids.length}…`;
+    try {
+      const r = await api('/invoices/xero', { method: 'POST', body: { ids } });
+      toast(r.failed ? `${r.sent} sent to Xero, ${r.failed} couldn’t be – see “⚠ Not sent” for why` : `${r.sent} sent to Xero as draft bills`, r.failed ? 'error' : 'ok');
+      rerender();
+    } catch (err) { showError(err); e.target.disabled = false; e.target.textContent = 'Send to Xero'; }
+  });
+
   if (!data.ready) return;
   el.querySelector('#upload').addEventListener('click', () => openUpload(ctx));
   // Drag and drop files onto the page.

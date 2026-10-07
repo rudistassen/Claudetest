@@ -177,17 +177,39 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
 
   router.get('/invoices', requirePerm('orders.manage'), (req, res) => {
     const ids = req.user.site_ids;
-    if (!ids.length) return res.json({ ready: !!reader, demo: !!reader?.demo, invoices: [] });
+    if (!ids.length) return res.json({ ready: !!reader, demo: !!reader?.demo, invoices: [], xero_ready: !!xero?.connected() });
     const status = req.query.status === 'confirmed' ? 'confirmed' : 'review';
     const rows = db.prepare(`SELECT i.id, i.location_id, l.name AS location_name, i.supplier_id, COALESCE(s.name, i.supplier_name) AS supplier_name,
-        i.supplier_id IS NULL AS new_supplier, i.invoice_number, i.invoice_date, i.total, i.status, i.created_at, i.confirmed_at, i.source,
+        i.supplier_id IS NULL AS new_supplier, i.invoice_number, i.invoice_date, i.due_date, i.total, i.status, i.created_at, i.confirmed_at, i.source,
+        i.xero_invoice_id IS NOT NULL AS in_xero, i.xero_sent_at, i.xero_error,
         (SELECT COUNT(*) FROM invoice_lines il WHERE il.invoice_id = i.id) AS line_count,
         (SELECT COUNT(*) FROM invoice_lines il WHERE il.invoice_id = i.id AND il.product_id IS NULL) AS unmatched
       FROM invoices i JOIN locations l ON l.id = i.location_id LEFT JOIN suppliers s ON s.id = i.supplier_id
       WHERE i.status = ? AND i.location_id IN (${ids.map(() => '?').join(', ')})
-      ORDER BY ${status === 'review' ? 'i.created_at DESC' : 'COALESCE(i.invoice_date, i.created_at) DESC'} LIMIT 300`).all(status, ...ids);
+      ORDER BY ${status === 'review' ? 'i.created_at DESC' : 'COALESCE(i.invoice_date, i.created_at) DESC'} LIMIT ${status === 'review' ? 300 : 2000}`).all(status, ...ids);
     const toCheck = db.prepare(`SELECT COUNT(*) AS n FROM invoices WHERE status = 'review' AND location_id IN (${ids.map(() => '?').join(', ')})`).get(...ids).n;
-    res.json({ ready: !!reader, demo: !!reader?.demo, to_check: toCheck, invoices: rows });
+    res.json({ ready: !!reader, demo: !!reader?.demo, to_check: toCheck, invoices: rows, xero_ready: !!xero?.connected() });
+  });
+
+  // Several confirmed invoices to Xero at once: { ids }. Each is sent in turn; one that fails doesn't stop the rest.
+  router.post('/invoices/xero', requirePerm('orders.manage'), async (req, res) => {
+    if (!xero?.connected()) throw badRequest('Connect Xero first (Setup → Xero)');
+    const list = (Array.isArray(req.body?.ids) ? req.body.ids : []).map((v) => id(v, 'id', { required: true }));
+    if (!list.length) throw badRequest('Tick the invoices to send');
+    if (list.length > 100) throw badRequest('Send up to 100 at a time');
+    const results = [];
+    for (const invoiceId of list) {
+      const inv = db.prepare('SELECT id, location_id, status, xero_invoice_id FROM invoices WHERE id = ?').get(invoiceId);
+      if (!inv || !req.user.site_ids.includes(inv.location_id)) { results.push({ id: invoiceId, ok: false, error: 'Not found' }); continue; }
+      if (inv.xero_invoice_id) { results.push({ id: invoiceId, ok: true, already: true }); continue; }
+      try {
+        await xero.sendInvoice(invoiceId);
+        results.push({ id: invoiceId, ok: true });
+      } catch (err) {
+        results.push({ id: invoiceId, ok: false, error: err.message });
+      }
+    }
+    res.json({ sent: results.filter((r) => r.ok && !r.already).length, failed: results.filter((r) => !r.ok).length, results });
   });
 
   // Upload and read an invoice: { location_id, file_name, media_type, data (base64) }. Saved for checking.

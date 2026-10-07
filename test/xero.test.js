@@ -133,3 +133,29 @@ test('Xero: connect, choose coding, and send a confirmed invoice as a draft bill
   assert.match(expired.data.error, /expired/);
   assert.equal((await admin('/xero')).data.connected, false);
 });
+
+test('Xero: several confirmed invoices sent at once, and the list shows which are in Xero', async () => {
+  const admin = await login('admin@cafe.local');
+  // (Connected again, after the test above ended with the connection lost.)
+  refreshOk = true;
+  const go = await admin('/xero/connect');
+  await admin(`/xero/callback?code=CODE2&state=${new URL(go.location).searchParams.get('state')}`);
+  const site = db.prepare('SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1').get().id;
+  const supplier = db.prepare('SELECT id, name FROM suppliers ORDER BY id LIMIT 1').get();
+  const add = (status, number) => Number(db.prepare(`INSERT INTO invoices (location_id, supplier_id, supplier_name, invoice_number, invoice_date, subtotal, vat, total, status)
+    VALUES (?, ?, ?, ?, '2026-10-02', 10, 0, 10, ?)`).run(site, supplier.id, supplier.name, number, status).lastInsertRowid);
+  const a = add('confirmed', 'BULK-1');
+  const b = add('confirmed', 'BULK-2');
+  const notYet = add('review', 'BULK-3');
+  const list = (await admin('/invoices?status=confirmed')).data;
+  assert.equal(list.xero_ready, true);
+  assert.equal(list.invoices.find((i) => i.id === a).in_xero, 0);
+  const r = (await admin('/invoices/xero', { method: 'POST', body: { ids: [a, b, notYet] } })).data;
+  assert.deepEqual([r.sent, r.failed], [2, 1]);
+  assert.match(r.results.find((x) => x.id === notYet).error, /Confirm the invoice/);
+  const after = (await admin('/invoices?status=confirmed')).data.invoices;
+  assert.equal(after.find((i) => i.id === a).in_xero, 1);
+  assert.ok(after.find((i) => i.id === b).xero_sent_at);
+  // Already there: not sent again.
+  assert.deepEqual((await admin('/invoices/xero', { method: 'POST', body: { ids: [a] } })).data.results[0], { id: a, ok: true, already: true });
+});
