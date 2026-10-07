@@ -437,6 +437,18 @@ function renderShell() {
     document.body.classList.toggle('nav-open');
   }));
   document.querySelector('.sidebar').addEventListener('click', (e) => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
+  // Tapping anywhere off the menu (or pressing Esc) closes it. The dimmed cover stops that tap also pressing
+  // whatever is underneath.
+  const scrim = document.createElement('div');
+  scrim.className = 'nav-scrim';
+  scrim.setAttribute('aria-hidden', 'true');
+  document.body.append(scrim);
+  document.addEventListener('click', (e) => {
+    if (!document.body.classList.contains('nav-open')) return;
+    if (e.target.closest('.sidebar, .menu-toggle, .tabbar-menu')) return;
+    document.body.classList.remove('nav-open');
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.body.classList.remove('nav-open'); });
   document.querySelectorAll('.nav-toggle').forEach((b) => b.addEventListener('click', () => {
     const group = b.closest('.nav-group');
     const open = group.classList.toggle('is-folded') === false;

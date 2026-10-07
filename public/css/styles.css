@@ -224,6 +224,9 @@ main { flex: 1; min-width: 0; padding: 1rem 1.25rem 2.5rem; }
 .user-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1280px) { .user-name { display: none; } }
 
+/* Behind the open side menu: dims the page; tapping it closes the menu. */
+.nav-scrim { display: none; position: fixed; inset: 0; z-index: 29; background: rgba(20, 28, 24, 0.3); animation: fade-in 0.15s ease-out; }
+
 /* Larger screens: the menu is across the top, so the side menu and ☰ are hidden. */
 @media (min-width: 1001px) {
   .sidebar, .topbar .menu-toggle { display: none; }
@@ -236,6 +239,7 @@ main { flex: 1; min-width: 0; padding: 1rem 1.25rem 2.5rem; }
     transform: translateX(-100%); transition: transform 0.2s;
   }
   body.nav-open .sidebar { transform: none; box-shadow: 0 0 30px rgba(0, 0, 0, 0.3); }
+  body.nav-open .nav-scrim { display: block; }
 }
 
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.8rem; }
