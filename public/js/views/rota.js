@@ -20,7 +20,9 @@ export async function render(ctx) {
   // The rota opens on the whole week's grid on a computer or tablet, and on today (only the shifts that are on) on a
   // phone, where the grid is cramped. Day / Week switch between them; a link to a particular day opens that day.
   const wide = window.matchMedia('(min-width: 700px)').matches;
-  const view = query.view === 'week' ? 'week'
+  // Timeline: the week's grid with each day drawn as hours, and every shift as a bar across them (like a Gantt chart).
+  const timeline = query.view === 'timeline';
+  const view = query.view === 'week' || timeline ? 'week'
     : query.view === 'day' || query.day ? 'day'
       : query.week || wide ? 'week' : 'day';
   const day = view === 'day' ? (/^\d{4}-\d{2}-\d{2}$/.test(query.day ?? '') ? query.day : todayISO()) : null;
@@ -34,7 +36,8 @@ export async function render(ctx) {
   // Remember the site picked here, so other pages open on it too.
   if (siteId && siteId !== state.locationId) chooseSite(state, siteId);
   const siteParam = all ? 'all' : String(siteId);
-  const scopeQs = (extra = {}) => qs({ view: view === 'week' ? 'week' : 'day', ...extra, site: state.multiSite ? siteParam : undefined });
+  const mode = view === 'week' ? (timeline ? 'timeline' : 'week') : 'day';
+  const scopeQs = (extra = {}) => qs({ view: mode, ...extra, site: state.multiSite ? siteParam : undefined });
   const [data, drops] = await Promise.all([api(`/rota${qs({ location_id: all ? 'all' : siteId, week })}`), api('/shift-drops')]);
   if (stale()) return;
   // Open shifts (dropped and approved) at the sites shown, and shifts someone has asked to drop.
@@ -302,8 +305,39 @@ export async function render(ctx) {
           <option value="all" ${all ? 'selected' : ''}>All sites</option>
           ${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
         </select>` : '';
-  const viewToggle = `<div class="seg" role="group" aria-label="Day or week">
-          <button data-view="day" class="${view === 'day' ? 'is-on' : ''}">Day</button><button data-view="week" class="${view === 'week' ? 'is-on' : ''}">Week</button></div>`;
+  const viewToggle = `<div class="seg" role="group" aria-label="Day, week or timeline">
+          <button data-view="day" class="${mode === 'day' ? 'is-on' : ''}">Day</button><button data-view="week" class="${mode === 'week' ? 'is-on' : ''}">Week</button><button data-view="timeline" class="${mode === 'timeline' ? 'is-on' : ''}" title="The week as a timeline: each shift as a bar across the hours">Timeline</button></div>`;
+
+  // --- Timeline: hours across each day, from the earliest start to the latest finish this week ---
+  const toHours = (t) => { const [h, m] = t.split(':').map(Number); return h + m / 60; };
+  const spanOf = (x) => { const a = toHours(x.start_time); let b = toHours(x.end_time); if (b <= a) b = 24; return [a, b]; };
+  const allShown = [...data.shifts, ...data.away_shifts];
+  let tlFrom = allShown.length ? Math.floor(Math.min(...allShown.map((x) => spanOf(x)[0]))) : 7;
+  let tlTo = allShown.length ? Math.ceil(Math.max(...allShown.map((x) => spanOf(x)[1]))) : 19;
+  if (tlTo - tlFrom < 8) { tlTo = Math.min(24, tlFrom + 8); tlFrom = Math.max(0, tlTo - 8); }
+  const tlPct = (h) => ((Math.min(Math.max(h, tlFrom), tlTo) - tlFrom) / (tlTo - tlFrom)) * 100;
+  const tlStep = tlTo - tlFrom > 12 ? 4 : 2;
+  const tlMarks = [];
+  for (let h = Math.ceil(tlFrom / tlStep) * tlStep; h <= tlTo; h += tlStep) tlMarks.push(h);
+  const tlGrid = `<span class="gt-grid" aria-hidden="true">${tlMarks.map((h) => `<i style="left:${tlPct(h)}%"></i>`).join('')}</span>`;
+  const tlScale = `<span class="gt-scale" aria-hidden="true">${tlMarks.map((h) => `<i style="left:${tlPct(h)}%">${h === 24 ? '24' : String(h).padStart(2, '0')}</i>`).join('')}</span>`;
+  const tlBar = (x, site, { away = false } = {}) => {
+    const [a, b] = spanOf(x);
+    const cls = away ? 'is-away' : [x.state && x.state !== 'published' ? `is-${x.state}` : '', x.sick ? 'is-sick' : ''].join(' ');
+    const label = `${x.start_time}–${x.end_time}`;
+    const tip = away ? `Covering at ${x.location_name} ${label}` : [label, shiftTitle(x), x.sick ? 'Off sick' : '', all ? `at ${x.location_name}` : ''].filter(Boolean).join(' · ');
+    const tag = away ? 'span' : 'button';
+    return `<${tag} class="gt-bar ${cls}" style="left:${tlPct(a)}%;width:${Math.max(tlPct(b) - tlPct(a), 2)}%;--site:${siteColour(siteName(x.location_id ?? site), x.location_id ?? site)}"
+      ${away ? '' : `data-shift="${x.id}" ${canEdit ? '' : 'disabled'}`} title="${esc(tip)}"><span>${label}</span></${tag}>`;
+  };
+  // How many people are on at each hour of a day, as a little bar chart under the timeline.
+  const tlCover = (d) => {
+    const on = counted.filter((x) => x.date === d && shownSites.includes(x.location_id)).map(spanOf);
+    const hours = [];
+    for (let h = tlFrom; h < tlTo; h++) hours.push([h, on.filter(([a, b]) => a < h + 1 && b > h).length]);
+    const peak = Math.max(1, ...hours.map(([, n]) => n));
+    return `<div class="gt-cover">${hours.map(([h, n]) => `<span style="height:${(n / peak) * 100}%" title="${String(h).padStart(2, '0')}:00–${String(h + 1).padStart(2, '0')}:00 · ${n} on"></span>`).join('')}</div>`;
+  };
   if (view === 'day') el.innerHTML = dayView();
   else el.innerHTML = `
     <div class="page-head">
@@ -336,8 +370,8 @@ export async function render(ctx) {
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
     ${labourTracker()}
     <div class="table-wrap rota-scroll">
-      <table class="rota">
-        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: 'day', day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}</th>`).join('')}<th>Hours</th></tr></thead>
+      <table class="rota ${timeline ? 'rota-gantt' : ''}">
+        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: 'day', day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}${timeline ? tlScale : ''}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
           ${(data.open_shifts ?? []).length ? `<tr class="rota-open"><th>Open shifts<small>tap to pick up</small></th>${data.days.map((d) => `<td class="${d === today ? 'is-today' : ''}">${openOn(d).map(openButton).join('')}</td>`).join('')}<td></td></tr>` : ''}
           ${rows.map(({ header, groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
@@ -361,8 +395,9 @@ export async function render(ctx) {
                 const covering = away.length > 0 && !shifts.length;
                 return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''} ${covering ? 'is-covering' : ''}" ${canEdit ? 'data-drop' : ''} data-user="${u.id}" data-date="${d}" data-site="${site}">
                   ${cellNotes(u.id, d)}
-                  ${away.map((x) => `<span class="cover-away" title="Covering at ${esc(x.location_name)} ${x.start_time}–${x.end_time}">Covering at ${esc(x.location_name)}<small>${x.start_time}–${x.end_time}</small></span>`).join('')}
-                  ${shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''} ${s.sick ? 'shift-sick' : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
+                  ${timeline ? '' : away.map((x) => `<span class="cover-away" title="Covering at ${esc(x.location_name)} ${x.start_time}–${x.end_time}">Covering at ${esc(x.location_name)}<small>${x.start_time}–${x.end_time}</small></span>`).join('')}
+                  ${timeline ? `<div class="gt-track">${tlGrid}${away.map((x) => tlBar(x, site, { away: true })).join('')}${shifts.map((x) => tlBar(x, site)).join('')}</div>`
+                    : shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''} ${s.sick ? 'shift-sick' : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
                   ${canEdit && !shifts.length && !off && !covering ? '<span class="add-hint">+</span>' : ''}
                   ${canEdit && shifts.length && !off ? `<span class="add-more" title="Add another shift for ${esc(u.name)} on ${fmtDate(d)}">+ shift</span>` : ''}
                 </td>`;
@@ -370,7 +405,7 @@ export async function render(ctx) {
               <td class="num">${rowHours(u, site)}</td>
             </tr>`)).join('')}
         </tbody>
-        <tfoot><tr><th>Total hours</th>${dayHours.map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>
+        <tfoot>${timeline ? `<tr class="gt-cover-row"><th>People on<small>by the hour</small></th>${data.days.map((d) => `<td>${tlCover(d)}</td>`).join('')}<td></td></tr>` : ''}<tr><th>Total hours</th>${dayHours.map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>
           ${data.daily_money ? `
           <tr><th>Labour cost</th>${data.daily_money.map((m) => `<td class="num">${money(m.labour_cost)}</td>`).join('')}<td class="num">${money(data.labour_cost)}</td></tr>
           ${fc ? `<tr class="rota-forecast-total"><th>Forecast sales<small>average for the day</small></th>${data.days.map((d) => { const f = forecastFor(shownSites, d); return `<td class="num">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num">${forecastWeek(shownSites) === null ? '–' : whole((forecastWeek(shownSites)))}</td></tr>
@@ -391,10 +426,10 @@ export async function render(ctx) {
     try { localStorage.setItem(LAYOUT_KEY, e.target.value); } catch { /* storage unavailable */ }
     ctx.rerender();
   });
-  el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs(view === 'day' ? { view: 'day', day, site: e.target.value } : { view: 'week', week, site: e.target.value })}`));
+  el.querySelector('#rota-site')?.addEventListener('change', (e) => ctx.navigate(`rota${qs(view === 'day' ? { view: 'day', day, site: e.target.value } : { view: mode, week, site: e.target.value })}`));
   el.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
-    if (b.dataset.view === view) return;
-    ctx.navigate(`rota${scopeQs(b.dataset.view === 'day' ? { view: 'day', day: week === weekStart(today) ? today : week } : { view: 'week', week: weekStart(day) })}`);
+    if (b.dataset.view === mode) return;
+    ctx.navigate(`rota${scopeQs(b.dataset.view === 'day' ? { view: 'day', day: week === weekStart(today) ? today : week } : { view: b.dataset.view, week: weekStart(day ?? week) })}`);
   }));
   el.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => {
     const n = Number(b.dataset.day);
