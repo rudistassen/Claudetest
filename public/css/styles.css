@@ -1861,7 +1861,9 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .lt-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.4rem 1rem; }
 .lt-figures > div { display: flex; flex-direction: column; min-width: 0; }
 .lt-figures span { font-size: 0.78rem; color: var(--muted); }
-.lt-figures small { font-size: 0.72rem; }
+.lt-figures small { font-size: 0.78rem; color: var(--muted); }
+.lt-figures small.tone-good { color: var(--good); }
+.lt-figures small.tone-bad { color: var(--bad); }
 .lt-figures strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
 .lt-bar { height: 8px; border-radius: 99px; background: var(--surface-2); margin-top: 0.55rem; overflow: hidden; }
 .lt-fill { display: block; height: 100%; border-radius: inherit; transition: width 0.3s; }

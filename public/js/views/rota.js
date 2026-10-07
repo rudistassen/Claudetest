@@ -214,10 +214,10 @@ export async function render(ctx) {
     }).filter(Boolean).join('') : '';
     return `<section class="card labour-track tone-box-${tone}" aria-label="Labour against budget">
       <div class="lt-figures">
-        <div><span>Labour so far</span><strong>${whole(cost)}</strong></div>
-        <div><span>Budget <small>(${LABOUR_TARGET}% of ${whole(sales)} forecast sales)</small></span><strong>${whole(budget)}</strong></div>
-        <div><span>Labour %</span><strong class="tone-${tone}">${fmtPct(p)}</strong></div>
-        <div><span>${left >= 0 ? 'Left to spend' : 'Over budget'}</span><strong class="tone-${left >= 0 ? 'good' : 'bad'}">${whole(Math.abs(left))}</strong></div>
+        <div><span>Forecast sales</span><strong>${whole(sales)}</strong></div>
+        <div><span>Labour budget for the week</span><strong>${whole(budget)}</strong><small>${LABOUR_TARGET}% of forecast sales</small></div>
+        <div><span>Labour forecast</span><strong>${whole(cost)}</strong><small class="tone-${left >= 0 ? 'good' : 'bad'}">${whole(Math.abs(left))} ${left >= 0 ? 'under budget' : 'over budget'}</small></div>
+        <div><span>Rota labour %</span><strong class="tone-${tone}">${fmtPct(p)}</strong><small>target ${LABOUR_TARGET}%</small></div>
       </div>
       <div class="lt-bar" role="meter" aria-valuemin="0" aria-valuemax="${Math.round(budget)}" aria-valuenow="${Math.round(cost)}" aria-label="Labour used of budget">
         <span class="lt-fill tone-bg-${tone}" style="width:${fill}%"></span></div>
