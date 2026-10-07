@@ -217,7 +217,7 @@ function staffEditor(state, rows, perms, settings = {}) {
       </div></div>`;
   };
   // Permissions tab: what they can do in each part of Atlas. By default they get whatever their Access allows;
-  // ticking "Choose their own" lets each permission be ticked for just this person. People who aren't admins can
+  // unticking "Template permissions" lets each permission be ticked for just this person. People who aren't admins can
   // only tick what they can do themselves (and never managing staff).
   const setPerms = Object.fromEntries(perms.sets.map((s) => [s.id, s.permissions]));
   const grantable = (key) => state.isAdmin || (key !== 'staff.manage' && state.can(key));
@@ -228,9 +228,9 @@ function staffEditor(state, rows, perms, settings = {}) {
     return `<div class="perm-panel" data-set-perms="${esc(JSON.stringify(setPerms))}">
       <p class="perm-admin-note notice" ${isAdmin ? '' : 'hidden'}>Admins can do everything at every site, so there’s nothing to tick. Change their Access on the Details tab to choose permissions.</p>
       <div class="perm-body" ${isAdmin ? 'hidden' : ''}>
-        <label class="check-row perm-own"><input type="checkbox" name="custom_on" ${own ? 'checked' : ''}>
-          <span><strong>Choose their own permissions</strong>
-          <small>Untick to give them exactly what their Access (on the Details tab) allows.</small></span></label>
+        <label class="check-row perm-own"><input type="checkbox" name="use_template" ${own ? '' : 'checked'}>
+          <span><strong>Template permissions</strong>
+          <small>Ticked: they get exactly what their Access template (on the Details tab) allows. Untick to choose their permissions one by one.</small></span></label>
         <div class="perm-areas">${perms.areas.map((a) => `<fieldset class="perm-area">
           <legend><label><input type="checkbox" class="perm-all" ${a.permissions.every((p) => has.has(p.key)) ? 'checked' : ''} ${own ? '' : 'disabled'}> ${esc(a.area)}</label></legend>
           ${a.permissions.map((p) => `<label class="check-row"><input type="checkbox" name="perm" value="${esc(p.key)}" ${has.has(p.key) ? 'checked' : ''}
@@ -265,10 +265,10 @@ function staffEditor(state, rows, perms, settings = {}) {
       </div>
       <div data-staff-panel="perms" hidden>${permsPanel(u)}</div>`;
   const save = async (v, row, formEl) => {
-    const own = formEl.querySelector('[name=custom_on]');
-    delete v.custom_on;
+    const template = formEl.querySelector('[name=use_template]');
+    delete v.use_template;
     delete v.perm;
-    if (own) v.custom_permissions = own.checked ? [...formEl.querySelectorAll('input[name=perm]:checked')].map((i) => i.value) : null;
+    if (template) v.custom_permissions = !template.checked ? [...formEl.querySelectorAll('input[name=perm]:checked')].map((i) => i.value) : null;
     v.site_ids = [...formEl.querySelectorAll('input[name=site_pick]:checked')].map((i) => Number(i.value));
     delete v.site_pick;
     if (v.all_sites === undefined) delete v.site_ids;
@@ -287,7 +287,7 @@ function showSetPerms(form) {
   const isAdmin = access === 'admin';
   panel.querySelector('.perm-admin-note').hidden = !isAdmin;
   panel.querySelector('.perm-body').hidden = isAdmin;
-  if (isAdmin || form.querySelector('[name=custom_on]').checked) return;
+  if (isAdmin || !form.querySelector('[name=use_template]').checked) return;
   const set = new Set(JSON.parse(panel.dataset.setPerms)[access] ?? []);
   for (const b of permBoxes(form)) b.checked = set.has(b.value);
   syncAreaTicks(form);
@@ -307,8 +307,8 @@ document.addEventListener('change', (e) => {
   const form = e.target.closest('form');
   if (!form?.querySelector('.perm-panel')) return;
   if (e.target.name === 'permission_set_id') showSetPerms(form);
-  if (e.target.name === 'custom_on') {
-    const on = e.target.checked;
+  if (e.target.name === 'use_template') {
+    const on = !e.target.checked;
     for (const b of permBoxes(form)) b.disabled = !on || b.hasAttribute('data-locked');
     form.querySelectorAll('.perm-all').forEach((b) => { b.disabled = !on; });
     if (!on) showSetPerms(form);
