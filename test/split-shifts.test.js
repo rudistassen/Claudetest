@@ -45,3 +45,16 @@ test('a person can have more than one shift in a day, as long as they don’t ov
   assert.match(overlap.data.error, /already has a shift 07:00–11:00/);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM shifts WHERE user_id = ? AND date = ? AND removed = 0').get(s.id, day).n, 3);
 });
+
+test('quick shift times look ahead and fill up to five', async () => {
+  const admin = await login('admin@cafe.local');
+  // A new site with one shift time used so far, and another planned next week.
+  const site = Number(db.prepare(`INSERT INTO locations (name, active) VALUES ('Quick times test', 1)`).run().lastInsertRowid);
+  const s = db.prepare(`SELECT id FROM users WHERE email = 'staff1@cafe.local'`).get();
+  const add = (date, start_time, end_time) => admin('/shifts', { method: 'POST', body: { location_id: site, user_id: s.id, date, start_time, end_time } });
+  assert.equal((await add(addDays(today(), -3), '05:00', '06:00')).status, 201);
+  assert.equal((await add(addDays(today(), 10), '05:30', '06:30')).status, 201);
+  const times = (await admin(`/rota/common-times?location_id=${site}`)).data;
+  assert.deepEqual(times.slice(0, 2).map((t) => `${t.start_time}–${t.end_time}`).sort(), ['05:00–06:00', '05:30–06:30']);
+  assert.equal(times.length, 5, 'filled up with times used at the other sites');
+});

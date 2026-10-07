@@ -205,25 +205,34 @@ export function registerRotaRoutes(router, db) {
   }
 
   /**
-   * The shift window's quick times: a site's five most used shift times over the last 4 weeks (each with the
-   * break it usually has), most used first.
+   * The shift window's quick times: a site's five most used shift times (each with the break it usually has), most
+   * used first. Looks at 4 weeks either side of today (the rota is often planned ahead); if that doesn't give five,
+   * at the last 6 months, then fills up with the most used times at the other sites this person can see.
    */
   router.get('/rota/common-times', requirePerm('rota.edit'), (req, res) => {
     const locationId = resolveLocation(req, req.query.location_id);
-    const rows = db.prepare(`SELECT start_time, end_time, break_minutes, COUNT(*) AS n FROM draft_shifts
-      WHERE location_id = ? AND date BETWEEN ? AND ? GROUP BY start_time, end_time, break_minutes`)
-      .all(locationId, addDays(today(), -27), today());
-    const byTime = new Map();
-    for (const r of rows) {
-      const k = `${r.start_time}|${r.end_time}`;
-      const t = byTime.get(k) ?? { start_time: r.start_time, end_time: r.end_time, count: 0, breaks: [] };
-      t.count += r.n;
-      t.breaks.push(r);
-      byTime.set(k, t);
-    }
-    res.json([...byTime.values()]
-      .sort((a, b) => b.count - a.count || a.start_time.localeCompare(b.start_time))
-      .slice(0, 5)
+    const WANT = 5;
+    const tally = (siteIds, from, to) => {
+      const rows = db.prepare(`SELECT start_time, end_time, break_minutes, COUNT(*) AS n FROM draft_shifts
+        WHERE location_id IN (${siteIds.map(() => '?').join(', ')}) AND date BETWEEN ? AND ? GROUP BY start_time, end_time, break_minutes`)
+        .all(...siteIds, from, to);
+      const byTime = new Map();
+      for (const r of rows) {
+        const k = `${r.start_time}|${r.end_time}`;
+        const t = byTime.get(k) ?? { start_time: r.start_time, end_time: r.end_time, count: 0, breaks: [] };
+        t.count += r.n;
+        t.breaks.push(r);
+        byTime.set(k, t);
+      }
+      return [...byTime.values()].sort((a, b) => b.count - a.count || a.start_time.localeCompare(b.start_time));
+    };
+    const picked = new Map();
+    const add = (list) => { for (const t of list) if (picked.size < WANT && !picked.has(`${t.start_time}|${t.end_time}`)) picked.set(`${t.start_time}|${t.end_time}`, t); };
+    add(tally([locationId], addDays(today(), -28), addDays(today(), 28)));
+    if (picked.size < WANT) add(tally([locationId], addDays(today(), -183), addDays(today(), 60)));
+    const others = req.user.site_ids.filter((id) => id !== locationId);
+    if (picked.size < WANT && others.length) add(tally(others, addDays(today(), -28), addDays(today(), 28)));
+    res.json([...picked.values()]
       .map(({ breaks, ...t }) => ({ ...t, break_minutes: breaks.sort((a, b) => b.n - a.n)[0].break_minutes ?? 0 })));
   });
 

@@ -568,7 +568,7 @@ export async function render(ctx) {
       if (!form.isConnected || Number(form.location_id.value || site) !== siteNow) return;
       presets.querySelectorAll('button').forEach((b) => b.remove());
       presets.insertAdjacentHTML('beforeend', times.map((t) => `<button type="button" class="chip-btn" data-start="${t.start_time}" data-end="${t.end_time}" data-break="${t.break_minutes}"
-        title="Used ${t.count} time${t.count === 1 ? '' : 's'} in the last 4 weeks${t.break_minutes ? `, usually with a ${t.break_minutes}-minute break` : ''}">${t.start_time}–${t.end_time}</button>`).join(''));
+        title="Used ${t.count} time${t.count === 1 ? '' : 's'} recently${t.break_minutes ? `, usually with a ${t.break_minutes}-minute break` : ''}">${t.start_time}–${t.end_time}</button>`).join(''));
       presets.hidden = !times.length;
       mark();
     };
