@@ -1,6 +1,6 @@
 import { api, esc, field, fmtDate, openModal, showError, siteColour, textarea, toast, todayISO } from '../lib.js';
 
-// Dropping shifts and open shifts, shared by My Brew and the rota: staff ask to drop a shift, a manager approves
+// Dropping shifts and open shifts, shared by My Atlas and the rota: staff ask to drop a shift, a manager approves
 // it (it becomes an open shift at that site) or declines it, and anyone at the site can pick an open shift up.
 
 const when = (d) => `${d.date === todayISO() ? 'Today' : fmtDate(d.date, { weekday: 'short', day: 'numeric', month: 'short' })} · ${d.start_time}–${d.end_time}`;

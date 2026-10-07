@@ -491,7 +491,7 @@ CREATE TABLE IF NOT EXISTS invoice_aliases (
   PRIMARY KEY (supplier_id, text)
 );
 
--- My Brew news feed: announcements and policy updates for staff, for every site or chosen sites.
+-- My Atlas news feed: announcements and policy updates for staff, for every site or chosen sites.
 CREATE TABLE IF NOT EXISTS news_posts (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
@@ -531,7 +531,7 @@ CREATE TABLE IF NOT EXISTS news_reads (
   PRIMARY KEY (post_id, user_id)
 );
 
--- Company documents on My Brew: handbooks, policies and forms, for every site or chosen sites.
+-- Company documents on My Atlas: handbooks, policies and forms, for every site or chosen sites.
 CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
@@ -1012,7 +1012,7 @@ export function openDb(file = ':memory:') {
     db.exec('PRAGMA user_version = 1');
   }
   if (version < 2) {
-    // The My Brew news feed was added: whoever could manage staff can post news.
+    // The My Atlas news feed was added: whoever could manage staff can post news.
     for (const ps of db.prepare('SELECT id, permissions FROM permission_sets').all()) {
       const perms = JSON.parse(ps.permissions || '[]');
       if (perms.includes('staff.manage') && !perms.includes('news.manage')) {
@@ -1043,7 +1043,7 @@ export function openDb(file = ':memory:') {
   }
   if (version < 5) {
     // Seeing the dashboard became a permission: every set keeps it except the built-in Staff set, so staff open
-    // Atlas on My Brew (an admin can tick it for them on the Permissions page).
+    // Atlas on My Atlas (an admin can tick it for them on the Permissions page).
     for (const ps of db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in IS NULL OR built_in != 'staff'`).all()) {
       const perms = JSON.parse(ps.permissions || '[]');
       if (!perms.includes('dashboard.view')) {

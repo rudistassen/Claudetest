@@ -113,7 +113,7 @@ const ROUTES = [
   [/^documents$/, mybrew.renderDocuments],
 ];
 
-// Where Atlas opens: the dashboard, or My Brew for people who can't see it.
+// Where Atlas opens: the dashboard, or My Atlas for people who can't see it.
 const home = () => (state.can('dashboard.view') ? 'dashboard' : 'mybrew');
 
 const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(...who));
@@ -121,7 +121,7 @@ const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(..
 // The side menu: Dashboard, then headed groups. Items someone can't use are hidden, and so is a group left empty.
 function navGroups() {
   return [
-    [null, [['dashboard', 'Dashboard', '▦', ['dashboard.view']], ['mybrew', 'My Brew', '☕']]],
+    [null, [['dashboard', 'Dashboard', '▦', ['dashboard.view']], ['mybrew', 'My Atlas', '◉']]],
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
       ['rota/requests', 'Requests', '✉', ['rota.publish', 'leave.manage']],
@@ -221,7 +221,7 @@ async function showEventsBadge(force = false) {
 }
 window.addEventListener('events:changed', () => showEventsBadge(true));
 
-// The number of news posts waiting for this person to confirm they've read them, shown on My Brew in the menu.
+// The number of news posts waiting for this person to confirm they've read them, shown on My Atlas in the menu.
 let newsUnread = { count: 0, at: 0, user: null };
 async function showNewsBadge(force = false) {
   if (force || newsUnread.user !== state.user?.id || Date.now() - newsUnread.at > 60000) {
@@ -314,7 +314,7 @@ const ICON = {
   rota: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   checks: '<rect x="3" y="3" width="18" height="18" rx="5"/><path d="m8 12 3 3 5-6"/>',
   timeoff: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-  mybrew: '<path d="M4 8h13v5a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2.5v3M12 2.5v3"/>',
+  mybrew: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
@@ -322,7 +322,7 @@ const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 // The phone icon bar: home, the everyday pages this person can use, then the full menu.
 function tabBar(items, active) {
   const has = (p) => items.some(([q]) => q === p);
-  const tabs = [state.can('dashboard.view') ? ['dashboard', 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Brew', 'mybrew']].filter(Boolean);
+  const tabs = [state.can('dashboard.view') ? ['dashboard', 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Atlas', 'mybrew']].filter(Boolean);
   return `<nav class="tabbar" aria-label="Quick links">
     ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'rota' ? BELL : ''}</a>`).join('')}
     <button type="button" class="tabbar-menu">${icon('menu')}<span>Menu</span></button>
@@ -534,7 +534,7 @@ export async function route() {
     el.innerHTML = '<div class="empty">Page not found.</div>';
     return;
   }
-  // People who can't see the dashboard start on My Brew.
+  // People who can't see the dashboard start on My Atlas.
   if (match.view === dashboard.render && !state.can('dashboard.view')) {
     window.location.replace('#/mybrew');
     return;

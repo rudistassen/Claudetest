@@ -1,5 +1,5 @@
-// Company documents on My Brew: handbooks, policies and forms uploaded in Setup → Documents, for every site or
-// chosen sites. Managed by people with the "My Brew news & documents" permission.
+// Company documents on My Atlas: handbooks, policies and forms uploaded in Setup → Documents, for every site or
+// chosen sites. Managed by people with the "My Atlas news & documents" permission.
 import { can, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
 import { badRequest, bool, forbidden, id, notFound, oneOf, str } from '../util.js';

@@ -49,7 +49,7 @@ export const PERMISSION_AREAS = [
   ['People', [
     ['people.manage', 'Use the People section for their sites: recruitment, training records, performance reviews and areas'],
   ]],
-  ['My Brew news & documents', [
+  ['My Atlas news & documents', [
     ['news.manage', 'Post staff news and policy updates, see who has read them, and share company documents'],
   ]],
   ['Holiday & availability', [

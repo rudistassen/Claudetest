@@ -32,7 +32,7 @@ async function login(email) {
 }
 
 
-test('My Brew news: who sees what, who can post where, and confirming you have read it', async () => {
+test('My Atlas news: who sees what, who can post where, and confirming you have read it', async () => {
   const admin = await login('admin@cafe.local');
   const manager = await login('manager1@cafe.local'); // one site
   const staffHere = await login('staff1@cafe.local'); // same site as manager1

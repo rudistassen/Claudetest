@@ -139,7 +139,7 @@ small { display: block; color: var(--muted); font-size: 0.8rem; }
 }
 .topbar a { color: inherit; text-decoration: none; }
 .brand { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.1rem; }
-.logo { display: inline-flex; align-items: center; gap: 0.45rem; --logo-accent: #e1306c; }
+.logo { display: inline-flex; align-items: center; gap: 0.45rem; --logo-accent: #e2b04a; }
 .logo-mark { flex-shrink: 0; display: block; }
 .logo-word { font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
 .login-logo { margin: 0 0 0.25rem; color: var(--brand); font-size: 1.7rem; }
@@ -847,9 +847,9 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 .nav-group[data-tone] { border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 .nav-badge { margin-left: auto; min-width: 1.3rem; padding: 0.05rem 0.4rem; border-radius: 99px; background: var(--bad); color: #fff; font-size: 0.72rem; font-weight: 700; text-align: center; }
 
-/* My Brew */
+/* My Atlas */
 .my-greeting { margin: 0.2rem 0 0; }
-/* My Brew is one column, like a feed: your next shifts, then the news, then company documents. */
+/* My Atlas is one column, like a feed: your next shifts, then the news, then company documents. */
 .mybrew { max-width: 760px; }
 .mybrew-news { margin-bottom: 1rem; }
 .mybrew .card { margin: 0 0 1rem; }
@@ -937,7 +937,7 @@ table.selectable tr:has(.pick input:checked) td { background: var(--brand-soft);
 }
 @media print { .rota tr.rota-forecast[hidden] { display: table-row !important; } }
 
-/* Company documents (My Brew) */
+/* Company documents (My Atlas) */
 .my-docs input[type=search] { width: 100%; margin-bottom: 0.5rem; }
 .doc-group h3 { margin: 0.7rem 0 0.2rem; }
 .doc-list { list-style: none; margin: 0; padding: 0; }
@@ -1507,7 +1507,7 @@ details.whos-in-site[open] { padding-bottom: 0.4rem; }
 .order-detail { width: 100%; }
 .order-detail tfoot td { border-top: 1px solid var(--border); }
 .order-detail tfoot tr + tr td { border-top: 0; }
-/* Dropped shifts: requests to approve, open shifts to pick up, your own requests (My Brew and the rota) */
+/* Dropped shifts: requests to approve, open shifts to pick up, your own requests (My Atlas and the rota) */
 .drops-card h2 { font-size: 1rem; margin: 0 0 0.4rem; display: flex; align-items: center; gap: 0.4rem; }
 .drops-card h2:not(:first-child) { margin-top: 0.9rem; }
 .drops-list { list-style: none; margin: 0; padding: 0; }
@@ -1582,7 +1582,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .hub-main { min-width: 0; }
 @media print { .hub-layout { display: block; } .hub-rail { display: none; } }
 
-/* My Brew home, laid out like a music app's home: filter pills, a grid of shortcuts, then swipeable rows of cards */
+/* My Atlas home, laid out like a music app's home: filter pills, a grid of shortcuts, then swipeable rows of cards */
 .mb-pills { display: flex; gap: 0.5rem; overflow-x: auto; margin: 0.2rem 0 0.9rem; scrollbar-width: none; }
 .mb-pill { flex-shrink: 0; border: 0; border-radius: 999px; padding: 0.42rem 1rem; background: var(--surface-2); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
 .mb-pill.is-on { background: var(--brand); color: var(--brand-contrast); }
@@ -1627,7 +1627,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 @keyframes req-ring { 0%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(-14deg); } 20%, 40% { transform: rotate(14deg); } 50% { transform: rotate(0); } }
 @media (prefers-reduced-motion: reduce) { .req-bell { animation: none; } }
 
-/* My Brew → My tasks */
+/* My Atlas → My tasks */
 .mb-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
 .mb-task { display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 0.8rem; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
 .mb-task-icon { flex-shrink: 0; display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 10px; background: var(--surface-2); font-size: 1.2rem; }
@@ -1692,7 +1692,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .pp-review h3 { font-size: 0.9rem; margin: 0.9rem 0 0.2rem; color: var(--muted); }
 .pp-text { white-space: pre-wrap; margin: 0; }
 
-/* My Brew: My training */
+/* My Atlas: My training */
 .mb-training { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.5rem; }
 .mb-training li { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0.85rem; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
 .mb-training li > span:nth-child(2) { flex: 1; min-width: 0; }

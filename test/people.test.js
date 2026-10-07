@@ -132,7 +132,7 @@ test('a manager only sees people and jobs at their own sites', async () => {
   }
 });
 
-test('staff see their own training (and only theirs) for My Brew', async () => {
+test('staff see their own training (and only theirs) for My Atlas', async () => {
   const a = await login('admin@cafe.local');
   const s = await login('staff1@cafe.local');
   const u = staff();

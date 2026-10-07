@@ -1,4 +1,4 @@
-// My Brew news feed: announcements and policy updates posted in Setup → News, shown to staff on My Brew.
+// My Atlas news feed: announcements and policy updates posted in Setup → News, shown to staff on My Atlas.
 // A post goes to every site or to chosen sites; policy posts can ask people to confirm they've read them.
 import { can, requirePerm } from '../auth.js';
 import { tx } from '../db.js';

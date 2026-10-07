@@ -65,7 +65,7 @@ const toBase64 = (file) => new Promise((resolve, reject) => {
   r.readAsDataURL(file);
 });
 
-// My Brew: each person's own page – their details, upcoming shifts, holiday and the staff news feed.
+// My Atlas: each person's own page – their details, upcoming shifts, holiday and the staff news feed.
 // Setup → News is where announcements and policy updates are posted.
 
 // --- Company documents ---
@@ -208,7 +208,7 @@ export async function renderMyBrew(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <div><h1>My Brew</h1><p class="muted my-greeting">${greeting()}, ${esc(firstName(u.name))} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
+      <div><h1>My Atlas</h1><p class="muted my-greeting">${greeting()}, ${esc(firstName(u.name))} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
     </div>
     <div class="mb-pills" role="group" aria-label="Show">
       ${[['all', 'All'], ['shifts', 'Shifts'], ['tasks', 'My tasks'], hasTraining ? ['training', 'My training'] : null, ['news', 'Newsfeed']].filter(Boolean).map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
@@ -324,7 +324,7 @@ export async function renderNewsSetup(ctx) {
       <h1>News</h1>
       <div class="actions"><button class="btn btn-primary" id="add">+ New post</button></div>
     </div>
-    <p class="muted">Announcements and policy updates for the news feed on everyone’s <a href="#/mybrew">My Brew</a> page. Policy updates can ask people to confirm they’ve read them, and you can see who has.</p>
+    <p class="muted">Announcements and policy updates for the news feed on everyone’s <a href="#/mybrew">My Atlas</a> page. Policy updates can ask people to confirm they’ve read them, and you can see who has.</p>
     <section class="card">
       ${posts.length ? `<div class="table-wrap"><table>
         <thead><tr><th>Post</th><th>Type</th><th>Who sees it</th><th>Posted</th><th>Read</th></tr></thead>
@@ -412,7 +412,7 @@ export async function renderNewsSetup(ctx) {
       body: form({}),
       onSubmit: async (v, f2) => {
         if (uploading) throw new Error('Wait for the photos and videos to finish uploading');
-        await api('/news', { method: 'POST', body: values(v, f2) }); toast('Posted – it’s on everyone’s My Brew page'); rerender();
+        await api('/news', { method: 'POST', body: values(v, f2) }); toast('Posted – it’s on everyone’s My Atlas page'); rerender();
       },
     });
     wire(f, {});
@@ -470,7 +470,7 @@ export async function renderDocumentsSetup(ctx) {
       <h1>Documents</h1>
       <div class="actions"><button class="btn btn-primary" id="add">+ Add document</button></div>
     </div>
-    <p class="muted">Handbooks, policies, guides and forms for the <strong>Company documents</strong> list on everyone’s <a href="#/mybrew">My Brew</a> page. To tell people about a new or changed policy, post it in <a href="#/admin/news">News</a> too.</p>
+    <p class="muted">Handbooks, policies, guides and forms for the <strong>Company documents</strong> list on everyone’s <a href="#/mybrew">My Atlas</a> page. To tell people about a new or changed policy, post it in <a href="#/admin/news">News</a> too.</p>
     <section class="card">
       ${docs.length ? `<div class="table-wrap"><table>
         <thead><tr><th>Document</th><th>Type</th><th>Who sees it</th><th>File</th><th>Added</th></tr></thead>
@@ -527,7 +527,7 @@ export async function renderDocumentsSetup(ctx) {
     const { form: f } = openModal({
       title: 'Add a document', wide: true, submitLabel: 'Share it',
       body: form({}),
-      onSubmit: async (v, f2) => { await api('/documents', { method: 'POST', body: await values(v, f2) }); toast('Shared – it’s on everyone’s My Brew page'); rerender(); },
+      onSubmit: async (v, f2) => { await api('/documents', { method: 'POST', body: await values(v, f2) }); toast('Shared – it’s on everyone’s My Atlas page'); rerender(); },
     });
     wire(f);
   });
