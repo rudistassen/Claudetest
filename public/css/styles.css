@@ -1851,3 +1851,4 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .pp-row-actions { white-space: nowrap; }
 .pp-row-actions .btn + .btn { margin-left: 0.3rem; }
 .btn.pp-starred { color: #a8761a; border-color: #e2b04a; }
+.pp-junk:hover { color: var(--bad); }

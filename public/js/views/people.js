@@ -151,6 +151,7 @@ const applicationCard = (c, onList = false) => `<li class="pp-app">
     ${reviewButton(c, onList)}
     ${c.stage === 'applied' ? `<button type="button" class="btn btn-small btn-primary" data-interview="${c.id}">✓ Interview</button>` : ''}
     <button type="button" class="btn btn-small" data-decline="${c.id}">✕ Decline</button>
+    <button type="button" class="btn btn-small btn-ghost pp-junk" data-delete-app="${c.id}" title="Delete – e.g. junk or spam" aria-label="Delete ${esc(c.name)}">🗑 Delete</button>
   </div></li>`;
 
 export async function renderRecruitment(ctx) {
@@ -226,6 +227,17 @@ export async function renderRecruitment(ctx) {
     ${careersCard(inbox)}`;
 
   el.querySelectorAll('[data-interview]').forEach((b) => b.addEventListener('click', () => interviewDialog([...apps.to_review, ...apps.new].find((c) => c.id === Number(b.dataset.interview)), jobs, rerender)));
+  // Junk that came into the careers inbox: gone from Atlas (the email itself stays in the inbox, and isn't picked up again).
+  el.querySelectorAll('[data-delete-app]').forEach((b) => b.addEventListener('click', async () => {
+    const c = [...apps.to_review, ...apps.new].find((x) => x.id === Number(b.dataset.deleteApp));
+    if (!await confirmDialog(`Delete ${c.name}${c.subject ? ` (“${c.subject}”)` : ''}? Use this for junk – they won’t be sent anything, and the email won’t be added again.`, { confirmLabel: 'Delete' })) return;
+    b.disabled = true;
+    try {
+      await api(`/candidates/${c.id}`, { method: 'DELETE' });
+      toast('Deleted');
+      rerender();
+    } catch (err) { showError(err); b.disabled = false; }
+  }));
   el.querySelectorAll('[data-review]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true;
     try {
@@ -349,7 +361,8 @@ export async function renderCandidate(ctx) {
         ${c.stage !== 'rejected' && c.stage !== 'hired' ? `<button class="btn" id="cand-review">${c.to_review_at ? '★ On To review – take off' : '☆ Add to To review'}</button>` : ''}
         ${c.stage === 'applied' ? '<button class="btn btn-primary" id="cand-interview">✓ Invite to interview</button>' : ''}
         ${c.stage !== 'rejected' && c.stage !== 'hired' ? '<button class="btn" id="cand-decline">✕ Decline</button>' : ''}
-        <button class="btn btn-ghost" id="cand-edit">Edit</button></div></div>
+        <button class="btn btn-ghost" id="cand-edit">Edit</button>
+        <button class="btn btn-ghost" id="cand-delete" title="Delete – e.g. junk or spam">🗑 Delete</button></div></div>
     ${c.declined_at ? `<p class="notice">Turned down on ${fmtDateTime(c.declined_at)}${c.reply_drafted_at ? ' – a reply was saved in the careers inbox’s Drafts' : ''}.</p>` : ''}
     <div class="pp-profile">
       <div>
@@ -435,6 +448,14 @@ export async function renderCandidate(ctx) {
     } catch (err) { showError(err); e.target.disabled = false; }
   });
   el.querySelector('#cand-decline')?.addEventListener('click', () => declineDialog(c.id, rerender));
+  el.querySelector('#cand-delete').addEventListener('click', async () => {
+    if (!await confirmDialog(`Delete ${c.name}${c.files.length ? ', their email and their files' : ''}? This can’t be undone${c.source === 'email' ? ' – the email won’t be added again' : ''}.`, { confirmLabel: 'Delete' })) return;
+    try {
+      await api(`/candidates/${c.id}`, { method: 'DELETE' });
+      toast('Deleted');
+      navigate('people/recruitment');
+    } catch (err) { showError(err); }
+  });
   el.querySelector('#cand-edit').addEventListener('click', () => openModal({
     title: `Edit ${c.name}`,
     body: `${field('Name', input('name', c.name, 'required maxlength="100"'))}

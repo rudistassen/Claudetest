@@ -165,3 +165,16 @@ test('Microsoft 365: the careers inbox lists every email, reads its text and dra
     label: 'careers inbox' });
   await assert.rejects(noWrite.replyDraft('M1', 'x'), /Mail\.ReadWrite/);
 });
+
+test('a junk application can be deleted and isn’t added again', async () => {
+  box.messages.push({ id: 'junk1', subject: 'Boost your SEO today!', from: 'spam@example.com', fromName: 'SEO Deals', receivedAt: new Date().toISOString(), body: 'Cheap backlinks' });
+  await checkCareers(db, { mailbox: box });
+  const junk = db.prepare(`SELECT id FROM candidates WHERE email = 'spam@example.com'`).get();
+  const a = await login('admin@cafe.local');
+  assert.ok((await a('/applications')).data.new.some((c) => c.id === junk.id));
+  assert.equal((await a(`/candidates/${junk.id}`, { method: 'DELETE' })).status, 200);
+  assert.ok(!(await a('/applications')).data.new.some((c) => c.id === junk.id));
+  assert.equal((await checkCareers(db, { mailbox: box })).added, 0);
+  assert.ok(!db.prepare(`SELECT 1 FROM candidates WHERE email = 'spam@example.com'`).get());
+  assert.equal(db.prepare(`SELECT detail FROM careers_emails WHERE message_id = 'junk1'`).get().detail, 'Deleted in Atlas');
+});

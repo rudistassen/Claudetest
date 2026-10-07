@@ -254,8 +254,14 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     res.json({ ok: true });
   });
 
+  // Gone for good – e.g. junk from the careers inbox. The inbox keeps its note of the email (without the candidate),
+  // so it isn't added again on the next check.
   router.delete('/candidates/:id', perm, (req, res) => {
-    db.prepare('DELETE FROM candidates WHERE id = ?').run(candidate(req, Number(req.params.id)).id);
+    const c = candidate(req, Number(req.params.id));
+    tx(db, () => {
+      if (c.email_message_id) db.prepare(`UPDATE careers_emails SET detail = 'Deleted in Atlas' WHERE message_id = ?`).run(c.email_message_id);
+      db.prepare('DELETE FROM candidates WHERE id = ?').run(c.id);
+    });
     res.json({ ok: true });
   });
 
