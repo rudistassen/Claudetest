@@ -194,6 +194,49 @@ export async function render(ctx) {
     return `${whole((f))}<small class="tone-${labourTone(p)}">${fmtPct(p)}</small>`;
   };
   const bankHol = (d) => data.bank_holidays?.[d];
+
+  // Opening hours (Setup → Locations): any time a site is open with nobody on the rota (sick and removed shifts
+  // don't count) is flagged to people planning the rota, from today on.
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const fromMin = (m) => (m >= 1440 ? '00:00' : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+  const openingOf = (id) => {
+    const l = state.locations.find((x) => x.id === id);
+    try { return l?.opening_hours ? JSON.parse(l.opening_hours) : null; } catch { return null; }
+  };
+  const gapsFor = (id, d) => {
+    const h = openingOf(id)?.[weekdayOf(d)];
+    if (!h) return [];
+    const open = toMin(h.open);
+    const close = h.close === '00:00' ? 1440 : toMin(h.close);
+    const spans = counted.filter((x) => x.location_id === id && x.date === d)
+      .map((x) => { const a = toMin(x.start_time); const b = toMin(x.end_time); return [a, b <= a ? 1440 : b]; })
+      .sort((x, y) => x[0] - y[0]);
+    const gaps = [];
+    let t = open;
+    for (const [a, b] of spans) {
+      if (t >= close) break;
+      if (a > t) gaps.push([t, Math.min(a, close)]);
+      t = Math.max(t, b);
+    }
+    if (t < close) gaps.push([t, close]);
+    return gaps.map(([a, b]) => `${fromMin(a)}–${fromMin(b)}`);
+  };
+  const checkFrom = today;
+  const gapList = canEdit ? shownSites.flatMap((id) => data.days.filter((d) => d >= checkFrom)
+    .map((d) => ({ id, d, gaps: gapsFor(id, d) })).filter((g) => g.gaps.length)) : [];
+  const gapsOn = (d, ids = shownSites) => gapList.filter((g) => g.d === d && ids.includes(g.id));
+  const gapTag = (d) => {
+    const g = gapsOn(d);
+    return g.length ? `<small class="gap-tag" title="${esc(`Nobody on: ${g.map((x) => `${all ? `${siteName(x.id)} ` : ''}${x.gaps.join(', ')}`).join('; ')}`)}">⚠ Nobody on</small>` : '';
+  };
+  const gapsBox = (list) => {
+    if (!list.length) return '';
+    const n = list.reduce((t, g) => t + g.gaps.length, 0);
+    return `<details class="rota-gaps" ${list.length <= 6 ? 'open' : ''}><summary>⚠ <strong>${n} time${n === 1 ? '' : 's'} with nobody on</strong> while ${all ? 'a site is' : 'the site is'} open</summary>
+      <ul>${list.map((g) => `<li>${all ? `<strong>${esc(siteName(g.id))}</strong> · ` : ''}${fmtDate(g.d)}: ${g.gaps.join(', ')}</li>`).join('')}</ul></details>`;
+  };
+  const noHoursNote = canEdit && state.isAdmin && shownSites.some((id) => !openingOf(id))
+    ? `<p class="muted small">Set ${all ? 'each site’s' : 'this site’s'} opening hours under <a href="#/admin/locations">Setup → Locations</a> to be warned when nobody is on while it’s open.</p>` : '';
   // Admins can click a name to open that person's staff details.
   const personName = (userId, name, tag = 'span') => (state.isAdmin
     ? `<button type="button" class="person-link" data-person="${userId}" title="Edit ${esc(name)}’s details">${esc(name)}</button>`
@@ -249,7 +292,8 @@ export async function render(ctx) {
       return `<section class="card day-site">
         <header class="day-site-head">
           <div><h2>${esc(name)}</h2>
-            <span class="muted small">${live.length} ${live.length === 1 ? 'shift' : 'shifts'} · ${hours} h${data.labour_cost !== undefined ? ` · ${money(cost)} labour` : ''}</span></div>
+            <span class="muted small">${live.length} ${live.length === 1 ? 'shift' : 'shifts'} · ${hours} h${data.labour_cost !== undefined ? ` · ${money(cost)} labour` : ''}</span>
+            ${gapsOn(day, [id]).length ? `<span class="gap-line">⚠ Nobody on ${gapsOn(day, [id])[0].gaps.join(', ')}</span>` : ''}</div>
           <div class="day-site-actions">
             ${canEdit && data.can_publish && pendingHere ? `<button class="btn btn-small" data-publish-site="${id}">Publish ${pendingHere} change${pendingHere === 1 ? '' : 's'}</button>` : ''}
             ${canEdit ? `<button class="btn btn-small" data-add-site="${id}">+ Add shift</button>` : ''}
@@ -293,6 +337,7 @@ export async function render(ctx) {
       <h2 class="day-title">${day === today ? 'Today · ' : ''}${fmtDate(day, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         ${bankHol(day) ? `<span class="badge badge-sent">${esc(bankHol(day))}</span>` : ''}</h2>
       <p class="muted">${liveCount} shift${liveCount === 1 ? '' : 's'}${data.labour_cost !== undefined ? ` · ${money(totalCost)} labour` : ''}</p>
+      ${gapsBox(gapsOn(day))}
       ${openOn(day).length ? `<section class="card day-site day-open"><header class="day-site-head"><div><h2>Open shifts</h2><span class="muted small">Dropped by someone – tap one to pick it up</span></div></header>
         <ul class="day-list">${openOn(day).map((x) => `<li class="day-person"><span class="day-name">${esc(x.location_name)}</span>${openButton(x).replace('class="shift shift-open"', 'class="day-card shift-open"')}</li>`).join('')}</ul></section>` : ''}
       ${withShifts.length ? withShifts.map(siteBlock).join('') : `<div class="card empty">Nobody is on the rota ${day === today ? 'today' : 'this day'}.</div>`}
@@ -369,9 +414,10 @@ export async function render(ctx) {
       </span>
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
     ${labourTracker()}
+    ${gapsBox(gapList)}
     <div class="table-wrap rota-scroll">
       <table class="rota ${timeline ? 'rota-gantt' : ''}">
-        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: 'day', day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}${timeline ? tlScale : ''}</th>`).join('')}<th>Hours</th></tr></thead>
+        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: 'day', day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}${gapTag(d)}${timeline ? tlScale : ''}</th>`).join('')}<th>Hours</th></tr></thead>
         <tbody>
           ${(data.open_shifts ?? []).length ? `<tr class="rota-open"><th>Open shifts<small>tap to pick up</small></th>${data.days.map((d) => `<td class="${d === today ? 'is-today' : ''}">${openOn(d).map(openButton).join('')}</td>`).join('')}<td></td></tr>` : ''}
           ${rows.map(({ header, groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
@@ -420,6 +466,7 @@ export async function render(ctx) {
     ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is covering at another site.</p>' : ''}
     ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a role yet – set one for each person on the Staff page.</p>' : ''}
     ${fcNote ? `<p class="muted small">${fcNote}</p>` : ''}
+    ${noHoursNote}
     ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see. Drag a shift onto another person or day to move it – hold Ctrl (⌥ on a Mac) as you drop to copy it instead. On a phone, press and hold a shift first.</p>' : ''}`;
 
   el.querySelector('#rota-layout')?.addEventListener('change', (e) => {

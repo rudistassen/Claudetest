@@ -204,7 +204,9 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
   tx(db, () => {
     const locIds = [];
     for (let i = 0; i < locationCount; i++) {
-      const r = db.prepare('INSERT INTO locations (name, address) VALUES (?, ?)').run(`${streets[i % streets.length]}`, `${10 + i} ${streets[i % streets.length]}`);
+      // Open 7–5 on weekdays and 8–4 at weekends.
+      const hours = JSON.stringify([...Array(5).fill({ open: '07:00', close: '17:00' }), { open: '08:00', close: '16:00' }, { open: '08:00', close: '16:00' }]);
+      const r = db.prepare('INSERT INTO locations (name, address, opening_hours) VALUES (?, ?, ?)').run(`${streets[i % streets.length]}`, `${10 + i} ${streets[i % streets.length]}`, hours);
       locIds.push(Number(r.lastInsertRowid));
     }
 

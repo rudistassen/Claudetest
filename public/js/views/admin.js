@@ -494,6 +494,57 @@ async function sendInvites(ctx, people) {
   } catch (err) { toast(err.message, 'error'); }
 }
 
+// Opening hours, Monday first: tick the days the site is open and set the times. The rota warns about any time
+// in them with nobody on.
+const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+function openingHoursField(l) {
+  let hours = null;
+  try { hours = l.opening_hours ? JSON.parse(l.opening_hours) : null; } catch { hours = null; }
+  return `<fieldset class="oh-field"><legend>Opening hours</legend>
+    <p class="small muted">The rota warns if nobody is on at any time while the site is open. Untick days it’s closed. Use 00:00 to close at midnight.</p>
+    <table class="oh-table"><tbody>${WEEK_DAYS.map((d, i) => {
+      const h = hours?.[i];
+      return `<tr data-oh-day="${i}"><th>${d}</th>
+        <td><label class="check"><input type="checkbox" name="oh_on_${i}" ${h ? 'checked' : ''}> Open</label></td>
+        <td><input type="time" name="oh_open_${i}" value="${esc(h?.open ?? '')}" aria-label="${d} opens" ${h ? '' : 'disabled'}></td>
+        <td class="oh-to">to</td>
+        <td><input type="time" name="oh_close_${i}" value="${esc(h?.close ?? '')}" aria-label="${d} closes" ${h ? '' : 'disabled'}></td></tr>`;
+    }).join('')}</tbody></table>
+    <button type="button" class="btn btn-small" data-oh-copy>Copy Monday to every day</button>
+  </fieldset>`;
+}
+// The seven days from the form, or null if no day is ticked (opening hours not set).
+function readOpeningHours(form) {
+  const days = WEEK_DAYS.map((d, i) => {
+    if (!form.querySelector(`[name=oh_on_${i}]`).checked) return null;
+    const open = form.querySelector(`[name=oh_open_${i}]`).value;
+    const close = form.querySelector(`[name=oh_close_${i}]`).value;
+    if (!open || !close) throw new Error(`Enter ${d}’s opening and closing times, or untick it`);
+    return { open, close };
+  });
+  return days.some(Boolean) ? days : null;
+}
+document.addEventListener('change', (e) => {
+  const m = /^oh_on_(\d)$/.exec(e.target.name ?? '');
+  if (!m) return;
+  const row = e.target.closest('tr');
+  row.querySelectorAll('input[type=time]').forEach((t) => { t.disabled = !e.target.checked; });
+  if (e.target.checked) row.querySelector('input[type=time]').focus();
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('[data-oh-copy]')) return;
+  const form = e.target.closest('form');
+  const on = form.querySelector('[name=oh_on_0]').checked;
+  const open = form.querySelector('[name=oh_open_0]').value;
+  const close = form.querySelector('[name=oh_close_0]').value;
+  for (let i = 1; i < 7; i++) {
+    form.querySelector(`[name=oh_on_${i}]`).checked = on;
+    form.querySelector(`[name=oh_open_${i}]`).value = open;
+    form.querySelector(`[name=oh_close_${i}]`).value = close;
+    form.querySelectorAll(`[data-oh-day="${i}"] input[type=time]`).forEach((t) => { t.disabled = !on; });
+  }
+});
+
 export async function renderLocations(ctx) {
   const rows = await api('/locations');
   if (ctx.stale()) return;
@@ -505,10 +556,14 @@ export async function renderLocations(ctx) {
       { label: 'Name', key: 'name' },
       { label: 'Address', key: 'address' },
       { label: 'Phone', key: 'phone' },
+      { label: 'Opening hours', value: (r) => (r.opening_hours ? 'Set' : 'Not set') },
       { label: 'Active', value: (r) => yesNo(r.active) },
     ],
-    form: (l) => `${field('Name', input('name', l.name, 'required'))}${field('Address', textarea('address', l.address))}${field('Phone', input('phone', l.phone))}${activeBox(l.active)}`,
-    save: async (v, row) => {
+    form: (l) => `${field('Name', input('name', l.name, 'required'))}${field('Address', textarea('address', l.address))}${field('Phone', input('phone', l.phone))}
+      ${openingHoursField(l)}${activeBox(l.active)}`,
+    save: async (v, row, form) => {
+      for (const k of Object.keys(v)) if (k.startsWith('oh_')) delete v[k];
+      v.opening_hours = readOpeningHours(form);
       if (row) await api(`/locations/${row.id}`, { method: 'PUT', body: v });
       else await api('/locations', { method: 'POST', body: v });
       await loadLocations();

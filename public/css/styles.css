@@ -1938,3 +1938,22 @@ td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
 .gt-cover span { flex: 1; min-height: 1px; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--brand) 55%, transparent); }
 .gt-cover-row th small { display: block; font-weight: 400; color: var(--muted); }
 @media print { .gt-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .gt-track { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* Setup → Locations: opening hours for each day. */
+.oh-field { border: 1px solid var(--border); border-radius: 10px; padding: 0.4rem 0.8rem 0.8rem; margin: 0.6rem 0; }
+.oh-field legend { font-weight: 600; padding: 0 0.3rem; }
+.oh-table { border-collapse: collapse; margin-bottom: 0.5rem; }
+.oh-table th { text-align: left; font-weight: 500; padding: 0.2rem 0.8rem 0.2rem 0; white-space: nowrap; }
+.oh-table td { padding: 0.2rem 0.3rem; }
+.oh-table input[type=time] { width: 7.5rem; }
+.oh-table input[type=time]:disabled { opacity: 0.4; }
+.oh-to { color: var(--muted); }
+@media (max-width: 480px) { .oh-table th { padding-right: 0.3rem; } .oh-table input[type=time] { width: 6.2rem; } }
+
+/* Rota: times a site is open with nobody on. */
+.rota-gaps { border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--border)); background: color-mix(in srgb, var(--bad-soft) 70%, var(--surface)); border-radius: 10px; padding: 0.55rem 0.9rem; margin-bottom: 0.8rem; }
+.rota-gaps summary { cursor: pointer; color: var(--bad); }
+.rota-gaps ul { margin: 0.4rem 0 0; padding-left: 1.2rem; font-size: 0.9rem; columns: 2 260px; }
+.gap-tag { display: block; margin-top: 0.15rem; color: var(--bad); font-weight: 600; font-size: 0.68rem; text-transform: none; letter-spacing: 0; }
+.gap-line { display: block; color: var(--bad); font-size: 0.82rem; font-weight: 600; }
+@media print { .rota-gaps { display: none; } }

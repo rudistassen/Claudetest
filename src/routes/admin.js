@@ -4,7 +4,7 @@ import { tx } from '../db.js';
 import { demoPasswordAccounts } from '../seed.js';
 import { trySquarePush } from '../square-staff.js';
 import { ALL_PERMISSIONS, cleanPermissions, parsePermissions, PERMISSION_AREAS, roleForPermissions } from '../permissions.js';
-import { badRequest, bool, forbidden, id, notFound, num, oneOf, str } from '../util.js';
+import { badRequest, bool, forbidden, id, notFound, num, oneOf, str, time } from '../util.js';
 
 const ROLES = ['admin', 'manager', 'staff'];
 
@@ -28,25 +28,42 @@ export function registerAdminRoutes(router, db, square = null) {
     res.json(rows);
   });
 
-  const locationBody = (b) => ({
+  // Opening hours: seven days, Monday first, each { open, close } (HH:MM) or null when closed. A close of 00:00
+  // means midnight. Not sent: left as they are; null: not set (so the rota doesn't check them).
+  const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const openingHours = (v) => {
+    if (v === null || v === '') return null;
+    if (!Array.isArray(v) || v.length !== 7) throw badRequest('Opening hours need all seven days');
+    const days = v.map((d, i) => {
+      if (!d || d.closed) return null;
+      const open = time(d.open, `${DAY_NAMES[i]} opening time`, { required: true });
+      const close = time(d.close, `${DAY_NAMES[i]} closing time`, { required: true });
+      if (close !== '00:00' && close <= open) throw badRequest(`${DAY_NAMES[i]}: closing time must be after opening time`);
+      return { open, close };
+    });
+    return JSON.stringify(days);
+  };
+  const locationBody = (b, existing = null) => ({
     name: str(b.name, 'name', { required: true, max: 100 }),
     address: str(b.address, 'address'),
     phone: str(b.phone, 'phone', { max: 50 }),
     active: b.active === undefined ? 1 : bool(b.active),
+    opening_hours: b.opening_hours === undefined ? existing?.opening_hours ?? null : openingHours(b.opening_hours),
   });
 
   router.post('/locations', requireAdmin, (req, res) => {
     const l = locationBody(req.body);
-    const r = db.prepare('INSERT INTO locations (name, address, phone, active) VALUES (?, ?, ?, ?)')
-      .run(l.name, l.address, l.phone, l.active);
+    const r = db.prepare('INSERT INTO locations (name, address, phone, active, opening_hours) VALUES (?, ?, ?, ?, ?)')
+      .run(l.name, l.address, l.phone, l.active, l.opening_hours);
     res.status(201).json(db.prepare('SELECT * FROM locations WHERE id = ?').get(r.lastInsertRowid));
   });
 
   router.put('/locations/:id', requireAdmin, (req, res) => {
-    const l = locationBody(req.body);
-    const r = db.prepare('UPDATE locations SET name = ?, address = ?, phone = ?, active = ? WHERE id = ?')
-      .run(l.name, l.address, l.phone, l.active, Number(req.params.id));
-    if (!r.changes) throw notFound('Location');
+    const existing = db.prepare('SELECT * FROM locations WHERE id = ?').get(Number(req.params.id));
+    if (!existing) throw notFound('Location');
+    const l = locationBody(req.body, existing);
+    db.prepare('UPDATE locations SET name = ?, address = ?, phone = ?, active = ?, opening_hours = ? WHERE id = ?')
+      .run(l.name, l.address, l.phone, l.active, l.opening_hours, existing.id);
     res.json(db.prepare('SELECT * FROM locations WHERE id = ?').get(Number(req.params.id)));
   });
 

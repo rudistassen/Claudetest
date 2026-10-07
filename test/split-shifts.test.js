@@ -58,3 +58,20 @@ test('quick shift times look ahead and fill up to five', async () => {
   assert.deepEqual(times.slice(0, 2).map((t) => `${t.start_time}–${t.end_time}`).sort(), ['05:00–06:00', '05:30–06:30']);
   assert.equal(times.length, 5, 'filled up with times used at the other sites');
 });
+
+test('each location can have opening hours for each day', async () => {
+  const admin = await login('admin@cafe.local');
+  const loc = db.prepare('SELECT * FROM locations ORDER BY id').get();
+  const week = [...Array(6).fill({ open: '07:00', close: '17:00' }), { closed: true }];
+  const r = await admin(`/locations/${loc.id}`, { method: 'PUT', body: { name: loc.name, address: loc.address, opening_hours: week } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(JSON.parse(r.data.opening_hours), [...Array(6).fill({ open: '07:00', close: '17:00' }), null]);
+  // Saving other details keeps them; closing at midnight is fine; closing before opening isn't.
+  await admin(`/locations/${loc.id}`, { method: 'PUT', body: { name: loc.name, phone: '0123' } });
+  assert.ok(db.prepare('SELECT opening_hours FROM locations WHERE id = ?').get(loc.id).opening_hours);
+  assert.equal((await admin(`/locations/${loc.id}`, { method: 'PUT', body: { name: loc.name, opening_hours: Array(7).fill({ open: '18:00', close: '00:00' }) } })).status, 200);
+  const bad = await admin(`/locations/${loc.id}`, { method: 'PUT', body: { name: loc.name, opening_hours: Array(7).fill({ open: '17:00', close: '09:00' }) } });
+  assert.equal(bad.status, 400);
+  assert.match(bad.data.error, /Monday: closing time must be after opening time/);
+  assert.equal((await admin(`/locations/${loc.id}`, { method: 'PUT', body: { name: loc.name, opening_hours: null } })).data.opening_hours, null);
+});
