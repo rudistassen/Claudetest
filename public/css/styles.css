@@ -1906,3 +1906,9 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .perm-area .check-row { font-size: 0.92rem; }
 .perm-area input:disabled + span { opacity: 0.75; }
 @media (max-width: 700px) { .perm-areas { grid-template-columns: minmax(0, 1fr); } }
+
+/* Rota: a day that already has a shift can take another (e.g. a split shift). */
+.add-more { display: block; margin-top: 0.2rem; font-size: 0.72rem; font-weight: 600; color: var(--muted); opacity: 0; text-align: center; border: 1px dashed var(--border); border-radius: 6px; padding: 0.1rem 0; }
+td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
+@media (hover: none) { .add-more { opacity: 0.8; } }
+@media print { .add-more { display: none; } }

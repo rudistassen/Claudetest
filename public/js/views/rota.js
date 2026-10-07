@@ -364,6 +364,7 @@ export async function render(ctx) {
                   ${away.map((x) => `<span class="cover-away" title="Covering at ${esc(x.location_name)} ${x.start_time}–${x.end_time}">Covering at ${esc(x.location_name)}<small>${x.start_time}–${x.end_time}</small></span>`).join('')}
                   ${shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''} ${s.sick ? 'shift-sick' : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
                   ${canEdit && !shifts.length && !off && !covering ? '<span class="add-hint">+</span>' : ''}
+                  ${canEdit && shifts.length && !off ? `<span class="add-more" title="Add another shift for ${esc(u.name)} on ${fmtDate(d)}">+ shift</span>` : ''}
                 </td>`;
               }).join('')}
               <td class="num">${rowHours(u, site)}</td>
@@ -650,8 +651,15 @@ export async function render(ctx) {
     e.stopPropagation();
     toast(`${a.title}. Edit it from that site’s rota${state.multiSite ? ' or All sites' : ''}.`);
   }));
+  // A person can have more than one shift in a day (e.g. a split shift): a day that already has one suggests the
+  // next starting when their last one ends.
+  const addTime = (t, hours) => { const [h, m] = t.split(':').map(Number); const mins = Math.min(h * 60 + m + hours * 60, 23 * 60 + 59); return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; };
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
-    shiftModal(null, { user_id: Number(td.dataset.user), date: td.dataset.date, location_id: Number(td.dataset.site) });
+    const userId = Number(td.dataset.user);
+    const already = data.shifts.filter((x) => x.user_id === userId && x.date === td.dataset.date && x.state !== 'removed' && x.end_time > x.start_time);
+    const lastEnd = already.map((x) => x.end_time).sort().pop();
+    const next = lastEnd && lastEnd < '23:00' ? { start_time: lastEnd, end_time: addTime(lastEnd, 4), break_minutes: 0 } : {};
+    shiftModal(null, { user_id: userId, date: td.dataset.date, location_id: Number(td.dataset.site), ...next });
   }));
   const scopeBody = { location_id: all ? 'all' : siteId, week, date: day ?? undefined };
   el.querySelector('#publish')?.addEventListener('click', async () => {
