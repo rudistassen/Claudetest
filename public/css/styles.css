@@ -2028,3 +2028,12 @@ td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
   .av-num { width: 1.35rem; height: 1.35rem; font-size: 0.7rem; }
   .av-dow { padding: 0.3rem 0.2rem; text-align: center; }
 }
+
+/* Rota: the week picker, centred under the title. */
+.week-nav { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin: -0.2rem 0 0.8rem; flex-wrap: wrap; }
+.week-step { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.week-step strong { min-width: 10.5rem; text-align: center; font-size: 0.95rem; }
+.week-step .btn { border-radius: 9px; padding-inline: 0.8rem; }
+.week-pick { position: relative; padding-inline: 0.65rem; }
+.week-pick input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+@media print { .week-nav .btn, .week-pick { display: none; } .week-step { border: 0; } }

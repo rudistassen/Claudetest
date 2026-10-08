@@ -405,6 +405,21 @@ export async function render(ctx) {
     const peak = Math.max(1, ...hours.map(([, n]) => n));
     return `<div class="gt-cover">${hours.map(([h, n]) => `<span style="height:${(n / peak) * 100}%" title="${String(h).padStart(2, '0')}:00–${String(h + 1).padStart(2, '0')}:00 · ${n} on"></span>`).join('')}</div>`;
   };
+  // The week, centred under the title: a calendar to jump to any week, and ‹ › either side of its dates.
+  const weekEnd = addDays(week, 6);
+  const sameMonth = week.slice(0, 7) === weekEnd.slice(0, 7);
+  const weekLabel = `${fmtDate(week, sameMonth ? { day: 'numeric' } : { day: 'numeric', month: 'short' })} – ${fmtDate(weekEnd, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const thisWeek = weekStart(today);
+  const weekNav = `<div class="week-nav">
+      <label class="btn week-pick" title="Pick a week"><span aria-hidden="true">📅</span><span class="sr-only">Pick a week</span>
+        <input type="date" id="week-pick" value="${week}" aria-label="Pick a week"></label>
+      <div class="week-step">
+        <button class="btn btn-ghost" data-week="-7" aria-label="Previous week">‹</button>
+        <strong>${weekLabel}</strong>
+        <button class="btn btn-ghost" data-week="7" aria-label="Next week">›</button>
+      </div>
+      ${week !== thisWeek ? `<button class="btn btn-small btn-ghost" data-week="0">${week < thisWeek ? 'Back to this week' : 'This week'}</button>` : ''}
+    </div>`;
   if (view === 'day') el.innerHTML = dayView();
   else el.innerHTML = `
     <div class="page-head">
@@ -419,13 +434,11 @@ export async function render(ctx) {
         </select>
         ${all ? '<button class="btn" id="collapse-all"></button>' : ''}
         <a class="btn" href="#/rota${qs({ view: 'mine', week })}">My shifts</a>
-        <button class="btn" data-week="-7">‹ Prev</button>
-        <button class="btn" data-week="0">This week</button>
-        <button class="btn" data-week="7">Next ›</button>
         ${canEdit ? '<button class="btn" id="copy-week">Copy previous week</button>' : ''}
         <button class="btn" id="print">Print</button>
       </div>
     </div>
+    ${weekNav}
     ${canEdit ? (pending ? `
     <div class="publish-bar">
       <span><strong>${pending} unpublished change${pending === 1 ? '' : 's'}</strong> – staff can’t see ${pending === 1 ? 'it' : 'them'} yet.
@@ -540,6 +553,9 @@ export async function render(ctx) {
     const offset = Number(b.dataset.week);
     ctx.navigate(`rota${scopeQs({ week: offset ? addDays(week, offset) : undefined })}`);
   }));
+  const pick = el.querySelector('#week-pick');
+  pick?.addEventListener('click', () => { try { pick.showPicker(); } catch { /* the browser opens its own picker */ } });
+  pick?.addEventListener('change', () => { if (pick.value) ctx.navigate(`rota${scopeQs({ week: weekStart(pick.value) })}`); });
   el.querySelector('#print')?.addEventListener('click', () => window.print());
   if (!canEdit) return;
 

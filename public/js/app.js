@@ -134,7 +134,7 @@ function navGroups() {
       ['rota', 'Rota', '◷', ROTA],
       ['rota/requests', 'Requests', '✉', ['rota.publish', 'leave.manage']],
       ['timeoff', 'Time off', '☀'],
-      ['availability', 'My availability', '◑'],
+      ['availability', 'My availability', '⏱'],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
     ]],
     ['Trail', [
