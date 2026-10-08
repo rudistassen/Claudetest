@@ -635,6 +635,40 @@ CREATE TABLE IF NOT EXISTS availability (
   PRIMARY KEY (user_id, weekday)
 );
 
+-- Availability on a particular day: unavailable or available, all day or between two times (one row per time range).
+-- Anything set for a day replaces the person's repeating pattern for that day.
+CREATE TABLE IF NOT EXISTS availability_days (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('unavailable', 'available')),
+  all_day INTEGER NOT NULL DEFAULT 0,
+  from_time TEXT,
+  to_time TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_availability_days_user ON availability_days(user_id, date);
+-- Repeating availability: from a date (to an end date, or for good), repeating every 1, 2 or 4 weeks. Each slot is
+-- a day in the pattern (week 0 = the week it starts in; weekday 0 = Monday).
+CREATE TABLE IF NOT EXISTS availability_patterns (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  start_date TEXT NOT NULL,
+  end_date TEXT,
+  weeks INTEGER NOT NULL DEFAULT 1 CHECK (weeks IN (1, 2, 4)),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS availability_pattern_slots (
+  id INTEGER PRIMARY KEY,
+  pattern_id INTEGER NOT NULL REFERENCES availability_patterns(id) ON DELETE CASCADE,
+  week INTEGER NOT NULL DEFAULT 0,
+  weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  kind TEXT NOT NULL CHECK (kind IN ('unavailable', 'available')),
+  all_day INTEGER NOT NULL DEFAULT 0,
+  from_time TEXT,
+  to_time TEXT
+);
+
 -- Named groups of permissions staff are assigned to. built_in marks the default Manager and Staff sets
 -- ('manager' / 'staff'), which people without a set fall back to by role.
 CREATE TABLE IF NOT EXISTS permission_sets (
@@ -1137,6 +1171,25 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 7');
+  }
+  if (version < 8) {
+    // Availability became a calendar with repeating patterns: each person's usual weekly availability carries on as
+    // a weekly pattern from this week.
+    const people = db.prepare('SELECT DISTINCT user_id FROM availability').all().map((r) => r.user_id);
+    if (people.length) {
+      const now = new Date();
+      const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7))).toISOString().slice(0, 10);
+      const slot = db.prepare(`INSERT INTO availability_pattern_slots (pattern_id, week, weekday, kind, all_day, from_time, to_time) VALUES (?, 0, ?, ?, ?, ?, ?)`);
+      for (const userId of people) {
+        const patternId = db.prepare('INSERT INTO availability_patterns (user_id, start_date, weeks) VALUES (?, ?, 1)').run(userId, monday).lastInsertRowid;
+        for (const r of db.prepare('SELECT * FROM availability WHERE user_id = ?').all(userId)) {
+          // "Only available 9–5" becomes "available 9–5"; "not available" becomes unavailable all day.
+          if (r.status === 'none') slot.run(patternId, r.weekday, 'unavailable', 1, null, null);
+          else slot.run(patternId, r.weekday, 'available', 0, r.from_time, r.to_time);
+        }
+      }
+    }
+    db.exec('PRAGMA user_version = 8');
   }
   ensureDefaultSets(db);
   return db;

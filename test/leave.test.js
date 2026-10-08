@@ -83,25 +83,57 @@ test('managers can’t approve their own holiday', async () => {
   assert.equal((await admin(`/leave/${r.data.id}/decide`, { method: 'POST', body: { status: 'approved' } })).status, 200);
 });
 
-test('everyone sets their usual availability, and managers and the rota see it', async () => {
+test('staff set availability for days and repeating patterns; managers and the rota see it', async () => {
   const staff = await login('staff2@cafe.local');
   const manager = await login('manager2@cafe.local');
-  assert.deepEqual((await staff('/availability/mine')).data.days, {}, 'available any time until they say otherwise');
-  const bad = await staff('/availability/mine', { method: 'PUT', body: { days: [{ weekday: 1, status: 'some', from_time: '17:00', to_time: '09:00' }] } });
-  assert.equal(bad.status, 400);
-  const saved = await staff('/availability/mine', { method: 'PUT', body: {
-    note: 'School run', days: [{ weekday: 0, status: 'none' }, { weekday: 1, status: 'some', from_time: '10:00', to_time: '15:00' }, { weekday: 2, status: 'any' }],
-  } });
-  assert.equal(saved.status, 200);
-  assert.deepEqual(saved.data.days, { 0: { status: 'none', from_time: null, to_time: null }, 1: { status: 'some', from_time: '10:00', to_time: '15:00' } });
-  assert.equal(saved.data.note, 'School run');
+  const other = await login('staff1@cafe.local');
+  const monday = weekStart(addDays(today(), 7));
+  const tuesday = addDays(monday, 1);
+  const cal = (q = '') => staff(`/availability/calendar?from=${monday}&to=${addDays(monday, 20)}${q}`);
+  assert.deepEqual((await cal()).data.days, {}, 'available any time until they say otherwise');
 
+  // A day: unavailable 09:00–12:00 and 14:00–16:00.
+  const bad = await staff('/availability/days', { method: 'POST', body: { date: monday, kind: 'unavailable', ranges: [{ from_time: '17:00', to_time: '09:00' }] } });
+  assert.equal(bad.status, 400);
+  const day = await staff('/availability/days', { method: 'POST', body: { date: monday, kind: 'unavailable', ranges: [{ from_time: '09:00', to_time: '12:00' }, { from_time: '14:00', to_time: '16:00' }] } });
+  assert.equal(day.status, 201);
+  assert.equal(day.data.length, 2);
+
+  // A pattern every 2 weeks: week 1 Tuesdays unavailable all day; week 2 Tuesdays available 10–15.
+  const pat = await staff('/availability/patterns', { method: 'POST', body: { start_date: monday, weeks: 2, slots: [
+    { week: 0, weekday: 1, kind: 'unavailable', all_day: true },
+    { week: 1, weekday: 1, kind: 'available', from_time: '10:00', to_time: '15:00' },
+    { week: 0, weekday: 0, kind: 'unavailable', all_day: true },
+  ] } });
+  assert.equal(pat.status, 201);
+  let days = (await cal()).data.days;
+  assert.deepEqual(days[tuesday].map((x) => [x.kind, x.all_day, x.source]), [['unavailable', true, 'pattern']]);
+  assert.deepEqual(days[addDays(tuesday, 7)].map((x) => [x.kind, x.from_time, x.to_time]), [['available', '10:00', '15:00']]);
+  assert.deepEqual(days[addDays(tuesday, 14)].map((x) => x.kind), ['unavailable'], 'repeats every two weeks');
+  assert.equal(days[monday].length, 2, 'what was set for the day replaces the pattern that day');
+  assert.ok(days[monday].every((x) => x.source === 'day'));
+  // Clearing the day brings the pattern back.
+  await staff('/availability/days/clear', { method: 'POST', body: { date: monday } });
+  assert.deepEqual((await cal()).data.days[monday].map((x) => [x.all_day, x.source]), [[true, 'pattern']]);
+  await staff('/availability/note', { method: 'PUT', body: { note: 'School run' } });
+
+  // Someone else can't change it; their manager can, and sees it.
+  assert.equal((await other('/availability/days', { method: 'POST', body: { user_id: staff.me.id, date: monday, kind: 'available', all_day: true } })).status, 403);
   assert.equal((await staff('/availability')).status, 403);
+  const managed = await manager(`/availability/calendar?user_id=${staff.me.id}&from=${monday}&to=${addDays(monday, 6)}`);
+  assert.equal(managed.status, 200);
+  assert.ok(managed.data.people.some((p) => p.id === staff.me.id));
+  assert.equal((await manager('/availability/days', { method: 'POST', body: { user_id: staff.me.id, date: addDays(monday, 2), kind: 'available', all_day: true } })).status, 201);
   const team = (await manager('/availability')).data;
-  const me = team.people.find((p) => p.id === staff.me.id);
-  assert.equal(me.days[1].from_time, '10:00');
-  assert.equal(me.note, 'School run');
+  assert.equal(team.people.find((p) => p.id === staff.me.id).note, 'School run');
   assert.ok(team.people.every((p) => p.location_id === manager.me.location_id));
-  const rota = (await manager('/rota')).data;
-  assert.equal(rota.availability[staff.me.id].days[0].status, 'none');
+
+  // The rota for that week has it by date.
+  const rota = (await manager(`/rota?week=${monday}`)).data;
+  assert.deepEqual(rota.availability[staff.me.id].days[tuesday].map((x) => x.kind), ['unavailable']);
+  assert.deepEqual(rota.availability[staff.me.id].days[addDays(monday, 2)].map((x) => [x.kind, x.all_day]), [['available', true]]);
+
+  // Deleting the pattern removes it from every week.
+  await staff(`/availability/patterns/${pat.data.id}`, { method: 'DELETE' });
+  assert.equal((await cal()).data.days[tuesday], undefined);
 });

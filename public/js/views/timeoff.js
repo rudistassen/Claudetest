@@ -1,3 +1,4 @@
+import { renderAvailability, renderTeam } from './availability.js';
 import { api, confirmDialog, esc, field, fmtDate, input, openModal, qs, showError, textarea, toast, todayISO } from '../lib.js';
 
 // Time off: your holiday requests and usual availability; for managers, approving requests and the team's availability.
@@ -17,9 +18,9 @@ function tabs(state, active) {
 
 export async function render(ctx) {
   const tab = ctx.query.tab ?? 'mine';
-  if (tab === 'availability') return renderAvailability(ctx);
+  if (tab === 'availability') return renderAvailability(ctx, tabs(ctx.state, 'availability'));
   if (tab === 'requests' && ctx.state.can('leave.manage')) return renderRequests(ctx);
-  if (tab === 'team' && ctx.state.can('leave.manage')) return renderTeam(ctx);
+  if (tab === 'team' && ctx.state.can('leave.manage')) return renderTeam(ctx, tabs(ctx.state, 'team'));
   return renderMine(ctx);
 }
 
@@ -80,56 +81,6 @@ async function renderMine(ctx) {
   }));
 }
 
-// --- My availability ---
-
-async function renderAvailability(ctx) {
-  const { el, state } = ctx;
-  const data = await api('/availability/mine');
-  if (ctx.stale()) return;
-  const row = (name, i) => {
-    const d = data.days[i] ?? { status: 'any' };
-    return `<div class="avail-row" data-day="${i}">
-      <strong>${name}</strong>
-      <select name="status" aria-label="${name}">
-        <option value="any" ${d.status === 'any' ? 'selected' : ''}>Any time</option>
-        <option value="some" ${d.status === 'some' ? 'selected' : ''}>Only between…</option>
-        <option value="none" ${d.status === 'none' ? 'selected' : ''}>Not available</option>
-      </select>
-      <span class="avail-times" ${d.status === 'some' ? '' : 'hidden'}>
-        <input type="time" name="from_time" value="${d.from_time ?? '09:00'}" aria-label="${name} from"> <span>and</span>
-        <input type="time" name="to_time" value="${d.to_time ?? '17:00'}" aria-label="${name} until">
-      </span>
-    </div>`;
-  };
-  el.innerHTML = `
-    <div class="page-head"><h1>Time off</h1></div>
-    ${tabs(state, 'availability')}
-    <form class="card" id="avail">
-      <h2>When can you usually work?</h2>
-      <p class="muted small">This helps your manager plan the rota. For one-off days off, request holiday instead.</p>
-      ${data.weekdays.map(row).join('')}
-      ${field('Anything else your manager should know (optional)', textarea('note', data.note ?? '', 'placeholder="e.g. school run until 9:15 on weekdays"'))}
-      <button class="btn btn-primary" type="submit">Save availability</button>
-    </form>`;
-  const form = el.querySelector('#avail');
-  form.querySelectorAll('.avail-row select').forEach((s) => s.addEventListener('change', () => {
-    s.closest('.avail-row').querySelector('.avail-times').hidden = s.value !== 'some';
-  }));
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const days = [...form.querySelectorAll('.avail-row')].map((r) => ({
-      weekday: Number(r.dataset.day),
-      status: r.querySelector('[name=status]').value,
-      from_time: r.querySelector('[name=from_time]').value,
-      to_time: r.querySelector('[name=to_time]').value,
-    }));
-    try {
-      await api('/availability/mine', { method: 'PUT', body: { days, note: form.note.value } });
-      toast('Availability saved');
-    } catch (err) { showError(err); }
-  });
-}
-
 // --- Holiday requests (managers) ---
 
 async function renderRequests(ctx) {
@@ -172,33 +123,4 @@ async function renderRequests(ctx) {
       },
     });
   }));
-}
-
-// --- Team availability (managers) ---
-
-async function renderTeam(ctx) {
-  const { el, state } = ctx;
-  const data = await api('/availability');
-  if (ctx.stale()) return;
-  const cell = (d) => (!d ? '<td class="avail-any">Any time</td>'
-    : d.status === 'none' ? '<td class="avail-none">Not available</td>'
-      : `<td class="avail-some">${d.from_time}–${d.to_time}</td>`);
-  let site = null;
-  el.innerHTML = `
-    <div class="page-head"><h1>Time off</h1></div>
-    ${tabs(state, 'team')}
-    <section class="card">
-      <h2>Usual availability</h2>
-      <div class="table-wrap"><table class="avail-table">
-        <thead><tr><th>Person</th>${data.weekdays.map((w) => `<th>${w.slice(0, 3)}</th>`).join('')}<th>Holiday (next 4 weeks)</th></tr></thead>
-        <tbody>${data.people.map((p) => {
-          const group = p.location_name !== site ? `<tr class="avail-group"><th colspan="${data.weekdays.length + 2}">${esc(p.location_name ?? 'No home site')}</th></tr>` : '';
-          site = p.location_name;
-          return `${group}<tr><th>${esc(p.name)}${p.note ? `<small>${esc(p.note)}</small>` : ''}</th>
-            ${data.weekdays.map((_, i) => cell(p.days[i])).join('')}
-            <td class="small">${p.holiday.map((h) => (h.start_date === h.end_date ? fmtDate(h.start_date) : `${fmtDate(h.start_date)} – ${fmtDate(h.end_date)}`)).join('<br>') || '<span class="muted">–</span>'}</td></tr>`;
-        }).join('')}</tbody>
-      </table></div>
-      <p class="muted small">Everyone sets this themselves under Time off → My availability. It’s shown on the rota too.</p>
-    </section>`;
 }

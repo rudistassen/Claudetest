@@ -53,18 +53,40 @@ export async function render(ctx) {
   // there that week, plus that site's own staff so they can be added. Someone working at two sites is in both.
   const cellKey = (userId, siteId, d) => `${userId}|${all ? siteId : ''}|${d}`;
   // Holiday and usual availability (sent to people who plan the rota).
-  const WEEKDAY_NAMES = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
   const weekdayOf = (d) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
   const holidayOn = (userId, d, status) => (data.leave ?? []).find((l) => l.user_id === userId && l.status === status && l.start_date <= d && l.end_date >= d);
-  const availOn = (userId, d) => data.availability?.[userId]?.days?.[weekdayOf(d)] ?? null;
+  // What someone has said about a day (Time off → My availability): unavailable or available, all day or between
+  // times – from that day or their repeating pattern.
+  const availOn = (userId, d) => data.availability?.[userId]?.days?.[d] ?? [];
+  const range = (a) => (a.all_day ? 'all day' : `${a.from_time}–${a.to_time}`);
   const cellNotes = (userId, d) => {
     if (holidayOn(userId, d, 'approved')) return '<span class="cell-note cell-holiday">Holiday</span>';
     const notes = [];
     if (holidayOn(userId, d, 'pending')) notes.push('<span class="cell-note cell-pending">Holiday requested</span>');
-    const a = availOn(userId, d);
-    if (a?.status === 'none') notes.push('<span class="cell-note">Not available</span>');
-    else if (a?.status === 'some') notes.push(`<span class="cell-note">${a.from_time}–${a.to_time} only</span>`);
+    for (const a of availOn(userId, d)) {
+      notes.push(a.kind === 'unavailable'
+        ? `<span class="cell-note cell-unavail" title="Not available ${range(a)}${a.source === 'pattern' ? ' (repeating)' : ''}">✕ ${a.all_day ? 'Not available' : `Not ${range(a)}`}</span>`
+        : `<span class="cell-note cell-avail" title="Available ${range(a)}${a.source === 'pattern' ? ' (repeating)' : ''}">✓ ${a.all_day ? 'Available' : range(a)}</span>`);
+    }
     return notes.join('');
+  };
+  // A gentle warning when a shift clashes with what someone said: unavailable then, or outside the times they said
+  // they're available.
+  const toMinutes = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const availClash = (userId, d, start, end, name) => {
+    const list = availOn(userId, d);
+    if (!list.length || !start || !end) return '';
+    const s = toMinutes(start);
+    let e = toMinutes(end);
+    if (e <= s) e = 24 * 60;
+    const day = fmtDate(d, { weekday: 'long', day: 'numeric', month: 'short' });
+    const off = list.filter((a) => a.kind === 'unavailable' && (a.all_day || (toMinutes(a.from_time) < e && toMinutes(a.to_time) > s)));
+    if (off.length) return `${name} isn’t available ${off.some((a) => a.all_day) ? '' : `${off.map(range).join(', ')} `}on ${day}.`;
+    const avail = list.filter((a) => a.kind === 'available' && !a.all_day);
+    if (avail.length && !avail.some((a) => toMinutes(a.from_time) <= s && toMinutes(a.to_time) >= e)) {
+      return `${name} said they’re available ${avail.map(range).join(', ')} on ${day}.`;
+    }
+    return '';
   };
   const byCell = new Map();
   for (const s of [...data.shifts, ...data.away_shifts.map((a) => ({ ...a, away: true }))]) {
@@ -590,14 +612,10 @@ export async function render(ctx) {
       const userId = Number(form.user_id.value);
       const d = form.date.value;
       const name = data.staff.find((u) => u.id === userId)?.name ?? 'They';
-      const a = d ? availOn(userId, d) : null;
       let msg = '';
       if (d && holidayOn(userId, d, 'approved')) msg = `${name} is on holiday that day, so this shift can’t be saved.`;
       else if (d && holidayOn(userId, d, 'pending')) msg = `${name} has asked for holiday that day.`;
-      else if (a?.status === 'none') msg = `${name} isn’t usually available on ${WEEKDAY_NAMES[weekdayOf(d)]}.`;
-      else if (a?.status === 'some' && (form.start_time.value < a.from_time || form.end_time.value > a.to_time)) {
-        msg = `${name} is usually only available ${a.from_time}–${a.to_time} on ${WEEKDAY_NAMES[weekdayOf(d)]}.`;
-      }
+      else if (d) msg = availClash(userId, d, form.start_time.value, form.end_time.value, name);
       warn.textContent = msg;
       warn.hidden = !msg;
     };
@@ -670,13 +688,9 @@ export async function render(ctx) {
         const when = to.date === shift.date ? '' : ` on ${fmtDate(to.date)}`;
         toast(`${copy ? 'Copied' : 'Moved'} the ${shift.start_time}–${shift.end_time} shift${who}${when}`);
         // The same gentle warnings as the shift window: a day they've asked off, or outside their usual hours.
-        const a = availOn(to.user_id, to.date);
         let warning = '';
         if (holidayOn(to.user_id, to.date, 'pending')) warning = `${name} has asked for holiday that day.`;
-        else if (a?.status === 'none') warning = `${name} isn’t usually available on ${WEEKDAY_NAMES[weekdayOf(to.date)]}.`;
-        else if (a?.status === 'some' && (shift.start_time < a.from_time || shift.end_time > a.to_time)) {
-          warning = `${name} is usually only available ${a.from_time}–${a.to_time} on ${WEEKDAY_NAMES[weekdayOf(to.date)]}.`;
-        }
+        else warning = availClash(to.user_id, to.date, shift.start_time, shift.end_time, name);
         if (warning) setTimeout(() => toast(warning, 'error'), 2400);
         ctx.rerender();
       },

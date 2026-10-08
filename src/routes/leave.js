@@ -1,4 +1,5 @@
 import { can, requirePerm } from '../auth.js';
+import { availabilityOn, patternsFor } from '../availability.js';
 import { fmtDay, logRota } from '../rota-log.js';
 import { addDays, badRequest, date, forbidden, id, notFound, oneOf, str, time, today } from '../util.js';
 
@@ -12,22 +13,6 @@ export function leaveFor(db, userIds, from, to) {
   return db.prepare(`SELECT id, user_id, start_date, end_date, status, note FROM leave_requests
     WHERE status IN ('pending', 'approved') AND user_id IN (${userIds.map(() => '?').join(', ')}) AND start_date <= ? AND end_date >= ?
     ORDER BY start_date`).all(...userIds, to, from);
-}
-
-/** Each person's weekly availability: { userId: { weekday: { status, from_time, to_time } } } plus their note. */
-export function availabilityFor(db, userIds) {
-  const out = {};
-  if (!userIds.length) return out;
-  const list = userIds.map(() => '?').join(', ');
-  for (const r of db.prepare(`SELECT * FROM availability WHERE user_id IN (${list})`).all(...userIds)) {
-    out[r.user_id] ??= { days: {}, note: null };
-    out[r.user_id].days[r.weekday] = { status: r.status, from_time: r.from_time, to_time: r.to_time };
-  }
-  for (const u of db.prepare(`SELECT id, availability_note FROM users WHERE id IN (${list}) AND availability_note IS NOT NULL`).all(...userIds)) {
-    out[u.id] ??= { days: {}, note: null };
-    out[u.id].note = u.availability_note;
-  }
-  return out;
 }
 
 /** The approved holiday someone is on for a date, if any (shifts can't be added then). */
@@ -122,48 +107,153 @@ export function registerLeaveRoutes(router, db) {
     res.json(withDays(db.prepare(`${withNames} WHERE r.id = ?`).get(r.id)));
   });
 
-  // --- Availability ---
+  // --- Availability: a calendar of days and repeating patterns (see availability.js) ---
 
-  router.get('/availability/mine', (req, res) => {
-    res.json({ weekdays: WEEKDAYS, ...(availabilityFor(db, [req.user.id])[req.user.id] ?? { days: {}, note: null }) });
+  // Whose availability this person can see and change: their own, and (with leave.manage) the people they look after.
+  const targetUser = (req, raw) => {
+    const userId = raw === undefined || raw === null || raw === '' ? req.user.id : id(raw, 'user_id', { required: true });
+    if (userId !== req.user.id && !(can(req.user, 'leave.manage') && manageable(req).some((u) => u.id === userId))) throw forbidden('You can’t change this person’s availability');
+    return db.prepare('SELECT id, name FROM users WHERE id = ?').get(userId) ?? (() => { throw notFound('Staff member'); })();
+  };
+  // A time range: all day, or from–to (to after from).
+  const slotTimes = (b, label) => {
+    if (b.all_day) return { all_day: 1, from_time: null, to_time: null };
+    const from = time(b.from_time, `${label} from`, { required: true });
+    const to = time(b.to_time, `${label} until`, { required: true });
+    if (to <= from) throw badRequest(`${label}: “until” must be after “from”`);
+    return { all_day: 0, from_time: from, to_time: to };
+  };
+  const KINDS = ['unavailable', 'available'];
+
+  // The calendar for a person (?user_id=, default you) from ?from to ?to (default this month), their patterns and
+  // note, and for managers the people they can choose from.
+  router.get('/availability/calendar', (req, res) => {
+    const user = targetUser(req, req.query.user_id);
+    const from = date(req.query.from, 'from') ?? `${today().slice(0, 8)}01`;
+    const to = date(req.query.to, 'to') ?? addDays(from, 41);
+    if (to < from || addDays(from, 92) < to) throw badRequest('Choose up to three months');
+    const a = availabilityOn(db, [user.id], from, to)[user.id];
+    res.json({
+      user, from, to, note: a.note, days: a.days,
+      patterns: patternsFor(db, [user.id]),
+      people: can(req.user, 'leave.manage') ? [{ id: req.user.id, name: req.user.name }, ...manageable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name }))] : null,
+    });
   });
 
-  // days: [{ weekday, status: 'any' | 'some' | 'none', from_time, to_time }]
-  router.put('/availability/mine', (req, res) => {
-    const days = Array.isArray(req.body.days) ? req.body.days : [];
-    const rows = days.map((d) => {
-      const weekday = id(Number(d.weekday) + 1, 'weekday', { required: true, max: 7 }) - 1;
-      const status = oneOf(d.status, 'status', ['any', 'some', 'none'], { required: true });
-      if (status !== 'some') return { weekday, status, from: null, to: null };
-      const from = time(d.from_time, `${WEEKDAYS[weekday]} from`, { required: true });
-      const to = time(d.to_time, `${WEEKDAYS[weekday]} until`, { required: true });
-      if (to <= from) throw badRequest(`${WEEKDAYS[weekday]}: “until” must be after “from”`);
-      return { weekday, status, from, to };
-    });
-    const note = str(req.body.note, 'note', { max: 500 });
+  // Adds availability for a day: { user_id?, date, kind, all_day, ranges: [{ from_time, to_time }] }.
+  router.post('/availability/days', (req, res) => {
+    const user = targetUser(req, req.body.user_id);
+    const day = date(req.body.date, 'date', { required: true });
+    const kind = oneOf(req.body.kind, 'kind', KINDS, { required: true });
+    const ranges = req.body.all_day ? [{ all_day: true }] : (Array.isArray(req.body.ranges) ? req.body.ranges : []);
+    if (!ranges.length) throw badRequest('Choose all day, or add the times');
+    const rows = ranges.map((r, i) => slotTimes(r, ranges.length > 1 ? `Time ${i + 1}` : 'Time'));
+    const ins = db.prepare('INSERT INTO availability_days (user_id, date, kind, all_day, from_time, to_time) VALUES (?, ?, ?, ?, ?, ?)');
     db.exec('BEGIN');
     try {
-      for (const r of rows) {
-        db.prepare('DELETE FROM availability WHERE user_id = ? AND weekday = ?').run(req.user.id, r.weekday);
-        if (r.status !== 'any') db.prepare('INSERT INTO availability (user_id, weekday, status, from_time, to_time) VALUES (?, ?, ?, ?, ?)').run(req.user.id, r.weekday, r.status, r.from, r.to);
-      }
-      db.prepare('UPDATE users SET availability_note = ? WHERE id = ?').run(note, req.user.id);
+      // All day replaces anything else said for that day.
+      if (req.body.all_day) db.prepare('DELETE FROM availability_days WHERE user_id = ? AND date = ?').run(user.id, day);
+      else db.prepare('DELETE FROM availability_days WHERE user_id = ? AND date = ? AND all_day = 1').run(user.id, day);
+      for (const r of rows) ins.run(user.id, day, kind, r.all_day, r.from_time, r.to_time);
       db.exec('COMMIT');
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
-    res.json({ weekdays: WEEKDAYS, ...(availabilityFor(db, [req.user.id])[req.user.id] ?? { days: {}, note: null }) });
+    } catch (err) { db.exec('ROLLBACK'); throw err; }
+    res.status(201).json(availabilityOn(db, [user.id], day, day)[user.id].days[day] ?? []);
   });
 
+  router.delete('/availability/days/:id', (req, res) => {
+    const row = db.prepare('SELECT * FROM availability_days WHERE id = ?').get(Number(req.params.id));
+    if (!row) throw notFound('Availability');
+    targetUser(req, row.user_id);
+    db.prepare('DELETE FROM availability_days WHERE id = ?').run(row.id);
+    res.json({ ok: true });
+  });
+
+  // Clears what was said for a day, so the pattern (if any) applies again.
+  router.post('/availability/days/clear', (req, res) => {
+    const user = targetUser(req, req.body.user_id);
+    const day = date(req.body.date, 'date', { required: true });
+    db.prepare('DELETE FROM availability_days WHERE user_id = ? AND date = ?').run(user.id, day);
+    res.json({ ok: true });
+  });
+
+  router.put('/availability/note', (req, res) => {
+    const user = targetUser(req, req.body.user_id);
+    db.prepare('UPDATE users SET availability_note = ? WHERE id = ?').run(str(req.body.note, 'note', { max: 500 }), user.id);
+    res.json({ ok: true });
+  });
+
+  // A repeating pattern: { user_id?, start_date, end_date?, weeks: 1 | 2 | 4, slots: [{ week, weekday, kind, all_day,
+  // from_time, to_time }] }.
+  function patternBody(req) {
+    const b = req.body ?? {};
+    const user = targetUser(req, b.user_id);
+    const start = date(b.start_date, 'From', { required: true });
+    const end = date(b.end_date, 'To');
+    if (end && end < start) throw badRequest('“To” must be after “From”');
+    const weeks = Number(b.weeks ?? 1);
+    if (![1, 2, 4].includes(weeks)) throw badRequest('Repeat every 1, 2 or 4 weeks');
+    const slots = (Array.isArray(b.slots) ? b.slots : []).map((x) => {
+      const week = Number(x.week ?? 0);
+      const weekday = Number(x.weekday);
+      if (!Number.isInteger(week) || week < 0 || week >= weeks) throw badRequest('That week isn’t in the pattern');
+      if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) throw badRequest('Choose a day of the week');
+      return { week, weekday, kind: oneOf(x.kind, 'kind', KINDS, { required: true }), ...slotTimes(x, `Week ${week + 1} ${WEEKDAYS[weekday]}`) };
+    });
+    if (!slots.length) throw badRequest('Add availability to at least one day of the pattern');
+    return { user, start, end, weeks, slots };
+  }
+  const saveSlots = (patternId, slots) => {
+    db.prepare('DELETE FROM availability_pattern_slots WHERE pattern_id = ?').run(patternId);
+    const ins = db.prepare('INSERT INTO availability_pattern_slots (pattern_id, week, weekday, kind, all_day, from_time, to_time) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    for (const x of slots) ins.run(patternId, x.week, x.weekday, x.kind, x.all_day, x.from_time, x.to_time);
+  };
+  const pattern = (req, patternId) => {
+    const p = db.prepare('SELECT * FROM availability_patterns WHERE id = ?').get(patternId);
+    if (!p) throw notFound('Pattern');
+    targetUser(req, p.user_id);
+    return p;
+  };
+
+  router.post('/availability/patterns', (req, res) => {
+    const p = patternBody(req);
+    db.exec('BEGIN');
+    let patternId;
+    try {
+      patternId = Number(db.prepare('INSERT INTO availability_patterns (user_id, start_date, end_date, weeks) VALUES (?, ?, ?, ?)').run(p.user.id, p.start, p.end, p.weeks).lastInsertRowid);
+      saveSlots(patternId, p.slots);
+      db.exec('COMMIT');
+    } catch (err) { db.exec('ROLLBACK'); throw err; }
+    res.status(201).json(patternsFor(db, [p.user.id]).find((x) => x.id === patternId));
+  });
+
+  router.put('/availability/patterns/:id', (req, res) => {
+    const existing = pattern(req, Number(req.params.id));
+    const p = patternBody({ ...req, body: { ...req.body, user_id: existing.user_id } });
+    db.exec('BEGIN');
+    try {
+      db.prepare('UPDATE availability_patterns SET start_date = ?, end_date = ?, weeks = ? WHERE id = ?').run(p.start, p.end, p.weeks, existing.id);
+      saveSlots(existing.id, p.slots);
+      db.exec('COMMIT');
+    } catch (err) { db.exec('ROLLBACK'); throw err; }
+    res.json(patternsFor(db, [p.user.id]).find((x) => x.id === existing.id));
+  });
+
+  router.delete('/availability/patterns/:id', (req, res) => {
+    const p = pattern(req, Number(req.params.id));
+    db.prepare('DELETE FROM availability_patterns WHERE id = ?').run(p.id);
+    res.json({ ok: true });
+  });
+
+  // Managers: everyone's availability for the next two weeks, with approved holiday.
   router.get('/availability', requirePerm('leave.manage'), (req, res) => {
     const people = manageable(req);
-    const avail = availabilityFor(db, people.map((u) => u.id));
     const from = today();
-    const leave = leaveFor(db, people.map((u) => u.id), from, addDays(from, 27));
+    const to = addDays(from, 13);
+    const avail = availabilityOn(db, people.map((u) => u.id), from, to);
+    const leave = leaveFor(db, people.map((u) => u.id), from, to);
     res.json({
-      weekdays: WEEKDAYS,
-      people: people.map((u) => ({ ...u, ...(avail[u.id] ?? { days: {}, note: null }), holiday: leave.filter((l) => l.user_id === u.id && l.status === 'approved') })),
+      from, to,
+      people: people.map((u) => ({ ...u, ...avail[u.id], holiday: leave.filter((l) => l.user_id === u.id && l.status === 'approved') })),
     });
   });
 

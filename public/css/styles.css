@@ -1977,3 +1977,54 @@ td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
 .import-changes li { white-space: nowrap; }
 .ing-edit { font-size: 0.78rem; margin-top: 0.1rem; }
 .dash-hourly-head .hourly-site { font-size: 0.82rem; padding: 0.2rem 1.6rem 0.2rem 0.5rem; margin: 0 auto 0.3rem 0.6rem; width: auto; max-width: 14rem; }
+.rota .cell-note.cell-unavail { color: var(--bad); font-weight: 600; }
+.rota .cell-note.cell-avail { color: var(--good); }
+
+/* Time off → My availability: month calendar, day pop-up and repeating patterns. */
+.av-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.4rem; }
+.av-head select { width: auto; min-width: 12rem; }
+.av-month { display: flex; align-items: center; gap: 0.4rem; }
+.av-month strong { min-width: 9.5rem; text-align: center; }
+.av-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); margin-bottom: 1rem; }
+.av-dow { padding: 0.35rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.av-day { position: relative; min-height: 6.5rem; padding: 0.35rem 0.4rem 1.9rem; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); min-width: 0; }
+.av-day:nth-child(7n) { border-right: 0; }
+.av-day.is-out { background: var(--surface-2); }
+.av-day.is-out .av-num { opacity: 0.5; }
+.av-day.is-past { opacity: 0.6; }
+.av-num { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; font-size: 0.78rem; border: 1px solid var(--border); }
+.av-day.is-today .av-num { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 700; }
+.av-chips { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.25rem; }
+.av-chip { display: block; width: 100%; text-align: left; font: inherit; font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.35rem; border-radius: 6px; border: 1px solid transparent; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.av-chip:disabled { cursor: default; }
+.av-unavailable { background: var(--bad-soft); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.av-available { background: var(--good-soft); color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+.av-holiday { background: var(--brand-soft); color: var(--brand); }
+.av-repeat { opacity: 0.75; }
+.av-add { position: absolute; left: 50%; bottom: 0.3rem; transform: translateX(-50%); border: 0; background: none; font-size: 1.1rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 0.15rem 0.6rem; border-radius: 6px; }
+.av-add:hover, .av-add:focus-visible { background: var(--surface-2); color: var(--text); }
+.av-cal-week .av-day { min-height: 5.5rem; }
+.av-sub { margin-top: -0.4rem; }
+.av-kind { display: flex; gap: 0.5rem; margin: 0.4rem 0 0.8rem; }
+.av-pick { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.8rem; border-radius: 99px; border: 1px solid var(--border); cursor: pointer; font-weight: 600; color: var(--muted); }
+.av-pick input { position: absolute; opacity: 0; pointer-events: none; }
+.av-pick-unavailable:has(input:checked) { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
+.av-pick-available:has(input:checked) { background: var(--good-soft); color: var(--good); border-color: var(--good); }
+.av-pick:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+.av-allday { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 0.6rem; }
+.av-allday input { width: auto; }
+.av-range { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+.av-range input[type=time] { width: 8rem; }
+.av-patterns li { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; }
+.av-patterns small { display: block; }
+.av-pattern-top { display: flex; flex-wrap: wrap; gap: 0.6rem 1.2rem; align-items: flex-end; }
+.av-pattern-top .field { margin: 0; }
+.av-team td { min-width: 5.5rem; vertical-align: top; }
+.av-team th small { display: block; font-weight: 400; color: var(--muted); }
+.av-team .av-chip { margin-bottom: 0.15rem; }
+@media (max-width: 700px) {
+  .av-day { min-height: 4.5rem; padding: 0.25rem 0.2rem 1.7rem; }
+  .av-chip { font-size: 0.62rem; padding: 0.1rem 0.2rem; }
+  .av-num { width: 1.35rem; height: 1.35rem; font-size: 0.7rem; }
+  .av-dow { padding: 0.3rem 0.2rem; text-align: center; }
+}

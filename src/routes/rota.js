@@ -1,6 +1,7 @@
 import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
-import { availabilityFor, leaveFor, onHoliday } from './leave.js';
+import { availabilityOn } from '../availability.js';
+import { leaveFor, onHoliday } from './leave.js';
 import { dayKey, labourByDay, pct, rotaByDay, salesByDay } from '../metrics.js';
 import { bankHoliday } from '../bank-holidays.js';
 import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
@@ -336,7 +337,7 @@ export function registerRotaRoutes(router, db) {
       labour_cost: manager ? round2(totalCost) : undefined,
       // For people who plan the rota: holiday (approved and requested) and usual availability for the people shown.
       leave: editor || can(req.user, 'leave.manage') ? leaveFor(db, staffIds, ws, we) : undefined,
-      availability: editor || can(req.user, 'leave.manage') ? availabilityFor(db, staffIds) : undefined,
+      availability: editor || can(req.user, 'leave.manage') ? availabilityOn(db, staffIds, ws, we) : undefined,
       // For editors: how many changes staff can't see yet, and whether this person may publish them.
       unpublished: editor ? db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`).get(...ids, ws, we).n : undefined,
       unpublished_by_site: editor ? Object.fromEntries(db.prepare(`SELECT location_id, COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED}) GROUP BY location_id`).all(...ids, ws, we).map((r) => [r.location_id, r.n])) : undefined,
