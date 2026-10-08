@@ -1,7 +1,6 @@
-import { renderAvailability, renderTeam } from './availability.js';
 import { api, confirmDialog, esc, field, fmtDate, input, openModal, qs, showError, textarea, toast, todayISO } from '../lib.js';
 
-// Time off: your holiday requests and usual availability; for managers, approving requests and the team's availability.
+// Time off: your holiday requests; for managers, approving them.
 
 const STATUS = { pending: 'Waiting', approved: 'Approved', declined: 'Declined', cancelled: 'Cancelled' };
 const BADGE = { pending: 'in_progress', approved: 'completed', declined: 'fail', cancelled: 'draft' };
@@ -11,16 +10,17 @@ const range = (r) => (r.start_date === r.end_date ? fmtDate(r.start_date, { week
 const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
 
 function tabs(state, active) {
-  const items = [['mine', 'My holiday'], ['availability', 'My availability']];
-  if (state.can('leave.manage')) items.push(['requests', 'Holiday requests'], ['team', 'Team availability']);
+  const items = [['mine', 'My holiday']];
+  if (state.can('leave.manage')) items.push(['requests', 'Holiday requests']);
   return `<div class="tabs">${items.map(([k, l]) => `<a href="#/timeoff${k === 'mine' ? '' : qs({ tab: k })}" class="${active === k ? 'active' : ''}">${l}</a>`).join('')}</div>`;
 }
 
 export async function render(ctx) {
   const tab = ctx.query.tab ?? 'mine';
-  if (tab === 'availability') return renderAvailability(ctx, tabs(ctx.state, 'availability'));
+  // Availability has its own page (Rota → My availability); team availability is on Rota → Requests.
+  if (tab === 'availability') return ctx.navigate(`availability${qs({ user: ctx.query.user, month: ctx.query.month })}`);
+  if (tab === 'team') return ctx.navigate('rota/requests');
   if (tab === 'requests' && ctx.state.can('leave.manage')) return renderRequests(ctx);
-  if (tab === 'team' && ctx.state.can('leave.manage')) return renderTeam(ctx, tabs(ctx.state, 'team'));
   return renderMine(ctx);
 }
 

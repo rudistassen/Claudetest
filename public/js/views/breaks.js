@@ -83,14 +83,32 @@ async function openBreaksEditor(ctx, cardId, who) {
     <label class="field"><span>End</span><input type="time" data-end value="${esc(b.end ?? '')}" ${b.id && !b.end ? 'placeholder="still on break"' : 'required'}></label>
     <button type="button" class="icon-btn" data-remove aria-label="Remove this break" title="Remove this break">×</button>
   </div>`;
+  // A suggested break while there's none: 30 minutes in the middle of the shift (clock-in to clock-out, or to the
+  // end of their rota'd shift while they're still in), on the 5 minutes. Nothing is saved until "Save breaks".
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const fromMin = (m) => { const x = ((Math.round(m) % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+  const suggestion = (() => {
+    if (!data.start || !data.break_types.length) return null;
+    const s = toMin(data.start);
+    const endTime = data.end ?? (data.rota_end && toMin(data.rota_end) !== s ? data.rota_end : null);
+    let e = endTime ? toMin(endTime) : s + 6 * 60;
+    if (e <= s) e += 24 * 60;
+    if (e - s < 60) return null;
+    const startAt = Math.round(((s + e) / 2 - 15) / 5) * 5;
+    // A 30-minute kind of break if there is one, preferring unpaid; else the first kind.
+    const mins30 = (t) => /^PT30M$/.test(t.expected_duration ?? '');
+    const type = data.break_types.find((t) => mins30(t) && !t.is_paid) ?? data.break_types.find(mins30) ?? data.break_types.find((t) => !t.is_paid) ?? data.break_types[0];
+    return { break_type_id: type.id, start: fromMin(startAt), end: fromMin(startAt + 30), suggested: true };
+  })();
   const { form } = openModal({
     title: `${who}’s breaks`,
     submitLabel: 'Save breaks',
     wide: true,
     body: `<p>${esc(who)} clocked in ${esc(data.start)}–${esc(data.end ?? 'now')}${data.open ? ' (still clocked in)' : ''}.</p>
       ${data.break_types.length ? '' : '<p class="notice">No kinds of break are set up for this site in Square yet. Add them in the Square Dashboard (Staff → Settings → Breaks), then come back.</p>'}
-      <div class="break-rows">${data.breaks.map(row).join('')}</div>
-      <p class="muted small break-none" ${data.breaks.length ? 'hidden' : ''}>No breaks on this clock-in.</p>
+      ${!data.breaks.length && suggestion ? `<p class="notice small break-suggested">Suggested: a 30-minute break in the middle of the shift${data.end ? '' : data.rota_end ? ` (they’re rota’d until ${esc(data.rota_end)})` : ''}. Change the times, or remove it, before saving.</p>` : ''}
+      <div class="break-rows">${(data.breaks.length ? data.breaks : suggestion ? [suggestion] : []).map(row).join('')}</div>
+      <p class="muted small break-none" ${data.breaks.length || suggestion ? 'hidden' : ''}>No breaks on this clock-in.</p>
       ${data.break_types.length ? '<button type="button" class="btn btn-small" data-add>+ Add break</button>' : ''}
       <p class="muted small">Saving changes the timecard in Square too, so unpaid breaks come off their pay. It’s recorded under Rota → Rota changes.</p>`,
     onSubmit: async () => {
@@ -106,14 +124,19 @@ async function openBreaksEditor(ctx, cardId, who) {
     },
   });
   const rows = form.querySelector('.break-rows');
-  const tidy = () => { form.querySelector('.break-none').hidden = !!rows.children.length; };
+  const tidy = () => {
+    form.querySelector('.break-none').hidden = !!rows.children.length;
+    const note = form.querySelector('.break-suggested');
+    if (note && !rows.children.length) note.hidden = true;
+  };
   rows.addEventListener('click', (e) => {
     if (!e.target.closest('[data-remove]')) return;
     e.target.closest('.break-edit').remove();
     tidy();
   });
   form.querySelector('[data-add]')?.addEventListener('click', () => {
-    rows.insertAdjacentHTML('beforeend', row());
+    // With no breaks yet, adding one starts from the suggestion.
+    rows.insertAdjacentHTML('beforeend', row(!rows.children.length && suggestion ? suggestion : {}));
     rows.lastElementChild.querySelector('[data-start]').focus();
     tidy();
   });

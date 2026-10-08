@@ -1,7 +1,9 @@
 import { api, esc, field, fmtDate, openModal, showError, siteColour, textarea, toast } from '../lib.js';
 import { dropsPanel, wireDrops } from './shiftdrops.js';
+import { teamAvailabilityCard } from './availability.js';
 
-// Rota → Requests: everything waiting for a manager in one place – holiday requests and shift drop requests.
+// Rota → Requests: everything waiting for a manager in one place – holiday requests and shift drop requests – and
+// the team's availability for the next two weeks.
 
 const day = (d) => fmtDate(d, { weekday: 'short', day: 'numeric', month: 'short' });
 const span = (r) => (r.start_date === r.end_date ? day(r.start_date) : `${day(r.start_date)} – ${day(r.end_date)}`);
@@ -10,9 +12,10 @@ export async function render(ctx) {
   const { el, state, stale, rerender } = ctx;
   const canLeave = state.can('leave.manage');
   const canDrops = state.can('rota.publish');
-  const [leave, drops] = await Promise.all([
+  const [leave, drops, team] = await Promise.all([
     canLeave ? api('/leave?status=pending') : Promise.resolve([]),
     canDrops ? api('/shift-drops') : Promise.resolve({ open: [], to_approve: [], mine: [] }),
+    canLeave ? api('/availability') : Promise.resolve(null),
   ]);
   if (stale()) return;
   const total = leave.length + drops.to_approve.length;
@@ -29,12 +32,13 @@ export async function render(ctx) {
         <div class="drops-actions"><button class="btn btn-small btn-primary" data-leave-approve="${r.id}">Approve</button>
           <button class="btn btn-small" data-leave-decline="${r.id}">Decline</button></div></li>`).join('')}</ul>`
         : '<p class="muted small">No holiday requests waiting.</p>'}
-      <p class="small"><a href="#/timeoff">All holiday and availability →</a></p>
+      <p class="small"><a href="#/timeoff?tab=requests">All holiday requests →</a></p>
     </section>` : ''}
     ${canDrops ? `<section class="req-section">
       ${drops.to_approve.length ? dropsPanel({ ...drops, open: [], mine: [] }) : '<section class="card"><h2>Shift drop requests <span class="badge">0</span></h2><p class="muted small">No shifts waiting to be dropped.</p></section>'}
       ${drops.open.length ? `<p class="small muted">${drops.open.length} open shift${drops.open.length === 1 ? '' : 's'} waiting for someone to pick up – see the rota.</p>` : ''}
-    </section>` : ''}`;
+    </section>` : ''}
+    ${team ? teamAvailabilityCard(team) : ''}`;
 
   wireDrops(el, drops, () => { window.dispatchEvent(new Event('requests:changed')); rerender(); });
   el.querySelectorAll('[data-leave-approve]').forEach((b) => b.addEventListener('click', async () => {

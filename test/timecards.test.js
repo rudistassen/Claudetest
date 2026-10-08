@@ -182,6 +182,7 @@ test('breaks can be added, changed and removed on a clock-in, in Square and Atla
   assert.equal(view.status, 200);
   assert.deepEqual(view.data.breaks, []);
   assert.deepEqual(view.data.break_types.map((b) => b.name), ['Lunch', 'Tea']);
+  assert.ok('rota_end' in view.data, 'their rota shift, for suggesting a break while still clocked in');
 
   // Checks: inside the clock-in, ends after it starts, no overlaps.
   const save = (breaks) => admin(url, { method: 'PUT', body: { breaks } });

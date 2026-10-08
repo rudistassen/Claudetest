@@ -58,7 +58,15 @@ export function registerTimecardRoutes(router, db, square) {
     const tc = await square.client.getTimecard(card.id);
     if (!tc) throw notFound('Clock-in in Square');
     const types = await square.client.listBreakTypes(tc.location_id);
+    // Their shift on the rota that day (the one starting nearest the clock-in), for suggesting a break while
+    // they're still clocked in.
+    const start = hhmm(tc.start_at);
+    const rota = card.user_id ? db.prepare(`SELECT start_time, end_time FROM shifts WHERE user_id = ? AND date = ? AND removed = 0
+      ORDER BY ABS((CAST(substr(start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(start_time, 4, 2) AS INTEGER))
+        - (CAST(substr(?, 1, 2) AS INTEGER) * 60 + CAST(substr(?, 4, 2) AS INTEGER))) LIMIT 1`).get(card.user_id, localDate(tc.start_at), start, start) : null;
     res.json({
+      rota_start: rota?.start_time ?? null,
+      rota_end: rota?.end_time ?? null,
       person: card.person ?? 'Someone',
       date: localDate(tc.start_at),
       start: hhmm(tc.start_at),

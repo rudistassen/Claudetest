@@ -21,6 +21,7 @@ import { renderSetPassword } from './views/password.js';
 import * as orders from './views/orders.js';
 import * as recipes from './views/recipes.js';
 import * as prepOrders from './views/prep-orders.js';
+import * as availability from './views/availability.js';
 import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
 import * as reports from './views/reports.js';
@@ -62,6 +63,7 @@ const ROUTES = [
   [/^rota$/, rota.render, ROTA],
   [/^rota\/log$/, rotalog.render, ['rota.edit', 'rota.publish']],
   [/^timeoff$/, timeoff.render],
+  [/^availability$/, (ctx) => availability.renderAvailability(ctx)],
   [/^wastage$/, wastage.render, WASTAGE],
   [/^stock$/, stock.renderList, STOCK],
   [/^stock\/(\d+)$/, stock.renderTake, STOCK],
@@ -131,8 +133,9 @@ function navGroups() {
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
       ['rota/requests', 'Requests', '✉', ['rota.publish', 'leave.manage']],
-      ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
       ['timeoff', 'Time off', '☀'],
+      ['availability', 'My availability', '◑'],
+      ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
     ]],
     ['Trail', [
       ['safety', 'Checklist', '✓', SAFETY],
@@ -266,7 +269,8 @@ const TILE_NOTES = {
   'safety/report': 'How each site is doing, and every failed check',
   'safety/setup': 'Add and change the checks for each site',
   rota: 'See and plan the week’s shifts',
-  'rota/requests': 'Holiday and shift drops waiting for you',
+  'rota/requests': 'Holiday and shift drops waiting for you, and team availability',
+  availability: 'When you can and can’t work, day by day or repeating',
   'rota/log': 'Every change to the rota, and who made it',
   timeoff: 'Ask for holiday and see your requests',
   stock: 'Count stock and see past stock takes',

@@ -69,7 +69,7 @@ export async function renderAvailability(ctx, tabsHtml) {
   if (ctx.stale()) return;
   const userId = data.user.id;
   const me = userId === state.user.id;
-  const go = (extra) => navigate(`timeoff${qs({ tab: 'availability', user: me ? undefined : userId, month: month.slice(0, 7), ...extra })}`);
+  const go = (extra) => navigate(`availability${qs({ user: me ? undefined : userId, month: month.slice(0, 7), ...extra })}`);
   const today = todayISO();
   const days = [];
   for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
@@ -83,8 +83,8 @@ export async function renderAvailability(ctx, tabsHtml) {
   };
 
   el.innerHTML = `
-    <div class="page-head"><h1>Time off</h1></div>
-    ${tabsHtml}
+    <div class="page-head"><h1>My availability</h1></div>
+    ${tabsHtml ?? ''}
     <div class="av-head">
       ${data.people ? `<select id="av-person" aria-label="Whose availability">${data.people.map((p) => `<option value="${p.id}" ${p.id === userId ? 'selected' : ''}>${esc(p.name)}${p.id === state.user.id ? ' (You)' : ''}</option>`).join('')}</select>` : `<strong>${esc(data.user.name)} (You)</strong>`}
       <div class="av-month">
@@ -95,7 +95,7 @@ export async function renderAvailability(ctx, tabsHtml) {
       </div>
       <button class="btn btn-primary" id="av-pattern-new">+ Create repeating pattern</button>
     </div>
-    <p class="muted small">Tap a day to say when ${me ? 'you can’t' : `${esc(data.user.name)} can’t`} work (or can). It shows on the rota for whoever plans it. ↻ = from a repeating pattern; anything set on a day replaces the pattern that day. For a holiday, use My holiday.</p>
+    <p class="muted small">Tap a day to say when ${me ? 'you can’t' : `${esc(data.user.name)} can’t`} work (or can). It shows on the rota for whoever plans it. ↻ = from a repeating pattern; anything set on a day replaces the pattern that day. For a holiday, use Time off.</p>
     <div class="av-cal" role="grid" aria-label="${monthLabel(month)}">
       ${WEEKDAYS.map((w) => `<div class="av-dow" role="columnheader">${w}</div>`).join('')}
       ${days.map((d) => {
@@ -123,7 +123,7 @@ export async function renderAvailability(ctx, tabsHtml) {
       <button class="btn btn-small" type="submit">Save note</button>
     </form>`;
 
-  el.querySelector('#av-person')?.addEventListener('change', (e) => navigate(`timeoff${qs({ tab: 'availability', user: Number(e.target.value) === state.user.id ? undefined : e.target.value, month: month.slice(0, 7) })}`));
+  el.querySelector('#av-person')?.addEventListener('change', (e) => navigate(`availability${qs({ user: Number(e.target.value) === state.user.id ? undefined : e.target.value, month: month.slice(0, 7) })}`));
   el.querySelectorAll('[data-month]').forEach((b) => b.addEventListener('click', () => {
     const n = Number(b.dataset.month);
     go({ month: (n ? addMonths(month, n) : monthStart(today)).slice(0, 7) });
@@ -183,13 +183,13 @@ async function renderPattern(ctx, tabsHtml) {
   if (ctx.stale()) return;
   const existing = query.pattern === 'new' ? null : data.patterns.find((p) => String(p.id) === query.pattern);
   const me = data.user.id === state.user.id;
-  const back = () => navigate(`timeoff${qs({ tab: 'availability', user: me ? undefined : data.user.id, month: query.month })}`);
+  const back = () => navigate(`availability${qs({ user: me ? undefined : data.user.id, month: query.month })}`);
   const start = { start_date: existing?.start_date ?? todayISO(), end_date: existing?.end_date ?? '', weeks: existing?.weeks ?? 1, slots: (existing?.slots ?? []).map((s) => ({ ...s })) };
   const p = { ...start, slots: start.slots.map((s) => ({ ...s })) };
 
   el.innerHTML = `
     <div class="page-head"><h1>Repeating pattern – ${esc(data.user.name)}</h1></div>
-    ${tabsHtml}
+    ${tabsHtml ?? ''}
     <div class="av-pattern-top">
       <label class="field"><span>From</span><input type="date" id="pt-from" value="${p.start_date}" required></label>
       <label class="field"><span>To <small class="muted">(optional)</small></span><input type="date" id="pt-to" value="${p.end_date}"></label>
@@ -259,28 +259,23 @@ async function renderPattern(ctx, tabsHtml) {
 
 // --- Team availability (managers): the next two weeks ---
 
-export async function renderTeam(ctx, tabsHtml) {
-  const { el } = ctx;
-  const data = await api('/availability');
-  if (ctx.stale()) return;
+/** The team's availability for the next two weeks, as a card (shown on Rota → Requests). */
+export function teamAvailabilityCard(data) {
   const dates = [];
   for (let d = data.from; d <= data.to; d = addDays(d, 1)) dates.push(d);
   const onHoliday = (p, d) => p.holiday.some((h) => h.start_date <= d && h.end_date >= d);
   let site = null;
-  el.innerHTML = `
-    <div class="page-head"><h1>Time off</h1></div>
-    ${tabsHtml}
-    <section class="card">
-      <h2>Availability · next two weeks</h2>
-      <div class="table-wrap"><table class="avail-table av-team">
+  return `<section class="card">
+      <h2>Team availability · next two weeks</h2>
+      ${data.people.length ? `<div class="table-wrap"><table class="avail-table av-team">
         <thead><tr><th>Person</th>${dates.map((d) => `<th>${fmtDate(d, { weekday: 'short' })}<small>${fmtDate(d, { day: 'numeric', month: 'short' })}</small></th>`).join('')}</tr></thead>
         <tbody>${data.people.map((p) => {
           const group = p.location_name !== site ? `<tr class="avail-group"><th colspan="${dates.length + 1}">${esc(p.location_name ?? 'No home site')}</th></tr>` : '';
           site = p.location_name;
-          return `${group}<tr><th><a href="#/timeoff${qs({ tab: 'availability', user: p.id })}">${esc(p.name)}</a>${p.note ? `<small>${esc(p.note)}</small>` : ''}</th>
+          return `${group}<tr><th><a href="#/availability${qs({ user: p.id })}">${esc(p.name)}</a>${p.note ? `<small>${esc(p.note)}</small>` : ''}</th>
             ${dates.map((d) => `<td>${onHoliday(p, d) ? '<span class="av-chip av-holiday">Holiday</span>' : (p.days[d] ?? []).map((a) => chip(a, 'disabled')).join('')}</td>`).join('')}</tr>`;
         }).join('')}</tbody>
-      </table></div>
-      <p class="muted small">Everyone sets this under Time off → My availability (tap a name to see or change theirs). Blank = nothing said, so available. It’s shown on the rota too.</p>
+      </table></div>` : '<p class="muted">Nobody to show.</p>'}
+      <p class="muted small">Everyone sets this under Rota → My availability (tap a name to see or change theirs). Blank = nothing said, so available. It’s shown on the rota too.</p>
     </section>`;
 }
