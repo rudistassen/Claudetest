@@ -2182,3 +2182,19 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .sb-save { position: sticky; bottom: 0.5rem; }
 .rota .is-budget, .rota-forecast .is-budget { color: var(--brand-deep); font-weight: 700; }
 .rota-budget-row th a { color: inherit; }
+.sb-phone { width: 100%; border-collapse: collapse; }
+.sb-phone th, .sb-phone td { padding: 0.45rem 0.3rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.sb-phone thead th { font-size: 0.75rem; }
+.sb-phone tbody th { white-space: nowrap; font-weight: 700; }
+.sb-phone tbody th small { display: inline; font-weight: 400; }
+.sb-phone tbody th small.bank-hol { display: block; }
+.sb-phone .sb-input { width: 5.2rem; font-size: 1rem; padding: 0.45rem 0.4rem; }
+.sb-phone .sb-fc, .sb-phone .sb-lab { color: var(--muted); font-size: 0.9rem; }
+.sb-phone tfoot th, .sb-phone tfoot td { font-weight: 700; border-top: 2px solid var(--text); border-bottom: 0; }
+@media (max-width: 700px) {
+  .sb-head .actions { width: 100%; }
+  .sb-head .actions .btn { flex: 1; }
+  .sb-save { bottom: calc(72px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--bg) 92%, transparent); padding: 0.5rem 0; }
+  .sb-save .topbar-gap { display: none; }
+  .sb-save .btn { flex: 1; text-align: center; }
+}

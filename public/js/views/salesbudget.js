@@ -17,18 +17,29 @@ export async function render(ctx) {
   const go = (w) => navigate(`rota/budget${qs({ week: w === thisWeek ? undefined : w })}`);
   const used = (s, i, budget = s.budget[i]) => (budget ?? s.forecast[i]);
 
+  // On a phone the days run down the page (one row each), so the budget boxes are big enough to type in.
+  const phone = window.matchMedia('(max-width: 700px)').matches;
+  const input = (s, b, i) => `<input class="qty-input sb-input" type="number" min="0" step="1" inputmode="decimal" data-day="${i}" value="${b ?? ''}" placeholder="${s.forecast[i] === null ? '' : Math.round(s.forecast[i])}" aria-label="${esc(s.name)} sales budget ${DAYS[i]}">`;
+  const forecastWeek = (s) => (s.forecast.some((f) => f !== null) ? whole(s.forecast.reduce((t, f) => t + (f ?? 0), 0)) : '–');
+  const phoneTable = (s) => `<table class="sb-table sb-phone">
+      <thead><tr><th>Day</th><th class="num">Forecast<small>net</small></th><th class="num">Budget<small>net</small></th><th class="num">Labour<small>${data.target_pct}%</small></th></tr></thead>
+      <tbody>${data.days.map((d, i) => `<tr><th>${DAYS[i]} <small>${fmtDate(d.date, { day: 'numeric', month: 'short' })}</small>${d.bank_holiday ? `<small class="bank-hol">${esc(d.bank_holiday)}</small>` : ''}</th>
+        <td class="num sb-fc">${whole(s.forecast[i])}</td><td class="num">${input(s, s.budget[i], i)}</td><td class="num sb-lab" data-labour="${i}"></td></tr>`).join('')}</tbody>
+      <tfoot><tr><th>Week</th><td class="num sb-fc">${forecastWeek(s)}</td><td class="num sb-week"></td><td class="num sb-lab" data-labour="week"></td></tr></tfoot>
+    </table>`;
   const siteCard = (s) => `<section class="card sb-site" data-site="${s.id}">
     <header class="sb-head"><h2>${esc(s.name)}</h2>
       <div class="actions"><button type="button" class="btn btn-small" data-copy="${s.id}" title="Start the budget from the forecast, to change the days you know will be different">Copy forecast into budget</button>
         <button type="button" class="btn btn-small btn-ghost" data-clear="${s.id}">Clear</button></div></header>
-    <div class="table-wrap"><table class="sb-table">
+    ${phone ? phoneTable(s) : `<div class="table-wrap"><table class="sb-table">
       <thead><tr><th></th>${data.days.map((d, i) => `<th class="num">${DAYS[i]}<small>${fmtDate(d.date, { day: 'numeric', month: 'short' })}</small>${d.bank_holiday ? `<small class="bank-hol">${esc(d.bank_holiday)}</small>` : ''}</th>`).join('')}<th class="num">Week</th></tr></thead>
       <tbody>
-        <tr class="sb-forecast"><th>Forecast net sales<small>average for the day</small></th>${s.forecast.map((f) => `<td class="num">${whole(f)}</td>`).join('')}<td class="num">${s.forecast.some((f) => f !== null) ? whole(s.forecast.reduce((t, f) => t + (f ?? 0), 0)) : '–'}</td></tr>
-        <tr class="sb-budget"><th>Sales budget (net)<small>leave blank to use the forecast</small></th>${s.budget.map((b, i) => `<td class="num"><input class="qty-input sb-input" type="number" min="0" step="1" inputmode="decimal" data-day="${i}" value="${b ?? ''}" placeholder="${s.forecast[i] === null ? '' : Math.round(s.forecast[i])}" aria-label="${esc(s.name)} sales budget ${DAYS[i]}"></td>`).join('')}<td class="num sb-week"></td></tr>
+        <tr class="sb-forecast"><th>Forecast net sales<small>average for the day</small></th>${s.forecast.map((f) => `<td class="num">${whole(f)}</td>`).join('')}<td class="num">${forecastWeek(s)}</td></tr>
+        <tr class="sb-budget"><th>Sales budget (net)<small>leave blank to use the forecast</small></th>${s.budget.map((b, i) => `<td class="num">${input(s, b, i)}</td>`).join('')}<td class="num sb-week"></td></tr>
         <tr class="sb-labour"><th>Labour budget<small>${data.target_pct}% of the sales above</small></th>${s.budget.map((_, i) => `<td class="num" data-labour="${i}"></td>`).join('')}<td class="num" data-labour="week"></td></tr>
       </tbody>
-    </table></div>
+    </table></div>`}
+    ${phone ? '<p class="muted small">Leave a day blank to use the forecast.</p>' : ''}
     ${s.updated_at ? `<p class="muted small">Budget last changed by ${esc(s.updated_by ?? 'someone')} · ${fmtDateTime(s.updated_at)}</p>` : ''}
   </section>`;
 

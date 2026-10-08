@@ -683,7 +683,7 @@ async function start() {
 
 // On phones, a table too wide for the screen is shown as a stack of small cards (one per row, each value labelled
 // with its column heading) instead of making people scroll sideways. Grids that only make sense as grids are left alone.
-const NO_STACK = '.par-table, .rota, .hm, .grid-table, .matrix, .perm-matrix, .avail-table, .whos-in-table, .open-orders';
+const NO_STACK = '.sb-table, .par-table, .rota, .hm, .grid-table, .matrix, .perm-matrix, .avail-table, .whos-in-table, .open-orders';
 const phoneTables = window.matchMedia('(max-width: 640px)');
 function labelCells(table) {
   const heads = [];
