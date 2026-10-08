@@ -1,3 +1,4 @@
+import { cellRef, saveFile, workbook } from '../excel.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, showError, todayISO, toast, weekStart } from '../lib.js';
 
 // Reporting → Par levels: two tiles – create a new par level report, or view the saved ones.
@@ -10,6 +11,10 @@ const LONG_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 const num = (n) => (n === null || n === undefined ? '' : String(Math.round(n * 10) / 10));
 const sum = (list) => list.reduce((t, n) => t + (Number(n) || 0), 0);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const fileName = (name) => `${name.replace(/[–—]/g, '-').replace(/[\\/:*?"<>|]+/g, ' ').replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim() || 'Par levels'}.xlsx`;
+const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
+// A week total and a column total in the spreadsheet, as formulas (with today's figures shown until Excel works them out).
+const weekSum = (row, value) => ({ f: `SUM(${cellRef(2, row)}:${cellRef(8, row)})`, v: value });
 // Quick ranges: the last few full weeks, Monday to Sunday.
 const lastWeeks = (n) => { const to = addDays(weekStart(todayISO()), -1); return { from: addDays(to, -(n * 7 - 1)), to }; };
 const range = (from, to) => `${fmtDate(from, { day: 'numeric', month: 'short', ...(from.slice(0, 4) === to.slice(0, 4) ? {} : { year: 'numeric' }) })} – ${fmtDate(to, { day: 'numeric', month: 'short', year: 'numeric' })}`;
@@ -125,6 +130,8 @@ export async function renderNew(ctx) {
       <div class="actions par-tools">
         <button type="button" class="btn" id="par-fill">Fill budget with average sold</button>
         <button type="button" class="btn btn-ghost" id="par-clear">Clear</button>
+        <span class="topbar-gap"></span>
+        <button type="button" class="btn" id="par-excel">Export to Excel</button>
       </div>
       <div class="table-wrap"><table class="par-table par-budget">
         <thead><tr>${sortHead('name', 'Item')}<th></th>${DAYS.map((d, i) => sortHead(String(i), d, `Sort by average sold on ${LONG_DAYS[i]} – ${data.days_traded[i]} day${data.days_traded[i] === 1 ? '' : 's'} trading`)).join('')}${sortHead('week', 'Week', 'Sort by average sold in the week')}</tr></thead>
@@ -173,6 +180,28 @@ export async function renderNew(ctx) {
     inputs().forEach((i) => { i.value = Number(i.dataset.avg) > 0 ? Math.ceil(Number(i.dataset.avg)) : ''; });
     form.querySelectorAll('.par-item').forEach(weekTotal);
     toast('Budget filled with the average sold – change any you like, then save');
+  });
+  // The page as it is (in the order it's sorted, with the budget typed so far) as an Excel file.
+  form.querySelector('#par-excel').addEventListener('click', () => {
+    const rows = [
+      [{ v: `Par levels – ${data.category} – ${siteName}`, bold: true }],
+      [`Average sold from ${period} (days the site didn’t trade left out)`],
+      [],
+      ['Item', '', ...LONG_DAYS, 'Week'].map((v) => ({ v, bold: true })),
+    ];
+    const first = rows.length;
+    for (const b of form.querySelectorAll('.par-item')) {
+      const avg = (avgOf.get(b.dataset.key) ?? []).map(round1);
+      const pars = [...b.querySelectorAll('.par-input')].map((i) => (i.value === '' ? null : Number(i.value)));
+      rows.push([{ v: b.dataset.name, bold: true }, 'Avg sold', ...avg.map((v) => ({ v, num: '0.0' })), { ...weekSum(rows.length, round1(sum(avg))), num: '0.0' }]);
+      rows.push(['', 'Budget', ...pars, weekSum(rows.length, sum(pars))]);
+    }
+    const last = rows.length - 1;
+    const total = (label, col) => ({ f: `SUMIF($B$${first + 1}:$B$${last + 1},"${label}",${cellRef(col, first)}:${cellRef(col, last)})`, bold: true,
+      v: round1(sum(rows.slice(first).filter((row) => row[1] === label).map((row) => (typeof row[col] === 'object' && row[col] ? row[col].v : row[col])))) });
+    rows.push([{ v: 'Total', bold: true }, { v: 'Avg sold', bold: true }, ...Array.from({ length: 8 }, (_, i) => ({ ...total('Avg sold', i + 2), num: '0.0' }))]);
+    rows.push(['', { v: 'Budget', bold: true }, ...Array.from({ length: 8 }, (_, i) => total('Budget', i + 2))]);
+    saveFile(fileName(`Par levels – ${data.category} – ${siteName}`), workbook('Par levels', rows, [28, 10, 11, 11, 11, 11, 11, 11, 11, 10]));
   });
   form.querySelector('#par-clear').addEventListener('click', async () => {
     if (!inputs().some((i) => i.value !== '') || !await confirmDialog('Clear every par level on this page?', { confirmLabel: 'Clear' })) return;
@@ -237,6 +266,7 @@ export async function renderReport(ctx) {
       <div class="actions">
         <a class="btn" href="#/par-levels/saved">All saved</a>
         <button class="btn" id="par-print">Print</button>
+        <button class="btn" id="par-excel">Export to Excel</button>
         <a class="btn" href="#/par-levels/new?report=${r.id}">Change</a>
         <button class="btn btn-ghost" id="par-delete">Delete</button>
       </div></div>
@@ -253,6 +283,25 @@ export async function renderReport(ctx) {
     return key === 'name' ? l.item_name : key === 'week' ? sum(l.pars) : l.pars[Number(key)] ?? -1;
   });
   el.querySelector('#par-print').addEventListener('click', () => window.print());
+  // The saved par levels (in the order they're sorted) as an Excel file.
+  el.querySelector('#par-excel').addEventListener('click', () => {
+    const rows = [
+      [{ v: r.name, bold: true }],
+      [`${r.category} · ${r.location_name}${r.sales_from && r.sales_to ? ` · from sales ${range(r.sales_from, r.sales_to)}` : ''}`],
+      [`Saved by ${r.updated_by ?? r.created_by ?? 'someone'} · ${fmtDateTime(r.updated_at)}`],
+      [],
+      ['Item', ...LONG_DAYS, 'Week'].map((v) => ({ v, bold: true })),
+    ];
+    const first = rows.length;
+    for (const tr of el.querySelectorAll('tr[data-line]')) {
+      const l = r.lines[Number(tr.dataset.line)];
+      rows.push([{ v: l.item_name, bold: true }, ...l.pars, { f: `SUM(${cellRef(1, rows.length)}:${cellRef(7, rows.length)})`, v: sum(l.pars) }]);
+    }
+    const last = rows.length - 1;
+    rows.push([{ v: 'Total', bold: true }, ...Array.from({ length: 8 }, (_, i) => ({ f: `SUM(${cellRef(i + 1, first)}:${cellRef(i + 1, last)})`, bold: true,
+      v: sum(rows.slice(first).map((row) => (typeof row[i + 1] === 'object' && row[i + 1] ? row[i + 1].v : row[i + 1]))) }))]);
+    saveFile(fileName(r.name), workbook('Par levels', rows, [28, 11, 11, 11, 11, 11, 11, 11, 10]));
+  });
   el.querySelector('#par-delete').addEventListener('click', async () => {
     if (!await confirmDialog(`Delete “${r.name}”? This can’t be undone.`, { confirmLabel: 'Delete' })) return;
     try { await api(`/par-levels/reports/${r.id}`, { method: 'DELETE' }); toast('Deleted'); navigate('par-levels/saved'); } catch (err) { showError(err); }
