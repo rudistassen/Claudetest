@@ -39,7 +39,7 @@ export async function render(ctx) {
     ${report ? `<div class="kpis">
       <div class="kpi"><span>Total wastage</span><strong>${money(report.total_cost)}</strong></div>
       <div class="kpi"><span>Entries</span><strong>${report.entries}</strong></div>
-      ${report.sales ? `<div class="kpi"><span>% of sales (${money(report.sales.net_sales)})</span><strong>${report.sales.wastage_pct === null ? '–' : `${report.sales.wastage_pct.toFixed(1)}%`}</strong></div>` : ''}
+      ${report.sales ? `<div class="kpi"><span>% of net sales (${money(report.sales.net_sales)})</span><strong>${report.sales.wastage_pct === null ? '–' : `${report.sales.wastage_pct.toFixed(1)}%`}</strong></div>` : ''}
       <div class="kpi"><span>Top reason</span><strong>${esc(report.by_reason[0]?.key ?? '–')}</strong></div>
     </div>
     <div class="two-col">

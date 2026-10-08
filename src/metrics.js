@@ -172,6 +172,17 @@ export function wastageByDay(db, locationIds, from, to) {
   return new Map(rows.map((r) => [key(r.location_id, r.date), r.total]));
 }
 
+/** Each site's sales budget (net) for each day of a week: { siteId: [Mon … Sun amounts, null where none is set] }. */
+export function salesBudgets(db, locationIds, weekStartDate) {
+  const out = {};
+  for (const id of locationIds) out[id] = Array(7).fill(null);
+  if (!locationIds.length) return out;
+  const days = Array.from({ length: 7 }, (_, i) => new Date(Date.parse(`${weekStartDate}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10));
+  for (const r of db.prepare(`SELECT location_id, date, amount FROM sales_budgets WHERE location_id IN (${locationIds.map(() => '?').join(', ')}) AND date BETWEEN ? AND ?`)
+    .all(...locationIds, days[0], days[6])) out[r.location_id][days.indexOf(r.date)] = r.amount;
+  return out;
+}
+
 export const pct = (part, whole) => (whole > 0 ? round2((part / whole) * 100) : null);
 
 export { key as dayKey };

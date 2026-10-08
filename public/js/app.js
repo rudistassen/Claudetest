@@ -5,6 +5,7 @@ import * as admin from './views/admin.js';
 import * as breaks from './views/breaks.js';
 import * as rotalog from './views/rotalog.js';
 import * as inbox from './views/inbox.js';
+import * as salesbudget from './views/salesbudget.js';
 import * as parlevels from './views/parlevels.js';
 import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
@@ -64,6 +65,7 @@ const ROUTES = [
   [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
   [/^rota$/, rota.render, ROTA],
   [/^rota\/log$/, rotalog.render, ['rota.edit', 'rota.publish']],
+  [/^rota\/budget$/, salesbudget.render, ['sales.view']],
   [/^timeoff$/, timeoff.render],
   [/^availability$/, (ctx) => availability.renderAvailability(ctx)],
   [/^wastage$/, wastage.render, WASTAGE],
@@ -139,6 +141,7 @@ function navGroups() {
     [null, [['dashboard', 'Dashboard', '▦', ['dashboard.view']], ['mybrew', 'My Atlas', '◉']]],
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
+      ['rota/budget', 'Sales budget', '£', ['sales.view']],
       ['rota/requests', 'Requests', '✉', ['rota.publish', 'leave.manage']],
       ['timeoff', 'Time off', '☀'],
       ['availability', 'My availability', '⏱'],
@@ -280,6 +283,7 @@ const TILE_NOTES = {
   'rota/requests': 'Holiday and shift drops waiting for you, and team availability',
   availability: 'When you can and can’t work, day by day or repeating',
   'rota/log': 'Every change to the rota, and who made it',
+  'rota/budget': 'Each site’s forecast net sales for the week, and the budget to plan the rota against',
   timeoff: 'Ask for holiday and see your requests',
   stock: 'Count stock and see past stock takes',
   wastage: 'Record what’s thrown away and see the cost',

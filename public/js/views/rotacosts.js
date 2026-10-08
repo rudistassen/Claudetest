@@ -25,13 +25,14 @@ export async function render(ctx) {
     <td class="num">${x.hours}</td>
     <td class="num"><strong>${money(x.cost)}</strong></td>
     <td class="num">${whole(x.forecast)}</td>
+    <td class="num">${x.sales_budget === null ? '–' : x.budgeted ? `<strong class="is-budget">${whole(x.sales_budget)}</strong>` : `<span class="muted" title="No budget set – the forecast is used">${whole(x.sales_budget)}</span>`}</td>
     <td class="num">${x.budget === null ? '–' : money(x.budget)}</td>
     <td class="num">${diff(x.difference)}</td>
     <td class="num">${pctCell(x.labour_pct)}</td>
     ${showActual ? `<td class="num">${x.actual_sales === null ? '–' : money(x.actual_sales)}</td>` : ''}
   </tr>`;
-  const head = (first) => `<thead><tr><th>${first}</th><th class="num">Hours</th><th class="num">Rota cost</th><th class="num">Forecast sales</th>
-    <th class="num">${data.target_pct}% labour budget</th><th class="num">Difference</th><th class="num">Rota labour %</th>${showActual ? '<th class="num">Actual sales</th>' : ''}</tr></thead>`;
+  const head = (first) => `<thead><tr><th>${first}</th><th class="num">Hours</th><th class="num">Rota cost</th><th class="num">Forecast net sales</th><th class="num">Sales budget (net)</th>
+    <th class="num">${data.target_pct}% labour budget</th><th class="num">Difference</th><th class="num">Rota labour %</th>${showActual ? '<th class="num">Actual net sales</th>' : ''}</tr></thead>`;
 
   el.innerHTML = `
     <div class="page-head">
@@ -53,7 +54,7 @@ export async function render(ctx) {
     <h2 class="day-title">Week commencing ${fmtDate(week, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h2>
     <div class="kpis">
       <div class="kpi" data-icon="£"><span>Rota cost</span><strong>${money(t.cost)}</strong><small>${t.hours} hours</small></div>
-      <div class="kpi"><span>Forecast sales</span><strong>${whole(t.forecast)}</strong></div>
+      <div class="kpi"><span>${t.budgeted ? 'Sales budget (net)' : 'Forecast net sales'}</span><strong>${whole(t.sales_budget)}</strong>${t.budgeted ? `<small>forecast ${whole(t.forecast)} net</small>` : ''}</div>
       <div class="kpi"><span>Labour budget at ${data.target_pct}%</span><strong>${t.budget === null ? '–' : money(t.budget)}</strong></div>
       <div class="kpi ${t.difference > 0 ? 'kpi-bad' : ''}"><span>${t.difference === null ? 'Difference' : t.difference > 0 ? 'Over budget by' : 'Under budget by'}</span>
         <strong>${t.difference === null ? '–' : money(Math.abs(t.difference))}</strong><small>Rota labour ${fmtPct(t.labour_pct)}</small></div>
@@ -74,8 +75,9 @@ export async function render(ctx) {
         <tbody>${data.days.map((d) => row(fmtDate(d.date), d, { sub: d.bank_holiday ? `<small class="bank-hol">${esc(d.bank_holiday)}</small>` : '' })).join('')}</tbody>
       </table></div>
       <p class="muted small">Rota cost = each shift’s hours (less unpaid breaks) × the person’s hourly rate.
-        Forecast sales = that weekday’s average net sales over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
-        Labour budget = ${data.target_pct}% of forecast sales; “over” means the rota costs more than that.${showActual ? ' Actual sales are from Square, so far.' : ''}</p>
+        Forecast net sales = that weekday’s average net sales over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
+        Sales budget = the budget set under <a href="#/rota/budget?week=${week}">Rota → Sales budget</a>, or the forecast for days without one (shown faded).
+        Labour budget = ${data.target_pct}% of the sales budget; “over” means the rota costs more than that.${showActual ? ' Actual net sales are from Square, so far.' : ''} All sales here are net: after discounts, excluding VAT.</p>
     </section>`;
 
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {

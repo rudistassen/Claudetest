@@ -73,7 +73,7 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
     <table role="presentation" width="100%" cellspacing="6" cellpadding="0" style="margin:8px -6px 4px"><tr>
       ${stat('Gross sales', money(tot.gross), change(tot.gross, tot.lwGross).html)}
       ${stat('Net sales', money(tot.net), change(tot.net, tot.lwNet).html)}
-      ${stat('Labour cost', money(tot.labour), `<span style="color:${pctColour(totPct)};font-weight:600">${pctText(totPct)} of sales</span>`)}
+      ${stat('Labour cost', money(tot.labour), `<span style="color:${pctColour(totPct)};font-weight:600">${pctText(totPct)} of net sales</span>`)}
     </tr></table>
     <p style="margin:0 0 16px;font-size:12px;color:#777">Changes are ${compare}${fullDay ? '' : ' up to the same time'}.</p>` : '';
 
@@ -113,7 +113,7 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
         Gross <strong>${money(s.gross_today)}</strong> ${change(s.gross_today, s.last_week.gross).html} &nbsp;·&nbsp;
         Net <strong>${money(s.sales_today)}</strong> ${change(s.sales_today, s.last_week.net).html} &nbsp;·&nbsp;
         Labour <strong>${money(s.labour_cost_today)}</strong> ${change(s.labour_cost_today, s.last_week.labour_cost, { goodUp: false }).html}
-        ${s.labour_pct_today === null ? '' : `<span style="color:${pctColour(s.labour_pct_today)}">(${pctText(s.labour_pct_today)} of sales)</span>`}</p>` : ''}
+        ${s.labour_pct_today === null ? '' : `<span style="color:${pctColour(s.labour_pct_today)}">(${pctText(s.labour_pct_today)} of net sales)</span>`}</p>` : ''}
       ${people && data.labour_synced ? `
       ${flagged(people).length ? `<p style="margin:6px 0;padding:6px 10px;border-radius:6px;background:#fbe3e1;color:#b3261e;font-size:14px">⚠ ${flagged(people).length} ${flagged(people).length === 1 ? 'shift' : 'shifts'} over 6 hours without a 20-minute break: ${flagged(people).map((c) => esc(c.name)).join(', ')}</p>` : ''}
       <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-top:6px">Clocked in (${people.length})</div>
@@ -152,11 +152,11 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
   const text = [
     `Atlas · ${name}`, heading, `${scope} · ${upTo}`, '',
     ...(tot ? [`Gross sales ${money(tot.gross)} ${change(tot.gross, tot.lwGross).text}`, `Net sales ${money(tot.net)} ${change(tot.net, tot.lwNet).text}`,
-      `Labour ${money(tot.labour)} (${pctText(totPct)} of sales)`, `Changes are ${compare}.`, ''] : []),
+      `Labour ${money(tot.labour)} (${pctText(totPct)} of net sales)`, `Changes are ${compare}.`, ''] : []),
     ...sites.flatMap((s) => [
       `== ${s.name} ==`,
       ...(seeSales ? [`Gross ${money(s.gross_today)} ${change(s.gross_today, s.last_week.gross).text}`, `Net ${money(s.sales_today)} ${change(s.sales_today, s.last_week.net).text}`,
-        `Labour ${money(s.labour_cost_today)} (${pctText(s.labour_pct_today)} of sales)`] : []),
+        `Labour ${money(s.labour_cost_today)} (${pctText(s.labour_pct_today)} of net sales)`] : []),
       ...(s.clock_ins && data.labour_synced ? [`Clocked in: ${s.clock_ins.map((c) => `${c.name} ${c.start}-${c.end ?? 'still in'} (${duration(c.hours)}${c.breaks?.length ? `, break ${c.breaks.map((b) => `${b.start}-${b.end ?? 'now'}${b.paid ? ' paid' : ''}`).join(', ')}` : ''})`).join('; ') || 'nobody'}`] : []),
       ...(s.clock_ins && flagged(s.clock_ins).length ? [`Over 6 hours without a 20-minute break: ${flagged(s.clock_ins).map((c) => c.name).join(', ')}`] : []),
       ...(s.clock_ins ?? []).filter((c) => attendanceNotes(c).length).map((c) => `${c.name}: ${attendanceNotes(c).join(', ')}${c.rota ? ` (rota ${c.rota})` : ''}`),

@@ -272,6 +272,17 @@ CREATE TABLE IF NOT EXISTS square_catalog (
   category_name TEXT
 );
 
+-- Sales budgets (Rota → Sales budget): the net sales a site plans for on a day, set by a manager (e.g. higher on a
+-- Saturday with an event). Where there's one, the rota uses it instead of the forecast.
+CREATE TABLE IF NOT EXISTS sales_budgets (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  updated_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (location_id, date)
+);
+
 -- Saved par level reports (Reporting → Par levels): named, for one Square category at one site, with the par level
 -- budgeted for each item on each weekday (0 = Monday). Only the budgeted levels are kept.
 CREATE TABLE IF NOT EXISTS par_reports (

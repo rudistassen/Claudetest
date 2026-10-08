@@ -2168,3 +2168,17 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .par-dates { align-items: flex-end; margin-top: 0.5rem; }
 .par-dates .field { margin: 0; }
 .par-quick { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+
+/* Rota → Sales budget */
+.sb-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.sb-head h2 { margin: 0; }
+.sb-table th small, .sb-table td small { display: block; font-weight: 400; color: var(--muted); font-size: 0.75rem; text-transform: none; letter-spacing: 0; }
+.sb-table tbody th { text-align: left; white-space: nowrap; }
+.sb-table .sb-input { width: 5.5rem; text-align: right; }
+.sb-table td.is-set .sb-input { border-color: var(--brand); background: var(--brand-soft); font-weight: 700; }
+.sb-forecast td { color: var(--muted); }
+.sb-week { font-weight: 700; }
+.sb-labour td { color: var(--muted); }
+.sb-save { position: sticky; bottom: 0.5rem; }
+.rota .is-budget, .rota-forecast .is-budget { color: var(--brand-deep); font-weight: 700; }
+.rota-budget-row th a { color: inherit; }

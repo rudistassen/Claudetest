@@ -79,3 +79,40 @@ test('all sites for admins; staff can’t see it; managers only their own site',
   const manager = await login('manager1@cafe.local');
   assert.equal((await manager('/reports/rota-costs')).data.sites.length, 1);
 });
+
+test('a sales budget for a day replaces the forecast on the rota and in rota costs', async () => {
+  const manager = await login('manager1@cafe.local');
+  const site = manager.me.location_id;
+  const week = weekStart(addDays(today(), 21));
+  db.prepare('DELETE FROM sales_daily WHERE location_id = ?').run(site);
+  const ins = db.prepare('INSERT INTO sales_daily (location_id, date, net_sales, gross_sales, orders) VALUES (?, ?, 1000, 1200, 50)');
+  for (let d = addDays(today(), -56); d < today(); d = addDays(d, 1)) ins.run(site, d);
+
+  const before = (await manager(`/sales-budgets?week=${week}`)).data;
+  const mine = before.sites.find((x) => x.id === site);
+  assert.deepEqual(mine.budget, [null, null, null, null, null, null, null]);
+  assert.ok(mine.forecast.every((f) => f === null || f === 1000));
+
+  // An event on the Saturday: budget £2,500 that day; the rest left to the forecast.
+  const saturday = addDays(week, 5);
+  const budget = [null, null, null, null, null, 2500, null];
+  assert.equal((await manager('/sales-budgets', { method: 'PUT', body: { week, sites: [{ id: site, budget }] } })).status, 200);
+  assert.deepEqual((await manager(`/sales-budgets?week=${week}`)).data.sites.find((x) => x.id === site).budget, budget);
+
+  const r = (await manager(`/reports/rota-costs?week=${week}&location_id=${site}`)).data;
+  const sat = r.sites[0].days.find((d) => d.date === saturday);
+  assert.deepEqual([sat.forecast, sat.sales_budget, sat.budgeted, sat.budget], [1000, 2500, true, 750]);
+  const mon = r.sites[0].days[0];
+  if (!mon.bank_holiday) assert.deepEqual([mon.sales_budget, mon.budgeted], [1000, false], 'no budget: the forecast');
+  assert.equal(r.totals.budgeted, true);
+
+  const rota = (await manager(`/rota?week=${week}&location_id=${site}`)).data;
+  assert.equal(rota.sales_budget[site][5], 2500);
+
+  // Clearing it goes back to the forecast; staff can't see or set budgets.
+  await manager('/sales-budgets', { method: 'PUT', body: { week, sites: [{ id: site, budget: [null, null, null, null, null, null, null] }] } });
+  assert.equal((await manager(`/sales-budgets?week=${week}`)).data.sites.find((x) => x.id === site).budget[5], null);
+  const staff = await login('staff1@cafe.local');
+  assert.equal((await staff(`/sales-budgets?week=${week}`)).status, 403);
+  assert.equal((await manager('/sales-budgets', { method: 'PUT', body: { week, sites: [{ id: site, budget: [1] }] } })).status, 400);
+});

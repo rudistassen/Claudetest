@@ -60,7 +60,7 @@ export async function render(ctx) {
       ${hasLabour ? `
       <div class="kpi"><span>Labour cost (clocked)</span><strong>${money(t.clocked_cost)}</strong><small>Rostered ${money(t.rostered_cost)}</small></div>
       <div class="kpi"><span>Hours clocked</span><strong>${hrs(t.clocked_hours)}</strong><small class="tone-${varianceTone(t.hours_variance, t.rostered_hours)}">${signed(t.hours_variance)} vs ${hrs(t.rostered_hours)} rostered</small></div>
-      <div class="kpi"><span>Sales per labour hour</span><strong>${t.sales_per_labour_hour === null ? '–' : money(t.sales_per_labour_hour)}</strong><small>Net sales ÷ hours clocked</small></div>`
+      <div class="kpi"><span>Net sales per labour hour</span><strong>${t.sales_per_labour_hour === null ? '–' : money(t.sales_per_labour_hour)}</strong><small>Net sales ÷ hours clocked</small></div>`
       : `<div class="kpi"><span>Labour cost (rostered)</span><strong>${money(t.rostered_cost)}</strong><small>${hrs(t.rostered_hours)} rostered</small></div>`}
     </div>
 
@@ -70,7 +70,7 @@ export async function render(ctx) {
         <div class="chart" id="chart-sales"></div>
       </section>
       <section class="card">
-        <h2>Labour as % of sales</h2>
+        <h2>Labour as % of net sales</h2>
         ${legend([
           ...(hasLabour ? [{ label: 'Clocked (actual)', color: c1 }] : []),
           { label: 'Rostered', color: hasLabour ? c2 : c1 },
@@ -101,7 +101,7 @@ export async function render(ctx) {
       <h2>By day</h2>
       <div class="table-wrap"><table>
         <thead><tr><th>Date</th><th class="num">Net sales</th><th class="num">Orders</th>
-          ${hasLabour ? '<th class="num">Hours clocked</th><th class="num">Rostered</th><th class="num">Labour (clocked)</th><th class="num">Labour %</th><th class="num">Sales / labour hr</th>' : ''}
+          ${hasLabour ? '<th class="num">Hours clocked</th><th class="num">Rostered</th><th class="num">Labour (clocked)</th><th class="num">Labour %</th><th class="num">Net sales / labour hr</th>' : ''}
           <th class="num">Rostered labour %</th></tr></thead>
         <tbody>${data.days.map((d) => `<tr>
           <td>${fmtDate(d.date)}</td><td class="num">${money(d.net_sales)}</td><td class="num">${d.orders}</td>
@@ -118,7 +118,7 @@ export async function render(ctx) {
       <h2>By site</h2>
       <div class="table-wrap"><table>
         <thead><tr><th>Site</th><th class="num">Net sales</th><th class="num">Avg spend</th>
-          ${hasLabour ? '<th class="num">Hours clocked</th><th class="num">vs rota</th><th class="num">Labour %</th><th class="num">Sales / labour hr</th>' : ''}
+          ${hasLabour ? '<th class="num">Hours clocked</th><th class="num">vs rota</th><th class="num">Labour %</th><th class="num">Net sales / labour hr</th>' : ''}
           <th class="num">Rostered labour %</th></tr></thead>
         <tbody>${[...data.locations].sort((a, b) => b.net_sales - a.net_sales).map((l) => `<tr>
           <td>${esc(l.name)}${l.linked ? '' : ' <small class="muted">not linked</small>'}</td><td class="num">${money(l.net_sales)}</td>
