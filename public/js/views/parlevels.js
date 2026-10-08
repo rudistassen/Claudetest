@@ -10,6 +10,32 @@ const LONG_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 const num = (n) => (n === null || n === undefined ? '' : String(Math.round(n * 10) / 10));
 const sum = (list) => list.reduce((t, n) => t + (Number(n) || 0), 0);
 
+// A column heading that sorts the table: Item (A–Z) or a day / the week (biggest first; tap again to flip).
+const sortHead = (key, label, title = '') => `<th class="${key === 'name' ? '' : 'num'}" aria-sort="none"><button type="button" class="th-sort" data-sort="${key}" ${title ? `title="${esc(title)}"` : ''}>${label}</button></th>`;
+/** rows(): the row elements to move; value(row, key): what to sort by; key 'name' sorts A–Z. */
+function makeSortable(table, rows, value) {
+  let current = null;
+  let dir = 1;
+  table.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => {
+    const key = b.dataset.sort;
+    dir = current === key ? -dir : key === 'name' ? 1 : -1;
+    current = key;
+    const list = rows();
+    const parent = list[0]?.parentNode;
+    if (!parent) return;
+    list.sort((a, c) => {
+      const x = value(a, key);
+      const y = value(c, key);
+      return (key === 'name' ? String(x).localeCompare(String(y)) : (Number(x) || 0) - (Number(y) || 0)) * dir
+        || String(value(a, 'name')).localeCompare(String(value(c, 'name')));
+    });
+    const foot = table.tFoot;
+    for (const r of list) (r.tagName === 'TBODY' ? table : parent).insertBefore(r, r.tagName === 'TBODY' ? foot : null);
+    table.querySelectorAll('th[aria-sort]').forEach((th) => th.setAttribute('aria-sort', 'none'));
+    b.closest('th').setAttribute('aria-sort', dir === 1 ? 'ascending' : 'descending');
+  }));
+}
+
 // --- Par levels: the two tiles ---
 export async function render(ctx) {
   const { el, stale } = ctx;
@@ -70,7 +96,7 @@ export async function renderNew(ctx) {
         <button type="button" class="btn btn-ghost" id="par-clear">Clear</button>
       </div>
       <div class="table-wrap"><table class="par-table par-budget">
-        <thead><tr><th>Item</th><th></th>${DAYS.map((d, i) => `<th class="num" title="${LONG_DAYS[i]} – ${data.days_traded[i]} day${data.days_traded[i] === 1 ? '' : 's'} trading">${d}</th>`).join('')}<th class="num">Week</th></tr></thead>
+        <thead><tr>${sortHead('name', 'Item')}<th></th>${DAYS.map((d, i) => sortHead(String(i), d, `Sort by average sold on ${LONG_DAYS[i]} – ${data.days_traded[i]} day${data.days_traded[i] === 1 ? '' : 's'} trading`)).join('')}${sortHead('week', 'Week', 'Sort by average sold in the week')}</tr></thead>
         ${data.items.map((it) => {
           const pars = had.get(it.item_key) ?? Array(7).fill(null);
           return `<tbody class="par-item" data-key="${esc(it.item_key)}" data-name="${esc(it.name)}">
@@ -81,6 +107,11 @@ export async function renderNew(ctx) {
               <td class="num par-week">${num(sum(pars))}</td></tr>
           </tbody>`;
         }).join('')}
+        <tfoot>
+          <tr class="par-total-avg"><th scope="rowgroup" rowspan="2">Total</th><td class="par-label">Avg sold</td>
+            ${DAYS.map((d, i) => `<td class="num">${num(sum(data.items.map((it) => it.avg[i])))}</td>`).join('')}<td class="num">${num(sum(data.items.map((it) => sum(it.avg))))}</td></tr>
+          <tr class="par-total-budget"><td class="par-label">Budget</td>${DAYS.map((d, i) => `<td class="num" data-total-day="${i}"></td>`).join('')}<td class="num" data-total-day="week"></td></tr>
+        </tfoot>
       </table></div>
       <div class="actions">
         <span class="topbar-gap"></span>
@@ -91,8 +122,20 @@ export async function renderNew(ctx) {
   const form = el.querySelector('#par-form');
   if (!form) return;
   const inputs = () => [...form.querySelectorAll('.par-input')];
-  const weekTotal = (body) => { body.querySelector('.par-week').textContent = num(sum([...body.querySelectorAll('.par-input')].map((i) => i.value))); };
+  // Each item's week, and the budget totals for each day along the bottom.
+  const totals = () => {
+    for (let d = 0; d < 7; d++) form.querySelector(`[data-total-day="${d}"]`).textContent = num(sum(inputs().filter((i) => i.dataset.day === String(d)).map((i) => i.value)));
+    form.querySelector('[data-total-day="week"]').textContent = num(sum(inputs().map((i) => i.value)));
+  };
+  const weekTotal = (body) => { body.querySelector('.par-week').textContent = num(sum([...body.querySelectorAll('.par-input')].map((i) => i.value))); totals(); };
+  totals();
   form.addEventListener('input', (e) => { if (e.target.matches('.par-input')) weekTotal(e.target.closest('.par-item')); });
+  const avgOf = new Map(data.items.map((it) => [it.item_key, it.avg]));
+  makeSortable(form.querySelector('.par-table'), () => [...form.querySelectorAll('.par-item')], (b, key) => {
+    if (key === 'name') return b.dataset.name;
+    const avg = avgOf.get(b.dataset.key) ?? [];
+    return key === 'week' ? sum(avg) : avg[Number(key)];
+  });
   // Every day's budget becomes that day's average sold, rounded up to a whole one.
   form.querySelector('#par-fill').addEventListener('click', async () => {
     if (inputs().some((i) => i.value !== '') && !await confirmDialog('Replace the budget you’ve put in with the average sold for each day (rounded up)?', { confirmLabel: 'Fill with average sold' })) return;
@@ -168,11 +211,16 @@ export async function renderReport(ctx) {
       </div></div>
     <section class="card par-final">
       <div class="table-wrap"><table class="par-table">
-        <thead><tr><th>Item</th>${DAYS.map((d, i) => `<th class="num" title="${LONG_DAYS[i]}">${d}</th>`).join('')}<th class="num">Week</th></tr></thead>
-        <tbody>${r.lines.map((l) => `<tr><th scope="row">${esc(l.item_name)}</th>${l.pars.map((p) => `<td class="num"><strong>${num(p) || '–'}</strong></td>`).join('')}<td class="num">${num(sum(l.pars))}</td></tr>`).join('')}</tbody>
+        <thead><tr>${sortHead('name', 'Item')}${DAYS.map((d, i) => sortHead(String(i), d, `Sort by ${LONG_DAYS[i]}`)).join('')}${sortHead('week', 'Week', 'Sort by the week')}</tr></thead>
+        <tbody>${r.lines.map((l, n) => `<tr data-line="${n}"><th scope="row">${esc(l.item_name)}</th>${l.pars.map((p) => `<td class="num"><strong>${num(p) || '–'}</strong></td>`).join('')}<td class="num">${num(sum(l.pars))}</td></tr>`).join('')}</tbody>
+        <tfoot><tr class="par-total"><th scope="row">Total</th>${DAYS.map((d, i) => `<td class="num">${num(sum(r.lines.map((l) => l.pars[i])))}</td>`).join('')}<td class="num">${num(sum(r.lines.map((l) => sum(l.pars))))}</td></tr></tfoot>
       </table></div>
       <p class="muted small">Saved by ${esc(r.updated_by ?? r.created_by ?? 'someone')} · ${fmtDateTime(r.updated_at)}</p>
     </section>`;
+  makeSortable(el.querySelector('.par-table'), () => [...el.querySelectorAll('tr[data-line]')], (tr, key) => {
+    const l = r.lines[Number(tr.dataset.line)];
+    return key === 'name' ? l.item_name : key === 'week' ? sum(l.pars) : l.pars[Number(key)] ?? -1;
+  });
   el.querySelector('#par-print').addEventListener('click', () => window.print());
   el.querySelector('#par-delete').addEventListener('click', async () => {
     if (!await confirmDialog(`Delete “${r.name}”? This can’t be undone.`, { confirmLabel: 'Delete' })) return;
