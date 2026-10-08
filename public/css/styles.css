@@ -2165,3 +2165,6 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .par-table tfoot .par-total-budget td { border-top: 1px solid var(--border); }
 .par-table tfoot .par-total-avg td.num { color: var(--muted); font-weight: 600; }
 @media print { .th-sort::after { content: none; } th[aria-sort="ascending"] .th-sort::after, th[aria-sort="descending"] .th-sort::after { content: none; } }
+.par-dates { align-items: flex-end; margin-top: 0.5rem; }
+.par-dates .field { margin: 0; }
+.par-quick { display: flex; flex-wrap: wrap; gap: 0.35rem; }

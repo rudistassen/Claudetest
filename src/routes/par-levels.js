@@ -1,9 +1,9 @@
 // Reporting → Par levels: for one Square category at one site, each item's average sold on each day of the week
-// over the last 6 full weeks (Monday to Sunday), to budget a par level for each day. The budget is saved as a named
+// over a date range (the last 6 full weeks unless another is picked), to budget a par level for each day. The budget is saved as a named
 // report, which keeps just the budgeted par levels; saved reports can be opened, changed, printed or deleted.
 import { assertLocation, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
-import { addDays, badRequest, notFound, num, round2, str, today, weekStart } from '../util.js';
+import { addDays, badRequest, date, notFound, num, round2, str, today, weekStart } from '../util.js';
 
 export const PAR_WEEKS = 6;
 const UNCATEGORISED = 'Uncategorised';
@@ -11,7 +11,15 @@ const weekdayOf = (iso) => (new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7;
 
 export function registerParLevelRoutes(router, db) {
   const perm = requirePerm('sales.view');
-  const window = () => { const to = addDays(weekStart(today()), -1); return { from: addDays(to, -(PAR_WEEKS * 7 - 1)), to }; };
+  // The sales the averages come from: ?from=&to=, or the last 6 full weeks (Monday to Sunday).
+  const window = (q = {}) => {
+    const lastSunday = addDays(weekStart(today()), -1);
+    const from = date(q.from, 'from') ?? addDays(lastSunday, -(PAR_WEEKS * 7 - 1));
+    const to = date(q.to, 'to') ?? (q.from ? today() : lastSunday);
+    if (from > to) throw badRequest('The start date is after the end date');
+    if (addDays(from, 731) <= to) throw badRequest('Pick up to two years');
+    return { from, to };
+  };
   const CATEGORY = `COALESCE(NULLIF(c.category_name, ''), '${UNCATEGORISED}')`;
 
   // A saved report with its lines (each item's par levels, Monday to Sunday; null where none was budgeted).
@@ -32,7 +40,7 @@ export function registerParLevelRoutes(router, db) {
   };
 
   router.get('/par-levels', perm, (req, res) => {
-    const { from, to } = window();
+    const { from, to } = window(req.query);
     const sites = req.user.site_ids;
     const inList = sites.map(() => '?').join(', ') || 'NULL';
     // Categories sold at any of their sites in the window (the first filter), most sold first.
@@ -104,7 +112,8 @@ export function registerParLevelRoutes(router, db) {
       pars: Array.from({ length: 7 }, (_, d) => num(l.pars?.[d], `lines[${i}].pars[${d}]`, { min: 0, max: 100000 })),
     })).filter((l) => l.pars.some((p) => p !== null && p !== undefined));
     if (!lines.length) throw badRequest('Put in at least one par level first');
-    return { name: str(b.name, 'name', { required: true, max: 120 }), location_id: locationId, category: str(b.category, 'category', { required: true, max: 200 }), lines };
+    return { name: str(b.name, 'name', { required: true, max: 120 }), location_id: locationId, category: str(b.category, 'category', { required: true, max: 200 }),
+      sales_from: date(b.sales_from, 'sales_from'), sales_to: date(b.sales_to, 'sales_to'), lines };
   };
   const saveLines = (reportId, lines) => {
     db.prepare('DELETE FROM par_report_lines WHERE report_id = ?').run(reportId);
@@ -114,8 +123,8 @@ export function registerParLevelRoutes(router, db) {
   router.post('/par-levels/reports', perm, (req, res) => {
     const b = body(req);
     const id = tx(db, () => {
-      const r = db.prepare('INSERT INTO par_reports (name, location_id, category, created_by, updated_by) VALUES (?, ?, ?, ?, ?)')
-        .run(b.name, b.location_id, b.category, req.user.name, req.user.name);
+      const r = db.prepare('INSERT INTO par_reports (name, location_id, category, sales_from, sales_to, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(b.name, b.location_id, b.category, b.sales_from, b.sales_to, req.user.name, req.user.name);
       saveLines(r.lastInsertRowid, b.lines);
       return Number(r.lastInsertRowid);
     });
@@ -125,8 +134,8 @@ export function registerParLevelRoutes(router, db) {
     const r = report(req, req.params.id);
     const b = body(req);
     tx(db, () => {
-      db.prepare(`UPDATE par_reports SET name = ?, location_id = ?, category = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`)
-        .run(b.name, b.location_id, b.category, req.user.name, r.id);
+      db.prepare(`UPDATE par_reports SET name = ?, location_id = ?, category = ?, sales_from = ?, sales_to = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(b.name, b.location_id, b.category, b.sales_from, b.sales_to, req.user.name, r.id);
       saveLines(r.id, b.lines);
     });
     res.json({ ...report(req, r.id), lines: linesOf(r.id) });

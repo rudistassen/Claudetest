@@ -105,3 +105,21 @@ test('par levels are saved as named reports that keep only the budgeted levels',
   assert.equal((await a(`/par-levels/reports/${made.data.id}`, { method: 'DELETE' })).status, 200);
   assert.deepEqual((await a('/par-levels/reports')).data, []);
 });
+
+test('the averages can come from any date range, which is kept with a saved report', async () => {
+  const a = await login('admin@cafe.local');
+  const lastSunday = addDays(weekStart(today()), -1);
+  const lastMonday = addDays(lastSunday, -6);
+  const oneWeek = (await a(`/par-levels?category=Bakery&location_id=${site}&from=${lastMonday}&to=${lastSunday}`)).data;
+  assert.deepEqual([oneWeek.from, oneWeek.to], [lastMonday, lastSunday]);
+  assert.deepEqual(oneWeek.days_traded, [1, 1, 1, 1, 1, 1, 1]);
+  assert.deepEqual(oneWeek.items.find((i) => i.name === 'Croissant').avg, [2, 4, 6, 8, 10, 12, 14]);
+  // A wider range counts the trading days in it (the first Monday of the six weeks was shut).
+  const wider = (await a(`/par-levels?category=Bakery&location_id=${site}&from=${addDays(lastMonday, -42)}&to=${lastSunday}`)).data;
+  assert.equal(wider.days_traded[0], 5);
+  assert.equal((await a(`/par-levels?category=Bakery&location_id=${site}&from=${lastSunday}&to=${lastMonday}`)).status, 400, 'from after to');
+
+  const made = await a('/par-levels/reports', { method: 'POST', body: { name: 'One week', location_id: site, category: 'Bakery', sales_from: lastMonday, sales_to: lastSunday,
+    lines: [{ item_key: 'V_CROISSANT', item_name: 'Croissant', pars: [2, 4, 6, 8, 10, 12, 14] }] } });
+  assert.deepEqual([made.data.sales_from, made.data.sales_to], [lastMonday, lastSunday]);
+});

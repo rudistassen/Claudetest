@@ -1,14 +1,18 @@
-import { api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, showError, toast } from '../lib.js';
+import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, showError, todayISO, toast, weekStart } from '../lib.js';
 
 // Reporting → Par levels: two tiles – create a new par level report, or view the saved ones.
 // Create: pick a Square category, then a site. Each item shows its average sold on each day of the week over the
-// last 6 full weeks, with a row underneath to budget the par level for each day; then save it with a name. A saved
+// dates picked at the top (the last 6 full weeks to start with), with a row underneath to budget the par level for each day; then save it with a name. A saved
 // report keeps just the budgeted par levels, and can be opened, changed, printed or deleted.
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const LONG_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const num = (n) => (n === null || n === undefined ? '' : String(Math.round(n * 10) / 10));
 const sum = (list) => list.reduce((t, n) => t + (Number(n) || 0), 0);
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+// Quick ranges: the last few full weeks, Monday to Sunday.
+const lastWeeks = (n) => { const to = addDays(weekStart(todayISO()), -1); return { from: addDays(to, -(n * 7 - 1)), to }; };
+const range = (from, to) => `${fmtDate(from, { day: 'numeric', month: 'short', ...(from.slice(0, 4) === to.slice(0, 4) ? {} : { year: 'numeric' }) })} – ${fmtDate(to, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
 // A column heading that sorts the table: Item (A–Z) or a day / the week (biggest first; tap again to flip).
 const sortHead = (key, label, title = '') => `<th class="${key === 'name' ? '' : 'num'}" aria-sort="none"><button type="button" class="th-sort" data-sort="${key}" ${title ? `title="${esc(title)}"` : ''}>${label}</button></th>`;
@@ -45,7 +49,7 @@ export async function render(ctx) {
     <p class="muted">How many of each item a site should have ready each day, budgeted from what it has sold on that day of the week (from Square).</p>
     <div class="hub-tiles" data-tone="reporting">
       <a class="hub-tile" href="#/par-levels/new"><span class="hub-icon" aria-hidden="true">＋</span>
-        <span class="hub-text"><strong>Create a new par level report</strong><small>Average sold Monday to Sunday over the last 6 weeks – budget each day and save it</small></span><span class="hub-go" aria-hidden="true">›</span></a>
+        <span class="hub-text"><strong>Create a new par level report</strong><small>Average sold Monday to Sunday over the dates you pick – budget each day and save it</small></span><span class="hub-go" aria-hidden="true">›</span></a>
       <a class="hub-tile" href="#/par-levels/saved"><span class="hub-icon" aria-hidden="true">▤</span>
         <span class="hub-text"><strong>View saved par levels</strong><small>${saved.length ? `${saved.length} saved report${saved.length === 1 ? '' : 's'}` : 'None saved yet'}</small></span><span class="hub-go" aria-hidden="true">›</span></a>
     </div>`;
@@ -59,9 +63,19 @@ export async function renderNew(ctx) {
   if (stale()) return;
   const category = editing?.category ?? (query.category || '');
   const site = editing ? String(editing.location_id) : query.site || (category ? String(state.locationId ?? sites[0]?.id ?? '') : '');
-  const data = await api(`/par-levels${qs({ category: category || undefined, location_id: category && site ? site : undefined, report: editing?.id })}`);
+  const from = ISO.test(query.from ?? '') ? query.from : editing?.sales_from ?? undefined;
+  const to = ISO.test(query.to ?? '') ? query.to : editing?.sales_to ?? undefined;
+  let data;
+  try {
+    data = await api(`/par-levels${qs({ category: category || undefined, location_id: category && site ? site : undefined, report: editing?.id, from, to })}`);
+  } catch (err) {
+    if (stale()) return;
+    showError(err);
+    navigate(`par-levels/new${qs({ category: category || undefined, site: site || undefined, report: editing?.id })}`);
+    return;
+  }
   if (stale()) return;
-  const go = (extra) => navigate(`par-levels/new${qs({ category: category || undefined, site: site || undefined, ...extra })}`);
+  const go = (extra) => navigate(`par-levels/new${qs({ category: category || undefined, site: site || undefined, report: editing?.id, from: data.from, to: data.to, ...extra })}`);
   const siteName = sites.find((l) => String(l.id) === String(data.location_id))?.name ?? '';
 
   const head = `<div class="page-head"><h1>${editing ? `Change “${esc(editing.name)}”` : 'New par level report'}</h1>
@@ -72,10 +86,27 @@ export async function renderNew(ctx) {
         ${data.categories.map((c) => `<option ${c === data.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
       <label class="field"><span>Site</span><select id="par-site" ${data.category && !editing ? '' : 'disabled'}>
         ${sites.map((l) => `<option value="${l.id}" ${String(l.id) === String(site) ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>
+    </div>
+    <div class="filters par-dates">
+      <label class="field"><span>Sales from</span><input type="date" id="par-from" value="${data.from}" max="${todayISO()}"></label>
+      <label class="field"><span>to</span><input type="date" id="par-to" value="${data.to}" max="${todayISO()}"></label>
+      <div class="par-quick" role="group" aria-label="Quick date ranges">
+        ${[4, 6, 8, 12].map((n) => { const w = lastWeeks(n); return `<button type="button" class="chip-btn ${w.from === data.from && w.to === data.to ? 'is-on' : ''}" data-weeks="${n}">Last ${n} weeks</button>`; }).join('')}
+      </div>
     </div>`;
   const wire = () => {
-    el.querySelector('#par-cat').addEventListener('change', (e) => navigate(`par-levels/new${qs({ category: e.target.value || undefined, site: e.target.value ? site || undefined : undefined })}`));
+    el.querySelector('#par-cat').addEventListener('change', (e) => navigate(`par-levels/new${qs({ category: e.target.value || undefined, site: e.target.value ? site || undefined : undefined, from: data.from, to: data.to })}`));
     el.querySelector('#par-site').addEventListener('change', (e) => go({ site: e.target.value }));
+    const dates = () => {
+      const f = el.querySelector('#par-from').value;
+      const t = el.querySelector('#par-to').value;
+      if (!f || !t) return;
+      if (f > t) { showError(new Error('The start date is after the end date')); return; }
+      go({ from: f, to: t });
+    };
+    el.querySelector('#par-from').addEventListener('change', dates);
+    el.querySelector('#par-to').addEventListener('change', dates);
+    el.querySelectorAll('[data-weeks]').forEach((b) => b.addEventListener('click', () => go(lastWeeks(Number(b.dataset.weeks)))));
   };
 
   if (!data.category || !data.location_id) {
@@ -86,10 +117,10 @@ export async function renderNew(ctx) {
     return;
   }
 
-  const period = `${fmtDate(data.from, { day: 'numeric', month: 'short' })} – ${fmtDate(data.to, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const period = range(data.from, data.to);
   const had = new Map((data.report?.lines ?? []).map((l) => [l.item_key, l.pars]));
   el.innerHTML = `${head}${filters}
-    <p class="muted">Average sold on each day of the week over the last ${data.weeks} full weeks (${period}). Days ${esc(siteName)} didn’t trade are left out. Put the par level you want for each day in the row under each item.</p>
+    <p class="muted">Average sold on each day of the week from <strong>${period}</strong>. Days ${esc(siteName)} didn’t trade are left out. Put the par level you want for each day in the row under each item.</p>
     ${data.items.length ? `<form id="par-form" class="card">
       <div class="actions par-tools">
         <button type="button" class="btn" id="par-fill">Fill budget with average sold</button>
@@ -160,12 +191,12 @@ export async function renderNew(ctx) {
     openModal({
       title: editing ? 'Save changes' : 'Save par levels',
       body: `${field('Name', input('name', suggested, 'required maxlength="120"'))}
-        <p class="muted small">${count} item${count === 1 ? '' : 's'} · ${esc(data.category)} · ${esc(siteName)}. Only the par levels you’ve budgeted are saved.</p>
+        <p class="muted small">${count} item${count === 1 ? '' : 's'} · ${esc(data.category)} · ${esc(siteName)} · averages from ${period}. Only the par levels you’ve budgeted are saved.</p>
         ${editing ? '<label class="check-row"><input type="checkbox" name="as_new"><span>Save as a new report (keep the old one as it is)</span></label>' : ''}`,
       submitLabel: 'Save',
       onSubmit: async (v) => {
         if (!v.name?.trim()) throw new Error('Give it a name');
-        const body = { name: v.name.trim(), location_id: data.location_id, category: data.category, lines };
+        const body = { name: v.name.trim(), location_id: data.location_id, category: data.category, sales_from: data.from, sales_to: data.to, lines };
         const r = editing && !v.as_new
           ? await api(`/par-levels/reports/${editing.id}`, { method: 'PUT', body })
           : await api('/par-levels/reports', { method: 'POST', body });
@@ -202,7 +233,7 @@ export async function renderReport(ctx) {
     return;
   }
   if (stale()) return;
-  el.innerHTML = `<div class="page-head"><div><h1>${esc(r.name)}</h1><p class="muted">${esc(r.category)} · ${esc(r.location_name)}</p></div>
+  el.innerHTML = `<div class="page-head"><div><h1>${esc(r.name)}</h1><p class="muted">${esc(r.category)} · ${esc(r.location_name)}${r.sales_from && r.sales_to ? ` · from sales ${range(r.sales_from, r.sales_to)}` : ''}</p></div>
       <div class="actions">
         <a class="btn" href="#/par-levels/saved">All saved</a>
         <button class="btn" id="par-print">Print</button>

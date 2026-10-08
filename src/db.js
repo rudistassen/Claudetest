@@ -960,6 +960,9 @@ CREATE TABLE IF NOT EXISTS user_areas (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // The sales dates a par level report's averages came from.
+  ['par_reports', 'sales_from', 'ALTER TABLE par_reports ADD COLUMN sales_from TEXT'],
+  ['par_reports', 'sales_to', 'ALTER TABLE par_reports ADD COLUMN sales_to TEXT'],
   // How much of a day's sales is open orders (tabs and tickets not paid yet, counted until they're paid).
   ['sales_daily', 'open_gross', 'ALTER TABLE sales_daily ADD COLUMN open_gross REAL NOT NULL DEFAULT 0'],
   ['sales_daily', 'open_orders', 'ALTER TABLE sales_daily ADD COLUMN open_orders INTEGER NOT NULL DEFAULT 0'],
