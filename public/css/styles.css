@@ -2111,3 +2111,18 @@ body.rota-pasting .rota td.editable:hover { box-shadow: inset 0 0 0 2px var(--br
   border: 0; border-radius: 50%; background: var(--brand-deep); color: #fff; font-size: 2rem; line-height: 1;
   box-shadow: var(--shadow-lift); cursor: pointer;
 }
+.pd-fab { transition: transform 0.15s ease; }
+.pd-fab.is-open { transform: rotate(45deg); }
+.pd-fab-menu {
+  position: fixed; right: 1rem; bottom: calc(80px + 4.3rem + env(safe-area-inset-bottom)); z-index: 34; display: grid; gap: 0.25rem;
+  min-width: 15rem; padding: 0.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lift);
+}
+.pd-fab-menu[hidden] { display: none; }
+.pd-fab-menu button {
+  display: grid; grid-template-columns: 1.8rem 1fr; align-items: center; column-gap: 0.4rem; padding: 0.7rem 0.6rem; border: 0; border-radius: 8px;
+  background: none; color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer;
+}
+.pd-fab-menu button:hover, .pd-fab-menu button:focus-visible { background: var(--surface-2); }
+.pd-fab-menu small { grid-column: 2; font-weight: 400; color: var(--muted); }
+.pd-fab-scrim { position: fixed; inset: 0; z-index: 33; background: rgba(0, 0, 0, 0.12); }
+.pd-fab-scrim[hidden] { display: none; }

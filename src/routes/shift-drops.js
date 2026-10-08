@@ -1,13 +1,13 @@
 // Dropping shifts: staff ask to drop one of their published shifts; someone who can publish the rota at that site
 // approves (the shift comes off their rota and becomes an open shift there) or declines (it stays theirs). Anyone
 // who works at the site can then claim an open shift, which puts it straight onto their published rota.
-import { assertLocation, can, requirePerm } from '../auth.js';
+import { assertLocation, can, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { logRota, shiftText } from '../rota-log.js';
 import { onHoliday } from './leave.js';
 import { notify, peopleAt, peopleWith } from '../push.js';
 import { fmtDay } from '../rota-log.js';
-import { badRequest, forbidden, notFound, round2, shiftHours, str, today } from '../util.js';
+import { badRequest, date, forbidden, notFound, num, round2, shiftHours, str, time, today } from '../util.js';
 
 const nowTime = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
 // A shift that hasn't started yet (today's only once its start time has passed).
@@ -56,7 +56,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     const toApprove = can(req.user, 'rota.publish')
       ? db.prepare(`${SELECT} WHERE d.status = 'pending' AND d.date >= ? AND d.location_id IN (${inList}) ORDER BY d.date, d.start_time`).all(today(), ...sites).map(withHours)
       : [];
-    const mine = db.prepare(`${SELECT} WHERE d.dropped_by = ? AND d.date >= ? AND d.status != 'cancelled' ORDER BY d.date, d.start_time`)
+    const mine = db.prepare(`${SELECT} WHERE d.dropped_by = ? AND d.shift_id IS NOT NULL AND d.date >= ? AND d.status != 'cancelled' ORDER BY d.date, d.start_time`)
       .all(req.user.id, today()).map(withHours);
     res.json({ open, to_approve: toApprove, mine });
   });
@@ -176,6 +176,35 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     notify(db, [shift.user_id], 'shift_changed', { title: 'Shift taken off your rota', body: `${when(opened)} at ${opened.location_name} is no longer yours`, url: '/#/rota?view=mine' });
     announceOpen(opened, shift.user_id);
     res.json(withHours(opened));
+  });
+
+  // A manager adds a new open shift (nobody on it yet): anyone at the site can pick it up, and they're told about it.
+  // It has no shift behind it; dropped_by is the manager who added it.
+  router.post('/shift-drops', requirePerm('rota.publish'), (req, res) => {
+    const b = req.body ?? {};
+    const s = {
+      location_id: resolveLocation(req, b.location_id),
+      date: date(b.date, 'date', { required: true }),
+      start_time: time(b.start_time, 'start_time', { required: true }),
+      end_time: time(b.end_time, 'end_time', { required: true }),
+      break_minutes: num(b.break_minutes, 'break_minutes', { min: 0, max: 600, int: true }) ?? 0,
+      position: str(b.position, 'position', { max: 100 }),
+      notes: str(b.notes, 'notes', { max: 1000 }),
+    };
+    assertLocation(req, s.location_id);
+    if (s.start_time === s.end_time) throw badRequest('Shift start and end cannot be the same');
+    if (!notStarted(s)) throw badRequest('That time has already passed – pick a later day or time');
+    const id = tx(db, () => {
+      const r = db.prepare(`INSERT INTO shift_drops (shift_id, location_id, date, start_time, end_time, break_minutes, position, notes, dropped_by, reason,
+        status, decided_by, decided_at) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'open', ?, datetime('now'))`)
+        .run(s.location_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes, req.user.id, req.user.id);
+      logRota(db, req, { action: 'open', location_id: s.location_id, shift: { ...s, id: null, user_id: null },
+        details: `${shiftText(s)} — new open shift added by ${req.user.name}` });
+      return r.lastInsertRowid;
+    });
+    const opened = load(id);
+    announceOpen(opened, req.user.id);
+    res.status(201).json(withHours(opened));
   });
 
   // A manager takes an open shift away (it's no longer needed, or they've covered it another way).

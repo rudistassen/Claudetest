@@ -19,10 +19,11 @@ export const ACTIONS = {
   holiday: ['Holiday', 'log-publish'],
   undo: ['Undone', 'log-change'],
   sick: ['Sickness', 'log-change'],
+  open: ['Open shift added', 'log-add'],
   claim: ['Open shift picked up', 'log-add'],
   withdraw: ['Open shift withdrawn', 'log-remove'],
 };
-const FILTERS = [['', 'All changes'], ['add', 'Added'], ['change', 'Changed'], ['remove', 'Removed'], ['restore', 'Put back'], ['publish', 'Published'], ['discard', 'Discarded'], ['copy', 'Copied week'], ['drop', 'Drop requests'], ['claim', 'Picked up'], ['holiday', 'Holiday'], ['sick', 'Sickness'], ['timecard_site', 'Clock-ins moved'], ['timecard_breaks', 'Breaks changed']];
+const FILTERS = [['', 'All changes'], ['add', 'Added'], ['change', 'Changed'], ['remove', 'Removed'], ['restore', 'Put back'], ['publish', 'Published'], ['discard', 'Discarded'], ['copy', 'Copied week'], ['drop', 'Drop requests'], ['open', 'Open shifts added'], ['claim', 'Picked up'], ['holiday', 'Holiday'], ['sick', 'Sickness'], ['timecard_site', 'Clock-ins moved'], ['timecard_breaks', 'Breaks changed']];
 
 const when = (at) => new Date(`${at.replace(' ', 'T')}Z`);
 const dateFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' });

@@ -157,3 +157,26 @@ test('holiday decisions and declined drop requests are recorded in Rota changes'
   const declined = (await manager('/rota/log?action=drop')).data.entries.find((e) => e.action === 'drop_decline');
   assert.match(declined.details, /declined \(“Short staffed”\); it stays on their rota/);
 });
+
+test('a manager adds a new open shift, which anyone at the site can pick up', async () => {
+  const day = addDays(today(), 4);
+  const manager = await login('manager1@cafe.local');
+  const staff = await login('staff1@cafe.local');
+  const site = db.prepare('SELECT location_id FROM users WHERE email = ?').get('manager1@cafe.local').location_id;
+  db.prepare('DELETE FROM shifts WHERE user_id = (SELECT id FROM users WHERE email = ?) AND date = ?').run('staff1@cafe.local', day);
+  const body = { location_id: site, date: day, start_time: '10:00', end_time: '16:00', break_minutes: 30, notes: 'Busy lunch' };
+
+  assert.equal((await staff('/shift-drops', { method: 'POST', body })).status, 403, 'staff can’t add open shifts');
+  assert.equal((await manager('/shift-drops', { method: 'POST', body: { ...body, date: addDays(today(), -1) } })).status, 400, 'not in the past');
+  const added = await manager('/shift-drops', { method: 'POST', body });
+  assert.equal(added.status, 201);
+  assert.equal(added.data.status, 'open');
+  assert.equal(added.data.hours, 5.5);
+  assert.ok(!(await manager('/shift-drops')).data.mine.some((d) => d.id === added.data.id), 'not shown as the manager’s own drop request');
+  assert.ok((await manager(`/rota?week=${day}`)).data.open_shifts.some((d) => d.id === added.data.id), 'on the rota');
+  assert.ok((await staff('/shift-drops')).data.open.find((d) => d.id === added.data.id).can_claim);
+  assert.equal((await staff(`/shift-drops/${added.data.id}/claim`, { method: 'POST' })).status, 200);
+  const mine = (await staff('/my-shifts')).data.find((s) => s.date === day);
+  assert.deepEqual([mine.start_time, mine.end_time, mine.notes], ['10:00', '16:00', 'Busy lunch']);
+  assert.ok(db.prepare(`SELECT 1 FROM rota_log WHERE action = 'open'`).get(), 'logged');
+});

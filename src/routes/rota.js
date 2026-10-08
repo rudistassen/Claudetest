@@ -456,7 +456,7 @@ export function registerRotaRoutes(router, db) {
     else { where.push('at >= ? AND at < ?'); args.push(sqlTime(from), sqlTime(addDays(to, 1))); }
     if (req.query.staff_id) { where.push('staff_id = ?'); args.push(Number(req.query.staff_id)); }
     if (req.query.action) {
-      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy', 'drop', 'claim', 'withdraw', 'sick', 'holiday', 'timecard_site', 'timecard_breaks']);
+      const kind = oneOf(req.query.action, 'action', ['add', 'change', 'remove', 'restore', 'publish', 'discard', 'copy', 'drop', 'open', 'claim', 'withdraw', 'sick', 'holiday', 'timecard_site', 'timecard_breaks']);
       // "Published" covers publishing a whole rota and a single shift.
       if (kind === 'publish') where.push(`action IN ('publish', 'publish_shift')`);
       // "Dropped" covers approved and declined drop requests.

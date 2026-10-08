@@ -455,10 +455,13 @@ export async function render(ctx) {
       ${gapsBox(gapsOn(day))}
       ${open.length ? `<ul class="pd-list">${open.map((x) => `<li class="pd-item"><button class="pd-card pd-open" data-open-shift="${x.id}" style="--site:${siteColour(x.location_name, x.location_id)}">
           <span class="pd-avatar" aria-hidden="true">?</span>
-          <span class="pd-body"><span class="pd-time">${x.start_time} – ${x.end_time}</span><span class="pd-name">Open shift – tap to pick it up</span>
+          <span class="pd-body"><span class="pd-time">${x.start_time} – ${x.end_time}<span class="pd-break">${pdIcon('cup')}${x.break_minutes ?? 0}m</span></span><span class="pd-name">Open shift – ${canEdit ? 'nobody on it yet' : 'tap to pick it up'}</span>
             <span class="pd-line">${pdIcon('pin')}${esc(x.location_name)}</span></span></button></li>`).join('')}</ul>` : ''}
       ${onDay.length ? `<ul class="pd-list">${onDay.map(card).join('')}</ul>` : `<div class="card empty">Nobody is on the rota ${day === today ? 'today' : 'this day'}.</div>`}
-      ${canEdit ? `<button class="pd-fab" data-add-site="${siteId ?? shownSites[0] ?? ''}" aria-label="Add a shift" title="Add a shift">+</button>
+      ${canEdit ? `<button class="pd-fab" id="pd-fab" aria-label="Add a shift" aria-haspopup="${data.can_publish ? 'menu' : 'false'}" aria-expanded="false">+</button>
+        ${data.can_publish ? `<div class="pd-fab-scrim" id="pd-fab-scrim" hidden></div><div class="pd-fab-menu" id="pd-fab-menu" role="menu" hidden>
+          <button role="menuitem" data-fab="person"><span aria-hidden="true">👤</span>Shift for someone</button>
+          <button role="menuitem" data-fab="open"><span aria-hidden="true">🔓</span>Open shift<small>Anyone at the site can pick it up</small></button></div>` : ''}
         <p class="muted small">Tap a shift to change it. Press and hold a shift, then drag it onto someone else’s to give it to them.</p>` : ''}`;
   };
 
@@ -664,8 +667,11 @@ export async function render(ctx) {
     const person = data.staff.find((u) => u.id === s.user_id);
     const site = s.location_id ?? (all ? person?.location_id : siteId) ?? state.locationId;
     const unpublished = shift && shift.state && shift.state !== 'published';
+    // A new shift can be an open shift instead: nobody on it yet, and anyone at the site can pick it up.
+    const canOpen = !shift && data.can_publish;
+    const who = canOpen ? [...staffOptions, ['open', 'Open shift – nobody yet, anyone at the site can pick it up']] : staffOptions;
     const { form } = openModal({
-      title: shift ? 'Edit shift' : 'Add shift',
+      title: shift ? 'Edit shift' : defaults.open ? 'Add open shift' : 'Add shift',
       body: `
         ${unpublished ? `<p class="notice publish-one">${shift.state === 'new' ? 'Staff can’t see this shift yet.' : 'Staff still see the old version of this shift.'}
           ${data.can_publish ? '<button type="button" class="btn btn-small btn-primary" id="publish-one">Publish just this shift</button>' : ''}</p>` : ''}
@@ -673,7 +679,7 @@ export async function render(ctx) {
           <span class="sick-line-actions">${data.can_publish && !shift.sick && shift.state !== 'removed' ? '<button type="button" class="btn btn-small" id="open-btn" title="Take it off their rota now and offer it to everyone at the site">Drop to open</button>' : ''}
           <button type="button" class="btn btn-small" id="sick-btn">${shift.sick ? 'Change' : 'Mark as sick'}</button></span></p>` : ''}
         <div class="row">
-          ${field('Staff member', select('user_id', staffOptions, s.user_id, 'required'))}
+          ${field('Staff member', select('user_id', who, defaults.open ? 'open' : s.user_id, 'required'))}
           ${field('Site', select('location_id', siteOptions, site, `required ${siteOptions.length > 1 ? '' : 'disabled'}`))}
         </div>
         ${field('Date', input('date', s.date, 'type="date" required'))}
@@ -695,6 +701,13 @@ export async function render(ctx) {
       },
       onSubmit: async (v) => {
         const body = { ...v, location_id: Number(v.location_id ?? site) };
+        if (canOpen && v.user_id === 'open') {
+          delete body.user_id;
+          await api('/shift-drops', { method: 'POST', body });
+          toast('Open shift added – everyone at the site can pick it up');
+          ctx.rerender();
+          return;
+        }
         if (shift) await api(`/shifts/${shift.id}`, { method: 'PUT', body });
         else await api('/shifts', { method: 'POST', body });
         toast('Shift saved');
@@ -721,6 +734,7 @@ export async function render(ctx) {
     const check = () => {
       const userId = Number(form.user_id.value);
       const d = form.date.value;
+      if (form.user_id.value === 'open') { warn.hidden = true; return; }
       const name = data.staff.find((u) => u.id === userId)?.name ?? 'They';
       let msg = '';
       if (d && holidayOn(userId, d, 'approved')) msg = `${name} is on holiday that day, so this shift can’t be saved.`;
@@ -919,6 +933,21 @@ export async function render(ctx) {
     } catch (err) { showError(err); }
   }));
   el.querySelectorAll('[data-add-site]').forEach((b) => b.addEventListener('click', () => shiftModal(null, { date: day ?? week, location_id: Number(b.dataset.addSite) })));
+  // Phone day view: the round + button. People who can publish choose a shift for someone or an open shift.
+  const fab = el.querySelector('#pd-fab');
+  const fabMenu = el.querySelector('#pd-fab-menu');
+  const fabSite = siteId ?? shownSites[0];
+  const fabScrim = el.querySelector('#pd-fab-scrim');
+  const showFabMenu = (show) => { if (!fabMenu) return; fabMenu.hidden = !show; fabScrim.hidden = !show; fab.setAttribute('aria-expanded', String(show)); fab.classList.toggle('is-open', show); };
+  fab?.addEventListener('click', () => {
+    if (!fabMenu) { shiftModal(null, { date: day, location_id: fabSite }); return; }
+    showFabMenu(fabMenu.hidden);
+  });
+  fabMenu?.querySelectorAll('[data-fab]').forEach((b) => b.addEventListener('click', () => {
+    showFabMenu(false);
+    shiftModal(null, { date: day, location_id: fabSite, open: b.dataset.fab === 'open' });
+  }));
+  fabScrim?.addEventListener('click', () => showFabMenu(false));
   el.querySelector('#discard')?.addEventListener('click', async () => {
     if (!(await confirmDialog('Throw away every unpublished change this week? New shifts are deleted, changed ones go back to what staff can see, and removed ones come back.', { confirmLabel: 'Discard changes', title: 'Discard changes' }))) return;
     try {

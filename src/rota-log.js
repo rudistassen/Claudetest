@@ -29,7 +29,7 @@ export function shiftChanges(db, before, after) {
 /**
  * Records one change. entry: { action, location_id, shift (the shift it's about, for its person and day), details },
  * or for something about a person but not one shift (a holiday), staff_id and date instead of shift.
- * Actions: add, change, remove, restore, publish_shift, publish, discard, copy, drop, drop_decline, claim, withdraw,
+ * Actions: add, change, remove, restore, publish_shift, publish, discard, copy, drop, drop_decline, open, claim, withdraw,
  * sick, holiday.
  */
 export function logRota(db, req, { action, location_id, shift = null, staff_id = null, date = null, details = '' }) {
