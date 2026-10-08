@@ -409,7 +409,7 @@ export async function render(ctx) {
       const changed = x.state && x.state !== 'published';
       const status = changed ? `<em class="shift-tag">${TAGS[x.state]}</em>`
         : `<span class="pd-tick" title="${canEdit ? 'Published' : 'Confirmed'}">✓✓</span>`;
-      const role = x.position || u?.position || '';
+      const role = u?.rota_group || '';
       const from = u && u.location_id !== x.location_id && u.location_name ? `Covering from ${u.location_name}` : '';
       return `<li class="pd-item" ${canEdit ? `data-drop data-user="${x.user_id}" data-date="${day}" data-site="${x.location_id}"` : ''}>
         <button class="pd-card ${changed ? `is-${x.state}` : ''} ${x.sick ? 'shift-sick' : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
