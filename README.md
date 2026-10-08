@@ -76,7 +76,7 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 ## Connecting Square
 
 1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "Atlas").
-2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders, locations, team members and timecards (the token needs `ORDERS_READ`, `MERCHANT_PROFILE_READ`, `EMPLOYEES_READ` and `TIMECARDS_READ`). Treat it like a password.
+2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders, locations, team members and timecards (the token needs `ORDERS_READ`, `MERCHANT_PROFILE_READ`, `EMPLOYEES_READ`, `TIMECARDS_READ` and `ITEMS_READ` – the last one gives each item's category, for **Reporting → Par levels**). Treat it like a password.
 3. Start Atlas with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
 4. In Atlas go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
 5. Click **Import sales** to backfill history (up to 92 days per run). After that, sales and clock-ins refresh automatically every 30 minutes. The first automatic run backfills the last 28 days.
@@ -129,6 +129,10 @@ Email goes through [Brevo](https://www.brevo.com) (free for up to 300 emails a d
 2. Under **Senders, domains & dedicated IPs → Senders**, add the address emails should come from and confirm it from the email Brevo sends.
 3. Under **SMTP & API → API keys**, generate a key.
 4. Set `BREVO_API_KEY` (the key) and `EMAIL_FROM` (the sender address) in the app's environment (Railway → Variables), and deploy. Optional: `EMAIL_FROM_NAME` (default "Atlas") and `APP_URL` (your Atlas address, for an "Open Atlas" button; on Railway it's found automatically).
+
+## Par levels
+
+**Reporting → Par levels**: pick a Square category, then a site. Each item in that category shows its average sold on each day of the week (Monday to Sunday) over the last 6 full weeks – days the site didn't trade are left out – with a row under it to budget the par level for each day. **Fill empty with averages** puts in each day's average rounded up. **Save draft** keeps your work; **Save as final version** saves a clean copy with only the budgeted par levels (the **Final version** tab, which prints). Working on the draft afterwards doesn't change the final version until you save it as final again. Categories come from Square's Items library, read with each Square sync (at most hourly).
 
 ## Phone notifications
 

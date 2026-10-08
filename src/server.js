@@ -1,3 +1,4 @@
+import { registerParLevelRoutes } from './routes/par-levels.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -100,6 +101,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerStockRoutes(api, db);
   registerPushRoutes(api, db);
   registerPrepOrderRoutes(api, db);
+  registerParLevelRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);

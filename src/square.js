@@ -87,6 +87,16 @@ export class SquareClient {
     }
   }
 
+  // Yields every item and category in the Square catalogue (Items library).
+  async *listCatalog() {
+    let cursor;
+    do {
+      const page = await this.request('GET', `/v2/catalog/list?types=ITEM,CATEGORY${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+      for (const o of page.objects ?? []) yield o;
+      cursor = page.cursor;
+    } while (cursor);
+  }
+
   // Yields every team member (active or not), so past clock-ins can be named.
   async *searchTeamMembers() {
     let cursor;
@@ -313,6 +323,37 @@ async function fetchLabour(client, { locationIds, startAt, endAt, tz }) {
   }
 }
 
+/**
+ * Saves the Square catalogue's items, each variation with its item's category (its reporting category, else its
+ * first category), so item sales can be grouped by category (Reporting → Par levels). Returns how many variations.
+ */
+export async function syncCatalog(db, client) {
+  const categories = new Map();
+  const items = [];
+  for await (const o of client.listCatalog()) {
+    if (o.type === 'CATEGORY') categories.set(o.id, o.category_data?.name ?? '');
+    else if (o.type === 'ITEM') items.push(o);
+  }
+  const rows = items.flatMap((it) => {
+    const d = it.item_data ?? {};
+    const categoryId = d.reporting_category?.id ?? d.categories?.[0]?.id ?? d.category_id ?? null;
+    return (d.variations ?? []).map((v) => [v.id, it.id, d.name ?? '', v.item_variation_data?.name ?? null, categoryId, categories.get(categoryId) || null]);
+  });
+  tx(db, () => {
+    db.prepare('DELETE FROM square_catalog').run();
+    const ins = db.prepare('INSERT OR REPLACE INTO square_catalog (variation_id, item_id, item_name, variation_name, category_id, category_name) VALUES (?, ?, ?, ?, ?, ?)');
+    for (const r of rows) ins.run(...r);
+    db.prepare(`INSERT INTO settings (key, value) VALUES ('square_catalog_synced_at', datetime('now')) ON CONFLICT (key) DO UPDATE SET value = excluded.value`).run();
+  });
+  return rows.length;
+}
+
+// The catalogue changes rarely: it's re-read at most once an hour by the automatic sync (and on every manual sync).
+function catalogDue(db) {
+  const at = db.prepare(`SELECT value FROM settings WHERE key = 'square_catalog_synced_at'`).get()?.value;
+  return !at || db.prepare(`SELECT ? < datetime('now', '-1 hour') AS due`).get(at).due === 1;
+}
+
 let running = null;
 
 /**
@@ -401,6 +442,12 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
       }
     }
 
+    // Categories for item sales. Needs the token to read the Items library; sales still sync if it can't.
+    let catalogError = null;
+    if (triggeredBy !== 'auto' || catalogDue(db)) {
+      try { await syncCatalog(db, client); } catch (err) { catalogError = err.message; }
+    }
+
     const labour = await fetchLabour(client, { ...window, tz });
     const timecards = (labour.timecards ?? [])
       .map((t) => ({ ...t, location_id: bySquareId.get(t.square_location_id) }))
@@ -440,7 +487,8 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
         WHERE date BETWEEN ? AND ? AND id IN (SELECT a.timecard_id FROM timecard_allocations a WHERE a.square_site_id = timecards.location_id)`).run(from, to);
     });
 
-    const message = labour.error ? `Sales synced, but clock-ins were not: ${labour.error}` : null;
+    const message = [labour.error ? `Sales synced, but clock-ins were not: ${labour.error}` : null,
+      catalogError ? `Item categories couldn’t be read (the Square token needs Items read access): ${catalogError}` : null].filter(Boolean).join(' · ') || null;
     db.prepare(`UPDATE square_sync_log SET status = 'ok', finished_at = datetime('now'), orders = ?, timecards = ?, message = ? WHERE id = ?`)
       .run(orderCount, labour.error ? null : timecards.length, message, log);
     return { from, to, orders: orderCount, open_orders: openCount, days: daily.size, timecards: labour.error ? null : timecards.length, warning: message };
@@ -450,14 +498,14 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
   }
 }
 
-/** Keeps today's and yesterday's sales and clock-ins fresh; backfills the last 28 days the first time. */
+/** Keeps today's and yesterday's sales and clock-ins fresh; backfills the last 6 weeks the first time. */
 export function startAutoSync(db, client, config, { log = console } = {}) {
   const tick = async () => {
     const hasMapping = db.prepare('SELECT 1 FROM locations WHERE square_location_id IS NOT NULL').get();
     if (!hasMapping) return;
     const today = localDate(Date.now());
     const hasSales = db.prepare('SELECT 1 FROM sales_daily LIMIT 1').get();
-    const from = addDays(today, hasSales ? -1 : -27);
+    const from = addDays(today, hasSales ? -1 : -41);
     try {
       const r = await syncSales(db, client, { from, to: today, triggeredBy: 'auto' });
       log.log(`Square sync ${from}..${today}: ${r.orders} orders, ${r.timecards ?? 'no'} clock-ins`);

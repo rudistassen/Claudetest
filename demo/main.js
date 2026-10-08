@@ -1,5 +1,6 @@
 // In-browser build of Atlas: the real server routes run against SQLite (sql.js) inside the page,
 // and window.fetch('/api/...') is answered locally instead of by a server.
+import { registerParLevelRoutes } from '../src/routes/par-levels.js';
 import initSqlJs from 'sql.js/dist/sql-asm.js';
 import { loadUser, registerAuthRoutes, requireAuth } from '../src/auth.js';
 import { openDb, publishAllShifts } from '../src/db.js';
@@ -128,6 +129,7 @@ async function boot() {
   registerStockRoutes(api, db);
   registerPushRoutes(api, db);
   registerPrepOrderRoutes(api, db);
+  registerParLevelRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db);

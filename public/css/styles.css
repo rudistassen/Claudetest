@@ -2141,3 +2141,18 @@ body.rota-pasting .rota td.editable:hover { box-shadow: inset 0 0 0 2px var(--br
 .inbox-item .btn { flex: none; align-self: center; }
 .inbox-item { flex-wrap: wrap; }
 @media (max-width: 520px) { .inbox-item .btn { margin-left: 3.15rem; } }
+
+/* Reporting → Par levels */
+.par-filters { align-items: flex-end; }
+.par-filters .field { margin: 0; min-width: 12rem; }
+.par-table { width: 100%; }
+.par-table th[scope="rowgroup"], .par-table th[scope="row"] { text-align: left; min-width: 9rem; }
+.par-budget tbody.par-item { border-top: 2px solid var(--border); }
+.par-budget tbody.par-item:first-of-type { border-top: 0; }
+.par-budget .par-avg td { color: var(--muted); }
+.par-label { white-space: nowrap; font-size: 0.85rem; color: var(--muted); }
+.par-row .par-label { color: var(--text); font-weight: 600; }
+.par-input { width: 4.2rem; text-align: right; }
+.par-week { font-weight: 700; }
+.par-final td strong { font-size: 1.05rem; }
+@media print { .par-filters, .page-head .actions { display: none !important; } }

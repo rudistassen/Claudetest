@@ -18,6 +18,20 @@ const MENU = [
   ['Avocado sourdough', 895, true], ['Ham & cheese toastie', 675, true], ['Brownie', 325, false], ['Orange juice', 280, true],
   ['Egg & cress sandwich', 495, false],
 ];
+// The Items library: each menu item in a category, with one "Regular" variation (the id till lines point at).
+const CATEGORY_OF = { Coffee: ['Flat white', 'Latte', 'Cappuccino', 'Americano', 'Oat latte'], 'Cold & other drinks': ['Hot chocolate', 'Orange juice'],
+  Bakery: ['Croissant', 'Pain au chocolat', 'Brownie'], Food: ['Bacon roll', 'Avocado sourdough', 'Ham & cheese toastie', 'Egg & cress sandwich'] };
+const catId = (c) => `CATG_${c.replace(/\W/g, '').toUpperCase()}`;
+function catalog() {
+  const cats = Object.keys(CATEGORY_OF).map((c) => ({ type: 'CATEGORY', id: catId(c), category_data: { name: c } }));
+  const items = MENU.map(([name]) => {
+    const cat = Object.keys(CATEGORY_OF).find((c) => CATEGORY_OF[c].includes(name));
+    const key = name.replace(/\W/g, '').toUpperCase();
+    return { type: 'ITEM', id: `ITEM_${key}`, item_data: { name, reporting_category: { id: catId(cat) }, categories: [{ id: catId(cat) }],
+      variations: [{ type: 'ITEM_VARIATION', id: `CAT_${key}`, item_variation_data: { name: 'Regular' } }] } };
+  });
+  return [...cats, ...items];
+}
 const WEIGHTS = [16, 14, 10, 8, 7, 4, 9, 5, 5, 3, 4, 6, 3, 4];
 
 function rng(seed) {
@@ -213,6 +227,7 @@ function teamWrite(path, method, body) {
 export async function fakeSquareFetch(url, init = {}) {
   const path = new URL(url).pathname;
   if (path === '/v2/locations') return json(200, { locations: SQUARE_LOCATIONS });
+  if (path === '/v2/catalog/list') return json(200, page(catalog(), { cursor: new URL(url).searchParams.get('cursor') ?? 0 }, 'objects', 10));
   if (path === '/v2/team-members/search') return json(200, page(teamMembers(), JSON.parse(init.body), 'team_members', 200));
   if (path.startsWith('/v2/team-members')) {
     const r = teamWrite(path, init.method ?? 'GET', init.body ? JSON.parse(init.body) : {});

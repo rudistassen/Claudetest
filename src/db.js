@@ -261,6 +261,38 @@ CREATE TABLE IF NOT EXISTS sales_hourly (
   PRIMARY KEY (location_id, date, hour)
 );
 
+-- The Square catalogue: each item variation (what a till line's catalog_object_id points at) with its item and
+-- category, so item sales can be grouped by category.
+CREATE TABLE IF NOT EXISTS square_catalog (
+  variation_id TEXT PRIMARY KEY,
+  item_id TEXT NOT NULL,
+  item_name TEXT NOT NULL,
+  variation_name TEXT,
+  category_id TEXT,
+  category_name TEXT
+);
+
+-- Par levels (Reporting → Par levels): how many of each item a site should have ready on each weekday (0 = Monday),
+-- for one Square category. version 'draft' is being worked on; 'final' is the saved final version.
+CREATE TABLE IF NOT EXISTS par_levels (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  version TEXT NOT NULL,
+  item_key TEXT NOT NULL,
+  item_name TEXT NOT NULL,
+  weekday INTEGER NOT NULL,
+  par REAL NOT NULL,
+  PRIMARY KEY (location_id, category, version, item_key, weekday)
+);
+CREATE TABLE IF NOT EXISTS par_sheets (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  version TEXT NOT NULL,
+  saved_by TEXT,
+  saved_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (location_id, category, version)
+);
+
 -- Square Team members, matched to app users by email (or name) so clock-ins line up with the rota.
 CREATE TABLE IF NOT EXISTS square_team_members (
   id TEXT PRIMARY KEY,

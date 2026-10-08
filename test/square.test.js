@@ -45,6 +45,7 @@ const mock = http.createServer((req, res) => {
     requests.push({ method: req.method, url: req.url, headers: req.headers, body: body ? JSON.parse(body) : null });
     if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(401, { errors: [{ category: 'AUTHENTICATION_ERROR', code: 'UNAUTHORIZED', detail: 'This request could not be authorized.' }] });
     if (req.method === 'GET' && req.url === '/v2/locations') return send(200, { locations: SQ_LOCATIONS });
+    if (req.method === 'GET' && req.url.startsWith('/v2/catalog/list')) return send(200, { objects: [] });
     if (req.method === 'POST' && req.url === '/v2/orders/search') {
       const q = JSON.parse(body);
       // No open tabs in this pretend account.

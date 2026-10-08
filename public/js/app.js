@@ -5,6 +5,7 @@ import * as admin from './views/admin.js';
 import * as breaks from './views/breaks.js';
 import * as rotalog from './views/rotalog.js';
 import * as inbox from './views/inbox.js';
+import * as parlevels from './views/parlevels.js';
 import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
 import * as openorders from './views/openorders.js';
@@ -84,6 +85,7 @@ const ROUTES = [
   [/^trading\/heatmap$/, trading.renderHeatmap, ['sales.view']],
   [/^breaks$/, breaks.render, ['sales.view', 'staff.manage']],
   [/^rota-costs$/, rotacosts.render, ['sales.view']],
+  [/^par-levels$/, parlevels.render, ['sales.view']],
   [/^reviews$/, reviews.render, ['sales.view']],
   [/^open-orders$/, openorders.render, ['sales.view']],
   [/^sickness$/, sickness.renderReport, ['rota.edit', 'staff.manage']],
@@ -175,6 +177,7 @@ function navGroups() {
       ['sales', 'Sales', '£', ['sales.view']],
       ['open-orders', 'Open orders', '◌', ['sales.view']],
       ['rota-costs', 'Rota costs', '⚖', ['sales.view']],
+      ['par-levels', 'Par levels', '▥', ['sales.view']],
       ['breaks', 'Breaks', '☕', ['sales.view', 'staff.manage']],
       ['sickness', 'Sickness', '✚', ['rota.edit', 'staff.manage']],
       ['reviews', 'Reviews', '★', ['sales.view']],
@@ -668,7 +671,7 @@ async function start() {
 
 // On phones, a table too wide for the screen is shown as a stack of small cards (one per row, each value labelled
 // with its column heading) instead of making people scroll sideways. Grids that only make sense as grids are left alone.
-const NO_STACK = '.rota, .hm, .grid-table, .matrix, .perm-matrix, .avail-table, .whos-in-table, .open-orders';
+const NO_STACK = '.par-table, .rota, .hm, .grid-table, .matrix, .perm-matrix, .avail-table, .whos-in-table, .open-orders';
 const phoneTables = window.matchMedia('(max-width: 640px)');
 function labelCells(table) {
   const heads = [];
