@@ -1008,7 +1008,10 @@ function enableShiftDrag(el, { shiftFor, onDrop }) {
   document.addEventListener('keydown', onKey);
   el.addEventListener('click', onClick, true);
   // Stop listening once the page is redrawn or replaced (its content is swapped out).
+  // (Bars added above the rota – the undo bar, the copy bar – don't count: only the shifts being redrawn does.)
+  const marker = el.querySelector('[data-shift], [data-drop]');
   const stop = new MutationObserver(() => {
+    if (marker?.isConnected) return;
     stop.disconnect();
     cleanup();
     document.removeEventListener('pointermove', onMove);
