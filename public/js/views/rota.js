@@ -5,6 +5,18 @@ import { openStaffEditor } from './admin.js';
 import { askToDrop, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
 import { sickDialog } from './sickness.js';
 
+// A shift copied with Ctrl/⌘+click: its times stay here (across weeks and sites) until it's pasted somewhere with a
+// click or Ctrl/⌘+V, or Esc clears it. Pasting opens the Add shift window filled in, to check before saving.
+let copiedShift = null;
+// The day the pointer is over, for Ctrl/⌘+V, and the page's paste action while the rota is open.
+let hoverCell = null;
+let pasteNow = null;
+document.addEventListener('keydown', (e) => {
+  if (!location.hash.startsWith('#/rota') || document.querySelector('.modal') || e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  if (e.key === 'Escape' && copiedShift) { copiedShift = null; pasteNow?.('clear'); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && copiedShift && hoverCell?.isConnected && pasteNow) { e.preventDefault(); pasteNow(hoverCell); }
+});
+
 // Ctrl+Z / ⌘Z on the rota undoes the last change (when there's one to undo and no form is open).
 let undoNow = null;
 document.addEventListener('keydown', (e) => {
@@ -502,7 +514,7 @@ export async function render(ctx) {
     ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a role yet – set one for each person on the Staff page.</p>' : ''}
     ${fcNote ? `<p class="muted small">${fcNote}</p>` : ''}
     ${noHoursNote}
-    ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see. Drag a shift onto another person or day to move it – hold Ctrl (⌥ on a Mac) as you drop to copy it instead. On a phone, press and hold a shift first.</p>' : ''}`;
+    ${canEdit ? '<p class="muted small">You’re seeing the draft rota: hours and costs include changes that aren’t published yet. Hover over a marked shift to see what staff currently see. Drag a shift onto another person or day to move it – hold Ctrl (⌥ on a Mac) as you drop to copy it instead. Or Ctrl+click (⌘ on a Mac) a shift to copy it, then click any day to paste it. On a phone, press and hold a shift first.</p>' : ''}`;
 
   el.querySelector('#rota-layout')?.addEventListener('change', (e) => {
     try { localStorage.setItem(LAYOUT_KEY, e.target.value); } catch { /* storage unavailable */ }
@@ -696,9 +708,10 @@ export async function render(ctx) {
         const name = data.staff.find((u) => u.id === to.user_id)?.name ?? 'them';
         if (holidayOn(to.user_id, to.date, 'approved')) { toast(`${name} is on holiday that day`, 'error'); return; }
         const body = { ...to, start_time: shift.start_time, end_time: shift.end_time, break_minutes: shift.break_minutes, position: shift.position, notes: shift.notes };
+        // A copy opens the Add shift window filled in, to check (or change the times) before it's added.
+        if (copy) { shiftModal(null, body); return; }
         try {
-          if (copy) await api('/shifts', { method: 'POST', body });
-          else await api(`/shifts/${shift.id}`, { method: 'PUT', body });
+          await api(`/shifts/${shift.id}`, { method: 'PUT', body });
         } catch (err) { showError(err); return; }
         const who = to.user_id === shift.user_id ? '' : ` to ${name}`;
         const when = to.date === shift.date ? '' : ` on ${fmtDate(to.date)}`;
@@ -742,9 +755,38 @@ export async function render(ctx) {
     e.stopPropagation();
     openStaffEditor(ctx, Number(b.dataset.person)).catch(showError);
   }));
+  // Copy and paste: Ctrl/⌘+click a shift to copy it; then click any day (or press Ctrl/⌘+V over one) to add it there.
+  const copyBar = () => {
+    el.querySelector('.copy-bar')?.remove();
+    document.body.classList.toggle('rota-pasting', !!copiedShift && canEdit);
+    if (!copiedShift || !canEdit) return;
+    el.querySelector('.rota-scroll, .day-title')?.insertAdjacentHTML('beforebegin', `<div class="copy-bar" role="status">
+      <span>📋 <strong>Copied ${esc(copiedShift.start_time)}–${esc(copiedShift.end_time)}</strong> (${esc(copiedShift.user_name)}) – click a day to add it there, or press Ctrl+V over one.</span>
+      <button type="button" class="btn btn-small btn-ghost" id="copy-clear">Clear (Esc)</button></div>`);
+    el.querySelector('#copy-clear').addEventListener('click', () => { copiedShift = null; copyBar(); });
+  };
+  const pasteInto = (cell) => {
+    if (cell === 'clear') { copyBar(); return; }
+    const c = copiedShift;
+    shiftModal(null, { user_id: Number(cell.dataset.user), date: cell.dataset.date, location_id: Number(cell.dataset.site),
+      start_time: c.start_time, end_time: c.end_time, break_minutes: c.break_minutes ?? 0, position: c.position, notes: c.notes });
+  };
+  pasteNow = canEdit ? pasteInto : null;
+  el.querySelectorAll('td.editable').forEach((td) => {
+    td.addEventListener('pointerenter', () => { hoverCell = td; });
+    td.addEventListener('pointerleave', () => { if (hoverCell === td) hoverCell = null; });
+  });
+  copyBar();
+
   el.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
     const shift = data.shifts.find((s) => s.id === Number(b.dataset.shift));
+    if (canEdit && (e.ctrlKey || e.metaKey) && shift.state !== 'removed') {
+      copiedShift = { start_time: shift.start_time, end_time: shift.end_time, break_minutes: shift.break_minutes, position: shift.position, notes: shift.notes, user_name: shift.user_name };
+      copyBar();
+      toast(`Copied ${shift.start_time}–${shift.end_time} – click a day to add it there`);
+      return;
+    }
     if (shift.state === 'removed') {
       openModal({
         title: 'Removed shift',
@@ -767,6 +809,7 @@ export async function render(ctx) {
   // next starting when their last one ends.
   const addTime = (t, hours) => { const [h, m] = t.split(':').map(Number); const mins = Math.min(h * 60 + m + hours * 60, 23 * 60 + 59); return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; };
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
+    if (copiedShift) { pasteInto(td); return; }
     const userId = Number(td.dataset.user);
     const already = data.shifts.filter((x) => x.user_id === userId && x.date === td.dataset.date && x.state !== 'removed' && x.end_time > x.start_time);
     const lastEnd = already.map((x) => x.end_time).sort().pop();

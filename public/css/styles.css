@@ -2037,3 +2037,10 @@ td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
 .week-pick { position: relative; padding-inline: 0.65rem; }
 .week-pick input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 @media print { .week-nav .btn, .week-pick { display: none; } .week-step { border: 0; } }
+
+/* Rota: a shift copied with Ctrl+click, waiting to be pasted on a day. */
+.copy-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 1rem; padding: 0.5rem 0.9rem; margin-bottom: 0.6rem;
+  border: 1px dashed var(--brand); border-radius: 10px; background: var(--brand-soft); font-size: 0.9rem; }
+body.rota-pasting .rota td.editable { cursor: copy; }
+body.rota-pasting .rota td.editable:hover { box-shadow: inset 0 0 0 2px var(--brand); background: var(--brand-soft); }
+@media print { .copy-bar { display: none; } }
