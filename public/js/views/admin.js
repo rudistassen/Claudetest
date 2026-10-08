@@ -575,6 +575,16 @@ export async function renderLocations(ctx) {
   });
 }
 
+// A product's pack quantity also fills in its recipe units per pack while the recipe unit is the same as the unit
+// (e.g. a 1.5 Kg pack measured in Kg in recipes is 1.5 recipe units).
+document.addEventListener('input', (e) => {
+  if (!['pack_quantity', 'unit', 'recipe_unit'].includes(e.target.name)) return;
+  const form = e.target.closest('form');
+  if (!form?.pack_quantity || !form.units_per_pack) return;
+  const same = form.unit.value.trim().toLowerCase() && form.unit.value.trim().toLowerCase() === form.recipe_unit.value.trim().toLowerCase();
+  if (same && Number(form.pack_quantity.value) > 0) form.units_per_pack.value = form.pack_quantity.value;
+});
+
 export async function renderProducts(ctx) {
   const { state } = ctx;
   const [rows, suppliers, meta, cats, vat] = await Promise.all([api('/products'), api('/suppliers'), api('/recipes/meta'), api('/product-categories'), api('/vat-codes')]);
@@ -600,7 +610,7 @@ export async function renderProducts(ctx) {
       { label: 'Category', value: (r) => r.category ?? '', html: (r) => (r.category ? esc(r.category) : '<span class="tone-warn">No category</span>') },
       { label: 'VAT', value: (r) => (r.vat_code ? vatName.get(r.vat_code) ?? r.vat_code : 'No VAT code'),
         html: (r) => (r.vat_code ? `<span title="${esc(r.vat_code)}">${esc(vatName.get(r.vat_code) ?? r.vat_code)}</span>` : '<span class="tone-warn">Not set</span>') },
-      { label: 'Unit', key: 'unit' },
+      { label: 'Pack', value: (r) => (r.pack_quantity ? `${Number(r.pack_quantity)} ${r.unit ?? ''}`.trim() : r.unit ?? '') },
       { label: 'Supplier', key: 'supplier_name' },
       { label: 'Unit cost', num: true, value: (r) => money(r.unit_cost) },
       { label: 'Default par', num: true, key: 'par_level' },
@@ -613,7 +623,10 @@ export async function renderProducts(ctx) {
         ${field('Category', select('category', catOptions, p.category ?? '', cats.length ? 'required' : ''), { hint: 'Manage them under Product categories' })}
         ${field('VAT code', select('vat_code', vatOptions(p.vat_code), p.vat_code ?? '', 'required'), { hint: vat.from_xero ? 'Your VAT rates in Xero' : 'As Xero names them' })}
       </div>
-      <div class="row">${field('Unit', input('unit', p.unit ?? 'each', 'required placeholder="each, case, kg…"'))}</div>
+      <div class="row">
+        ${field('Pack quantity', input('pack_quantity', p.pack_quantity, 'type="number" min="0.0001" step="any" placeholder="e.g. 1.5"'), { hint: 'How much is in one pack, in the unit beside it' })}
+        ${field('Unit', input('unit', p.unit ?? 'each', 'required placeholder="each, case, kg…"'), { hint: 'e.g. 1.5 Kg = a 1.5 kg pack' })}
+      </div>
       <div class="row">
         ${field('Supplier', select('supplier_id', [['', '—'], ...suppliers.map((s) => [s.id, s.name])], p.supplier_id))}
         ${field('Unit cost (£)', input('unit_cost', p.unit_cost ?? 0, 'type="number" min="0" step="0.01"'))}

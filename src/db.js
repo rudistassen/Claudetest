@@ -882,6 +882,8 @@ const MIGRATIONS = [
   ['products', 'recipe_unit', 'ALTER TABLE products ADD COLUMN recipe_unit TEXT'],
   ['products', 'units_per_pack', 'ALTER TABLE products ADD COLUMN units_per_pack REAL NOT NULL DEFAULT 1'],
   ['products', 'allergens', 'ALTER TABLE products ADD COLUMN allergens TEXT'],
+  // How much is in one pack, in its unit (e.g. 1.5 for a 1.5 kg bag of flour).
+  ['products', 'pack_quantity', 'ALTER TABLE products ADD COLUMN pack_quantity REAL'],
   // The group someone is in on the rota (e.g. Kitchen, Front of house), for grouping the rota.
   ['users', 'rota_group', 'ALTER TABLE users ADD COLUMN rota_group TEXT'],
   ['users', 'permission_set_id', 'ALTER TABLE users ADD COLUMN permission_set_id INTEGER REFERENCES permission_sets(id) ON DELETE SET NULL'],

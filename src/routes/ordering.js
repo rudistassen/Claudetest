@@ -175,6 +175,7 @@ export function registerOrderingRoutes(router, db) {
       sku: str(b.sku, 'sku', { max: 50 }),
       category: str(b.category, 'category', { max: 100 }),
       unit: str(b.unit, 'unit', { max: 30 }) ?? 'each',
+      pack_quantity: num(b.pack_quantity, 'Pack quantity', { min: 0.0001 }),
       supplier_id: id(b.supplier_id, 'supplier_id'),
       unit_cost: num(b.unit_cost, 'unit_cost', { min: 0 }) ?? 0,
       par_level: num(b.par_level, 'par_level', { min: 0 }) ?? 0,
@@ -196,7 +197,7 @@ export function registerOrderingRoutes(router, db) {
     }
     return p;
   };
-  const productCols = ['name', 'sku', 'category', 'unit', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'vat_code', 'active'];
+  const productCols = ['name', 'sku', 'category', 'unit', 'pack_quantity', 'supplier_id', 'unit_cost', 'par_level', 'recipe_unit', 'units_per_pack', 'allergens', 'vat_code', 'active'];
 
   router.post('/products', requirePerm('setup.products'), (req, res) => {
     const p = productBody(req.body);
