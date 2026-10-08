@@ -288,7 +288,7 @@ export function registerOrderingRoutes(router, db) {
     if (!order) throw notFound('Order');
     assertLocation(req, order.location_id);
     order.total = round2(order.total);
-    order.lines = db.prepare(`SELECT ol.*, p.name AS product_name, p.unit, p.sku FROM purchase_order_lines ol
+    order.lines = db.prepare(`SELECT ol.*, p.name AS product_name, p.unit, p.pack_quantity, p.sku FROM purchase_order_lines ol
       JOIN products p ON p.id = ol.product_id WHERE ol.order_id = ? ORDER BY p.category, p.name`).all(order.id);
     return order;
   }
@@ -310,7 +310,7 @@ export function registerOrderingRoutes(router, db) {
     const lastTake = db.prepare(`SELECT id, completed_at FROM stock_takes WHERE location_id = ? AND status = 'completed'
       ORDER BY completed_at DESC, id DESC LIMIT 1`).get(locationId);
     const rows = db.prepare(`
-      SELECT p.id AS product_id, p.name, p.sku, p.category, p.unit, p.unit_cost,
+      SELECT p.id AS product_id, p.name, p.sku, p.category, p.unit, p.pack_quantity, p.unit_cost,
         COALESCE(pp.par_level, p.par_level) AS par_level, stl.counted_quantity AS on_hand
       FROM products p
       LEFT JOIN product_pars pp ON pp.product_id = p.id AND pp.location_id = ?

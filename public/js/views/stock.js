@@ -1,4 +1,4 @@
-import { api, confirmDialog, esc, fmtDateTime, money, qs, qty, showError, statusBadge, toast, sitePicker } from '../lib.js';
+import { api, confirmDialog, esc, fmtDateTime, money, packUnit, qs, qty, showError, statusBadge, toast, sitePicker } from '../lib.js';
 
 export async function renderList(ctx) {
   const { el, state, stale } = ctx;
@@ -75,7 +75,7 @@ export async function renderTake(ctx) {
           <thead><tr><th>Product</th><th>Unit</th><th class="num">Previous</th><th class="num">Count</th><th class="num">Value</th></tr></thead>
           <tbody>${list.map((l) => `
             <tr data-product="${esc(l.key)}" data-name="${esc(l.name.toLowerCase())}">
-              <td>${esc(l.name)}${l.prepped ? ' <span class="badge badge-sent">Prepped</span>' : ''}</td><td>${esc(l.unit)}</td><td class="num">${qty(l.previous_quantity)}</td>
+              <td>${esc(l.name)}${l.prepped ? ' <span class="badge badge-sent">Prepped</span>' : ''}</td><td>${esc(l.prepped ? l.unit : packUnit(l.unit, l.pack_quantity))}</td><td class="num">${qty(l.previous_quantity)}</td>
               <td class="num">${editable
                 ? `<input class="count-input" type="number" min="0" step="any" inputmode="decimal" value="${l.counted_quantity ?? ''}" aria-label="Count for ${esc(l.name)}">`
                 : qty(l.counted_quantity)}</td>

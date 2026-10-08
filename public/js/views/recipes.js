@@ -1,4 +1,5 @@
-import { addDays, api, esc, field, fmtDate, input, money, qs, qty, textarea, toast, todayISO, siteScope, siteFilter } from '../lib.js';
+import { openProductEditor } from './admin.js';
+import { addDays, api, esc, field, fmtDate, input, money, qs, qty, showError, textarea, toast, todayISO, siteScope, siteFilter } from '../lib.js';
 
 let metaCache = null;
 const meta = async () => (metaCache ??= await api('/recipes/meta'));
@@ -198,6 +199,8 @@ export async function renderEdit(ctx, newKind = 'sold') {
     ...products.map((p) => ({ value: `p:${p.id}`, name: p.name, meta: [p.supplier_name ?? 'No supplier', p.category].filter(Boolean).join(' · '), active: p.active })),
   ].map((c) => ({ ...c, search: `${c.name} ${c.meta}`.toLowerCase() }));
   const choiceByValue = new Map(choices.map((c) => [c.value, c]));
+  const canEditProducts = ctx.state.can('setup.products');
+  const productMeta = (p) => [p.supplier_name ?? 'No supplier', p.category].filter(Boolean).join(' · ');
   const lineValue = (i) => (i.sub_recipe_id ? `r:${i.sub_recipe_id}` : i.product_id ? `p:${i.product_id}` : '');
   const row = (i = {}) => `
     <tr class="ing-row">
@@ -205,6 +208,7 @@ export async function renderEdit(ctx, newKind = 'sold') {
         <input class="ing-search" type="search" autocomplete="off" placeholder="Search ingredients or suppliers…" aria-label="Ingredient" value="${esc(choiceByValue.get(lineValue(i))?.name ?? '')}">
         <input type="hidden" class="ing-product" value="${lineValue(i)}">
         <small class="ing-picked muted">${esc(choiceByValue.get(lineValue(i))?.meta ?? '')}</small>
+        ${canEditProducts ? `<button type="button" class="link-btn ing-edit" ${lineValue(i).startsWith('p:') ? '' : 'hidden'} title="Edit this product without leaving the recipe">✎ Edit product</button>` : ''}
         <ul class="ing-options" role="listbox" hidden></ul>
       </div></td>
       <td class="num"><input class="ing-qty qty-input" type="number" min="0" step="any" value="${i.quantity ?? ''}" aria-label="Quantity"> <span class="ing-unit muted">${esc(i.recipe_unit ?? '')}</span></td>
@@ -327,13 +331,39 @@ export async function renderEdit(ctx, newKind = 'sold') {
     tr.addEventListener('ing:removed', () => list.remove());
     let shown = [];
     let at = -1;
+    const editBtn = tr.querySelector('.ing-edit');
     const choose = (c) => {
       hidden.value = c?.value ?? '';
       search.value = c?.name ?? '';
       picked.textContent = c?.meta ?? '';
+      if (editBtn) editBtn.hidden = !hidden.value.startsWith('p:');
       list.hidden = true;
       update();
     };
+    // ✎ Edit product: change the product (cost, pack, recipe unit, allergens…) in a pop-up, then carry on with the
+    // recipe – its cost, unit and allergens here update straight away.
+    editBtn?.addEventListener('click', async () => {
+      const productId = Number(hidden.value.slice(2));
+      const product = byId.get(productId);
+      if (!product) return;
+      try {
+        await openProductEditor(product, async () => {
+          const fresh = (await api('/products')).find((x) => x.id === productId);
+          if (!fresh) return;
+          Object.assign(product, fresh);
+          const c = choiceByValue.get(`p:${productId}`);
+          Object.assign(c, { name: fresh.name, meta: productMeta(fresh), active: fresh.active });
+          c.search = `${c.name} ${c.meta}`.toLowerCase();
+          // Every row using this product shows its new name and details.
+          body.querySelectorAll('.ing-row').forEach((row) => {
+            if (row.querySelector('.ing-product').value !== `p:${productId}`) return;
+            row.querySelector('.ing-search').value = c.name;
+            row.querySelector('.ing-picked').textContent = c.meta;
+          });
+          update();
+        });
+      } catch (err) { showError(err); }
+    });
     // On focus everything is listed; typing narrows it down.
     const draw = (all = false) => {
       const words = all ? [] : search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);

@@ -85,7 +85,7 @@ export function registerStockRoutes(router, db) {
       .get(take.location_id, take.id, take.completed_at);
     take.previous = previous ?? null;
     take.lines = db.prepare(`
-      SELECT stl.product_id, stl.counted_quantity, stl.unit_cost, p.name, p.category, p.unit, p.sku,
+      SELECT stl.product_id, stl.counted_quantity, stl.unit_cost, p.name, p.category, p.unit, p.pack_quantity, p.sku,
         prev.counted_quantity AS previous_quantity
       FROM stock_take_lines stl
       JOIN products p ON p.id = stl.product_id

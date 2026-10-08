@@ -1975,3 +1975,4 @@ td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
 .ing-supplier { margin-left: 0.25rem; }
 .import-changes { margin: 0; padding-left: 1rem; }
 .import-changes li { white-space: nowrap; }
+.ing-edit { font-size: 0.78rem; margin-top: 0.1rem; }

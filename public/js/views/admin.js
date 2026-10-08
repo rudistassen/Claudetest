@@ -585,38 +585,15 @@ document.addEventListener('input', (e) => {
   if (same && Number(form.pack_quantity.value) > 0) form.units_per_pack.value = form.pack_quantity.value;
 });
 
-export async function renderProducts(ctx) {
-  const { state } = ctx;
-  const [rows, suppliers, meta, cats, vat] = await Promise.all([api('/products'), api('/suppliers'), api('/recipes/meta'), api('/product-categories'), api('/vat-codes')]);
+// The product form (Stock & Ordering → Products, and the ✎ beside an ingredient when editing a recipe).
+async function productFormKit() {
+  const [suppliers, meta, cats, vat] = await Promise.all([api('/suppliers'), api('/recipes/meta'), api('/product-categories'), api('/vat-codes')]);
   const vatName = new Map(vat.codes.map((v) => [v.code, v.name]));
   const vatOptions = (code) => [['', '— Choose —'], ...vat.codes.map((v) => [v.code, `${v.name} (${v.code})`]), ...(code && !vatName.has(code) ? [[code, code]] : [])];
   const catOptions = [['', cats.length ? '— Choose —' : '— Add categories first —'], ...cats.map((c) => [c.name, c.name])];
   const ALLERGEN_LIST = meta.allergens;
-  if (ctx.stale()) return;
-  listPage(ctx, {
-    title: 'Products',
-    rows,
-    search: true,
-    canEdit: state.can('setup.products'),
-    addLabel: 'Add product',
-    bulk: {
-      label: 'Set VAT code',
-      run: (picked) => bulkSet(picked, 'vat_code', 'VAT code', vatOptions(null)),
-      more: [{ label: 'Set category', run: (picked) => bulkSet(picked, 'category', 'Category', catOptions) }],
-    },
-    extraActions: `${rows.length ? '<button class="btn" id="export-products">Export</button>' : ''}${state.can('setup.products') ? '<button class="btn" id="import-products">Import</button>' : ''}`,
-    columns: [
-      { label: 'Name', key: 'name' },
-      { label: 'Category', value: (r) => r.category ?? '', html: (r) => (r.category ? esc(r.category) : '<span class="tone-warn">No category</span>') },
-      { label: 'VAT', value: (r) => (r.vat_code ? vatName.get(r.vat_code) ?? r.vat_code : 'No VAT code'),
-        html: (r) => (r.vat_code ? `<span title="${esc(r.vat_code)}">${esc(vatName.get(r.vat_code) ?? r.vat_code)}</span>` : '<span class="tone-warn">Not set</span>') },
-      { label: 'Pack', value: (r) => (r.pack_quantity ? `${Number(r.pack_quantity)} ${r.unit ?? ''}`.trim() : r.unit ?? '') },
-      { label: 'Supplier', key: 'supplier_name' },
-      { label: 'Unit cost', num: true, value: (r) => money(r.unit_cost) },
-      { label: 'Default par', num: true, key: 'par_level' },
-      { label: 'Recipe unit', value: (r) => (r.units_per_pack && r.units_per_pack !== 1 ? `${r.units_per_pack} ${r.recipe_unit ?? ''} / ${r.unit}` : r.recipe_unit ?? r.unit) },
-      { label: '', html: (r) => `<button class="btn btn-small" data-pars="${r.id}">Site pars</button>` },
-    ],
+  return {
+    vatName, vatOptions, catOptions, ALLERGEN_LIST,
     form: (p) => `
       <div class="row">${field('Name', input('name', p.name, 'required'))}${field('SKU / supplier code', input('sku', p.sku))}</div>
       <div class="row">
@@ -644,6 +621,55 @@ export async function renderProducts(ctx) {
       for (const [k] of ALLERGEN_LIST) delete body[`allergen_${k}`];
       return row ? api(`/products/${row.id}`, { method: 'PUT', body }) : api('/products', { method: 'POST', body });
     },
+  };
+}
+
+/** Edits a product in a pop-up, e.g. from a recipe; onSaved gets the product as saved. */
+export async function openProductEditor(product, onSaved) {
+  const kit = await productFormKit();
+  openModal({
+    title: `Edit ${product.name}`,
+    body: kit.form(product),
+    wide: true,
+    onSubmit: async (v) => {
+      await kit.save(v, product);
+      toast('Product saved');
+      await onSaved?.();
+    },
+  });
+}
+
+export async function renderProducts(ctx) {
+  const { state } = ctx;
+  const [rows, kit] = await Promise.all([api('/products'), productFormKit()]);
+  const { vatName, vatOptions, catOptions, ALLERGEN_LIST } = kit;
+  if (ctx.stale()) return;
+  listPage(ctx, {
+    title: 'Products',
+    rows,
+    search: true,
+    canEdit: state.can('setup.products'),
+    addLabel: 'Add product',
+    bulk: {
+      label: 'Set VAT code',
+      run: (picked) => bulkSet(picked, 'vat_code', 'VAT code', vatOptions(null)),
+      more: [{ label: 'Set category', run: (picked) => bulkSet(picked, 'category', 'Category', catOptions) }],
+    },
+    extraActions: `${rows.length ? '<button class="btn" id="export-products">Export</button>' : ''}${state.can('setup.products') ? '<button class="btn" id="import-products">Import</button>' : ''}`,
+    columns: [
+      { label: 'Name', key: 'name' },
+      { label: 'Category', value: (r) => r.category ?? '', html: (r) => (r.category ? esc(r.category) : '<span class="tone-warn">No category</span>') },
+      { label: 'VAT', value: (r) => (r.vat_code ? vatName.get(r.vat_code) ?? r.vat_code : 'No VAT code'),
+        html: (r) => (r.vat_code ? `<span title="${esc(r.vat_code)}">${esc(vatName.get(r.vat_code) ?? r.vat_code)}</span>` : '<span class="tone-warn">Not set</span>') },
+      { label: 'Pack', value: (r) => (r.pack_quantity ? `${Number(r.pack_quantity)} ${r.unit ?? ''}`.trim() : r.unit ?? '') },
+      { label: 'Supplier', key: 'supplier_name' },
+      { label: 'Unit cost', num: true, value: (r) => money(r.unit_cost) },
+      { label: 'Default par', num: true, key: 'par_level' },
+      { label: 'Recipe unit', value: (r) => (r.units_per_pack && r.units_per_pack !== 1 ? `${r.units_per_pack} ${r.recipe_unit ?? ''} / ${r.unit}` : r.recipe_unit ?? r.unit) },
+      { label: '', html: (r) => `<button class="btn btn-small" data-pars="${r.id}">Site pars</button>` },
+    ],
+    form: kit.form,
+    save: kit.save,
   });
 
   // Ticked products: give them all the same VAT code or category.

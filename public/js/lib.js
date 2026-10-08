@@ -36,6 +36,8 @@ const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;
 export const esc = (v) => (v === null || v === undefined ? '' : String(v).replace(/[&<>"']/g, (c) => ESC[c]));
 
 export const money = (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n || 0);
+// A product's unit with how much is in one pack, e.g. "1.5 Kg pack" (or just the unit when no pack quantity is set).
+export const packUnit = (unit, packQuantity) => (packQuantity ? `${Number(packQuantity).toLocaleString('en-GB', { maximumFractionDigits: 3 })} ${unit ?? ''} pack`.replace('  ', ' ') : unit ?? '');
 export const qty = (n) => (n === null || n === undefined ? '–' : Number(n).toLocaleString('en-GB', { maximumFractionDigits: 2 }));
 
 export function todayISO() {
