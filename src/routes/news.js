@@ -3,6 +3,7 @@
 import { can, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
 import { badRequest, bool, forbidden, id, notFound, oneOf, str } from '../util.js';
+import { notify } from '../push.js';
 
 const CATEGORIES = ['announcement', 'policy', 'event', 'reminder'];
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -171,7 +172,11 @@ export function registerNewsRoutes(router, db) {
       saveMedia(req, r.lastInsertRowid, post);
       return r.lastInsertRowid;
     });
-    res.status(201).json(withSites(db.prepare('SELECT * FROM news_posts WHERE id = ?').get(newId)));
+    const saved = withSites(db.prepare('SELECT * FROM news_posts WHERE id = ?').get(newId));
+    // Everyone it's for gets a notification.
+    notify(db, audience(saved).map((u) => u.id).filter((id) => id !== req.user.id), 'news',
+      { title: saved.requires_ack ? `Please read: ${saved.title}` : saved.title, body: String(saved.body ?? '').replace(/\s+/g, ' ').slice(0, 140), url: '/#/mybrew', tag: `news-${saved.id}` });
+    res.status(201).json(saved);
   });
 
   router.put('/news/:id', requirePerm('news.manage'), (req, res) => {

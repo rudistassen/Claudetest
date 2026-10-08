@@ -7,6 +7,7 @@ import { getSetting, setSetting } from './invoice-inbox.js';
 import { CAREERS_VARIABLES, mailboxSetup } from './mailbox.js';
 import { fromBase64 } from './routes/invoices.js';
 import { badRequest, str } from './util.js';
+import { notify, peopleWith } from './push.js';
 
 const KEY = { since: 'careers_inbox_since', lastCheck: 'careers_inbox_last_check', lastError: 'careers_inbox_last_error',
   declineSubject: 'careers_decline_subject', declineBody: 'careers_decline_body' };
@@ -86,7 +87,7 @@ async function handle(db, mailbox, m) {
   const name = (m.fromName && !m.fromName.includes('@') ? m.fromName : from.split('@')[0].replace(/[._]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())).slice(0, 100);
   const addFile = db.prepare('INSERT INTO candidate_files (candidate_id, file_name, file_type, size, file) VALUES (?, ?, ?, ?, ?)');
   // Saved all together, so a problem part-way leaves nothing half-added (the email is tried again next time).
-  return tx(db, () => {
+  const out = tx(db, () => {
     // Someone who has emailed before and is still being considered: added to their profile.
     const already = db.prepare(`SELECT id, message FROM candidates WHERE lower(email) = lower(?) AND stage NOT IN ('hired', 'rejected')
       ORDER BY id DESC LIMIT 1`).get(from);
@@ -104,8 +105,15 @@ async function handle(db, mailbox, m) {
         (m.subject ?? '').slice(0, 300) || null, body || null, m.id, m.receivedAt ?? null).lastInsertRowid);
     }
     for (const f of files) addFile.run(candidateId, String(f.name).slice(0, 200), f.type, f.bytes, fromBase64(f.data));
-    return { status: 'added', candidateId, detail: already ? 'Added to their existing profile' : null };
+    return { status: 'added', candidateId, isNew: !already, detail: already ? 'Added to their existing profile' : null };
   });
+  // A new application: whoever looks after recruitment at its site gets a notification.
+  if (out.isNew) {
+    const c = db.prepare('SELECT c.name, c.location_id, v.title FROM candidates c LEFT JOIN vacancies v ON v.id = c.vacancy_id WHERE c.id = ?').get(out.candidateId);
+    notify(db, peopleWith(db, ['people.manage'], c?.location_id ?? null), 'application',
+      { title: 'New job application', body: `${c?.name ?? name}${c?.title ? ` – ${c.title}` : ''}`, url: `/#/people/recruitment/candidates/${out.candidateId}`, tag: `application-${out.candidateId}` });
+  }
+  return out;
 }
 
 let running = null;

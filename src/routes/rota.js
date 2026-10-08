@@ -2,6 +2,7 @@ import { assertLocation, can, reportLocations, requirePerm, resolveLocation } fr
 import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { availabilityOn } from '../availability.js';
 import { leaveFor, onHoliday } from './leave.js';
+import { notify, notifyOnce } from '../push.js';
 import { dayKey, labourByDay, pct, rotaByDay, salesByDay } from '../metrics.js';
 import { bankHoliday } from '../bank-holidays.js';
 import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
@@ -367,12 +368,35 @@ export function registerRotaRoutes(router, db) {
     clearUndo(req);
     const [from, to, label] = day ? [day, day, fmtDay(day)] : [ws, addDays(ws, 6), `the week of ${fmtDay(ws)}`];
     let published = 0;
+    const changed = new Set();
+    const sitesDone = [];
     for (const id of ids) {
       const n = pendingAt(id, from, to);
       if (!n) continue;
+      // Whose shifts change (including whoever a moved shift was published for), to let them know.
+      for (const r of db.prepare(`SELECT user_id, pub_user_id FROM shifts WHERE location_id = ? AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`).all(id, from, to)) {
+        changed.add(r.user_id);
+        if (r.pub_user_id) changed.add(r.pub_user_id);
+      }
+      sitesDone.push(id);
       publishShifts(db, [id], from, to);
       logRota(db, req, { action: 'publish', location_id: id, details: `Published ${plural(n, 'change')} for ${label}` });
       published += n;
+    }
+    // Notifications: anyone whose shifts changed; and the first time a week is published at a site, everyone on it.
+    const weekLabel = ws ? `w/c ${fmtDay(ws)}` : fmtDay(day);
+    const url = `/#/rota?view=mine&week=${ws ?? weekStart(day)}`;
+    notify(db, [...changed], 'shift_changed', { title: 'Your shifts have changed', body: `Your rota for ${weekLabel} has been updated – tap to see your shifts`, url, tag: `shifts-${ws ?? day}` });
+    if (ws) {
+      for (const id of sitesDone) {
+        const site = db.prepare('SELECT name FROM locations WHERE id = ?').get(id)?.name ?? 'your site';
+        for (const r of db.prepare('SELECT DISTINCT user_id FROM published_shifts WHERE location_id = ? AND date BETWEEN ? AND ?').all(id, from, to)) {
+          if (changed.has(r.user_id)) continue;
+          notifyOnce(db, `rota|${id}|${ws}|${r.user_id}`, [r.user_id], 'rota_published', { title: 'Rota published', body: `The ${site} rota for ${weekLabel} is out – tap to see your shifts`, url, tag: `rota-${ws}` });
+        }
+        // Those whose shifts changed have now had this week's notice too.
+        for (const u of changed) db.prepare('INSERT OR IGNORE INTO push_sent (key) VALUES (?)').run(`rota|${id}|${ws}|${u}`);
+      }
     }
     res.json({ published });
   });
@@ -388,6 +412,11 @@ export function registerRotaRoutes(router, db) {
       if (s.removed) db.prepare('DELETE FROM shifts WHERE id = ?').run(s.id);
       else db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS} WHERE id = ?`).run(s.id);
       logRota(db, req, { action: 'publish_shift', location_id: s.location_id, shift: s, details: `${s.removed ? 'Published the removal of' : 'Published'} ${shiftText(s)}` });
+    });
+    notify(db, [s.user_id, s.pub_user_id], 'shift_changed', {
+      title: s.removed ? 'Shift removed' : 'Your shifts have changed',
+      body: `${fmtDay(s.date)} ${s.start_time}–${s.end_time}${s.removed ? ' is no longer on your rota' : ' – tap to see your shifts'}`,
+      url: `/#/rota?view=mine&week=${weekStart(s.date)}`,
     });
     res.json({ published: 1, removed: !!s.removed });
   });

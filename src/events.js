@@ -7,6 +7,7 @@ import { getSetting, setSetting } from './invoice-inbox.js';
 import { EVENTS_VARIABLES, mailboxSetup } from './mailbox.js';
 import { fromBase64 } from './routes/invoices.js';
 import { badRequest, date, HttpError, id, notFound, num, oneOf, str, time, today } from './util.js';
+import { notify, peopleWith } from './push.js';
 
 const KEY = { since: 'events_inbox_since', sentSince: 'events_inbox_sent_since', lastCheck: 'events_inbox_last_check', lastError: 'events_inbox_last_error' };
 export const MARKETING_FOLDER = 'Marketing';
@@ -41,7 +42,7 @@ async function handle(db, mailbox, m) {
   }
   const body = cleanBody(await mailbox.body(m.id));
   const files = cvAttachments(m.hasAttachments === false ? [] : await mailbox.attachments(m.id));
-  return tx(db, () => {
+  const out = tx(db, () => {
     // The enquiry it belongs to: the same email thread, else the same person's open enquiry.
     let enquiry = m.conversationId ? db.prepare('SELECT id FROM event_enquiries WHERE conversation_id = ?').get(m.conversationId) : null;
     enquiry ??= db.prepare(`SELECT id FROM event_enquiries WHERE lower(email) = lower(?) AND status IN ('new', 'replied', 'provisional', 'confirmed')
@@ -61,8 +62,15 @@ async function handle(db, mailbox, m) {
       (m.subject ?? '').slice(0, 300), body || null, m.id, sqlTime(m.receivedAt)).lastInsertRowid);
     const addFile = db.prepare('INSERT INTO enquiry_files (enquiry_id, message_id, file_name, file_type, size, file) VALUES (?, ?, ?, ?, ?, ?)');
     for (const f of files) addFile.run(enquiryId, msgId, String(f.name).slice(0, 200), f.type, f.bytes, fromBase64(f.data));
-    return { status: 'added', enquiryId, detail: enquiry ? 'Added to an existing enquiry' : null };
+    return { status: 'added', enquiryId, isNew: !enquiry, detail: enquiry ? 'Added to an existing enquiry' : null };
   });
+  // A new enquiry: whoever manages events (at its site, if one was picked) gets a notification.
+  if (out.isNew) {
+    const site = db.prepare('SELECT location_id, name, title FROM event_enquiries WHERE id = ?').get(out.enquiryId);
+    notify(db, peopleWith(db, ['events.manage'], site?.location_id ?? null), 'enquiry',
+      { title: 'New events enquiry', body: `${site?.name ?? from}${site?.title ? ` – ${site.title}` : ''}`, url: `/#/events/enquiries/${out.enquiryId}`, tag: `enquiry-${out.enquiryId}` });
+  }
+  return out;
 }
 
 // The details read from an enquiry's emails, as they're saved (anything not in the right form is left out).

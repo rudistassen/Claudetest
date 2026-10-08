@@ -30,6 +30,7 @@ import { registerEventRoutes } from './events.js';
 import { registerReviewRoutes } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from './invites.js';
 import { HttpError } from './util.js';
+import { registerPushRoutes } from './push.js';
 
 export const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -97,6 +98,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
+  registerPushRoutes(api, db);
   registerPrepOrderRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);

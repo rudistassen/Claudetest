@@ -115,6 +115,10 @@ export function setUpInstall() {
   checkDesktopMode();
   if (isDemo || !('serviceWorker' in navigator) || !window.isSecureContext) return;
   navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
+  // A tapped notification, when the phone can't open its page directly: go there.
+  navigator.serviceWorker.addEventListener?.('message', (e) => {
+    if (e.data?.type === 'open' && e.data.url) location.href = e.data.url;
+  });
   watchForUpdates();
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();

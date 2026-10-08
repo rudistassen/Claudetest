@@ -1,7 +1,7 @@
 // Atlas's service worker: makes the app installable and quick to open. Everything is fetched fresh from the
 // server first, so updates show straight away; the saved copy is only used when there's no connection.
 // Data (/api) is never saved here.
-const CACHE = 'atlas-v32';
+const CACHE = 'atlas-v34';
 const SHELL = ['/', '/css/styles.css', '/js/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/img/atlas.svg'];
 
 self.addEventListener('install', (e) => {
@@ -33,5 +33,33 @@ self.addEventListener('fetch', (e) => {
       }
       throw new Error('offline');
     }
+  })());
+});
+
+// Phone notifications from Atlas: show them, and open the page they're about when tapped.
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch { data = { title: 'Atlas', body: e.data?.text() ?? '' }; }
+  e.waitUntil(self.registration.showNotification(data.title || 'Atlas', {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: data.tag,
+    renotify: !!data.tag,
+    data: { url: data.url || '/' },
+  }));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || '/', self.location.origin).href;
+  e.waitUntil((async () => {
+    const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const here = open.find((c) => new URL(c.url).origin === self.location.origin);
+    if (here) {
+      await here.focus();
+      return here.navigate ? here.navigate(url).catch(() => here.postMessage({ type: 'open', url })) : here.postMessage({ type: 'open', url });
+    }
+    return self.clients.openWindow(url);
   })());
 });

@@ -38,6 +38,7 @@ import { registerInviteRoutes, registerPasswordRoutes } from '../src/invites.js'
 import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
+import { registerPushRoutes } from '../src/push.js';
 
 // --- A tiny Express-compatible router ---
 
@@ -125,6 +126,7 @@ async function boot() {
   registerRotaRoutes(api, db);
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
+  registerPushRoutes(api, db);
   registerPrepOrderRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);

@@ -16,6 +16,7 @@ import { googlePlaces, placesConfig, startReviewSync } from './google-reviews.js
 import { startReportScheduler } from './reports.js';
 import { SquareClient, squareConfig, startAutoSync, syncSales } from './square.js';
 import { addDays, today } from './util.js';
+import { configurePush, startLateAlerts } from './push.js';
 
 const args = new Set(process.argv.slice(2));
 const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'data', 'cafe.db');
@@ -119,6 +120,15 @@ if (places) {
   console.log(`Google reviews switched on; checking every ${placesSettings.hours} hours.`);
   startReviewSync(db, places, { hours: placesSettings.hours });
 }
+
+// Phone notifications (Web Push): Atlas makes and keeps its own keys, unless VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY
+// are set. A problem here never stops Atlas starting.
+try {
+  if (await configurePush(process.env, db)) {
+    console.log('Phone notifications: switched on.');
+    startLateAlerts(db);
+  }
+} catch (err) { console.log(`Phone notifications: couldn’t be switched on – ${err.message}`); }
 
 const version = appVersion(publicDir);
 const xeroSettings = xeroConfig();

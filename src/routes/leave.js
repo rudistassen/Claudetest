@@ -1,6 +1,7 @@
 import { can, requirePerm } from '../auth.js';
 import { availabilityOn, patternsFor } from '../availability.js';
 import { fmtDay, logRota } from '../rota-log.js';
+import { notify, peopleWith } from '../push.js';
 import { addDays, badRequest, date, forbidden, id, notFound, oneOf, str, time, today } from '../util.js';
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -57,6 +58,10 @@ export function registerLeaveRoutes(router, db) {
     if (overlap) throw badRequest(`You already have holiday booked or requested from ${overlap.start_date} to ${overlap.end_date}`);
     const r = db.prepare('INSERT INTO leave_requests (user_id, start_date, end_date, note) VALUES (?, ?, ?, ?)')
       .run(req.user.id, start, end, str(req.body.note, 'note', { max: 500 }));
+    // Whoever approves holiday at their site gets a notification.
+    const when = start === end ? fmtDay(start) : `${fmtDay(start)} – ${fmtDay(end)}`;
+    notify(db, peopleWith(db, ['leave.manage'], req.user.location_id ?? null).filter((id) => id !== req.user.id), 'holiday_request',
+      { title: 'Holiday request', body: `${req.user.name} has asked for holiday: ${when}`, url: '/#/rota/requests' });
     res.status(201).json(withDays(db.prepare(`${withNames} WHERE r.id = ?`).get(r.lastInsertRowid)));
   });
 
@@ -98,6 +103,11 @@ export function registerLeaveRoutes(router, db) {
     const note = str(req.body.note, 'note', { max: 500 });
     db.prepare(`UPDATE leave_requests SET status = ?, decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?`)
       .run(status, req.user.id, note, r.id);
+    const span = r.start_date === r.end_date ? fmtDay(r.start_date) : `${fmtDay(r.start_date)} – ${fmtDay(r.end_date)}`;
+    notify(db, [r.user_id], 'holiday_decision', {
+      title: status === 'approved' ? 'Holiday approved ✓' : r.status === 'approved' ? 'Holiday cancelled' : 'Holiday declined',
+      body: `${span}${note ? ` – “${note}”` : ''}`, url: '/#/timeoff',
+    });
     // Recorded in Rota → Rota changes, at the person's home site.
     const person = db.prepare('SELECT location_id FROM users WHERE id = ?').get(r.user_id);
     const days = daysBetween(r.start_date, r.end_date);

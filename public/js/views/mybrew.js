@@ -1,5 +1,6 @@
 import { api, esc, field, fmtDate, fmtDateTime, input, isDemo, openModal, select, showError, siteColour, textarea, toast, todayISO } from '../lib.js';
 import { askToDrop, dropsPanel, wireDrops } from './shiftdrops.js';
+import { renderNotifications } from '../notifications.js';
 
 // --- Photos and short videos on posts ---
 
@@ -256,7 +257,9 @@ export async function renderMyBrew(ctx) {
         </div>
         ${news.length ? news.map(post).join('') : '<div class="card empty">No news yet.</div>'}
         </section>
+        <section class="card mb-push" id="mb-push" data-mb="all"></section>
     </div>`;
+  renderNotifications(el.querySelector('#mb-push'), { isAdmin: state.isAdmin });
 
   wireDrops(el, drops, () => ctx.rerender());
   // All / Shifts / News: shows just those sections.

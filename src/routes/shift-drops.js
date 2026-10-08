@@ -5,6 +5,8 @@ import { assertLocation, can, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
 import { logRota, shiftText } from '../rota-log.js';
 import { onHoliday } from './leave.js';
+import { notify, peopleAt, peopleWith } from '../push.js';
+import { fmtDay } from '../rota-log.js';
 import { badRequest, forbidden, notFound, round2, shiftHours, str, today } from '../util.js';
 
 const nowTime = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
@@ -23,6 +25,10 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     return d;
   };
   const approver = (req, locationId) => can(req.user, 'rota.publish') && req.user.site_ids.includes(locationId);
+  const when = (d) => `${fmtDay(d.date)} ${d.start_time}–${d.end_time}`;
+  // An open shift: everyone at the site who could pick it up gets a notification.
+  const announceOpen = (d, exceptId) => notify(db, peopleAt(db, d.location_id).filter((id) => id !== exceptId), 'open_shift',
+    { title: 'Shift free to pick up', body: `${when(d)} at ${d.location_name} – first come, first served`, url: '/#/rota', tag: `open-${d.id}` });
 
   // Why someone can't claim an open shift (null when they can).
   function claimProblem(user, d) {
@@ -64,7 +70,10 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     const reason = str(req.body?.reason, 'reason', { max: 500 });
     const r = db.prepare(`INSERT INTO shift_drops (shift_id, location_id, date, start_time, end_time, break_minutes, position, notes, dropped_by, reason)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(s.id, s.location_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes, req.user.id, reason);
-    res.status(201).json(withHours(load(r.lastInsertRowid)));
+    const d = load(r.lastInsertRowid);
+    notify(db, peopleWith(db, ['rota.publish'], s.location_id).filter((id) => id !== req.user.id), 'drop_request',
+      { title: 'Shift drop request', body: `${req.user.name} has asked to drop ${when(d)} at ${d.location_name}${reason ? ` – “${reason}”` : ''}`, url: '/#/rota/requests' });
+    res.status(201).json(withHours(d));
   });
 
   // Take back a request to drop a shift before it's been dealt with.
@@ -98,6 +107,8 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
       logRota(db, req, { action: 'drop', location_id: d.location_id, shift: { ...d, id: shift.id, user_id: d.dropped_by },
         details: `${shiftText(d)} — dropped by ${d.dropped_by_name}${d.reason ? ` (“${d.reason}”)` : ''}; ${remove ? 'shift deleted' : 'now an open shift'}` });
     });
+    notify(db, [d.dropped_by], 'drop_decision', { title: 'Shift drop approved ✓', body: `${when(d)} is off your rota`, url: '/#/rota?view=mine' });
+    if (!remove) announceOpen(d, d.dropped_by);
     res.json(withHours(load(d.id)));
   });
 
@@ -112,6 +123,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
       logRota(db, req, { action: 'drop_decline', location_id: d.location_id, shift: { ...d, id: d.shift_id, user_id: d.dropped_by },
         details: `${shiftText(d)} — ${d.dropped_by_name}’s request to drop it declined${note ? ` (“${note}”)` : ''}; it stays on their rota` });
     });
+    notify(db, [d.dropped_by], 'drop_decision', { title: 'Shift drop declined', body: `${when(d)} is still yours${note ? ` – “${note}”` : ''}`, url: '/#/rota?view=mine' });
     res.json(withHours(load(d.id)));
   });
 
@@ -160,7 +172,10 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
         details: `${shiftText(shift)} — taken off ${person}’s rota by ${req.user.name}${reason ? ` (“${reason}”)` : ''}; now an open shift` });
       return r.lastInsertRowid;
     });
-    res.json(withHours(load(id)));
+    const opened = load(id);
+    notify(db, [shift.user_id], 'shift_changed', { title: 'Shift taken off your rota', body: `${when(opened)} at ${opened.location_name} is no longer yours`, url: '/#/rota?view=mine' });
+    announceOpen(opened, shift.user_id);
+    res.json(withHours(opened));
   });
 
   // A manager takes an open shift away (it's no longer needed, or they've covered it another way).

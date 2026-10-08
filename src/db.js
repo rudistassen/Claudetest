@@ -669,6 +669,29 @@ CREATE TABLE IF NOT EXISTS availability_pattern_slots (
   to_time TEXT
 );
 
+-- Phone (and browser) notifications: each device someone turned them on for, which kinds they've turned off, and
+-- alerts already sent (so the same one isn't sent twice).
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_sent_at TEXT
+);
+CREATE TABLE IF NOT EXISTS push_prefs (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (user_id, kind)
+);
+CREATE TABLE IF NOT EXISTS push_sent (
+  key TEXT PRIMARY KEY,
+  at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Named groups of permissions staff are assigned to. built_in marks the default Manager and Staff sets
 -- ('manager' / 'staff'), which people without a set fall back to by role.
 CREATE TABLE IF NOT EXISTS permission_sets (
