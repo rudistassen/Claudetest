@@ -188,13 +188,15 @@ export async function renderEdit(ctx, newKind = 'sold') {
   const preps = all.filter((x) => x.kind === 'prep' && x.id !== editing && !(editing && contains(x.id, editing)));
 
   const currentSquare = r.square_catalog_object_id ? `id:${r.square_catalog_object_id}` : r.square_item_name ? `name:${r.square_item_name}` : '';
-  const squareOptions = squareItems.map((i) => {
+  const optionsFor = (items) => items.map((i) => {
     const value = i.catalog_object_id ? `id:${i.catalog_object_id}` : `name:${i.name}`;
     const taken = i.recipe && i.recipe.id !== editing ? ` – linked to ${i.recipe.name}` : '';
     const bits = [i.price !== null && i.price !== undefined ? money(i.price) : '', i.sku ? `SKU ${i.sku}` : '', i.quantity ? `${qty(i.quantity)} sold in 90 days` : 'none sold in 90 days'].filter(Boolean);
     return [value, `${squareName(i)} · ${bits.join(' · ')}${taken}`];
   });
-  const squareByValue = new Map(squareItems.map((i) => [i.catalog_object_id ? `id:${i.catalog_object_id}` : `name:${i.name}`, i]));
+  const squareOptions = optionsFor(squareItems);
+  const keyOf = (i) => (i.catalog_object_id ? `id:${i.catalog_object_id}` : `name:${i.name}`);
+  let squareByValue = new Map(squareItems.map((i) => [keyOf(i), i]));
   if (currentSquare && !squareOptions.some(([v]) => v === currentSquare)) squareOptions.unshift([currentSquare, r.square_item_name ?? r.square_catalog_object_id]);
 
   // An ingredient is a product ("p:12") or a prepped recipe ("r:5"), picked by typing part of its name, supplier or
@@ -240,9 +242,10 @@ export async function renderEdit(ctx, newKind = 'sold') {
         <h2>Square</h2>
         ${field('Square menu item', `<select name="square" id="recipe-square"><option value="">Not linked</option>${squareOptions.map(([v, l]) => `<option value="${esc(v)}" ${v === currentSquare ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`,
           { hint: squareItems.length ? 'Pick the item from Square to fill in its name, SKU, selling price and category. Linking also counts its Square sales towards menu performance and ingredient usage.' : 'Import Square sales first (Setup → Square) to choose an item' })}
+        <button type="button" class="link-btn" id="square-refresh" title="Read the item list from Square again – for items, SKUs or prices just changed in Square">↻ Refresh from Square</button>
       </section>`}
       <section class="card">
-        <div class="row">${field('Name', input('name', r.name, `required id="recipe-name" placeholder="${prep ? 'e.g. Tomato sauce' : 'e.g. Ham & cheese toastie'}"`))}${prep ? '' : field('SKU', input('sku', r.sku, 'id="recipe-sku" maxlength="100" placeholder="From Square"'))}${field('Category', input('category', r.category, `list="recipe-cats" id="recipe-category" placeholder="${prep ? 'e.g. Sauces' : 'e.g. Hot food'}"`))}</div>
+        <div class="row">${field('Name', input('name', r.name, `required id="recipe-name" placeholder="${prep ? 'e.g. Tomato sauce' : 'e.g. Ham & cheese toastie'}"`))}${prep ? '' : field('SKU', input('sku', r.sku || squareByValue.get(currentSquare)?.sku, 'id="recipe-sku" maxlength="100" placeholder="From Square"'))}${field('Category', input('category', r.category, `list="recipe-cats" id="recipe-category" placeholder="${prep ? 'e.g. Sauces' : 'e.g. Hot food'}"`))}</div>
         <datalist id="recipe-cats">${categories.map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
         ${prep ? `<div class="row">
           ${field('Each batch makes', input('yield_quantity', r.yield_quantity, 'type="number" min="0.0001" step="any" required id="recipe-yield" placeholder="e.g. 2000"'), { hint: 'Weigh or measure what one batch actually makes, after cooking' })}
@@ -287,6 +290,27 @@ export async function renderEdit(ctx, newKind = 'sold') {
 
   const form = el.querySelector('#recipe-form');
   const body = el.querySelector('#ing-body');
+  // Refresh: read Square's item list again (new items, SKUs, prices), keeping what's picked and typed.
+  form.querySelector('#square-refresh')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Refreshing…';
+    try {
+      await api('/recipes/square-items/refresh', { method: 'POST' });
+      const items = await api('/recipes/square-items');
+      squareByValue = new Map(items.map((i) => [keyOf(i), i]));
+      const select = form.querySelector('#recipe-square');
+      const picked = select.value;
+      const opts = optionsFor(items);
+      if (picked && !opts.some(([v]) => v === picked)) opts.unshift([picked, r.square_item_name ?? picked]);
+      select.innerHTML = `<option value="">Not linked</option>${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === picked ? 'selected' : ''}>${esc(l)}</option>`).join('')}`;
+      const i = squareByValue.get(picked);
+      if (i?.sku && !form.sku.value) form.sku.value = i.sku;
+      toast(`Square items refreshed${i ? (i.sku ? ` – SKU ${i.sku}` : ' – this item has no SKU in Square') : ''}`);
+    } catch (err) { showError(err); }
+    btn.disabled = false;
+    btn.textContent = '↻ Refresh from Square';
+  });
   // Picking a Square item fills in its name, SKU, selling price and category from Square.
   form.querySelector('#recipe-square')?.addEventListener('change', (e) => {
     const i = squareByValue.get(e.target.value);

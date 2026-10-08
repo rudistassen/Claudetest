@@ -325,7 +325,7 @@ async function fetchLabour(client, { locationIds, startAt, endAt, tz }) {
 
 /**
  * Saves the Square catalogue's items, each variation with its item's category (its reporting category, else its
- * first category), SKU and price, so item sales can be grouped by category (Reporting → Par levels) and a sold item
+ * first category), SKU (or its barcode, if it has no SKU) and price, so item sales can be grouped by category (Reporting → Par levels) and a sold item
  * linked to Square can be filled in from it. Returns how many variations.
  */
 export async function syncCatalog(db, client) {
@@ -341,7 +341,7 @@ export async function syncCatalog(db, client) {
     return (d.variations ?? []).map((v) => {
       const vd = v.item_variation_data ?? {};
       const price = vd.pricing_type === 'VARIABLE_PRICING' || vd.price_money?.amount === undefined ? null : Number(vd.price_money.amount) / 100;
-      return [v.id, it.id, d.name ?? '', vd.name ?? null, categoryId, categories.get(categoryId) || null, vd.sku || null, price];
+      return [v.id, it.id, d.name ?? '', vd.name ?? null, categoryId, categories.get(categoryId) || null, vd.sku || vd.upc || null, price];
     });
   });
   tx(db, () => {

@@ -1,5 +1,6 @@
 import { can, reportLocations, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
+import { syncCatalog } from '../square.js';
 import { ALLERGENS, SALES_MATCH, TARGET_GP, cleanAllergens, loadRecipes, productUsage, unitCost } from '../recipes.js';
 import { addDays, badRequest, bool, date, id, notFound, num, oneOf, round2, str, today } from '../util.js';
 
@@ -13,11 +14,21 @@ function forViewer(req, recipe) {
   return rest;
 }
 
-export function registerRecipeRoutes(router, db) {
+export function registerRecipeRoutes(router, db, square = null) {
   router.get('/recipes/meta', requirePerm('recipes.view', 'recipes.costs', 'recipes.edit'), (_req, res) => res.json({ allergens: ALLERGENS, target_gp: TARGET_GP }));
 
   router.get('/recipes', requirePerm('recipes.view', 'recipes.costs', 'recipes.edit'), (req, res) => {
     res.json(loadRecipes(db, { activeOnly: !can(req.user, 'recipes.edit') && !can(req.user, 'recipes.costs') }).map((r) => forViewer(req, r)));
+  });
+
+  // Reads the Square Items library again now (names, SKUs, prices, categories), for the sold item editor's Refresh.
+  router.post('/recipes/square-items/refresh', requirePerm('recipes.edit'), async (_req, res) => {
+    if (!square) throw badRequest('Square is not connected');
+    try {
+      res.json({ items: await syncCatalog(db, square.client) });
+    } catch (err) {
+      throw badRequest(`Couldn’t read the Square item list – the Square token needs Items read access (${err.message})`);
+    }
   });
 
   // Square items: everything in the Square Items library (with its SKU, price and category) and anything else seen in

@@ -132,7 +132,7 @@ async function boot() {
   registerParLevelRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
-  registerRecipeRoutes(api, db);
+  registerRecipeRoutes(api, db, square);
   registerTradingRoutes(api, db, square);
   registerOpenOrderRoutes(api, db, square);
   registerLeaveRoutes(api, db);

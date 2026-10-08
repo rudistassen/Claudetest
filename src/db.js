@@ -1279,6 +1279,11 @@ export function openDb(file = ':memory:') {
     db.exec('DROP TABLE IF EXISTS par_levels; DROP TABLE IF EXISTS par_sheets;');
     db.exec('PRAGMA user_version = 9');
   }
+  if (version < 10) {
+    // The Square catalogue now keeps SKUs and prices: read it again at the next sync rather than waiting an hour.
+    db.prepare(`DELETE FROM settings WHERE key = 'square_catalog_synced_at'`).run();
+    db.exec('PRAGMA user_version = 10');
+  }
   ensureDefaultSets(db);
   return db;
 }

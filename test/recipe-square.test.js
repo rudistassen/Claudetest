@@ -32,6 +32,7 @@ test('Square items come with their SKU, price and category, and a sold item keep
     yield { type: 'CATEGORY', id: 'C_HOT', category_data: { name: 'Hot food' } };
     yield { type: 'ITEM', id: 'I_TOASTIE', item_data: { name: 'Cheese toastie', reporting_category: { id: 'C_HOT' }, variations: [
       { id: 'V_TOASTIE', item_variation_data: { name: 'Regular', sku: 'HF-001', pricing_type: 'FIXED_PRICING', price_money: { amount: 675, currency: 'GBP' } } }] } };
+    yield { type: 'ITEM', id: 'I_JUICE', item_data: { name: 'Orange juice', variations: [{ id: 'V_JUICE', item_variation_data: { name: 'Regular', upc: '5012345678900' } }] } };
     yield { type: 'ITEM', id: 'I_SPECIAL', item_data: { name: 'Daily special', variations: [{ id: 'V_SPECIAL', item_variation_data: { name: 'Regular', pricing_type: 'VARIABLE_PRICING' } }] } };
   } });
   const a = await login('admin@cafe.local');
@@ -39,6 +40,8 @@ test('Square items come with their SKU, price and category, and a sold item keep
   const toastie = items.find((i) => i.catalog_object_id === 'V_TOASTIE');
   assert.deepEqual([toastie.name, toastie.sku, toastie.price, toastie.category, toastie.quantity], ['Cheese toastie', 'HF-001', 6.75, 'Hot food', 0], 'in Square even if not sold yet');
   assert.equal(items.find((i) => i.catalog_object_id === 'V_SPECIAL').price, null, 'a price set at the till has none');
+  assert.equal(items.find((i) => i.catalog_object_id === 'V_JUICE').sku, '5012345678900', 'no SKU: its barcode');
+  assert.equal((await a('/recipes/square-items/refresh', { method: 'POST' })).status, 400, 'Square not connected here');
 
   const made = await a('/recipes', { method: 'POST', body: { kind: 'sold', name: 'Cheese toastie', sku: 'HF-001', category: 'Hot food', selling_price: 6.75, square_catalog_object_id: 'V_TOASTIE', square_item_name: 'Cheese toastie', ingredients: [] } });
   assert.equal(made.status, 201);

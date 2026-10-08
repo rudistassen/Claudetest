@@ -104,7 +104,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerParLevelRoutes(api, db);
   registerSafetyRoutes(api, db);
   registerSalesRoutes(api, db, square);
-  registerRecipeRoutes(api, db);
+  registerRecipeRoutes(api, db, square);
   registerTradingRoutes(api, db, square);
   registerOpenOrderRoutes(api, db, square);
   registerLeaveRoutes(api, db);
