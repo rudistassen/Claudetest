@@ -1,11 +1,11 @@
 // Dropping shifts: staff ask to drop one of their published shifts; someone who can publish the rota at that site
-// approves (the shift comes off their rota and becomes an open shift there) or declines (it stays theirs). Anyone
-// who works at the site can then claim an open shift, which puts it straight onto their published rota.
+// approves (the shift comes off their rota and becomes an open shift there) or declines (it stays theirs). Anyone,
+// from any site, can then claim an open shift, which puts it straight onto their published rota.
 import { assertLocation, can, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { logRota, shiftText } from '../rota-log.js';
 import { onHoliday } from './leave.js';
-import { notify, peopleAt, peopleWith } from '../push.js';
+import { notify, peopleWith } from '../push.js';
 import { fmtDay } from '../rota-log.js';
 import { badRequest, date, forbidden, notFound, num, round2, shiftHours, str, time, today } from '../util.js';
 
@@ -26,13 +26,13 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
   };
   const approver = (req, locationId) => can(req.user, 'rota.publish') && req.user.site_ids.includes(locationId);
   const when = (d) => `${fmtDay(d.date)} ${d.start_time}–${d.end_time}`;
-  // An open shift: everyone at the site who could pick it up gets a notification.
-  const announceOpen = (d, exceptId) => notify(db, peopleAt(db, d.location_id).filter((id) => id !== exceptId), 'open_shift',
+  // An open shift: everyone (staff at every site can pick it up) gets a notification.
+  const everyone = () => db.prepare('SELECT id FROM users WHERE active = 1').all().map((r) => r.id);
+  const announceOpen = (d, exceptId) => notify(db, everyone().filter((id) => id !== exceptId), 'open_shift',
     { title: 'Shift free to pick up', body: `${when(d)} at ${d.location_name} – first come, first served`, url: '/#/rota', tag: `open-${d.id}` });
 
   // Why someone can't claim an open shift (null when they can).
   function claimProblem(user, d) {
-    if (!user.site_ids.includes(d.location_id)) return `You don’t work at ${d.location_name}`;
     if (!notStarted(d)) return 'This shift has already started';
     if (onHoliday(db, user.id, d.date)) return 'You’re on holiday that day';
     const clash = findClash({ user_id: user.id, date: d.date, start_time: d.start_time, end_time: d.end_time });
@@ -41,14 +41,14 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
   }
 
   /**
-   * Everything about dropped shifts for this person: open shifts they could pick up at their sites, drop requests
+   * Everything about dropped shifts for this person: open shifts they could pick up (at any site), drop requests
    * waiting for them to approve (if they can publish the rota), and their own recent requests.
    */
   router.get('/shift-drops', (req, res) => {
     const sites = req.user.site_ids;
     const inList = sites.map(() => '?').join(', ') || 'NULL';
-    const open = db.prepare(`${SELECT} WHERE d.status = 'open' AND d.date >= ? AND d.location_id IN (${inList}) ORDER BY d.date, d.start_time`)
-      .all(today(), ...sites).filter(notStarted)
+    const open = db.prepare(`${SELECT} WHERE d.status = 'open' AND d.date >= ? AND l.active = 1 ORDER BY d.date, d.start_time`)
+      .all(today()).filter(notStarted)
       .map((d) => {
         const problem = claimProblem(req.user, d);
         return { ...withHours(d), can_claim: !problem, claim_problem: problem, can_withdraw: approver(req, d.location_id) };
@@ -130,7 +130,6 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
   // Claim an open shift: it goes straight onto your published rota. First come, first served.
   router.post('/shift-drops/:id/claim', (req, res) => {
     const d = load(req.params.id);
-    if (!req.user.site_ids.includes(d.location_id)) throw notFound('Shift');
     if (d.status !== 'open') throw badRequest(d.status === 'claimed' ? `Sorry – ${d.claimed_by_name} has already picked up this shift` : 'This shift isn’t open any more');
     const problem = claimProblem(req.user, d);
     if (problem) throw badRequest(problem);
@@ -150,7 +149,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
   });
 
   // A manager drops someone's shift straight to open: it comes off their rota now (no approval needed) and anyone
-  // at the site can pick it up. Any request they'd made to drop it is closed by this.
+  // can pick it up. Any request they'd made to drop it is closed by this.
   router.post('/shifts/:id/open', requirePerm('rota.publish'), (req, res) => {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ? AND removed = 0').get(Number(req.params.id));
     if (!shift) throw notFound('Shift');
@@ -178,7 +177,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     res.json(withHours(opened));
   });
 
-  // A manager adds a new open shift (nobody on it yet): anyone at the site can pick it up, and they're told about it.
+  // A manager adds a new open shift (nobody on it yet): anyone, from any site, can pick it up, and they're told about it.
   // It has no shift behind it; dropped_by is the manager who added it.
   router.post('/shift-drops', requirePerm('rota.publish'), (req, res) => {
     const b = req.body ?? {};

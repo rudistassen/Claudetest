@@ -461,7 +461,7 @@ export async function render(ctx) {
       ${canEdit ? `<button class="pd-fab" id="pd-fab" aria-label="Add a shift" aria-haspopup="${data.can_publish ? 'menu' : 'false'}" aria-expanded="false">+</button>
         ${data.can_publish ? `<div class="pd-fab-scrim" id="pd-fab-scrim" hidden></div><div class="pd-fab-menu" id="pd-fab-menu" role="menu" hidden>
           <button role="menuitem" data-fab="person"><span aria-hidden="true">👤</span>Shift for someone</button>
-          <button role="menuitem" data-fab="open"><span aria-hidden="true">🔓</span>Open shift<small>Anyone at the site can pick it up</small></button></div>` : ''}
+          <button role="menuitem" data-fab="open"><span aria-hidden="true">🔓</span>Open shift<small>Anyone from any site can pick it up</small></button></div>` : ''}
         <p class="muted small">Tap a shift to change it. Press and hold a shift, then drag it onto someone else’s to give it to them.</p>` : ''}`;
   };
 
@@ -667,16 +667,16 @@ export async function render(ctx) {
     const person = data.staff.find((u) => u.id === s.user_id);
     const site = s.location_id ?? (all ? person?.location_id : siteId) ?? state.locationId;
     const unpublished = shift && shift.state && shift.state !== 'published';
-    // A new shift can be an open shift instead: nobody on it yet, and anyone at the site can pick it up.
+    // A new shift can be an open shift instead: nobody on it yet, and anyone from any site can pick it up.
     const canOpen = !shift && data.can_publish;
-    const who = canOpen ? [...staffOptions, ['open', 'Open shift – nobody yet, anyone at the site can pick it up']] : staffOptions;
+    const who = canOpen ? [...staffOptions, ['open', 'Open shift – nobody yet, anyone can pick it up']] : staffOptions;
     const { form } = openModal({
       title: shift ? 'Edit shift' : defaults.open ? 'Add open shift' : 'Add shift',
       body: `
         ${unpublished ? `<p class="notice publish-one">${shift.state === 'new' ? 'Staff can’t see this shift yet.' : 'Staff still see the old version of this shift.'}
           ${data.can_publish ? '<button type="button" class="btn btn-small btn-primary" id="publish-one">Publish just this shift</button>' : ''}</p>` : ''}
         ${shift ? `<p class="sick-line ${shift.sick ? 'is-sick' : ''}">${shift.sick ? `<span><strong>Off sick</strong>${shift.sick_note ? ` – ${esc(shift.sick_note)}` : ''}</span>` : '<span class="muted">Not coming in?</span>'}
-          <span class="sick-line-actions">${data.can_publish && !shift.sick && shift.state !== 'removed' ? '<button type="button" class="btn btn-small" id="open-btn" title="Take it off their rota now and offer it to everyone at the site">Drop to open</button>' : ''}
+          <span class="sick-line-actions">${data.can_publish && !shift.sick && shift.state !== 'removed' ? '<button type="button" class="btn btn-small" id="open-btn" title="Take it off their rota now and offer it to everyone">Drop to open</button>' : ''}
           <button type="button" class="btn btn-small" id="sick-btn">${shift.sick ? 'Change' : 'Mark as sick'}</button></span></p>` : ''}
         <div class="row">
           ${field('Staff member', select('user_id', who, defaults.open ? 'open' : s.user_id, 'required'))}
@@ -704,7 +704,7 @@ export async function render(ctx) {
         if (canOpen && v.user_id === 'open') {
           delete body.user_id;
           await api('/shift-drops', { method: 'POST', body });
-          toast('Open shift added – everyone at the site can pick it up');
+          toast('Open shift added – anyone from any site can pick it up');
           ctx.rerender();
           return;
         }
@@ -717,12 +717,12 @@ export async function render(ctx) {
     form.querySelector('#open-btn')?.addEventListener('click', () => openModal({
       title: 'Drop to open?',
       body: `<p><strong>${esc(shift.user_name)}</strong> · ${fmtDate(shift.date)} · ${shift.start_time}–${shift.end_time}</p>
-        <p class="muted small">It comes off ${esc(shift.user_name)}’s rota straight away and becomes an open shift that anyone at ${esc(siteName(shift.location_id))} can pick up.</p>
+        <p class="muted small">It comes off ${esc(shift.user_name)}’s rota straight away and becomes an open shift at ${esc(siteName(shift.location_id))} that anyone, from any site, can pick up.</p>
         ${field('Reason (optional)', textarea('reason', '', 'maxlength="500" placeholder="e.g. Swapped to another site"'))}`,
       submitLabel: 'Drop to open',
       onSubmit: async (v) => {
         await api(`/shifts/${shift.id}/open`, { method: 'POST', body: { reason: v.reason } });
-        toast('Shift is now open for anyone at the site to pick up');
+        toast('Shift is now open for anyone to pick up');
         ctx.rerender();
       },
     }));
@@ -1010,7 +1010,7 @@ async function renderMine(ctx, week) {
         </div>`;
       }).join('')}
     </section>
-    <p class="muted small">These are your published shifts. Can’t make one? Tap “Drop shift” – once a manager approves, it’s offered to everyone at that site. If something looks wrong, speak to your manager.</p>`;
+    <p class="muted small">These are your published shifts. Can’t make one? Tap “Drop shift” – once a manager approves, it’s offered to everyone. If something looks wrong, speak to your manager.</p>`;
   el.querySelectorAll('[data-drop-shift]').forEach((b) => b.addEventListener('click', () => askToDrop(shifts.find((s) => s.id === Number(b.dataset.dropShift)), () => ctx.rerender())));
 
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {

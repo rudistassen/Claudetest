@@ -410,7 +410,7 @@ CREATE TABLE IF NOT EXISTS rota_undo (
 );
 
 -- Dropped shifts: someone asks to drop a published shift; a manager approves (it comes off their rota and becomes
--- an open shift at that site) or declines; anyone at the site can then claim it. The shift's details are copied
+-- an open shift at that site) or declines; anyone (from any site) can then claim it. The shift's details are copied
 -- in, as they were when it was dropped. status: pending, open, claimed, declined, cancelled, withdrawn, deleted
 -- (approved, but the shift was deleted rather than offered to others).
 CREATE TABLE IF NOT EXISTS shift_drops (

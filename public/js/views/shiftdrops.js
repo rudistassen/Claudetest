@@ -1,7 +1,7 @@
 import { api, esc, field, fmtDate, openModal, showError, siteColour, textarea, toast, todayISO } from '../lib.js';
 
 // Dropping shifts and open shifts, shared by My Atlas and the rota: staff ask to drop a shift, a manager approves
-// it (it becomes an open shift at that site) or declines it, and anyone at the site can pick an open shift up.
+// it (it becomes an open shift at that site) or declines it, and anyone, from any site, can pick an open shift up.
 
 const when = (d) => `${d.date === todayISO() ? 'Today' : fmtDate(d.date, { weekday: 'short', day: 'numeric', month: 'short' })} · ${d.start_time}–${d.end_time}`;
 const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 2 })} h`;
@@ -12,7 +12,7 @@ export function askToDrop(s, done) {
   openModal({
     title: 'Drop this shift?',
     body: `<p><strong>${esc(when(s))}</strong> at ${esc(s.location_name)}</p>
-      <p class="muted small">A manager needs to approve it first. Until then it’s still your shift. Once approved, it comes off your rota and anyone at ${esc(s.location_name)} can pick it up.</p>
+      <p class="muted small">A manager needs to approve it first. Until then it’s still your shift. Once approved, it comes off your rota and anyone (from any site) can pick it up.</p>
       ${field('Reason (optional)', textarea('reason', '', 'maxlength="500" placeholder="e.g. Exam that day"'))}`,
     submitLabel: 'Ask to drop',
     onSubmit: async (v) => {

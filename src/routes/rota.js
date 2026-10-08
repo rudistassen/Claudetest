@@ -349,7 +349,7 @@ export function registerRotaRoutes(router, db) {
       can_publish: editor ? can(req.user, 'rota.publish') : undefined,
       // Their last change, if it can still be undone.
       undo: editor ? undoFor(req.user.id) : undefined,
-      // Dropped shifts that are open for anyone at the site to pick up, and shifts someone has asked to drop.
+      // Dropped shifts that are open for anyone to pick up, and shifts someone has asked to drop.
       open_shifts: drops.open,
       drop_requested: drops.pending_shift_ids,
     });
