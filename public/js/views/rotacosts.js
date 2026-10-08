@@ -26,13 +26,14 @@ export async function render(ctx) {
     <td class="num"><strong>${money(x.cost)}</strong></td>
     <td class="num">${whole(x.forecast)}</td>
     <td class="num">${x.sales_budget === null ? '–' : x.budgeted ? `<strong class="is-budget">${whole(x.sales_budget)}</strong>` : `<span class="muted" title="No budget set – the forecast is used">${whole(x.sales_budget)}</span>`}</td>
+    <td class="num muted">${whole(x.sales_budget_net)}</td>
     <td class="num">${x.budget === null ? '–' : money(x.budget)}</td>
     <td class="num">${diff(x.difference)}</td>
     <td class="num">${pctCell(x.labour_pct)}</td>
     ${showActual ? `<td class="num">${x.actual_sales === null ? '–' : money(x.actual_sales)}</td>` : ''}
   </tr>`;
-  const head = (first) => `<thead><tr><th>${first}</th><th class="num">Hours</th><th class="num">Rota cost</th><th class="num">Forecast net sales</th><th class="num">Sales budget (net)</th>
-    <th class="num">${data.target_pct}% labour budget</th><th class="num">Difference</th><th class="num">Rota labour %</th>${showActual ? '<th class="num">Actual net sales</th>' : ''}</tr></thead>`;
+  const head = (first) => `<thead><tr><th>${first}</th><th class="num">Hours</th><th class="num">Rota cost</th><th class="num">Forecast gross sales</th><th class="num">Sales budget (gross)</th><th class="num">Net equivalent</th>
+    <th class="num">${data.target_pct}% labour budget</th><th class="num">Difference</th><th class="num">Rota labour %<small>of net</small></th>${showActual ? '<th class="num">Actual gross sales</th>' : ''}</tr></thead>`;
 
   el.innerHTML = `
     <div class="page-head">
@@ -54,8 +55,8 @@ export async function render(ctx) {
     <h2 class="day-title">Week commencing ${fmtDate(week, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h2>
     <div class="kpis">
       <div class="kpi" data-icon="£"><span>Rota cost</span><strong>${money(t.cost)}</strong><small>${t.hours} hours</small></div>
-      <div class="kpi"><span>${t.budgeted ? 'Sales budget (net)' : 'Forecast net sales'}</span><strong>${whole(t.sales_budget)}</strong>${t.budgeted ? `<small>forecast ${whole(t.forecast)} net</small>` : ''}</div>
-      <div class="kpi"><span>Labour budget at ${data.target_pct}%</span><strong>${t.budget === null ? '–' : money(t.budget)}</strong></div>
+      <div class="kpi"><span>${t.budgeted ? 'Sales budget (gross)' : 'Forecast gross sales'}</span><strong>${whole(t.sales_budget)}</strong><small>${whole(t.sales_budget_net)} net${t.budgeted ? ` · forecast ${whole(t.forecast)} gross` : ''}</small></div>
+      <div class="kpi"><span>Labour budget at ${data.target_pct}% of net</span><strong>${t.budget === null ? '–' : money(t.budget)}</strong></div>
       <div class="kpi ${t.difference > 0 ? 'kpi-bad' : ''}"><span>${t.difference === null ? 'Difference' : t.difference > 0 ? 'Over budget by' : 'Under budget by'}</span>
         <strong>${t.difference === null ? '–' : money(Math.abs(t.difference))}</strong><small>Rota labour ${fmtPct(t.labour_pct)}</small></div>
     </div>
@@ -75,9 +76,9 @@ export async function render(ctx) {
         <tbody>${data.days.map((d) => row(fmtDate(d.date), d, { sub: d.bank_holiday ? `<small class="bank-hol">${esc(d.bank_holiday)}</small>` : '' })).join('')}</tbody>
       </table></div>
       <p class="muted small">Rota cost = each shift’s hours (less unpaid breaks) × the person’s hourly rate.
-        Forecast net sales = that weekday’s average net sales over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
+        Sales are shown gross. Forecast gross sales = that weekday’s average gross sales over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
         Sales budget = the budget set under <a href="#/rota/budget?week=${week}">Rota → Sales budget</a>, or the forecast for days without one (shown faded).
-        Labour budget = ${data.target_pct}% of the sales budget; “over” means the rota costs more than that.${showActual ? ' Actual net sales are from Square, so far.' : ''} All sales here are net: after discounts, excluding VAT.</p>
+        Net equivalent = the sales after discounts and excluding VAT – the forecast’s own net average, or the budget at the site’s usual net-to-gross rate. Labour budget = ${data.target_pct}% of that, and labour % is of it; “over” means the rota costs more than that.${showActual ? ' Actual gross sales are from Square, so far.' : ''}</p>
     </section>`;
 
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {

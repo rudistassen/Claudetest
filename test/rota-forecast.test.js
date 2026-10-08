@@ -43,7 +43,8 @@ test('sales forecast: each weekday’s average over the last weeks, leaving out 
   db.prepare('DELETE FROM sales_daily WHERE location_id = ?').run(site);
   // A week in the past with a Monday bank holiday in the 8 weeks before it: Monday 31 August 2026.
   const ws = '2026-09-14';
-  const put = (d, net) => db.prepare('INSERT INTO sales_daily (location_id, date, net_sales, gross_sales, orders) VALUES (?, ?, ?, ?, 10)').run(site, d, net, net);
+  // Gross is net plus 20% VAT.
+  const put = (d, net) => db.prepare('INSERT INTO sales_daily (location_id, date, net_sales, gross_sales, orders) VALUES (?, ?, ?, ?, 10)').run(site, d, net, net * 1.2);
   put('2026-09-07', 1000); // Monday
   put('2026-08-31', 5000); // Monday, bank holiday – left out
   put('2026-08-24', 800); // Monday
@@ -53,8 +54,9 @@ test('sales forecast: each weekday’s average over the last weeks, leaving out 
   const f = salesForecast(db, [site], ws);
   assert.equal(f.to, '2026-09-13');
   assert.equal(f.from, addDays('2026-09-13', -55));
-  assert.deepEqual(f.sites[site][0], { avg: 900, days: 2 }, 'Mondays: (1000 + 800) / 2');
-  assert.deepEqual(f.sites[site][5], { avg: 2000, days: 1 });
+  assert.deepEqual(f.sites[site][0], { avg: 900, gross: 1080, days: 2 }, 'Mondays: (1000 + 800) / 2, and gross');
+  assert.deepEqual(f.sites[site][5], { avg: 2000, gross: 2400, days: 1 });
+  assert.ok(Math.abs(f.ratios[site] - 1 / 1.2) < 1e-9, 'net is 1/1.2 of gross here');
   assert.equal(f.sites[site][6], null, 'no open Sundays');
   assert.equal(f.sites[site][2], null);
 });

@@ -1,7 +1,7 @@
 // Atlas's service worker: makes the app installable and quick to open. Everything is fetched fresh from the
 // server first, so updates show straight away; the saved copy is only used when there's no connection.
 // Data (/api) is never saved here.
-const CACHE = 'atlas-v53';
+const CACHE = 'atlas-v54';
 const SHELL = ['/', '/css/styles.css', '/js/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/img/atlas.svg'];
 
 self.addEventListener('install', (e) => {

@@ -183,7 +183,7 @@ export async function render(ctx) {
     const f = fc && id ? forecastWeek([id]) : null;
     if (f === null) return '';
     const p = pctOf(rotaCost([id]), f);
-    return ` · ${budgeted([id]) ? 'budget' : 'forecast'} ${whole((f))} net · labour <span class="tone-${labourTone(p)}">${fmtPct(p)}</span>`;
+    return ` · ${budgeted([id]) ? 'budget' : 'forecast'} ${whole(grossWeek([id]))} gross · labour <span class="tone-${labourTone(p)}">${fmtPct(p)}</span>`;
   };
   const rowHours = (u, site) => Math.round(counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
   // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
@@ -205,8 +205,9 @@ export async function render(ctx) {
   const rateOf = new Map(data.staff.map((u) => [u.id, u.hourly_rate ?? 0]));
   const shownSites = all ? active.map((l) => l.id) : [siteId];
   const rotaCost = (ids, d) => counted.filter((x) => ids.includes(x.location_id) && (!d || x.date === d)).reduce((t, x) => t + x.hours * (rateOf.get(x.user_id) ?? 0), 0);
-  // Net sales planned for a day: the sales budget set for it (Rota → Sales budget), otherwise the forecast (that
-  // weekday's average). avgFor is the forecast alone. Labour % and the labour budget use the planned figure.
+  // Sales planned for a day: the sales budget set for it (Rota → Sales budget), otherwise the forecast (that weekday's
+  // average). Shown gross (grossFor; avgFor is the forecast alone); labour % and the labour budget use the net
+  // equivalent (forecastFor) – a budget is turned into net with the site's own net-to-gross ratio.
   const budgetOf = (id, d) => data.sales_budget?.[id]?.[data.days.indexOf(d)] ?? null;
   const sumOver = (ids, d, one) => {
     let total = 0;
@@ -217,17 +218,21 @@ export async function render(ctx) {
     }
     return known ? total : null;
   };
-  const avgFor = (ids, d) => sumOver(ids, d, (id) => fc?.sites?.[id]?.[weekdayOf(d)]?.avg ?? null);
-  const forecastFor = (ids, d) => sumOver(ids, d, (id) => budgetOf(id, d) ?? fc?.sites?.[id]?.[weekdayOf(d)]?.avg ?? null);
+  const fcOf = (id, d) => fc?.sites?.[id]?.[weekdayOf(d)] ?? null;
+  const ratioOf = (id) => fc?.ratios?.[id] ?? 1 / 1.2;
+  const avgFor = (ids, d) => sumOver(ids, d, (id) => fcOf(id, d)?.gross ?? null);
+  const grossFor = (ids, d) => sumOver(ids, d, (id) => budgetOf(id, d) ?? fcOf(id, d)?.gross ?? null);
+  const forecastFor = (ids, d) => sumOver(ids, d, (id) => (budgetOf(id, d) !== null ? budgetOf(id, d) * ratioOf(id) : fcOf(id, d)?.avg ?? null));
   const weekOf = (fn) => (ids) => {
     const vals = data.days.map((d) => fn(ids, d));
     return vals.some((v) => v !== null) ? vals.reduce((t, v) => t + (v ?? 0), 0) : null;
   };
   const forecastWeek = weekOf(forecastFor);
   const avgWeek = weekOf(avgFor);
+  const grossWeek = weekOf(grossFor);
   // Whether any of these sites has a budget set on a day (or any day this week).
   const budgeted = (ids, d) => ids.some((id) => (d ? [d] : data.days).some((x) => budgetOf(id, x) !== null));
-  const salesLabel = (ids) => (budgeted(ids) ? 'sales budget (net)' : 'forecast net sales');
+  const salesLabel = (ids) => (budgeted(ids) ? 'the sales budget in net sales' : 'forecast net sales');
   // Forecasts are estimates, so they're shown in whole pounds.
   const whole = (n) => `£${Math.round(n).toLocaleString('en-GB')}`;
   const pctOf = (cost, sales) => (sales ? Math.round((cost / sales) * 1000) / 10 : null);
@@ -235,7 +240,7 @@ export async function render(ctx) {
     const f = forecastFor(ids, d);
     if (f === null) return '<span class="muted">–</span>';
     const p = pctOf(rotaCost(ids, d), f);
-    return `<span class="${budgeted(ids, d) ? 'is-budget' : ''}" title="${budgeted(ids, d) ? 'Sales budget (net)' : 'Forecast net sales'}">${whole((f))}</span><small class="tone-${labourTone(p)}">${fmtPct(p)}</small>`;
+    return `<span class="${budgeted(ids, d) ? 'is-budget' : ''}" title="${budgeted(ids, d) ? 'Sales budget (gross)' : 'Forecast gross sales'} – labour % is of ${whole(f)} net">${whole(grossFor(ids, d))}</span><small class="tone-${labourTone(p)}">${fmtPct(p)}</small>`;
   };
   const bankHol = (d) => data.bank_holidays?.[d];
 
@@ -304,8 +309,8 @@ export async function render(ctx) {
     }).filter(Boolean).join('') : '';
     return `<section class="card labour-track tone-box-${tone}" aria-label="Labour against budget">
       <div class="lt-figures">
-        <div><span>${budgeted(shownSites) ? 'Sales budget (net)' : 'Forecast net sales'}</span><strong>${whole(sales)}</strong>${budgeted(shownSites) && avgWeek(shownSites) !== null ? `<small>forecast ${whole(avgWeek(shownSites))} net</small>` : ''}</div>
-        <div><span>Labour budget for the week</span><strong>${whole(budget)}</strong><small>${LABOUR_TARGET}% of ${salesLabel(shownSites)}</small></div>
+        <div><span>${budgeted(shownSites) ? 'Sales budget (gross)' : 'Forecast gross sales'}</span><strong>${whole(grossWeek(shownSites))}</strong><small>${whole(sales)} net${budgeted(shownSites) && avgWeek(shownSites) !== null ? ` · forecast ${whole(avgWeek(shownSites))} gross` : ''}</small></div>
+        <div><span>Labour budget for the week</span><strong>${whole(budget)}</strong><small>${LABOUR_TARGET}% of net sales</small></div>
         <div><span>Labour forecast</span><strong>${whole(cost)}</strong><small class="tone-${left >= 0 ? 'good' : 'bad'}">${whole(Math.abs(left))} ${left >= 0 ? 'under budget' : 'over budget'}</small></div>
         <div><span>Rota labour %</span><strong class="tone-${tone}">${fmtPct(p)}</strong><small>target ${LABOUR_TARGET}%</small></div>
       </div>
@@ -314,7 +319,7 @@ export async function render(ctx) {
       ${perSite ? `<div class="lt-sites">${perSite}</div>` : ''}
     </section>`;
   };
-  const fcNote = fc ? `Forecast = each day’s average net sales (after discounts, excluding VAT) over the last ${fc.weeks} weeks (bank holidays and closed days left out). Where a sales budget is set for a day (Rota → Sales budget) it’s used instead. Labour % = the rota’s cost ÷ that figure.` : '';
+  const fcNote = fc ? `Sales are shown gross. Forecast = each day’s average gross sales over the last ${fc.weeks} weeks (bank holidays and closed days left out); where a sales budget is set for a day (Rota → Sales budget) it’s used instead. Labour % = the rota’s cost ÷ the net sales (after discounts, excluding VAT) – the forecast’s own net average, or the budget less VAT and discounts at the site’s usual rate.` : '';
 
   // --- Day view: just the shifts on one day, site by site: each person's name and a card with their times ---
   const dayView = () => {
@@ -572,7 +577,7 @@ export async function render(ctx) {
             </button>
             ${canEdit && data.can_publish && siteOfGroup(groupId) && data.unpublished_by_site?.[siteOfGroup(groupId)] ? `<button class="btn btn-small rota-publish-site" data-publish-site="${siteOfGroup(groupId)}">Publish ${esc(header)} (${data.unpublished_by_site[siteOfGroup(groupId)]})</button>` : ''}</div>
           </th></tr>
-          ${fc && siteOfGroup(groupId) ? `<tr class="rota-forecast" data-in-group="${esc(groupId)}"><th>${budgeted([siteOfGroup(groupId)]) ? 'Budget' : 'Forecast'} net sales · labour %</th>${data.days.map((d) => `<td class="num">${fcCell([siteOfGroup(groupId)], d)}</td>`).join('')}<td></td></tr>` : ''}` : `
+          ${fc && siteOfGroup(groupId) ? `<tr class="rota-forecast" data-in-group="${esc(groupId)}"><th>${budgeted([siteOfGroup(groupId)]) ? 'Budget' : 'Forecast'} gross sales · labour %</th>${data.days.map((d) => `<td class="num">${fcCell([siteOfGroup(groupId)], d)}</td>`).join('')}<td></td></tr>` : ''}` : `
             <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
               <th>${personName(u.id, u.name, 'strong')}${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${data.days.map((d) => {
@@ -596,12 +601,12 @@ export async function render(ctx) {
         <tfoot>${timeline ? `<tr class="gt-cover-row"><th>People on<small>by the hour</small></th>${data.days.map((d) => `<td>${tlCover(d)}</td>`).join('')}<td></td></tr>` : ''}<tr><th>Total hours</th>${dayHours.map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>
           ${data.daily_money ? `
           <tr><th>Labour cost</th>${data.daily_money.map((m) => `<td class="num">${money(m.labour_cost)}</td>`).join('')}<td class="num">${money(data.labour_cost)}</td></tr>
-          ${fc ? `<tr class="rota-forecast-total"><th>Forecast net sales<small>average for the day</small></th>${data.days.map((d) => { const f = avgFor(shownSites, d); return `<td class="num">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num">${avgWeek(shownSites) === null ? '–' : whole((avgWeek(shownSites)))}</td></tr>
-          ${budgeted(shownSites) ? `<tr class="rota-forecast-total rota-budget-row"><th>Sales budget (net)<small><a href="#/rota/budget${qs({ week })}">forecast where none is set</a></small></th>${data.days.map((d) => { const f = forecastFor(shownSites, d); return `<td class="num ${budgeted(shownSites, d) ? 'is-budget' : ''}">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num"><strong>${forecastWeek(shownSites) === null ? '–' : whole(forecastWeek(shownSites))}</strong></td></tr>` : ''}
-          <tr class="rota-forecast-total"><th>Rota labour %<small>of ${salesLabel(shownSites)}</small></th>${data.days.map((d) => { const p = pctOf(rotaCost(shownSites, d), forecastFor(shownSites, d)); return `<td class="num tone-${labourTone(p)}">${fmtPct(p)}</td>`; }).join('')}<td class="num tone-${labourTone(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}"><strong>${fmtPct(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}</strong></td></tr>` : ''}
+          ${fc ? `<tr class="rota-forecast-total"><th>Forecast gross sales<small>average for the day</small></th>${data.days.map((d) => { const f = avgFor(shownSites, d); return `<td class="num">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num">${avgWeek(shownSites) === null ? '–' : whole((avgWeek(shownSites)))}</td></tr>
+          ${budgeted(shownSites) ? `<tr class="rota-forecast-total rota-budget-row"><th>Sales budget (gross)<small><a href="#/rota/budget${qs({ week })}">forecast where none is set</a></small></th>${data.days.map((d) => { const f = grossFor(shownSites, d); return `<td class="num ${budgeted(shownSites, d) ? 'is-budget' : ''}">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num"><strong>${grossWeek(shownSites) === null ? '–' : whole(grossWeek(shownSites))}</strong></td></tr>` : ''}
+          <tr class="rota-forecast-total"><th>Rota labour %<small>of net sales</small></th>${data.days.map((d) => { const p = pctOf(rotaCost(shownSites, d), forecastFor(shownSites, d)); return `<td class="num tone-${labourTone(p)}">${fmtPct(p)}</td>`; }).join('')}<td class="num tone-${labourTone(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}"><strong>${fmtPct(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}</strong></td></tr>` : ''}
           ${data.daily_money.some((m) => m.net_sales !== null) ? `
-          <tr><th>Net sales (Square)<small>actual so far</small></th>${data.daily_money.map((m) => `<td class="num">${m.net_sales === null ? '–' : money(m.net_sales)}</td>`).join('')}<td class="num">${money(data.week_sales)}</td></tr>
-          <tr><th>Labour %</th>${data.daily_money.map((m) => `<td class="num tone-${labourTone(m.labour_pct)}">${fmtPct(m.labour_pct)}</td>`).join('')}<td class="num tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</td></tr>` : ''}` : ''}
+          <tr><th>Gross sales (Square)<small>actual so far</small></th>${data.daily_money.map((m) => `<td class="num">${m.gross_sales === null ? '–' : money(m.gross_sales)}</td>`).join('')}<td class="num">${money(data.week_gross_sales)}</td></tr>
+          <tr><th>Labour %<small>of net sales</small></th>${data.daily_money.map((m) => `<td class="num tone-${labourTone(m.labour_pct)}">${fmtPct(m.labour_pct)}</td>`).join('')}<td class="num tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</td></tr>` : ''}` : ''}
         </tfoot>
       </table>
     </div>

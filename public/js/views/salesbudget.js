@@ -1,8 +1,9 @@
 import { addDays, api, esc, fmtDate, fmtDateTime, money, qs, showError, todayISO, toast, weekStart } from '../lib.js';
 
-// Rota → Sales budget: for a week, each site's forecast net sales for each day (a guide – the average for that weekday
-// over recent weeks) and a budget to set for each day (e.g. higher on a Saturday with an event on). Where a budget is
-// set, the rota and Rota costs use it instead of the forecast, for labour % and the labour budget.
+// Rota → Sales budget: for a week, each site's forecast gross sales for each day (a guide – the average for that
+// weekday over recent weeks) and a gross budget to set for each day (e.g. higher on a Saturday with an event on). Once
+// published, the rota and Rota costs use it instead of the forecast. Labour % and the labour budget are worked out on
+// net sales: the budget less VAT and discounts at the site's usual rate (net_ratio), or the forecast's net average.
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const whole = (n) => (n === null || n === undefined ? '–' : `£${Math.round(n).toLocaleString('en-GB')}`);
@@ -16,6 +17,7 @@ export async function render(ctx) {
   const weekEnd = addDays(week, 6);
   const go = (w) => navigate(`rota/budget${qs({ week: w === thisWeek ? undefined : w })}`);
   const used = (s, i, budget = s.budget[i]) => (budget ?? s.forecast[i]);
+  const usedNet = (s, i, budget = s.budget[i]) => (budget !== null && budget !== undefined ? budget * s.net_ratio : s.forecast_net[i]);
 
   // On a phone the days run down the page (one row each), so the budget boxes are big enough to type in.
   const phone = window.matchMedia('(max-width: 700px)').matches;
@@ -39,12 +41,12 @@ export async function render(ctx) {
     ${phone ? phoneTable(s) : `<div class="table-wrap"><table class="sb-table">
       <thead><tr><th></th>${data.days.map((d, i) => `<th class="num">${DAYS[i]}<small>${fmtDate(d.date, { day: 'numeric', month: 'short' })}</small>${d.bank_holiday ? `<small class="bank-hol">${esc(d.bank_holiday)}</small>` : ''}</th>`).join('')}<th class="num">Week</th></tr></thead>
       <tbody>
-        <tr class="sb-forecast"><th>Forecast net sales<small>average for the day</small></th>${s.forecast.map((f) => `<td class="num">${whole(f)}</td>`).join('')}<td class="num">${forecastWeek(s)}</td></tr>
-        <tr class="sb-budget"><th>Sales budget (net)<small>leave blank to use the forecast</small></th>${s.budget.map((b, i) => `<td class="num">${input(s, b, i)}</td>`).join('')}<td class="num sb-week"></td></tr>
-        <tr class="sb-labour"><th>Labour budget<small>${data.target_pct}% of the sales above</small></th>${s.budget.map((_, i) => `<td class="num" data-labour="${i}"></td>`).join('')}<td class="num" data-labour="week"></td></tr>
+        <tr class="sb-forecast"><th>Forecast gross sales<small>average for the day</small></th>${s.forecast.map((f) => `<td class="num">${whole(f)}</td>`).join('')}<td class="num">${forecastWeek(s)}</td></tr>
+        <tr class="sb-budget"><th>Sales budget (gross)<small>leave blank to use the forecast</small></th>${s.budget.map((b, i) => `<td class="num">${input(s, b, i)}</td>`).join('')}<td class="num sb-week"></td></tr>
+        <tr class="sb-labour"><th>Labour budget<small>${data.target_pct}% of the net equivalent</small></th>${s.budget.map((_, i) => `<td class="num" data-labour="${i}"></td>`).join('')}<td class="num" data-labour="week"></td></tr>
       </tbody>
     </table></div>`}
-    ${phone ? '<p class="muted small">All net sales. Leave a day blank to use the forecast.</p>' : ''}
+    ${phone ? '<p class="muted small">Gross sales. Labour is 30% of the net equivalent. Leave a day blank to use the forecast.</p>' : ''}
     <footer class="sb-foot"><span class="sb-status small"></span>
       <button type="button" class="btn btn-small btn-primary" data-publish="${s.id}">Publish ${esc(s.name)}</button></footer>
   </section>`;
@@ -60,8 +62,8 @@ export async function render(ctx) {
       </div>
       ${week !== thisWeek ? `<button class="btn btn-small btn-ghost" data-week="0">${week < thisWeek ? 'Back to this week' : 'This week'}</button>` : ''}
     </div>
-    <${phone ? 'details class="sb-intro"><summary>How the sales budget works</summary><p class="muted">' : 'p class="muted">'}The forecast is a guide: each weekday’s average <strong>net sales</strong> (after discounts, excluding VAT) over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
-      Set a budget for any day you know will be different – an event on a Saturday, say. Once you publish a site’s budget, the rota uses it (for labour % and the ${data.target_pct}% labour budget), and the forecast for days left blank. Publish one site at a time, or every site with changes using Publish budget.</p>${phone ? '</details>' : ''}
+    <${phone ? 'details class="sb-intro"><summary>How the sales budget works</summary><p class="muted">' : 'p class="muted">'}The forecast is a guide: each weekday’s average <strong>gross sales</strong> over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
+      Set a budget for any day you know will be different – an event on a Saturday, say. Once you publish a site’s budget, the rota uses it, and the forecast for days left blank. Labour % and the ${data.target_pct}% labour budget are worked out on <strong>net sales</strong> (after discounts, excluding VAT): the budget is turned into net at each site’s usual rate over recent weeks. Publish one site at a time, or every site with changes using Publish budget.</p>${phone ? '</details>' : ''}
     <form id="sb-form">
       ${data.sites.map(siteCard).join('')}
       <div class="actions sb-save"><span class="topbar-gap"></span><a class="btn" href="#/rota${qs({ view: 'week', week })}">Open this week’s rota</a><button type="submit" class="btn btn-primary">Publish budget</button></div>
@@ -82,11 +84,17 @@ export async function render(ctx) {
     const s = site(card);
     const inputs = [...card.querySelectorAll('.sb-input')];
     const vals = inputs.map((i, d) => used(s, d, i.value === '' ? null : Number(i.value)));
+    const nets = inputs.map((i, d) => usedNet(s, d, i.value === '' ? null : Number(i.value)));
     const week = vals.some((v) => v !== null && v !== undefined) ? vals.reduce((t, v) => t + (v ?? 0), 0) : null;
+    const weekNet = nets.some((v) => v !== null && v !== undefined) ? nets.reduce((t, v) => t + (v ?? 0), 0) : null;
     const budgeted = inputs.filter((i) => i.value !== '').length;
     card.querySelector('.sb-week').innerHTML = `${whole(week)}${budgeted && budgeted < 7 ? '<small>incl. forecast</small>' : ''}`;
-    vals.forEach((v, d) => { card.querySelector(`[data-labour="${d}"]`).textContent = v === null || v === undefined ? '–' : money(v * data.target_pct / 100); });
-    card.querySelector('[data-labour="week"]').textContent = week === null ? '–' : money(week * data.target_pct / 100);
+    nets.forEach((v, d) => {
+      const c = card.querySelector(`[data-labour="${d}"]`);
+      c.textContent = v === null || v === undefined ? '–' : money(v * data.target_pct / 100);
+      c.title = v === null || v === undefined ? '' : `${data.target_pct}% of ${whole(v)} net`;
+    });
+    card.querySelector('[data-labour="week"]').textContent = weekNet === null ? '–' : money(weekNet * data.target_pct / 100);
     inputs.forEach((i) => i.closest('td, .sb-day-input')?.classList.toggle('is-set', i.value !== ''));
     // Published or not: the rota only uses a budget once it's published.
     const changed = isChanged(card);

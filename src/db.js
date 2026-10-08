@@ -272,8 +272,8 @@ CREATE TABLE IF NOT EXISTS square_catalog (
   category_name TEXT
 );
 
--- Sales budgets (Rota → Sales budget): the net sales a site plans for on a day, set by a manager (e.g. higher on a
--- Saturday with an event). Where there's one, the rota uses it instead of the forecast.
+-- Sales budgets (Rota → Sales budget): the gross sales a site plans for on a day, set by a manager (e.g. higher on a
+-- Saturday with an event). Where there's one, the rota uses it instead of the forecast (its net equivalent for labour %).
 CREATE TABLE IF NOT EXISTS sales_budgets (
   location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
@@ -1296,6 +1296,17 @@ export function openDb(file = ':memory:') {
     // The Square catalogue now keeps SKUs and prices: read it again at the next sync rather than waiting an hour.
     db.prepare(`DELETE FROM settings WHERE key = 'square_catalog_synced_at'`).run();
     db.exec('PRAGMA user_version = 10');
+  }
+  if (version < 11) {
+    // Sales budgets became gross (the figure the business talks in); ones already set were net, so they're turned
+    // into gross with each site's net-to-gross ratio over its last 8 weeks (or 20% VAT if it has no sales yet).
+    for (const { location_id: site } of db.prepare('SELECT DISTINCT location_id FROM sales_budgets').all()) {
+      const t = db.prepare(`SELECT SUM(net_sales) AS net, SUM(gross_sales) AS gross FROM sales_daily
+        WHERE location_id = ? AND date >= date('now', '-56 days') AND net_sales > 0`).get(site);
+      const ratio = t?.gross > 0 ? Math.min(1, t.net / t.gross) : 1 / 1.2;
+      db.prepare('UPDATE sales_budgets SET amount = ROUND(amount / ?, 2) WHERE location_id = ?').run(ratio, site);
+    }
+    db.exec('PRAGMA user_version = 11');
   }
   ensureDefaultSets(db);
   return db;

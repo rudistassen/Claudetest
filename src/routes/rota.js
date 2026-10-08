@@ -20,35 +20,49 @@ function range(s) {
 
 export const FORECAST_WEEKS = 8;
 
+// Net sales as a share of gross for a site (after discounts, less VAT), from its recent sales; with none, gross less
+// 20% VAT. Used to turn a gross sales budget into the net figure labour % is worked out on.
+const DEFAULT_NET_RATIO = 1 / 1.2;
+const netRatio = (t) => (t && t.gross > 0 ? Math.min(1, t.net / t.gross) : DEFAULT_NET_RATIO);
+
 /**
- * Expected sales for each site on each day of the week: the average of that weekday's net sales over the last
+ * Expected sales for each site on each day of the week: the average of that weekday's sales over the last
  * FORECAST_WEEKS weeks before the rota week (or before today, for a week that's still to come). Bank holidays and
  * days with no sales (closed, or before Square was connected) are left out. Returns
- * { weeks, from, to, sites: { [locationId]: [Mon..Sun: { avg, days } | null] } }.
+ * { weeks, from, to, sites: { [locationId]: [Mon..Sun: { avg (net), gross, days } | null] }, ratios: { [locationId]: net ÷ gross } }.
  */
 export function salesForecast(db, locationIds, weekStartDate) {
   const to = [addDays(weekStartDate, -1), addDays(today(), -1)].sort()[0];
   const from = addDays(to, -(FORECAST_WEEKS * 7 - 1));
   const sites = {};
   if (!locationIds.length) return { weeks: FORECAST_WEEKS, from, to, sites };
-  const rows = db.prepare(`SELECT location_id, date, net_sales FROM sales_daily
+  const ratios = {};
+  if (!locationIds.length) return { weeks: FORECAST_WEEKS, from, to, sites, ratios };
+  const rows = db.prepare(`SELECT location_id, date, net_sales, gross_sales FROM sales_daily
     WHERE location_id IN (${locationIds.map(() => '?').join(', ')}) AND date BETWEEN ? AND ? AND net_sales > 0`).all(...locationIds, from, to);
   const sums = new Map();
+  const totals = new Map();
   for (const r of rows) {
     if (bankHoliday(r.date)) continue;
     const k = `${r.location_id}|${(new Date(`${r.date}T00:00:00Z`).getUTCDay() + 6) % 7}`;
-    const v = sums.get(k) ?? { total: 0, days: 0 };
+    const v = sums.get(k) ?? { total: 0, gross: 0, days: 0 };
     v.total += r.net_sales;
+    v.gross += r.gross_sales || r.net_sales;
     v.days += 1;
     sums.set(k, v);
+    const t = totals.get(r.location_id) ?? { net: 0, gross: 0 };
+    t.net += r.net_sales;
+    t.gross += r.gross_sales || r.net_sales;
+    totals.set(r.location_id, t);
   }
   for (const id of locationIds) {
     sites[id] = Array.from({ length: 7 }, (_, dow) => {
       const v = sums.get(`${id}|${dow}`);
-      return v ? { avg: round2(v.total / v.days), days: v.days } : null;
+      return v ? { avg: round2(v.total / v.days), gross: round2(v.gross / v.days), days: v.days } : null;
     });
+    ratios[id] = netRatio(totals.get(id));
   }
-  return { weeks: FORECAST_WEEKS, from, to, sites };
+  return { weeks: FORECAST_WEEKS, from, to, sites, ratios };
 }
 
 // Rota publishing: editors change a draft (the shifts table, where removed marks a published shift deleted in the
@@ -59,9 +73,11 @@ export const LABOUR_TARGET_PCT = 30;
 export function registerRotaRoutes(router, db) {
   /**
    * Reporting → Rota costs: for a week, each site's rota cost against a labour budget of 30% of its planned net
-   * sales – its sales budget for the day (Rota → Sales budget) where one is set, otherwise its forecast (the average
-   * for that weekday over recent weeks, bank holidays left out). Uses the rota as it stands, including changes not
-   * yet published; ?published=1 uses what staff can see.
+   * sales. Sales are shown gross (what the business talks in): the sales budget for the day (Rota → Sales budget)
+   * where one is set, otherwise the forecast (the average for that weekday over recent weeks, bank holidays left
+   * out). Labour % and the labour budget use the net equivalent – a budget is turned into net with the site's own
+   * net-to-gross ratio. Uses the rota as it stands, including changes not yet published; ?published=1 uses what
+   * staff can see.
    */
   router.get('/reports/rota-costs', requirePerm('sales.view'), (req, res) => {
     const ws = weekStart(date(req.query.week, 'week') ?? today());
@@ -74,39 +90,41 @@ export function registerRotaRoutes(router, db) {
     const budgets = salesBudgets(db, ids, ws);
     const actual = salesByDay(db, ids, ws, addDays(ws, 6));
     const share = LABOUR_TARGET_PCT / 100;
-    // planned: the net sales planned for (the budget where set, else the forecast).
-    const line = (hours, cost, fc, sales, planned = fc, budgeted = false) => ({
-      hours: round2(hours),
-      cost: round2(cost),
-      forecast: fc === null ? null : round2(fc),
-      sales_budget: planned === null ? null : round2(planned),
-      budgeted,
-      budget: planned === null ? null : round2(planned * share),
-      difference: planned === null ? null : round2(cost - planned * share),
-      labour_pct: planned ? pct(cost, planned) : null,
-      actual_sales: sales === null ? null : round2(sales),
-    });
+    const MONEY = ['forecast', 'forecast_net', 'sales_budget', 'sales_budget_net', 'actual_sales', 'actual_net_sales'];
+    // x: { hours, cost, forecast, forecast_net, sales_budget, sales_budget_net, actual_sales, actual_net_sales, budgeted }
+    const line = (x) => {
+      const plan = x.sales_budget_net ?? null;
+      const out = { hours: round2(x.hours), cost: round2(x.cost), budgeted: !!x.budgeted };
+      for (const k of MONEY) out[k] = x[k] === null || x[k] === undefined ? null : round2(x[k]);
+      return { ...out,
+        budget: plan === null ? null : round2(plan * share),
+        difference: plan === null ? null : round2(x.cost - plan * share),
+        labour_pct: plan ? pct(x.cost, plan) : null };
+    };
+    // Adds up lines: money that's missing everywhere stays missing.
+    const addUp = (list) => {
+      const x = { hours: 0, cost: 0, budgeted: list.some((l) => l.budgeted) };
+      for (const l of list) { x.hours += l.hours; x.cost += l.cost; }
+      for (const k of MONEY) x[k] = list.some((l) => l[k] !== null) ? list.reduce((n, l) => n + (l[k] ?? 0), 0) : null;
+      return line(x);
+    };
     const sites = locations.map((l) => {
+      const ratio = forecast.ratios[l.id];
       const perDay = days.map((d, i) => {
         const r = rota.get(dayKey(l.id, d)) ?? { hours: 0, cost: 0 };
         const f = forecast.sites[l.id]?.[i];
         const b = budgets[l.id][i];
         const a = actual.get(dayKey(l.id, d));
-        return { date: d, bank_holiday: bankHoliday(d), ...line(r.hours, r.cost, f ? f.avg : null, a ? a.net_sales : null, b ?? (f ? f.avg : null), b !== null) };
+        return { date: d, bank_holiday: bankHoliday(d), ...line({
+          hours: r.hours, cost: r.cost,
+          forecast: f ? f.gross : null, forecast_net: f ? f.avg : null,
+          sales_budget: b ?? (f ? f.gross : null), sales_budget_net: b !== null ? b * ratio : f ? f.avg : null, budgeted: b !== null,
+          actual_sales: a ? a.gross_sales : null, actual_net_sales: a ? a.net_sales : null,
+        }) };
       });
-      const sum = (k) => perDay.reduce((n, x) => n + (x[k] ?? 0), 0);
-      const has = (k) => perDay.some((x) => x[k] !== null);
-      return { id: l.id, name: l.name, days: perDay,
-        ...line(sum('hours'), sum('cost'), has('forecast') ? sum('forecast') : null, has('actual_sales') ? sum('actual_sales') : null, has('sales_budget') ? sum('sales_budget') : null, perDay.some((x) => x.budgeted)) };
+      return { id: l.id, name: l.name, net_ratio: round2(ratio * 10000) / 10000, days: perDay, ...addUp(perDay) };
     });
-    const total = (k) => sites.reduce((n, x) => n + (x[k] ?? 0), 0);
-    const anyOf = (k) => sites.some((x) => x[k] !== null);
-    const byDay = days.map((d, i) => {
-      const t = (k) => sites.reduce((n, x) => n + (x.days[i][k] ?? 0), 0);
-      const w = (k) => sites.some((x) => x.days[i][k] !== null);
-      return { date: d, bank_holiday: bankHoliday(d),
-        ...line(t('hours'), t('cost'), w('forecast') ? t('forecast') : null, w('actual_sales') ? t('actual_sales') : null, w('sales_budget') ? t('sales_budget') : null, sites.some((x) => x.days[i].budgeted)) };
-    });
+    const byDay = days.map((d, i) => ({ date: d, bank_holiday: bankHoliday(d), ...addUp(sites.map((x) => x.days[i])) }));
     res.json({
       week: ws,
       target_pct: LABOUR_TARGET_PCT,
@@ -117,14 +135,14 @@ export function registerRotaRoutes(router, db) {
       unpublished: db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id IN (${ids.map(() => '?').join(', ')}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`).get(...ids, ws, addDays(ws, 6)).n,
       sites,
       days: byDay,
-      totals: line(total('hours'), total('cost'), anyOf('forecast') ? total('forecast') : null, anyOf('actual_sales') ? total('actual_sales') : null,
-        anyOf('sales_budget') ? total('sales_budget') : null, sites.some((x) => x.budgeted)),
+      totals: addUp(sites),
     });
   });
 
   /**
-   * Rota → Sales budget: for a week, each site's forecast net sales for each day (the guide, from recent weeks'
-   * averages) and the sales budget set for it. A budget overrides the forecast on the rota and in Rota costs.
+   * Rota → Sales budget: for a week, each site's forecast gross sales for each day (the guide, from recent weeks'
+   * averages) and the gross sales budget set for it. A budget overrides the forecast on the rota and in Rota costs;
+   * labour % uses its net equivalent (net_ratio × gross).
    */
   router.get('/sales-budgets', requirePerm('sales.view'), (req, res) => {
     const ws = weekStart(date(req.query.week, 'week') ?? today());
@@ -143,7 +161,9 @@ export function registerRotaRoutes(router, db) {
       target_pct: LABOUR_TARGET_PCT,
       sites: locations.map((l) => ({
         id: l.id, name: l.name,
-        forecast: (forecast.sites[l.id] ?? []).map((f) => (f ? f.avg : null)),
+        forecast: (forecast.sites[l.id] ?? []).map((f) => (f ? f.gross : null)),
+        forecast_net: (forecast.sites[l.id] ?? []).map((f) => (f ? f.avg : null)),
+        net_ratio: forecast.ratios[l.id],
         budget: budgets[l.id],
         updated_by: saved.find((x) => x.location_id === l.id)?.updated_by ?? null,
         updated_at: saved.find((x) => x.location_id === l.id)?.updated_at ?? null,
@@ -358,6 +378,7 @@ export function registerRotaRoutes(router, db) {
       money = days.map((d) => {
         // Across sites, labour % only counts sites that have sales that day (as on the Sales page).
         let net = null;
+        let gross = null;
         let plannedCost = 0;
         let workedCost = 0;
         for (const l of ids) {
@@ -366,11 +387,13 @@ export function registerRotaRoutes(router, db) {
           const siteNet = sales.get(k)?.net_sales;
           if (siteNet === undefined) continue;
           net = (net ?? 0) + siteNet;
+          gross = (gross ?? 0) + (sales.get(k)?.gross_sales ?? 0);
           workedCost += worked.get(k) ?? 0;
         }
         return {
           date: d,
           net_sales: net === null ? null : round2(net),
+          gross_sales: gross === null ? null : round2(gross),
           labour_cost: round2(plannedCost),
           worked_cost: workedCost,
           labour_pct: net === null || !workedCost ? null : pct(workedCost, net),
@@ -388,6 +411,7 @@ export function registerRotaRoutes(router, db) {
       days,
       daily_money: money,
       week_sales: manager ? round2(weekSales) : undefined,
+      week_gross_sales: manager ? round2((money ?? []).reduce((s, m) => s + (m.gross_sales ?? 0), 0)) : undefined,
       labour_pct: manager ? pct(weekWorked, weekSales) : undefined,
       staff,
       shifts,

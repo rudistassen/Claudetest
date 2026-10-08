@@ -172,7 +172,7 @@ export function wastageByDay(db, locationIds, from, to) {
   return new Map(rows.map((r) => [key(r.location_id, r.date), r.total]));
 }
 
-/** Each site's sales budget (net) for each day of a week: { siteId: [Mon … Sun amounts, null where none is set] }. */
+/** Each site's sales budget (gross) for each day of a week: { siteId: [Mon … Sun amounts, null where none is set] }. */
 export function salesBudgets(db, locationIds, weekStartDate) {
   const out = {};
   for (const id of locationIds) out[id] = Array(7).fill(null);

@@ -37,7 +37,8 @@ test('rota cost for the week against a 30% labour budget on forecast sales, by s
   const manager = await login('manager1@cafe.local');
   const site = manager.me.location_id;
   const week = weekStart(addDays(today(), 7));
-  // Eight weeks of history: £1,000 every day, so each day's forecast is £1,000 and its budget £300.
+  // Eight weeks of history: £1,000 net (£1,200 gross) every day, so each day's forecast is £1,200 gross, £1,000
+  // net, and its labour budget 30% of net, £300.
   db.prepare('DELETE FROM sales_daily WHERE location_id = ?').run(site);
   const ins = db.prepare('INSERT INTO sales_daily (location_id, date, net_sales, gross_sales, orders) VALUES (?, ?, 1000, 1200, 50)');
   for (let d = addDays(week, -56); d < week; d = addDays(d, 1)) ins.run(site, d);
@@ -48,14 +49,15 @@ test('rota cost for the week against a 30% labour budget on forecast sales, by s
   const s = r.sites[0];
   for (const d of s.days) {
     if (d.bank_holiday) continue;
-    assert.equal(d.forecast, 1000);
+    assert.equal(d.forecast, 1200);
+    assert.equal(d.forecast_net, 1000);
     assert.equal(d.budget, 300);
     close(d.difference, d.cost - 300);
   }
   close(s.cost, s.days.reduce((n, d) => n + d.cost, 0));
-  close(s.budget, s.forecast * 0.3);
+  close(s.budget, s.forecast_net * 0.3);
   close(s.difference, s.cost - s.budget);
-  assert.equal(s.labour_pct, Math.round((s.cost / s.forecast) * 10000) / 100);
+  assert.equal(s.labour_pct, Math.round((s.cost / s.forecast_net) * 10000) / 100, 'labour % of net sales');
   close(r.totals.cost, s.cost);
 
   // A new, unpublished shift counts on the planned rota but not the published one.
@@ -91,23 +93,24 @@ test('a sales budget for a day replaces the forecast on the rota and in rota cos
   const before = (await manager(`/sales-budgets?week=${week}`)).data;
   const mine = before.sites.find((x) => x.id === site);
   assert.deepEqual(mine.budget, [null, null, null, null, null, null, null]);
-  assert.ok(mine.forecast.every((f) => f === null || f === 1000));
+  assert.ok(mine.forecast.every((f) => f === null || f === 1200), 'forecast in gross');
+  assert.ok(Math.abs(mine.net_ratio - 1000 / 1200) < 1e-9);
 
-  // An event on the Saturday: budget £2,500 that day; the rest left to the forecast.
+  // An event on the Saturday: a gross budget of £3,000 that day (£2,500 net); the rest left to the forecast.
   const saturday = addDays(week, 5);
-  const budget = [null, null, null, null, null, 2500, null];
+  const budget = [null, null, null, null, null, 3000, null];
   assert.equal((await manager('/sales-budgets', { method: 'PUT', body: { week, sites: [{ id: site, budget }] } })).status, 200);
   assert.deepEqual((await manager(`/sales-budgets?week=${week}`)).data.sites.find((x) => x.id === site).budget, budget);
 
   const r = (await manager(`/reports/rota-costs?week=${week}&location_id=${site}`)).data;
   const sat = r.sites[0].days.find((d) => d.date === saturday);
-  assert.deepEqual([sat.forecast, sat.sales_budget, sat.budgeted, sat.budget], [1000, 2500, true, 750]);
+  assert.deepEqual([sat.forecast, sat.sales_budget, sat.sales_budget_net, sat.budgeted, sat.budget], [1200, 3000, 2500, true, 750], 'labour budget: 30% of £2,500 net');
   const mon = r.sites[0].days[0];
-  if (!mon.bank_holiday) assert.deepEqual([mon.sales_budget, mon.budgeted], [1000, false], 'no budget: the forecast');
+  if (!mon.bank_holiday) assert.deepEqual([mon.sales_budget, mon.sales_budget_net, mon.budgeted], [1200, 1000, false], 'no budget: the forecast');
   assert.equal(r.totals.budgeted, true);
 
   const rota = (await manager(`/rota?week=${week}&location_id=${site}`)).data;
-  assert.equal(rota.sales_budget[site][5], 2500);
+  assert.equal(rota.sales_budget[site][5], 3000);
 
   // Clearing it goes back to the forecast; staff can't see or set budgets.
   await manager('/sales-budgets', { method: 'PUT', body: { week, sites: [{ id: site, budget: [null, null, null, null, null, null, null] }] } });
