@@ -20,10 +20,19 @@ export function registerRecipeRoutes(router, db) {
     res.json(loadRecipes(db, { activeOnly: !can(req.user, 'recipes.edit') && !can(req.user, 'recipes.costs') }).map((r) => forViewer(req, r)));
   });
 
-  // Square items seen in synced sales, with the recipe each is linked to.
+  // Square items: everything in the Square Items library (with its SKU, price and category) and anything else seen in
+  // synced sales, best sellers first, with the recipe each is linked to.
   router.get('/recipes/square-items', requirePerm('recipes.edit'), (_req, res) => {
-    const items = db.prepare(`SELECT si.catalog_object_id, si.name, si.variation_name, SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net_sales
-      FROM sales_items si WHERE si.date >= ? GROUP BY si.item_key ORDER BY net_sales DESC`).all(addDays(today(), -90));
+    const sold = db.prepare(`SELECT si.catalog_object_id, si.name, si.variation_name, SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net_sales
+      FROM sales_items si WHERE si.date >= ? GROUP BY si.item_key`).all(addDays(today(), -90));
+    const soldById = new Map(sold.filter((i) => i.catalog_object_id).map((i) => [i.catalog_object_id, i]));
+    const catalog = db.prepare('SELECT * FROM square_catalog ORDER BY item_name, variation_name').all();
+    const inCatalog = new Set(catalog.map((c) => c.variation_id));
+    const items = [
+      ...catalog.map((c) => ({ catalog_object_id: c.variation_id, name: c.item_name, variation_name: c.variation_name, sku: c.sku, price: c.price, category: c.category_name,
+        quantity: soldById.get(c.variation_id)?.quantity ?? 0, net_sales: soldById.get(c.variation_id)?.net_sales ?? 0 })),
+      ...sold.filter((i) => !i.catalog_object_id || !inCatalog.has(i.catalog_object_id)).map((i) => ({ ...i, sku: null, price: null, category: null })),
+    ].sort((a, b) => b.net_sales - a.net_sales || a.name.localeCompare(b.name));
     const recipes = db.prepare(`SELECT id, name, square_catalog_object_id, square_item_name FROM recipes WHERE active = 1 AND kind = 'sold'`).all();
     res.json(items.map((i) => {
       const linked = recipes.find((r) => (r.square_catalog_object_id
@@ -122,6 +131,7 @@ export function registerRecipeRoutes(router, db) {
       shelf_life: str(b.shelf_life, 'shelf_life', { max: 200 }),
       square_catalog_object_id: prep ? null : str(b.square_catalog_object_id, 'square_catalog_object_id', { max: 64 }),
       square_item_name: prep ? null : str(b.square_item_name, 'square_item_name', { max: 150 }),
+      sku: prep ? null : str(b.sku, 'sku', { max: 100 }),
       active: b.active === undefined ? 1 : bool(b.active),
     };
     // Each line is a product or a prepped recipe.
@@ -154,7 +164,7 @@ export function registerRecipeRoutes(router, db) {
       .some((l) => l.sub_recipe_id === targetId || usesRecipe(l.sub_recipe_id, targetId, seen));
   }
   const cols = ['kind', 'yield_quantity', 'yield_unit', 'in_stock_takes', 'name', 'category', 'description', 'method', 'portions', 'selling_price', 'vat_rated', 'extra_allergens', 'may_contain',
-    'shelf_life', 'square_catalog_object_id', 'square_item_name', 'active'];
+    'shelf_life', 'square_catalog_object_id', 'square_item_name', 'sku', 'active'];
 
   function saveIngredients(recipeId, ingredients) {
     db.prepare('DELETE FROM recipe_ingredients WHERE recipe_id = ?').run(recipeId);

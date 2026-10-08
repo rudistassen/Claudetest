@@ -325,7 +325,8 @@ async function fetchLabour(client, { locationIds, startAt, endAt, tz }) {
 
 /**
  * Saves the Square catalogue's items, each variation with its item's category (its reporting category, else its
- * first category), so item sales can be grouped by category (Reporting → Par levels). Returns how many variations.
+ * first category), SKU and price, so item sales can be grouped by category (Reporting → Par levels) and a sold item
+ * linked to Square can be filled in from it. Returns how many variations.
  */
 export async function syncCatalog(db, client) {
   const categories = new Map();
@@ -337,11 +338,15 @@ export async function syncCatalog(db, client) {
   const rows = items.flatMap((it) => {
     const d = it.item_data ?? {};
     const categoryId = d.reporting_category?.id ?? d.categories?.[0]?.id ?? d.category_id ?? null;
-    return (d.variations ?? []).map((v) => [v.id, it.id, d.name ?? '', v.item_variation_data?.name ?? null, categoryId, categories.get(categoryId) || null]);
+    return (d.variations ?? []).map((v) => {
+      const vd = v.item_variation_data ?? {};
+      const price = vd.pricing_type === 'VARIABLE_PRICING' || vd.price_money?.amount === undefined ? null : Number(vd.price_money.amount) / 100;
+      return [v.id, it.id, d.name ?? '', vd.name ?? null, categoryId, categories.get(categoryId) || null, vd.sku || null, price];
+    });
   });
   tx(db, () => {
     db.prepare('DELETE FROM square_catalog').run();
-    const ins = db.prepare('INSERT OR REPLACE INTO square_catalog (variation_id, item_id, item_name, variation_name, category_id, category_name) VALUES (?, ?, ?, ?, ?, ?)');
+    const ins = db.prepare('INSERT OR REPLACE INTO square_catalog (variation_id, item_id, item_name, variation_name, category_id, category_name, sku, price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     for (const r of rows) ins.run(...r);
     db.prepare(`INSERT INTO settings (key, value) VALUES ('square_catalog_synced_at', datetime('now')) ON CONFLICT (key) DO UPDATE SET value = excluded.value`).run();
   });

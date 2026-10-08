@@ -960,6 +960,10 @@ CREATE TABLE IF NOT EXISTS user_areas (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // Square catalogue SKUs and prices (to fill in a sold item linked to Square), and a sold item's SKU.
+  ['square_catalog', 'sku', 'ALTER TABLE square_catalog ADD COLUMN sku TEXT'],
+  ['square_catalog', 'price', 'ALTER TABLE square_catalog ADD COLUMN price REAL'],
+  ['recipes', 'sku', 'ALTER TABLE recipes ADD COLUMN sku TEXT'],
   // The sales dates a par level report's averages came from.
   ['par_reports', 'sales_from', 'ALTER TABLE par_reports ADD COLUMN sales_from TEXT'],
   ['par_reports', 'sales_to', 'ALTER TABLE par_reports ADD COLUMN sales_to TEXT'],

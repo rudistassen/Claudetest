@@ -150,7 +150,7 @@ export async function renderRecipe(ctx) {
         ${r.method ? `<div class="method">${esc(r.method)}</div>` : '<p class="muted">No method written yet.</p>'}
         ${r.shelf_life ? `<p><strong>Shelf life / storage:</strong> ${esc(r.shelf_life)}</p>` : ''}
         ${r.description ? `<p class="muted">${esc(r.description)}</p>` : ''}
-        ${costs && !prep ? `<p class="small muted">Square: ${r.square_catalog_object_id || r.square_item_name ? `linked${r.square_item_name ? ` to “${esc(r.square_item_name)}”` : ''}` : 'not linked – sales won’t count towards menu performance'}</p>` : ''}
+        ${costs && !prep ? `<p class="small muted">Square: ${r.square_catalog_object_id || r.square_item_name ? `linked${r.square_item_name ? ` to “${esc(r.square_item_name)}”` : ''}` : 'not linked – sales won’t count towards menu performance'}${r.sku ? ` · SKU ${esc(r.sku)}` : ''}</p>` : ''}
       </section>
     </div>`;
 }
@@ -158,6 +158,9 @@ export async function renderRecipe(ctx) {
 // --- Editor (admin) ---
 
 export const renderPrepEdit = (ctx) => renderEdit(ctx, 'prep');
+
+// A Square item's name, with its size when it has one that isn't the default ("Latte (Large)").
+const squareName = (i) => `${i.name}${i.variation_name && i.variation_name !== 'Regular' ? ` (${i.variation_name})` : ''}`;
 
 export async function renderEdit(ctx, newKind = 'sold') {
   const { el, params, stale } = ctx;
@@ -188,8 +191,10 @@ export async function renderEdit(ctx, newKind = 'sold') {
   const squareOptions = squareItems.map((i) => {
     const value = i.catalog_object_id ? `id:${i.catalog_object_id}` : `name:${i.name}`;
     const taken = i.recipe && i.recipe.id !== editing ? ` – linked to ${i.recipe.name}` : '';
-    return [value, `${i.name}${i.variation_name && i.variation_name !== 'Regular' ? ` (${i.variation_name})` : ''} · ${qty(i.quantity)} sold in 90 days${taken}`];
+    const bits = [i.price !== null && i.price !== undefined ? money(i.price) : '', i.sku ? `SKU ${i.sku}` : '', i.quantity ? `${qty(i.quantity)} sold in 90 days` : 'none sold in 90 days'].filter(Boolean);
+    return [value, `${squareName(i)} · ${bits.join(' · ')}${taken}`];
   });
+  const squareByValue = new Map(squareItems.map((i) => [i.catalog_object_id ? `id:${i.catalog_object_id}` : `name:${i.name}`, i]));
   if (currentSquare && !squareOptions.some(([v]) => v === currentSquare)) squareOptions.unshift([currentSquare, r.square_item_name ?? r.square_catalog_object_id]);
 
   // An ingredient is a product ("p:12") or a prepped recipe ("r:5"), picked by typing part of its name, supplier or
@@ -231,8 +236,13 @@ export async function renderEdit(ctx, newKind = 'sold') {
         ${prep ? '' : '<div class="kpi" id="k-gp-box"><span>GP after VAT</span><strong id="k-gp">–</strong></div>'}
         <div class="kpi"><span>Allergens (from ingredients)</span><strong id="k-allergens" class="small">–</strong></div>
       </div>
+      ${prep ? '' : `<section class="card recipe-square">
+        <h2>Square</h2>
+        ${field('Square menu item', `<select name="square" id="recipe-square"><option value="">Not linked</option>${squareOptions.map(([v, l]) => `<option value="${esc(v)}" ${v === currentSquare ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`,
+          { hint: squareItems.length ? 'Pick the item from Square to fill in its name, SKU, selling price and category. Linking also counts its Square sales towards menu performance and ingredient usage.' : 'Import Square sales first (Setup → Square) to choose an item' })}
+      </section>`}
       <section class="card">
-        <div class="row">${field('Name', input('name', r.name, `required id="recipe-name" placeholder="${prep ? 'e.g. Tomato sauce' : 'e.g. Ham & cheese toastie'}"`))}${field('Category', input('category', r.category, `list="recipe-cats" id="recipe-category" placeholder="${prep ? 'e.g. Sauces' : 'e.g. Hot food'}"`))}</div>
+        <div class="row">${field('Name', input('name', r.name, `required id="recipe-name" placeholder="${prep ? 'e.g. Tomato sauce' : 'e.g. Ham & cheese toastie'}"`))}${prep ? '' : field('SKU', input('sku', r.sku, 'id="recipe-sku" maxlength="100" placeholder="From Square"'))}${field('Category', input('category', r.category, `list="recipe-cats" id="recipe-category" placeholder="${prep ? 'e.g. Sauces' : 'e.g. Hot food'}"`))}</div>
         <datalist id="recipe-cats">${categories.map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
         ${prep ? `<div class="row">
           ${field('Each batch makes', input('yield_quantity', r.yield_quantity, 'type="number" min="0.0001" step="any" required id="recipe-yield" placeholder="e.g. 2000"'), { hint: 'Weigh or measure what one batch actually makes, after cooking' })}
@@ -269,9 +279,6 @@ export async function renderEdit(ctx, newKind = 'sold') {
         <label class="check-row"><input type="checkbox" name="in_stock_takes" ${r.in_stock_takes === 0 ? '' : 'checked'}>
           <span><strong>Count in stock takes</strong><small>Adds it to each site’s stock take, counted in ${esc(r.yield_unit ?? 'its yield unit')} and valued at its cost per unit.</small></span></label>
         ${field('Active', `<input type="checkbox" name="active" ${r.active ? 'checked' : ''}>`, { className: 'field-inline' })}</section>` : `<section class="card">
-        <h2>Square</h2>
-        ${field('Square menu item', `<select name="square" id="recipe-square"><option value="">Not linked</option>${squareOptions.map(([v, l]) => `<option value="${esc(v)}" ${v === currentSquare ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`,
-          { hint: squareItems.length ? 'Linking counts this item’s Square sales towards menu performance and ingredient usage' : 'Import Square sales first (Setup → Square) to choose an item' })}
         ${field('Active', `<input type="checkbox" name="active" ${r.active ? 'checked' : ''}>`, { className: 'field-inline' })}
       </section>`}
       <p class="form-error" hidden></p>
@@ -280,6 +287,19 @@ export async function renderEdit(ctx, newKind = 'sold') {
 
   const form = el.querySelector('#recipe-form');
   const body = el.querySelector('#ing-body');
+  // Picking a Square item fills in its name, SKU, selling price and category from Square.
+  form.querySelector('#recipe-square')?.addEventListener('change', (e) => {
+    const i = squareByValue.get(e.target.value);
+    if (!i) return;
+    const filled = [];
+    const set = (name, value, label) => { if (value === null || value === undefined || value === '') return; form[name].value = value; filled.push(label); };
+    set('name', squareName(i), 'name');
+    set('sku', i.sku, 'SKU');
+    set('selling_price', i.price, 'selling price');
+    set('category', i.category, 'category');
+    form.selling_price.dispatchEvent(new Event('input', { bubbles: true }));
+    toast(`Filled in the ${filled.join(', ').replace(/, ([^,]*)$/, ' and $1')} from Square`);
+  });
   const update = () => {
     let batch = 0;
     const allergens = new Set();
@@ -457,6 +477,7 @@ export async function renderEdit(ctx, newKind = 'sold') {
       extra_allergens: checked('extra_allergens'),
       may_contain: checked('may_contain'),
       square_catalog_object_id: square.startsWith('id:') ? square.slice(3) : null,
+      sku: prep ? null : form.sku.value || null,
       square_item_name: square.startsWith('name:') ? square.slice(5) : square ? squareItems.find((i) => `id:${i.catalog_object_id}` === square)?.name ?? r.square_item_name ?? null : null,
       active: form.active.checked,
       ingredients: [...body.querySelectorAll('.ing-row')]

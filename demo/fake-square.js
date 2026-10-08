@@ -24,11 +24,11 @@ const CATEGORY_OF = { Coffee: ['Flat white', 'Latte', 'Cappuccino', 'Americano',
 const catId = (c) => `CATG_${c.replace(/\W/g, '').toUpperCase()}`;
 function catalog() {
   const cats = Object.keys(CATEGORY_OF).map((c) => ({ type: 'CATEGORY', id: catId(c), category_data: { name: c } }));
-  const items = MENU.map(([name]) => {
+  const items = MENU.map(([name, price], i) => {
     const cat = Object.keys(CATEGORY_OF).find((c) => CATEGORY_OF[c].includes(name));
     const key = name.replace(/\W/g, '').toUpperCase();
     return { type: 'ITEM', id: `ITEM_${key}`, item_data: { name, reporting_category: { id: catId(cat) }, categories: [{ id: catId(cat) }],
-      variations: [{ type: 'ITEM_VARIATION', id: `CAT_${key}`, item_variation_data: { name: 'Regular' } }] } };
+      variations: [{ type: 'ITEM_VARIATION', id: `CAT_${key}`, item_variation_data: { name: 'Regular', sku: `BB-${String(101 + i)}`, pricing_type: 'FIXED_PRICING', price_money: { amount: price, currency: 'GBP' } } }] } };
   });
   return [...cats, ...items];
 }
