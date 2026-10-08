@@ -971,6 +971,8 @@ CREATE TABLE IF NOT EXISTS user_areas (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // Staff on paid breaks don't clock breaks in Square, so they're never flagged for a missed or short break.
+  ['users', 'paid_breaks', 'ALTER TABLE users ADD COLUMN paid_breaks INTEGER NOT NULL DEFAULT 0'],
   // Square catalogue SKUs and prices (to fill in a sold item linked to Square), and a sold item's SKU.
   ['square_catalog', 'sku', 'ALTER TABLE square_catalog ADD COLUMN sku TEXT'],
   ['square_catalog', 'price', 'ALTER TABLE square_catalog ADD COLUMN price REAL'],

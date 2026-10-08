@@ -49,3 +49,10 @@ test('Square timecards keep their breaks', () => {
   assert.equal(t.unpaid_break_minutes, 30);
   assert.deepEqual(t.breaks.map((b) => [b.is_paid, b.name]), [[true, 'Tea'], [false, null]]);
 });
+
+test('someone on paid breaks is never flagged for a missed or short break', () => {
+  const paid = { ...card(9), paid_breaks: 1 };
+  assert.equal(breakInfo(paid, []).break_flag, null);
+  assert.equal(breakInfo(paid, [brk(3, 3.1)]).break_flag, null);
+  assert.equal(breakInfo(card(9), []).break_flag, 'none', 'others still are');
+});

@@ -27,7 +27,8 @@ export function breaksFor(db, timecardIds) {
 /**
  * Break details for one clock-in. card needs start and end (ms; an open clock-in ends at "now") and end_at (null
  * while still clocked in); breaks are its timecard_breaks rows.
- * flag: 'none' (worked over 6 hours with no break), 'short' (no single break of 20 minutes or more) or null.
+ * flag: 'none' (worked over 6 hours with no break), 'short' (no single break of 20 minutes or more) or null – always
+ * null for someone on paid breaks (card.paid_breaks), who doesn't clock breaks in Square.
  * breaks_known is false for clock-ins synced before break details were kept (re-syncing those days fills them in).
  */
 export function breakInfo(card, breaks = [], now = Date.now()) {
@@ -53,7 +54,7 @@ export function breakInfo(card, breaks = [], now = Date.now()) {
   const longest = list.reduce((m, b) => Math.max(m, b.minutes), 0);
   const spanHours = (card.end - card.start) / 3600000;
   let flag = null;
-  if (spanHours > BREAK_RULE.shiftHours) {
+  if (spanHours > BREAK_RULE.shiftHours && !card.paid_breaks) {
     if (!list.length) flag = 'none';
     // A break still running may yet reach 20 minutes, so it isn't called short until it ends.
     else if (longest < BREAK_RULE.breakMinutes && !list.some((b) => b.running)) flag = 'short';

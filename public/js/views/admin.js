@@ -266,6 +266,8 @@ function staffEditor(state, rows, perms, settings = {}) {
       ${u.id ? inviteBox(u) : ''}
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password (optional)', input('password', '', 'type="password" minlength="8" autocomplete="new-password"'), { hint: u.id ? 'At least 8 characters' : 'Leave blank and send them an invite, so they choose their own' })}
       ${activeBox(u.active)}
+      <label class="check-row"><input type="checkbox" name="paid_breaks" ${u.paid_breaks ? 'checked' : ''}>
+        <span><strong>Paid breaks</strong><small>They don’t clock their breaks in Square, so no missed or short break warnings show for them on any report</small></span></label>
       </div>
       <div data-staff-panel="perms" hidden>${permsPanel(u)}</div>`;
   const save = async (v, row, formEl) => {

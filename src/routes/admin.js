@@ -115,6 +115,8 @@ export function registerAdminRoutes(router, db, square = null) {
       rota_group: b.rota_group === undefined ? existing?.rota_group ?? null : str(b.rota_group, 'rota_group', { max: 50 }),
       hourly_rate: num(b.hourly_rate, 'hourly_rate', { min: 0 }) ?? 0,
       active: b.active === undefined ? 1 : bool(b.active),
+      // Paid breaks: they don't clock breaks in Square, so no break warnings for them. Left as it is when not sent.
+      paid_breaks: b.paid_breaks === undefined ? existing?.paid_breaks ?? 0 : bool(b.paid_breaks),
     };
     const access = b.permission_set_id ?? null;
     let set = null;
@@ -204,9 +206,9 @@ export function registerAdminRoutes(router, db, square = null) {
     // No password: they choose their own from an invite.
     const password = req.body.password ? validatePassword(req.body.password) : randomBytes(24).toString('hex');
     const userId = tx(db, () => {
-      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, rota_group, hourly_rate, active, permission_set_id, custom_permissions, all_sites)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites);
+      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, rota_group, hourly_rate, active, permission_set_id, custom_permissions, all_sites, paid_breaks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, u.paid_breaks);
       saveSites(r.lastInsertRowid, u);
       return r.lastInsertRowid;
     });
@@ -223,8 +225,8 @@ export function registerAdminRoutes(router, db, square = null) {
       throw badRequest('You cannot change your own access or deactivate yourself');
     }
     tx(db, () => {
-      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, custom_permissions = ?, all_sites = ? WHERE id = ?`)
-        .run(u.name, u.email, u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, userId);
+      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, custom_permissions = ?, all_sites = ?, paid_breaks = ? WHERE id = ?`)
+        .run(u.name, u.email, u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, u.paid_breaks, userId);
       saveSites(userId, u);
     });
     if (req.body.password) {

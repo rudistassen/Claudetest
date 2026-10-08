@@ -55,7 +55,7 @@ export function labourByDay(db, locationIds, from, to, opts = {}) {
  * still open counts up to `now`. Cost uses Square's wage for the job, else the person's hourly rate in the app.
  */
 export function timecardsFor(db, locationIds, from, to, now = Date.now()) {
-  return db.prepare(`SELECT t.*, COALESCE(u.name, m.name, 'Unknown team member') AS name, u.hourly_rate AS user_rate
+  return db.prepare(`SELECT t.*, COALESCE(u.name, m.name, 'Unknown team member') AS name, u.hourly_rate AS user_rate, COALESCE(u.paid_breaks, 0) AS paid_breaks
     FROM timecards t LEFT JOIN users u ON u.id = t.user_id LEFT JOIN square_team_members m ON m.id = t.team_member_id
     WHERE t.date BETWEEN ? AND ? AND t.location_id IN (${locationIds.map(() => '?').join(', ')}) ORDER BY t.start_at`)
     .all(from, to, ...locationIds)

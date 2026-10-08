@@ -25,7 +25,7 @@ export function validatePassword(password) {
   return p;
 }
 
-export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, u.rota_group';
+export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, u.rota_group, u.paid_breaks';
 
 // Joins a user's permission set, or the built-in set for their role when they don't have one.
 export const ACCESS_JOIN = `LEFT JOIN permission_sets ps ON ps.id = u.permission_set_id
