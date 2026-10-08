@@ -141,10 +141,10 @@ function navGroups() {
     [null, [['dashboard', 'Dashboard', '▦', ['dashboard.view']], ['mybrew', 'My Atlas', '◉']]],
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
-      ['rota/budget', 'Sales budget', '£', ['sales.view']],
-      ['rota/requests', 'Requests', '✉', ['rota.publish', 'leave.manage']],
       ['timeoff', 'Time off', '☀'],
       ['availability', 'My availability', '⏱'],
+      ['rota/budget', 'Sales budget', '£', ['sales.view']],
+      ['rota/requests', 'Requests', '✉', ['rota.publish', 'leave.manage']],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
     ]],
     ['Trail', [
@@ -321,11 +321,16 @@ function hubOf(path) {
 }
 
 // Tiles shown under a "Set up" heading at the end of their section's tiles.
+// Tiles shown under an "Admin" heading after the rest of the Rota section's tiles (for managers).
 const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories']);
+const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log']);
 const hubTiles = (items, active) => {
-  const main = items.filter(([p]) => !SETUP_TILES.has(p));
-  const setup = items.filter(([p]) => SETUP_TILES.has(p));
-  return `${main.map((i) => hubTile(i, active)).join('')}${setup.length ? `<p class="hub-group-head">Set up</p>${setup.map((i) => hubTile(i, active)).join('')}` : ''}`;
+  const main = items.filter(([p]) => !SETUP_TILES.has(p) && !ADMIN_TILES.has(p));
+  const group = (title, set) => {
+    const list = items.filter(([p]) => set.has(p));
+    return list.length ? `<p class="hub-group-head">${title}</p>${list.map((i) => hubTile(i, active)).join('')}` : '';
+  };
+  return `${main.map((i) => hubTile(i, active)).join('')}${group('Admin', ADMIN_TILES)}${group('Set up', SETUP_TILES)}`;
 };
 
 // A section's page of tiles (see HUBS).
