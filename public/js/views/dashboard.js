@@ -380,6 +380,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         <small class="kpi-vs">${labourVersus(labourPct, labourLastWeek)}</small></div>
       <section class="card dash-hourly">
         <header class="dash-hourly-head"><h2>Gross sales by hour</h2>
+          ${locs.length > 1 ? `<select id="hourly-site" class="hourly-site" aria-label="Site for the chart"><option value="">All sites</option>${locs.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select>` : ''}
           <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>${shown.isToday ? 'Today' : esc(dayWord())}</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week</span></div></header>
         <div id="hourly-chart" class="chart-box"><div class="loading">Loading…</div></div>
       </section>
@@ -442,15 +443,32 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   }).catch(() => {});
   // Gross sales by hour: today next to the same weekday last week.
   const chartBox = el.querySelector('#hourly-chart');
-  if (chartBox) {
-    api(`/trading/hourly-compare?date=${d0}`).then((h) => {
-      if (stale() || !chartBox.isConnected) return;
-      if (!h.hours.length) { chartBox.innerHTML = `<p class="muted small">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}.</p>`; return; }
+  // A site can be picked for the chart (remembered in this browser); otherwise it's every site shown.
+  const siteBox = el.querySelector('#hourly-site');
+  const SITE_KEY = 'atlas:dash-hourly-site';
+  if (siteBox) {
+    let saved = '';
+    try { saved = localStorage.getItem(SITE_KEY) ?? ''; } catch { /* storage unavailable */ }
+    if (locs.some((l) => String(l.id) === saved)) siteBox.value = saved;
+    siteBox.addEventListener('change', () => {
+      try { localStorage.setItem(SITE_KEY, siteBox.value); } catch { /* storage unavailable */ }
+      loadChart();
+    });
+  }
+  let chartSeq = 0;
+  const loadChart = () => {
+    const seq = ++chartSeq;
+    const site = siteBox?.value || '';
+    chartBox.innerHTML = '<div class="loading">Loading…</div>';
+    el.querySelector('.dash-hourly .legend-open')?.remove();
+    api(`/trading/hourly-compare?date=${d0}${site ? `&location_id=${site}` : ''}`).then((h) => {
+      if (stale() || !chartBox.isConnected || seq !== chartSeq) return;
+      if (!h.hours.length) { chartBox.innerHTML = `<p class="muted small">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}${site ? ' at this site' : ''}.</p>`; return; }
       const hh = (n) => String(n).padStart(2, '0');
       const whole = (v) => (v >= 1000 ? `£${(v / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })}k` : `£${Math.round(v)}`);
       // Open (unpaid) orders show in orange on top of today's bars, and get a legend entry while there are any.
       if (h.hours.some((x) => x.open > 0)) {
-        el.querySelector('.dash-hourly .chart-legend')?.insertAdjacentHTML('beforeend', '<span><i class="chart-legend-bar" style="background:var(--open-bar)"></i>Open orders</span>');
+        el.querySelector('.dash-hourly .chart-legend')?.insertAdjacentHTML('beforeend', '<span class="legend-open"><i class="chart-legend-bar" style="background:var(--open-bar)"></i>Open orders</span>');
       }
       pairedBarChart(chartBox, {
         data: h.hours,
@@ -463,10 +481,11 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         fmt: money,
         fmtAxis: whole,
         height: 190,
-        ariaLabel: 'Gross sales by hour, today and the same day last week',
+        ariaLabel: `Gross sales by hour${site ? ` at ${siteBox.selectedOptions[0].textContent}` : ''}, today and the same day last week`,
       });
     }).catch(() => { if (chartBox.isConnected) chartBox.innerHTML = '<p class="muted small">Couldn’t load the hourly chart.</p>'; });
-  }
+  };
+  if (chartBox) loadChart();
   wireClockInActions(el, { state, rerender });
   // Tapping a name opens that clock-in's timecard (from the site cards, Who's in, or the Clocked in list).
   const openTimecard = (id) => {
