@@ -1,7 +1,7 @@
 // Atlas's service worker: makes the app installable and quick to open. Everything is fetched fresh from the
 // server first, so updates show straight away; the saved copy is only used when there's no connection.
 // Data (/api) is never saved here.
-const CACHE = 'atlas-v38';
+const CACHE = 'atlas-v39';
 const SHELL = ['/', '/css/styles.css', '/js/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/img/atlas.svg'];
 
 self.addEventListener('install', (e) => {
@@ -56,9 +56,12 @@ self.addEventListener('notificationclick', (e) => {
   e.waitUntil((async () => {
     const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const here = open.find((c) => new URL(c.url).origin === self.location.origin);
+    // Atlas already open (often in the background, on whatever page it was left on): bring it up and tell it which
+    // page to show. (Navigating it from here doesn't work reliably on phones – it can just come back on the old page.)
     if (here) {
-      await here.focus();
-      return here.navigate ? here.navigate(url).catch(() => here.postMessage({ type: 'open', url })) : here.postMessage({ type: 'open', url });
+      await here.focus().catch(() => {});
+      here.postMessage({ type: 'open', url });
+      return;
     }
     return self.clients.openWindow(url);
   })());

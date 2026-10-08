@@ -4,6 +4,7 @@ import { install, installState, setUpInstall } from './install.js';
 import * as admin from './views/admin.js';
 import * as breaks from './views/breaks.js';
 import * as rotalog from './views/rotalog.js';
+import * as inbox from './views/inbox.js';
 import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
 import * as openorders from './views/openorders.js';
@@ -111,6 +112,7 @@ const ROUTES = [
   [/^admin\/xero$/, xeroView.render, 'admin'],
   [/^admin\/payment-links$/, paymentlinks.render, ['payments.send']],
   [/^mybrew$/, mybrew.renderMyBrew],
+  [/^notifications$/, inbox.render],
   [/^admin\/news$/, mybrew.renderNewsSetup, ['news.manage']],
   [/^admin\/documents$/, mybrew.renderDocumentsSetup, ['news.manage']],
   [/^invoices$/, invoices.renderList, ['orders.manage']],
@@ -407,6 +409,7 @@ function renderShell() {
           <p class="topnav-heading">${esc(state.user.name)}</p>
           <div class="topnav-links">
             <a href="#/account" class="${path === 'account' ? 'active' : ''}"><span class="nav-icon">☺</span><span class="nav-label">My account</span></a>
+            <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span></a>
             <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
             <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
             <a href="#" id="logout" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>

@@ -210,6 +210,7 @@ export async function renderMyBrew(ctx) {
   el.innerHTML = `
     <div class="page-head">
       <div><h1>My Atlas</h1><p class="muted my-greeting">${greeting()}, ${esc(firstName(u.name))} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
+      <a class="btn mb-inbox" href="#/notifications" aria-label="Notifications">🔔 Notifications<span class="nav-badge" id="mb-inbox-count" hidden></span></a>
     </div>
     <div class="mb-pills" role="group" aria-label="Show">
       ${[['all', 'All'], ['shifts', 'Shifts'], ['tasks', 'My tasks'], hasTraining ? ['training', 'My training'] : null, ['news', 'Newsfeed']].filter(Boolean).map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
@@ -260,6 +261,10 @@ export async function renderMyBrew(ctx) {
         <section class="card mb-push" id="mb-push" data-mb="all"></section>
     </div>`;
   renderNotifications(el.querySelector('#mb-push'), { isAdmin: state.isAdmin });
+  api('/notifications').then(({ unread }) => {
+    const badge = el.querySelector('#mb-inbox-count');
+    if (badge && unread) { badge.textContent = unread > 99 ? '99+' : String(unread); badge.hidden = false; }
+  }).catch(() => {});
 
   wireDrops(el, drops, () => ctx.rerender());
   // All / Shifts / News: shows just those sections.

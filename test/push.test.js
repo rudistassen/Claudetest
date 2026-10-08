@@ -75,7 +75,7 @@ test('people turn notifications on, choose kinds, and get the right ones', async
   await settle();
   const pub = take('https://push.example/staff');
   assert.deepEqual(pub.map((x) => x.kind), ['shift_changed']);
-  assert.match(pub[0].url, new RegExp(`week=${week}`));
+  assert.match(pub[0].page, new RegExp(`week=${week}`));
   await admin('/rota/publish', { method: 'POST', body: { location_id: site, week } });
   await settle();
   assert.equal(take('https://push.example/staff').length, 0);
@@ -156,11 +156,30 @@ test('new job applications and events enquiries reach whoever looks after them',
   const app = take('https://push.example/admin').find((x) => x.kind === 'application');
   assert.ok(app);
   assert.match(app.body, /Ana Lopez/);
-  assert.match(app.url, /people\/recruitment\/candidates\/\d+/);
+  assert.match(app.page, /people\/recruitment\/candidates\/\d+/);
   const events = memoryMailbox([{ id: 'ev1', subject: 'Birthday party for 30', from: 'sam@example.com', fromName: 'Sam Party', receivedAt: new Date().toISOString(), body: 'Can we book your space?' }], 'events@cafe.example');
   await checkEvents(db, { mailbox: events });
   await settle();
   const enq = take('https://push.example/admin').find((x) => x.kind === 'enquiry');
   assert.ok(enq);
   assert.match(enq.body, /Sam Party/);
+});
+
+test('notifications are kept on each person’s Notifications page, and a tap opens it', async () => {
+  const staff = await login('staff1@cafe.local');
+  await staff('/push/subscribe', { method: 'POST', body: sub('https://push.example/inbox') });
+  take('');
+  const sentTest = await staff('/push/test', { method: 'POST' });
+  assert.ok(sentTest.data.sent >= 1);
+  const [msg] = take('https://push.example/inbox');
+  const box = (await staff('/notifications')).data;
+  assert.ok(box.unread >= 1);
+  const kept = box.items[0];
+  assert.equal(kept.title, 'Atlas notifications are on');
+  assert.equal(kept.read_at, null);
+  assert.equal(msg.url, `/#/notifications?n=${kept.id}`, 'tapping opens the Notifications page at that one');
+  await staff('/notifications/read', { method: 'POST' });
+  assert.equal((await staff('/notifications')).data.unread, 0);
+  const other = await login('staff1-2@cafe.local');
+  assert.ok(!(await other('/notifications')).data.items.some((n) => n.id === kept.id), 'only your own');
 });

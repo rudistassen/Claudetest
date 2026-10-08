@@ -2126,3 +2126,18 @@ body.rota-pasting .rota td.editable:hover { box-shadow: inset 0 0 0 2px var(--br
 .pd-fab-menu small { grid-column: 2; font-weight: 400; color: var(--muted); }
 .pd-fab-scrim { position: fixed; inset: 0; z-index: 33; background: rgba(0, 0, 0, 0.12); }
 .pd-fab-scrim[hidden] { display: none; }
+
+/* Notifications page */
+.mb-inbox { position: relative; display: inline-flex; align-items: center; gap: 0.35rem; }
+.mb-inbox .nav-badge { position: static; margin-left: 0.2rem; }
+.inbox { list-style: none; margin: 0 0 1rem; padding: 0; }
+.inbox-item { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.85rem 1rem; border-top: 1px solid var(--border); }
+.inbox-item:first-child { border-top: 0; }
+.inbox-item.is-new { background: color-mix(in srgb, var(--brand) 6%, var(--surface)); }
+.inbox-item.is-picked { box-shadow: inset 4px 0 0 var(--brand-deep); }
+.inbox-icon { flex: none; display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--surface-2); font-size: 1.15rem; }
+.inbox-text { flex: 1 1 13rem; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.inbox-new { color: var(--brand-deep); font-weight: 700; }
+.inbox-item .btn { flex: none; align-self: center; }
+.inbox-item { flex-wrap: wrap; }
+@media (max-width: 520px) { .inbox-item .btn { margin-left: 3.15rem; } }

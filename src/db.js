@@ -691,6 +691,18 @@ CREATE TABLE IF NOT EXISTS push_sent (
   key TEXT PRIMARY KEY,
   at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Everything someone has been notified about, for their Notifications page (kept 60 days). url is the page it's about.
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  url TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  read_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, id);
 
 -- Named groups of permissions staff are assigned to. built_in marks the default Manager and Staff sets
 -- ('manager' / 'staff'), which people without a set fall back to by role.

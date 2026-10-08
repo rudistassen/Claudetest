@@ -134,6 +134,8 @@ Email goes through [Brevo](https://www.brevo.com) (free for up to 300 emails a d
 
 Staff turn notifications on themselves on **My Atlas → Phone notifications** (on an iPhone, Atlas must be added to the Home Screen and opened from there), and choose which they get: the rota published, their shifts changing, open shifts, shift drop and holiday decisions, and news; and for managers, holiday and shift drop requests, someone not clocked in 15 minutes after their shift starts (sites with Square clock-ins), new events enquiries and new job applications.
 
+Everything someone is notified about is also kept on their **Notifications** page (the 🔔 button on My Atlas, or the menu under their name) for 60 days. Tapping a notification on the phone opens that page, with a button to the page it's about.
+
 They're on as soon as Atlas starts: it makes its own notification keys the first time and keeps them in its database. (To use your own instead, set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` – `npm run push-keys` makes a pair – and don't change them afterwards, or phones would need turning on again.)
 
 ## Standalone demo

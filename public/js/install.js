@@ -117,7 +117,13 @@ export function setUpInstall() {
   navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
   // A tapped notification, when the phone can't open its page directly: go there.
   navigator.serviceWorker.addEventListener?.('message', (e) => {
-    if (e.data?.type === 'open' && e.data.url) location.href = e.data.url;
+    if (e.data?.type !== 'open' || !e.data.url) return;
+    const to = new URL(e.data.url, location.href);
+    if (to.origin === location.origin && to.hash) {
+      // Same page, different screen: switch to it (re-showing it if it's already the one open).
+      if (location.hash === to.hash) window.dispatchEvent(new HashChangeEvent('hashchange'));
+      else location.hash = to.hash;
+    } else location.href = to.href;
   });
   watchForUpdates();
   window.addEventListener('beforeinstallprompt', (e) => {

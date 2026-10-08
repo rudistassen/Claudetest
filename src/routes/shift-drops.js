@@ -29,7 +29,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
   // An open shift: everyone (staff at every site can pick it up) gets a notification.
   const everyone = () => db.prepare('SELECT id FROM users WHERE active = 1').all().map((r) => r.id);
   const announceOpen = (d, exceptId) => notify(db, everyone().filter((id) => id !== exceptId), 'open_shift',
-    { title: 'Shift free to pick up', body: `${when(d)} at ${d.location_name} – first come, first served`, url: '/#/rota', tag: `open-${d.id}` });
+    { title: 'Shift free to pick up', body: `${when(d)} at ${d.location_name} – first come, first served`, url: '/#/mybrew', tag: `open-${d.id}` });
 
   // Why someone can't claim an open shift (null when they can).
   function claimProblem(user, d) {

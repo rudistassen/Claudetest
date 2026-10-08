@@ -64,16 +64,22 @@ const wants = (db, userId, kind) => db.prepare('SELECT enabled FROM push_prefs W
  * forgotten. Resolves to how many were sent.
  */
 export function notify(db, userIds, kind, { title, body, url = '/', tag } = {}, force = false) {
-  if (!send || !KIND_KEYS.has(kind)) return Promise.resolve(0);
+  if (!KIND_KEYS.has(kind)) return Promise.resolve(0);
   try {
     const ids = [...new Set((userIds ?? []).filter(Boolean))];
     if (!ids.length) return Promise.resolve(0);
     const active = new Set(db.prepare(`SELECT id FROM users WHERE active = 1 AND id IN (${ids.map(() => '?').join(', ')})`).all(...ids).map((r) => r.id));
     const to = ids.filter((id) => active.has(id) && (force || wants(db, id, kind)));
     if (!to.length) return Promise.resolve(0);
+    // Each person's Notifications page keeps it (whether or not they have notifications on a phone); tapping it on
+    // the phone opens that page with this one at the top.
+    const keep = db.prepare('INSERT INTO notifications (user_id, kind, title, body, url) VALUES (?, ?, ?, ?, ?)');
+    const saved = new Map(to.map((id) => [id, Number(keep.run(id, kind, title, body ?? null, url).lastInsertRowid)]));
+    db.prepare(`DELETE FROM notifications WHERE created_at < datetime('now', '-60 days')`).run();
+    if (!send) return Promise.resolve(0);
     const subs = db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${to.map(() => '?').join(', ')})`).all(...to);
-    const payload = JSON.stringify({ title, body, url, tag: tag ?? kind, kind });
     return Promise.all(subs.map(async (s) => {
+      const payload = JSON.stringify({ title, body, url: `/#/notifications?n=${saved.get(s.user_id)}`, page: url, tag: tag ?? kind, kind });
       try {
         await send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload);
         db.prepare(`UPDATE push_subscriptions SET last_sent_at = datetime('now') WHERE id = ?`).run(s.id);
@@ -148,12 +154,23 @@ export function registerPushRoutes(router, db) {
     res.json({ ok: true });
   });
 
+  // This person's notifications, newest first (the last 60 days, up to 100), and how many they haven't seen.
+  router.get('/notifications', (req, res) => {
+    const items = db.prepare('SELECT id, kind, title, body, url, created_at, read_at FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 100').all(req.user.id);
+    res.json({ items, unread: db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(req.user.id).n });
+  });
+  // Marks them all as seen.
+  router.post('/notifications/read', (req, res) => {
+    db.prepare(`UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL`).run(req.user.id);
+    res.json({ ok: true });
+  });
+
   // A test notification to this person's devices.
   router.post('/push/test', async (req, res) => {
     if (!pushEnabled()) return res.status(400).json({ error: 'Notifications aren’t set up yet – an admin needs to add the notification keys in Railway' });
     const devices = db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?').get(req.user.id).n;
     if (!devices) return res.status(400).json({ error: 'Turn on notifications on this phone first' });
-    const sent = await notify(db, [req.user.id], 'news', { title: 'Atlas notifications are on', body: 'You’ll get notifications like this one. Tap to open Atlas.', url: '/#/mybrew', tag: 'test' }, true);
+    const sent = await notify(db, [req.user.id], 'news', { title: 'Atlas notifications are on', body: 'You’ll get notifications like this one. Tap to open Atlas.', url: '/#/notifications', tag: 'test' }, true);
     res.json({ sent, devices });
   });
 }
