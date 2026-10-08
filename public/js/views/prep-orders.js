@@ -1,7 +1,7 @@
 import { addDays, api, confirmDialog, esc, fmtDate, qs, qty, showError, toast, todayISO } from '../lib.js';
 
 // Stock and Ordering → Prep kitchen ordering: each site orders prepped recipes (sauces, fillings, bakes) from the
-// prep kitchen for a day, and the prep kitchen sees the prep list – every site's orders added up, in batches.
+// prep kitchen for a day, and the prep kitchen sees the prep list – every site's orders added up.
 
 const STATUS = { ordered: ['Ordered', 'badge-sent'], sent: ['Sent', 'badge-received'] };
 const badge = (s) => `<span class="badge ${STATUS[s]?.[1] ?? ''}">${STATUS[s]?.[0] ?? esc(s)}</span>`;
@@ -24,7 +24,7 @@ export async function render(ctx) {
     const data = await api(`/prep-orders/list${qs({ date: day })}`);
     if (stale()) return;
     el.innerHTML = `${head}
-      <p class="muted">Everything the sites have ordered from the prep kitchen for a day, added up – with how many batches to make.</p>
+      <p class="muted">Everything the sites have ordered from the prep kitchen for a day, added up for each prepped recipe.</p>
       <div class="filters">
         <button class="btn" data-day="-1" aria-label="Previous day">‹</button>
         <input type="date" id="pl-day" value="${day}" aria-label="Day">
@@ -34,11 +34,10 @@ export async function render(ctx) {
       <section class="card">
         <h2>Prep list · ${fmtDate(day, { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
         ${data.items.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Prepped recipe</th><th class="num">Total ordered</th><th class="num">Batches to make</th><th>By site</th></tr></thead>
+          <thead><tr><th>Prepped recipe</th><th class="num">Total ordered</th><th>By site</th></tr></thead>
           <tbody>${data.items.map((i) => `<tr>
-            <td><strong>${esc(i.name)}</strong>${i.yield_quantity ? `<small class="muted">A batch makes ${qty(i.yield_quantity)} ${esc(i.unit)}</small>` : ''}</td>
+            <td><strong>${esc(i.name)}</strong></td>
             <td class="num"><strong>${qty(i.total)} ${esc(i.unit)}</strong></td>
-            <td class="num">${i.batches_to_make === null ? '–' : `<strong>${i.batches_to_make}</strong>${i.batches !== i.batches_to_make ? ` <small class="muted">(${qty(i.batches)} needed)</small>` : ''}`}</td>
             <td class="small">${i.sites.map((x) => `${esc(x.location_name)} ${qty(x.quantity)}`).join(' · ')}</td></tr>`).join('')}</tbody>
         </table></div>` : '<p class="muted">Nothing ordered for this day yet.</p>'}
       </section>
@@ -85,10 +84,9 @@ export async function render(ctx) {
       ${sentAlready.length ? `<p class="notice">The prep kitchen has already sent an order for ${fmtDate(day)}. Anything you order now is a separate order.</p>` : ''}
       ${data.recipes.length ? [...groups].map(([cat, list]) => `<h3 class="group-title">${esc(cat)}</h3>
         <div class="table-wrap"><table class="po-table">
-          <thead><tr><th>Prepped recipe</th><th>A batch makes</th><th class="num">Amount</th></tr></thead>
+          <thead><tr><th>Prepped recipe</th><th class="num">Amount</th></tr></thead>
           <tbody>${list.map((r) => `<tr>
             <td><strong>${esc(r.name)}</strong>${r.shelf_life ? `<small class="muted">${esc(r.shelf_life)}</small>` : ''}</td>
-            <td class="muted">${qty(r.yield_quantity)} ${esc(r.yield_unit)}</td>
             <td class="num"><input class="qty-input po-qty" type="number" min="0" step="any" inputmode="decimal" data-recipe="${r.id}" value="${had.get(r.id) ?? ''}" aria-label="Amount of ${esc(r.name)}"> <span class="muted">${esc(r.yield_unit)}</span></td>
           </tr>`).join('')}</tbody></table></div>`).join('')
         : `<div class="empty">No prepped recipes yet. Add them under <a href="#/recipes/prep">Menu → Prepped recipes</a>.</div>`}
