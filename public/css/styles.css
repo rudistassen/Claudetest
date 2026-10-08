@@ -2207,3 +2207,7 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
   .sb-save .topbar-gap { display: none; }
   .sb-save .btn { flex: 1; text-align: center; }
 }
+.sb-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.6rem; border-top: 1px solid var(--border); }
+.sb-site.is-changed { box-shadow: inset 4px 0 0 var(--warn); }
+.tone-warn { color: var(--warn); }
+@media (max-width: 700px) { .sb-foot .btn { width: 100%; } }

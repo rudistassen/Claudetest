@@ -45,7 +45,8 @@ export async function render(ctx) {
       </tbody>
     </table></div>`}
     ${phone ? '<p class="muted small">All net sales. Leave a day blank to use the forecast.</p>' : ''}
-    ${s.updated_at ? `<p class="muted small">Budget last changed by ${esc(s.updated_by ?? 'someone')} · ${fmtDateTime(s.updated_at)}</p>` : ''}
+    <footer class="sb-foot"><span class="sb-status small"></span>
+      <button type="button" class="btn btn-small btn-primary" data-publish="${s.id}">Publish ${esc(s.name)}</button></footer>
   </section>`;
 
   el.innerHTML = `<div class="page-head"><h1>Sales budget</h1></div>
@@ -60,14 +61,23 @@ export async function render(ctx) {
       ${week !== thisWeek ? `<button class="btn btn-small btn-ghost" data-week="0">${week < thisWeek ? 'Back to this week' : 'This week'}</button>` : ''}
     </div>
     <${phone ? 'details class="sb-intro"><summary>How the sales budget works</summary><p class="muted">' : 'p class="muted">'}The forecast is a guide: each weekday’s average <strong>net sales</strong> (after discounts, excluding VAT) over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
-      Set a budget for any day you know will be different – an event on a Saturday, say. The rota uses the budget where there is one (for labour % and the ${data.target_pct}% labour budget), and the forecast for days left blank.</p>${phone ? '</details>' : ''}
+      Set a budget for any day you know will be different – an event on a Saturday, say. Once you publish a site’s budget, the rota uses it (for labour % and the ${data.target_pct}% labour budget), and the forecast for days left blank. Publish one site at a time, or every site with changes using Publish budget.</p>${phone ? '</details>' : ''}
     <form id="sb-form">
       ${data.sites.map(siteCard).join('')}
-      <div class="actions sb-save"><span class="topbar-gap"></span><a class="btn" href="#/rota${qs({ view: 'week', week })}">Open this week’s rota</a><button type="submit" class="btn btn-primary">Save budget</button></div>
+      <div class="actions sb-save"><span class="topbar-gap"></span><a class="btn" href="#/rota${qs({ view: 'week', week })}">Open this week’s rota</a><button type="submit" class="btn btn-primary">Publish budget</button></div>
     </form>`;
 
   const form = el.querySelector('#sb-form');
   const site = (card) => data.sites.find((s) => s.id === Number(card.dataset.site));
+  const valuesOf = (card) => [...card.querySelectorAll('.sb-input')].map((i) => (i.value === '' ? null : Number(i.value)));
+  const isChanged = (card) => valuesOf(card).some((v, i) => v !== (site(card).budget[i] ?? null));
+  // Publishes some sites' budgets (the rota uses them from then on), keeping anything typed for the others.
+  const publish = async (cards) => {
+    await api('/sales-budgets', { method: 'PUT', body: { week, sites: cards.map((card) => ({ id: Number(card.dataset.site), budget: valuesOf(card) })) } });
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    for (const card of cards) Object.assign(site(card), { budget: valuesOf(card), updated_by: ctx.state.user.name, updated_at: now });
+    cards.forEach(refresh);
+  };
   const refresh = (card) => {
     const s = site(card);
     const inputs = [...card.querySelectorAll('.sb-input')];
@@ -78,6 +88,13 @@ export async function render(ctx) {
     vals.forEach((v, d) => { card.querySelector(`[data-labour="${d}"]`).textContent = v === null || v === undefined ? '–' : money(v * data.target_pct / 100); });
     card.querySelector('[data-labour="week"]').textContent = week === null ? '–' : money(week * data.target_pct / 100);
     inputs.forEach((i) => i.closest('td, .sb-day-input')?.classList.toggle('is-set', i.value !== ''));
+    // Published or not: the rota only uses a budget once it's published.
+    const changed = isChanged(card);
+    card.classList.toggle('is-changed', changed);
+    card.querySelector('.sb-status').innerHTML = changed ? '<strong class="tone-warn">● Not published yet</strong> – the rota uses the last published budget until you publish'
+      : s.updated_at ? `<span class="muted">✓ Published by ${esc(s.updated_by ?? 'someone')} · ${fmtDateTime(s.updated_at)}</span>`
+        : '<span class="muted">No budget published – the rota uses the forecast</span>';
+    card.querySelector('[data-publish]').disabled = !changed;
   };
   form.querySelectorAll('.sb-site').forEach(refresh);
   form.addEventListener('input', (e) => { if (e.target.matches('.sb-input')) refresh(e.target.closest('.sb-site')); });
@@ -92,16 +109,19 @@ export async function render(ctx) {
     card.querySelectorAll('.sb-input').forEach((i) => { i.value = ''; });
     refresh(card);
   }));
+  form.querySelectorAll('[data-publish]').forEach((b) => b.addEventListener('click', async () => {
+    const card = b.closest('.sb-site');
+    b.disabled = true;
+    try { await publish([card]); toast(`${site(card).name}’s budget is published – the rota now uses it`); } catch (err) { showError(err); refresh(card); }
+  }));
+  // Publish budget: every site with changes.
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const sites = [...form.querySelectorAll('.sb-site')].map((card) => ({
-      id: Number(card.dataset.site),
-      budget: [...card.querySelectorAll('.sb-input')].map((i) => (i.value === '' ? null : Number(i.value))),
-    }));
+    const cards = [...form.querySelectorAll('.sb-site')].filter(isChanged);
+    if (!cards.length) { toast('Nothing new to publish'); return; }
     try {
-      await api('/sales-budgets', { method: 'PUT', body: { week, sites } });
-      toast('Sales budget saved – the rota now uses it');
-      ctx.rerender();
+      await publish(cards);
+      toast(cards.length === 1 ? `${site(cards[0]).name}’s budget is published – the rota now uses it` : `Published the budget for ${cards.length} sites – the rota now uses it`);
     } catch (err) { showError(err); }
   });
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
