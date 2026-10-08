@@ -21,12 +21,17 @@ export async function render(ctx) {
   const phone = window.matchMedia('(max-width: 700px)').matches;
   const input = (s, b, i) => `<input class="qty-input sb-input" type="number" min="0" step="1" inputmode="decimal" data-day="${i}" value="${b ?? ''}" placeholder="${s.forecast[i] === null ? '' : Math.round(s.forecast[i])}" aria-label="${esc(s.name)} sales budget ${DAYS[i]}">`;
   const forecastWeek = (s) => (s.forecast.some((f) => f !== null) ? whole(s.forecast.reduce((t, f) => t + (f ?? 0), 0)) : '–');
-  const phoneTable = (s) => `<table class="sb-table sb-phone">
-      <thead><tr><th>Day</th><th class="num">Forecast<small>net</small></th><th class="num">Budget<small>net</small></th><th class="num">Labour<small>${data.target_pct}%</small></th></tr></thead>
-      <tbody>${data.days.map((d, i) => `<tr><th>${DAYS[i]} <small>${fmtDate(d.date, { day: 'numeric', month: 'short' })}</small>${d.bank_holiday ? `<small class="bank-hol">${esc(d.bank_holiday)}</small>` : ''}</th>
-        <td class="num sb-fc">${whole(s.forecast[i])}</td><td class="num">${input(s, s.budget[i], i)}</td><td class="num sb-lab" data-labour="${i}"></td></tr>`).join('')}</tbody>
-      <tfoot><tr><th>Week</th><td class="num sb-fc">${forecastWeek(s)}</td><td class="num sb-week"></td><td class="num sb-lab" data-labour="week"></td></tr></tfoot>
-    </table>`;
+  const phoneTable = (s) => `<ul class="sb-days">${data.days.map((d, i) => `<li class="sb-day">
+        <div class="sb-day-info"><strong>${DAYS[i]} <span>${fmtDate(d.date, { day: 'numeric', month: 'short' })}</span></strong>
+          ${d.bank_holiday ? `<small class="bank-hol">${esc(d.bank_holiday)}</small>` : ''}
+          <small>Forecast ${whole(s.forecast[i])}</small><small>Labour <span data-labour="${i}"></span></small></div>
+        <label class="sb-day-input"><span aria-hidden="true">£</span>${input(s, s.budget[i], i)}</label>
+      </li>`).join('')}</ul>
+    <dl class="sb-totals">
+      <div><dt>Week budget</dt><dd class="sb-week"></dd></div>
+      <div><dt>Forecast</dt><dd>${forecastWeek(s)}</dd></div>
+      <div><dt>Labour ${data.target_pct}%</dt><dd data-labour="week"></dd></div>
+    </dl>`;
   const siteCard = (s) => `<section class="card sb-site" data-site="${s.id}">
     <header class="sb-head"><h2>${esc(s.name)}</h2>
       <div class="actions"><button type="button" class="btn btn-small" data-copy="${s.id}" title="Start the budget from the forecast, to change the days you know will be different">Copy forecast into budget</button>
@@ -39,7 +44,7 @@ export async function render(ctx) {
         <tr class="sb-labour"><th>Labour budget<small>${data.target_pct}% of the sales above</small></th>${s.budget.map((_, i) => `<td class="num" data-labour="${i}"></td>`).join('')}<td class="num" data-labour="week"></td></tr>
       </tbody>
     </table></div>`}
-    ${phone ? '<p class="muted small">Leave a day blank to use the forecast.</p>' : ''}
+    ${phone ? '<p class="muted small">All net sales. Leave a day blank to use the forecast.</p>' : ''}
     ${s.updated_at ? `<p class="muted small">Budget last changed by ${esc(s.updated_by ?? 'someone')} · ${fmtDateTime(s.updated_at)}</p>` : ''}
   </section>`;
 
@@ -54,8 +59,8 @@ export async function render(ctx) {
       </div>
       ${week !== thisWeek ? `<button class="btn btn-small btn-ghost" data-week="0">${week < thisWeek ? 'Back to this week' : 'This week'}</button>` : ''}
     </div>
-    <p class="muted">The forecast is a guide: each weekday’s average <strong>net sales</strong> (after discounts, excluding VAT) over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
-      Set a budget for any day you know will be different – an event on a Saturday, say. The rota uses the budget where there is one (for labour % and the ${data.target_pct}% labour budget), and the forecast for days left blank.</p>
+    <${phone ? 'details class="sb-intro"><summary>How the sales budget works</summary><p class="muted">' : 'p class="muted">'}The forecast is a guide: each weekday’s average <strong>net sales</strong> (after discounts, excluding VAT) over the ${data.forecast_weeks} weeks to ${fmtDate(data.forecast_to)}, leaving out bank holidays and days with no sales.
+      Set a budget for any day you know will be different – an event on a Saturday, say. The rota uses the budget where there is one (for labour % and the ${data.target_pct}% labour budget), and the forecast for days left blank.</p>${phone ? '</details>' : ''}
     <form id="sb-form">
       ${data.sites.map(siteCard).join('')}
       <div class="actions sb-save"><span class="topbar-gap"></span><a class="btn" href="#/rota${qs({ view: 'week', week })}">Open this week’s rota</a><button type="submit" class="btn btn-primary">Save budget</button></div>
@@ -72,7 +77,7 @@ export async function render(ctx) {
     card.querySelector('.sb-week').innerHTML = `${whole(week)}${budgeted && budgeted < 7 ? '<small>incl. forecast</small>' : ''}`;
     vals.forEach((v, d) => { card.querySelector(`[data-labour="${d}"]`).textContent = v === null || v === undefined ? '–' : money(v * data.target_pct / 100); });
     card.querySelector('[data-labour="week"]').textContent = week === null ? '–' : money(week * data.target_pct / 100);
-    inputs.forEach((i) => i.closest('td').classList.toggle('is-set', i.value !== ''));
+    inputs.forEach((i) => i.closest('td, .sb-day-input')?.classList.toggle('is-set', i.value !== ''));
   };
   form.querySelectorAll('.sb-site').forEach(refresh);
   form.addEventListener('input', (e) => { if (e.target.matches('.sb-input')) refresh(e.target.closest('.sb-site')); });
@@ -103,6 +108,9 @@ export async function render(ctx) {
     const n = Number(b.dataset.week);
     go(n ? addDays(week, n) : thisWeek);
   }));
+  const layout = window.matchMedia('(max-width: 700px)');
+  const relayout = () => { if (!el.isConnected) layout.removeEventListener('change', relayout); else if (layout.matches !== phone) ctx.rerender(); };
+  layout.addEventListener('change', relayout);
   const pick = el.querySelector('#week-pick');
   pick.addEventListener('click', () => { try { pick.showPicker(); } catch { /* the browser opens its own picker */ } });
   pick.addEventListener('change', () => { if (pick.value) go(weekStart(pick.value)); });
