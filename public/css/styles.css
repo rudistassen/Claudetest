@@ -2052,3 +2052,62 @@ body.rota-pasting .rota td.editable:hover { box-shadow: inset 0 0 0 2px var(--br
 .push-kinds summary { cursor: pointer; font-weight: 600; }
 .push-kinds fieldset { border: 0; padding: 0; margin: 0.6rem 0 0; }
 .push-kinds legend { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.2rem; }
+
+/* Rota day view on a phone: date bar, at-a-glance tiles and a card per shift. */
+.pd-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; }
+.pd-head select { flex: 1; min-width: 0; width: auto; }
+.pd-datebar {
+  display: grid; grid-template-columns: 2.75rem 1fr 2.75rem; align-items: center; margin: 0 -0.7rem 0.9rem; padding: 0.35rem 0.3rem;
+  background: var(--surface); border-block: 1px solid var(--border);
+}
+.pd-step { border: 0; background: none; font-size: 1.7rem; line-height: 1; padding: 0.3rem; color: var(--text); cursor: pointer; }
+.pd-date { position: relative; text-align: center; font-size: 1.2rem; font-weight: 600; color: var(--brand-deep); cursor: pointer; }
+.pd-date input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.pd-sub { display: flex; gap: 0.6rem; align-items: center; justify-content: center; margin: -0.4rem 0 0.8rem; font-size: 0.9rem; }
+.pd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; margin-bottom: 0.8rem; }
+.pd-stat {
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text); text-decoration: none; min-width: 0;
+}
+.pd-stat > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.pd-stat strong { font-size: 1rem; white-space: nowrap; }
+.pd-stat small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-stat-icon { flex: none; display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 50%; background: var(--surface-2); }
+.pd-stat-icon.is-leave { background: var(--brand-soft); color: var(--brand-deep); }
+.pd-stat-icon svg { width: 1.45rem; height: 1.45rem; }
+.pd-cost { display: flex; align-items: center; justify-content: space-between; padding: 0.9rem 1rem; margin-bottom: 0.9rem; color: var(--text); text-decoration: none; }
+.pd-cost small { display: block; color: var(--muted); font-size: 0.95rem; font-weight: 600; }
+.pd-cost strong { font-size: 1.3rem; }
+.pd-chev { font-size: 1.6rem; color: var(--muted); }
+.pd-list { list-style: none; margin: 0 0 0.9rem; padding: 0; display: grid; gap: 0.7rem; }
+.pd-card {
+  position: relative; display: flex; align-items: flex-start; gap: 0.75rem; width: 100%; padding: 0.85rem 0.85rem 0.85rem 1.1rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.pd-card::before { content: ""; position: absolute; left: 0.45rem; top: 0.8rem; width: 4px; height: 2.4rem; border-radius: 2px; background: var(--site, var(--brand)); }
+.pd-card:disabled { cursor: default; opacity: 1; }
+.pd-card.is-new { background: color-mix(in srgb, var(--good) 8%, var(--surface)); }
+.pd-card.is-changed { background: color-mix(in srgb, var(--warn) 9%, var(--surface)); }
+.pd-card.is-removed { opacity: 0.6; }
+.pd-card.is-removed .pd-time { text-decoration: line-through; }
+.pd-card.shift-sick .pd-time { text-decoration: line-through; }
+.pd-open { border-style: dashed; }
+.pd-avatar {
+  flex: none; display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 50%;
+  background: var(--surface-2); color: var(--muted); font-weight: 700; font-size: 0.9rem;
+}
+.pd-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.pd-time { display: flex; align-items: center; gap: 0.9rem; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pd-break { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+.pd-name { font-weight: 600; }
+.pd-line { display: flex; align-items: center; gap: 0.45rem; color: var(--muted); font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-time svg, .pd-line svg { flex: none; width: 1.1rem; height: 1.1rem; }
+.pd-status { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; }
+.pd-tick { color: var(--good); font-weight: 800; letter-spacing: -0.25em; padding-right: 0.25em; }
+.pd-note svg { width: 1.1rem; height: 1.1rem; color: var(--muted); }
+.pd-fab {
+  position: fixed; right: 1rem; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 34; width: 3.6rem; height: 3.6rem;
+  border: 0; border-radius: 50%; background: var(--brand-deep); color: #fff; font-size: 2rem; line-height: 1;
+  box-shadow: var(--shadow-lift); cursor: pointer;
+}

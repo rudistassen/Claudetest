@@ -380,6 +380,88 @@ export async function render(ctx) {
       ${canEdit ? '<p class="muted small">You’re seeing the draft rota. Tap a shift to change it, or to publish just that shift. Drag a shift onto someone else to give it to them (press and hold first on a phone).</p>' : ''}`;
   };
 
+  // --- Day view on a phone: a clean list of shift cards (like the rota apps staff are used to) – the date across
+  // the top, open shifts / leave / cost at a glance, then one card per shift, and a round + button to add one. ---
+  const PD_ICON = {
+    cup: '<path d="M4 8h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z"/><path d="M16 9h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M4 21h12"/>',
+    pin: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/>',
+    case: '<rect x="3.5" y="7" width="17" height="12.5" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/>',
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/>',
+    plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2Z"/>',
+    note: '<path d="M5 5h14v10H10l-4 3.5V15H5Z"/>',
+    calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  };
+  const pdIcon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PD_ICON[n]}</svg>`;
+  const initials = (name) => name.replace(/\(.*?\)/g, '').split(/\s+/).filter((w) => /^\p{L}/u.test(w)).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const phoneDayView = () => {
+    const onDay = data.shifts.filter((x) => x.date === day && shownSites.includes(x.location_id) && (canEdit || x.state !== 'removed'))
+      .sort((a, b) => a.start_time.localeCompare(b.start_time) || a.end_time.localeCompare(b.end_time) || a.user_name.localeCompare(b.user_name));
+    const live = onDay.filter((x) => x.state !== 'removed');
+    const published = live.filter((x) => !x.state || x.state === 'published').length;
+    const person = (id) => data.staff.find((u) => u.id === id);
+    const pendingDay = shownSites.reduce((t, id) => t + (data.unpublished_by_day?.[`${day}|${id}`] ?? 0), 0);
+    const leaveToday = (data.leave ?? []).filter((l) => l.start_date <= day && l.end_date >= day);
+    const onHol = leaveToday.filter((l) => l.status === 'approved').length;
+    const open = openOn(day);
+    const totalCost = rotaCost(shownSites, day);
+    const card = (x) => {
+      const u = person(x.user_id);
+      const changed = x.state && x.state !== 'published';
+      const status = changed ? `<em class="shift-tag">${TAGS[x.state]}</em>`
+        : `<span class="pd-tick" title="${canEdit ? 'Published' : 'Confirmed'}">✓✓</span>`;
+      const role = x.position || u?.position || '';
+      const from = u && u.location_id !== x.location_id && u.location_name ? `Covering from ${u.location_name}` : '';
+      return `<li class="pd-item" ${canEdit ? `data-drop data-user="${x.user_id}" data-date="${day}" data-site="${x.location_id}"` : ''}>
+        <button class="pd-card ${changed ? `is-${x.state}` : ''} ${x.sick ? 'shift-sick' : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
+          style="--site:${siteColour(siteName(x.location_id), x.location_id)}" title="${esc([shiftTitle(x), from].filter(Boolean).join(' · ') || `${x.start_time}–${x.end_time}`)}">
+          <span class="pd-avatar" aria-hidden="true">${esc(initials(x.user_name))}</span>
+          <span class="pd-body">
+            <span class="pd-time">${x.start_time} – ${x.end_time}<span class="pd-break">${pdIcon('cup')}${x.break_minutes ?? 0}m</span></span>
+            <span class="pd-name">${esc(x.user_name)}</span>
+            ${role ? `<span class="pd-line">${pdIcon('case')}${esc(role)}</span>` : ''}
+            <span class="pd-line">${pdIcon('pin')}${esc(siteName(x.location_id))}${from ? ` · ${esc(from)}` : ''}</span>
+          </span>
+          <span class="pd-status">${status}${dropTag(x)}${x.notes ? `<span class="pd-note" title="${esc(x.notes)}">${pdIcon('note')}</span>` : ''}</span>
+        </button>
+      </li>`;
+    };
+    return `
+      <div class="pd-head">
+        ${siteSelect}
+        ${viewToggle}
+      </div>
+      <div class="pd-datebar">
+        <button class="pd-step" data-day="-1" aria-label="Previous day">‹</button>
+        <label class="pd-date">${fmtDate(day, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          <input type="date" id="rota-day" value="${day}" aria-label="Pick a day"></label>
+        <button class="pd-step" data-day="1" aria-label="Next day">›</button>
+      </div>
+      ${day !== today || bankHol(day) ? `<p class="pd-sub">${bankHol(day) ? `<span class="badge badge-sent">${esc(bankHol(day))}</span>` : ''}
+        ${day !== today ? '<button class="link-btn" data-day="0">Back to today</button>' : ''}</p>` : ''}
+      <div class="pd-stats">
+        <div class="pd-stat">
+          <span class="pd-stat-icon">${pdIcon('target')}</span>
+          <span><strong>${open.length} Open shift${open.length === 1 ? '' : 's'}</strong>
+            <small>${canEdit ? `${published}/${live.length} published` : `${live.length} shift${live.length === 1 ? '' : 's'} on`}</small></span></div>
+        <a class="pd-stat" href="#/timeoff">
+          <span class="pd-stat-icon is-leave">${pdIcon('plane')}</span>
+          <span><strong>${leaveToday.length} on leave</strong><small>${data.leave ? `${onHol}/${leaveToday.length} on holiday` : 'Holiday'}</small></span></a>
+      </div>
+      ${data.labour_cost !== undefined ? `<${state.can('sales.view') ? 'a href="#/rota-costs"' : 'div'} class="card pd-cost">
+        <span><small>Cost summary</small><strong>${money(totalCost)}</strong></span>${state.can('sales.view') ? '<span class="pd-chev" aria-hidden="true">›</span></a>' : '</div>'}` : ''}
+      ${canEdit && pendingDay ? `<div class="publish-bar">
+        <span><strong>${pendingDay} unpublished change${pendingDay === 1 ? '' : 's'}</strong> – staff can’t see ${pendingDay === 1 ? 'it' : 'them'} yet.</span>
+        ${data.can_publish ? `<span class="publish-actions"><button class="btn btn-primary" id="publish">Publish this day</button></span>` : ''}</div>` : ''}
+      ${gapsBox(gapsOn(day))}
+      ${open.length ? `<ul class="pd-list">${open.map((x) => `<li class="pd-item"><button class="pd-card pd-open" data-open-shift="${x.id}" style="--site:${siteColour(x.location_name, x.location_id)}">
+          <span class="pd-avatar" aria-hidden="true">?</span>
+          <span class="pd-body"><span class="pd-time">${x.start_time} – ${x.end_time}</span><span class="pd-name">Open shift – tap to pick it up</span>
+            <span class="pd-line">${pdIcon('pin')}${esc(x.location_name)}</span></span></button></li>`).join('')}</ul>` : ''}
+      ${onDay.length ? `<ul class="pd-list">${onDay.map(card).join('')}</ul>` : `<div class="card empty">Nobody is on the rota ${day === today ? 'today' : 'this day'}.</div>`}
+      ${canEdit ? `<button class="pd-fab" data-add-site="${siteId ?? shownSites[0] ?? ''}" aria-label="Add a shift" title="Add a shift">+</button>
+        <p class="muted small">Tap a shift to change it. Press and hold a shift, then drag it onto someone else’s to give it to them.</p>` : ''}`;
+  };
+
   const siteSelect = state.multiSite ? `<select id="rota-site" aria-label="Site">
           <option value="all" ${all ? 'selected' : ''}>All sites</option>
           ${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
@@ -432,7 +514,7 @@ export async function render(ctx) {
       </div>
       ${week !== thisWeek ? `<button class="btn btn-small btn-ghost" data-week="0">${week < thisWeek ? 'Back to this week' : 'This week'}</button>` : ''}
     </div>`;
-  if (view === 'day') el.innerHTML = dayView();
+  if (view === 'day') el.innerHTML = wide ? dayView() : phoneDayView();
   else el.innerHTML = `
     <div class="page-head">
       <h1>Rota · ${all ? 'All sites' : esc(state.location?.name ?? '')}</h1>
