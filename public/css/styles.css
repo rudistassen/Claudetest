@@ -1973,3 +1973,5 @@ td.editable:hover .add-more, td.editable:focus-within .add-more { opacity: 1; }
 .ing-options li.is-at, .ing-options li[data-n]:hover { background: var(--brand-soft); }
 .ing-options li.ing-none { color: var(--muted); cursor: default; font-size: 0.85rem; }
 .ing-supplier { margin-left: 0.25rem; }
+.import-changes { margin: 0; padding-left: 1rem; }
+.import-changes li { white-space: nowrap; }

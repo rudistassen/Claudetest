@@ -37,6 +37,20 @@ function addWage(wages, memberId, title, rate) {
  * Works out what importing the team would do, without changing anything.
  * Each row: { member, action: 'create' | 'update' | 'deactivate' | 'skip', user?, values?, reason? }.
  */
+// What importing someone already in Atlas would change, in words (e.g. "Pay £12.50 → £12.75").
+const pounds = (n) => `£${Number(n ?? 0).toFixed(2)}`;
+function changesFor(user, v, alreadyLinked) {
+  const out = [];
+  if (user.name !== v.name) out.push(`Name ${user.name} → ${v.name}`);
+  if ((user.email ?? '').toLowerCase() !== (v.email ?? '').toLowerCase()) out.push(`Email ${user.email ?? '–'} → ${v.email}`);
+  if (Math.abs((user.hourly_rate ?? 0) - (v.hourly_rate ?? 0)) > 0.004) out.push(`Pay ${pounds(user.hourly_rate)} → ${pounds(v.hourly_rate)}`);
+  if ((user.position ?? '') !== (v.position ?? '')) out.push(`Job title ${user.position || '–'} → ${v.position || '–'}`);
+  if (user.location_id !== v.location_id) out.push('Home site set');
+  if (!user.active) out.push('Reactivated');
+  if (!alreadyLinked) out.push('Linked to Square');
+  return out;
+}
+
 export function planTeamImport(db, { members, wages }, { deactivateOthers = false, currentUserId } = {}) {
   const sites = db.prepare('SELECT id, name, square_location_id FROM locations WHERE square_location_id IS NOT NULL AND active = 1 ORDER BY name').all();
   const siteBySquare = new Map(sites.map((s) => [s.square_location_id, s]));
@@ -106,19 +120,21 @@ export function planTeamImport(db, { members, wages }, { deactivateOthers = fals
       for (let n = 2; !emailFree(email, user?.id); n++) email = placeholderEmail(m).replace('@', `-${n}@`);
     }
     planned.add(email.toLowerCase());
+    const values = {
+      name,
+      email,
+      role,
+      location_id: locationId,
+      position: top?.title ?? user?.position ?? null,
+      hourly_rate: top?.rate ?? user?.hourly_rate ?? 0,
+    };
     rows.push({
       member: m,
       name,
       action: user ? 'update' : 'create',
       user,
-      values: {
-        name,
-        email,
-        role,
-        location_id: locationId,
-        position: top?.title ?? user?.position ?? null,
-        hourly_rate: top?.rate ?? user?.hourly_rate ?? 0,
-      },
+      values,
+      changes: user ? changesFor(user, values, linked.has(m.id)) : [],
       no_email: !validEmail(m.email_address),
     });
   }

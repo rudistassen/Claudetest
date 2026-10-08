@@ -123,16 +123,20 @@ function openSquareImport(ctx) {
     preview.innerHTML = '<div class="loading">Loading your Square team…</div>';
     try {
       const rows = await api(`/square/team${qs({ deactivate_others: form.deactivate_others.checked ? 'true' : undefined })}`);
-      const order = { create: 0, update: 1, deactivate: 2, skip: 3 };
+      // Updates that change nothing are shown as "No change", after the ones that do.
+      for (const r of rows) if (r.action === 'update' && !r.changes?.length) r.action = 'same';
+      const order = { create: 0, update: 1, deactivate: 2, same: 3, skip: 4 };
       rows.sort((a, b) => order[a.action] - order[b.action] || a.name.localeCompare(b.name));
       const n = (a) => rows.filter((r) => r.action === a).length;
-      const summary = [[n('create'), 'to add'], [n('update'), 'to update'], [n('deactivate'), 'to deactivate'], [n('skip'), 'skipped']]
+      const summary = [[n('create'), 'to add'], [n('update'), 'to update'], [n('deactivate'), 'to deactivate'], [n('same'), 'no change'], [n('skip'), 'skipped']]
         .filter(([c]) => c).map(([c, l]) => `<strong>${c}</strong> ${l}`).join(' · ');
       preview.innerHTML = rows.length ? `<p>${summary}</p><div class="table-wrap"><table>
-        <thead><tr><th>Person</th><th>Change</th><th>Site</th><th class="num">Hourly rate</th></tr></thead>
-        <tbody>${rows.map((r) => `<tr class="${r.action === 'skip' || r.action === 'deactivate' ? 'inactive' : ''}">
+        <thead><tr><th>Person</th><th>Change</th><th>What changes</th><th>Site</th><th class="num">Hourly rate</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr class="${r.action === 'skip' || r.action === 'deactivate' || r.action === 'same' ? 'inactive' : ''}">
           <td>${esc(r.name)}${r.email ? `<small>${esc(r.email)}${r.no_email ? ' · no email in Square' : ''}</small>` : ''}</td>
-          <td>${ACTION_LABELS[r.action]}${r.action === 'update' && r.existing && r.existing.name !== r.name ? ` <small>was ${esc(r.existing.name)}</small>` : ''}${r.reason ? ` <small>${esc(r.reason)}</small>` : ''}</td>
+          <td>${r.action === 'same' ? 'No change' : ACTION_LABELS[r.action]}</td>
+          <td class="small">${r.action === 'update' ? `<ul class="import-changes">${r.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`
+            : r.action === 'create' ? 'New in Atlas' : r.reason ? esc(r.reason) : r.action === 'deactivate' ? 'Can no longer sign in or be rota’d' : '<span class="muted">Already up to date</span>'}</td>
           <td>${esc(r.site ?? '')}</td>
           <td class="num">${r.hourly_rate === null ? '' : money(r.hourly_rate)}</td></tr>`).join('')}</tbody>
       </table></div>` : '<p class="muted">Your Square team is empty.</p>';

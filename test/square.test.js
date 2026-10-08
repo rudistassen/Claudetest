@@ -394,6 +394,7 @@ describe('staff from Square', () => {
     assert.equal(row('Someone Else').action, 'update', 'matched to manager1 by email');
     assert.equal(row('Someone Else').existing.email, 'manager1@cafe.local');
     assert.equal(row('Someone Else').role, 'manager', 'keeps their role');
+    assert.ok(row('Someone Else').changes.some((c) => /^Name .* → Someone Else$/.test(c)), 'says what changes');
     assert.equal(row('Casual Carl').action, 'skip');
     assert.deepEqual([row('Priya Shah').action, row('Priya Shah').site, row('Priya Shah').position, row('Priya Shah').hourly_rate],
       ['create', 'High Street', 'Barista', 12.21]);
@@ -430,6 +431,8 @@ describe('staff from Square', () => {
     assert.equal(moved.data.location_id, kiosk);
     const preview2 = (await admin('/square/team')).data;
     assert.equal(preview2.find((x) => x.name === 'Priya Shah').site, 'Airport Kiosk');
+    assert.ok(preview2.filter((x) => x.action === 'update').every((x) => Array.isArray(x.changes)));
+    assert.deepEqual(preview2.find((x) => x.name === 'Someone Else').changes, [], 'nothing left to change after importing');
     const again = (await admin('/square/import-staff', { method: 'POST', body: { deactivate_others: true } })).data;
     assert.deepEqual([again.created, again.updated, again.deactivated], [0, 5, 0], 'running it again adds nobody twice');
     assert.equal(db.prepare('SELECT location_id FROM users WHERE id = ?').get(priya.id).location_id, kiosk, 'home site kept');

@@ -83,6 +83,8 @@ export function registerSalesRoutes(router, db, square) {
       site: r.values ? (r.values.location_id ? names.get(r.values.location_id) : 'All (admin)') : null,
       position: r.values?.position ?? null,
       hourly_rate: r.values?.hourly_rate ?? null,
+      // For people already here: each thing that changes (an empty list means nothing does).
+      changes: r.action === 'update' ? (r.changes ?? []).map((c) => (c === 'Home site set' ? `Home site ${names.get(r.user.location_id) ?? '–'} → ${names.get(r.values.location_id) ?? '–'}` : c)) : [],
     })));
   });
 
