@@ -272,25 +272,25 @@ CREATE TABLE IF NOT EXISTS square_catalog (
   category_name TEXT
 );
 
--- Par levels (Reporting → Par levels): how many of each item a site should have ready on each weekday (0 = Monday),
--- for one Square category. version 'draft' is being worked on; 'final' is the saved final version.
-CREATE TABLE IF NOT EXISTS par_levels (
+-- Saved par level reports (Reporting → Par levels): named, for one Square category at one site, with the par level
+-- budgeted for each item on each weekday (0 = Monday). Only the budgeted levels are kept.
+CREATE TABLE IF NOT EXISTS par_reports (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
   location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
   category TEXT NOT NULL,
-  version TEXT NOT NULL,
+  created_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS par_report_lines (
+  report_id INTEGER NOT NULL REFERENCES par_reports(id) ON DELETE CASCADE,
   item_key TEXT NOT NULL,
   item_name TEXT NOT NULL,
   weekday INTEGER NOT NULL,
   par REAL NOT NULL,
-  PRIMARY KEY (location_id, category, version, item_key, weekday)
-);
-CREATE TABLE IF NOT EXISTS par_sheets (
-  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-  category TEXT NOT NULL,
-  version TEXT NOT NULL,
-  saved_by TEXT,
-  saved_at TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (location_id, category, version)
+  PRIMARY KEY (report_id, item_key, weekday)
 );
 
 -- Square Team members, matched to app users by email (or name) so clock-ins line up with the rota.
@@ -1257,6 +1257,20 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 8');
+  }
+  if (version < 9) {
+    // Par levels became named, saved reports: a final version saved the first way becomes a saved report.
+    const old = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'par_sheets'`).get();
+    if (old) {
+      for (const sh of db.prepare(`SELECT p.*, l.name AS site FROM par_sheets p JOIN locations l ON l.id = p.location_id WHERE p.version = 'final'`).all()) {
+        const id = db.prepare('INSERT INTO par_reports (name, location_id, category, created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(`${sh.category} – ${sh.site}`, sh.location_id, sh.category, sh.saved_by, sh.saved_at, sh.saved_by, sh.saved_at).lastInsertRowid;
+        db.prepare(`INSERT INTO par_report_lines (report_id, item_key, item_name, weekday, par)
+          SELECT ?, item_key, item_name, weekday, par FROM par_levels WHERE location_id = ? AND category = ? AND version = 'final'`).run(id, sh.location_id, sh.category);
+      }
+    }
+    db.exec('DROP TABLE IF EXISTS par_levels; DROP TABLE IF EXISTS par_sheets;');
+    db.exec('PRAGMA user_version = 9');
   }
   ensureDefaultSets(db);
   return db;

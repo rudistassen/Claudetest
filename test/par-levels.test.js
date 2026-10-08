@@ -74,32 +74,34 @@ test('par levels: average sold on each weekday over six weeks, by Square categor
   assert.deepEqual(coffee.items.map((i) => i.name).sort(), ['Latte – Large', 'Latte – Regular'], 'sizes shown when an item has more than one');
 });
 
-test('par levels are saved as a draft, then as a final version with only the budgeted levels', async () => {
+test('par levels are saved as named reports that keep only the budgeted levels', async () => {
   const a = await login('admin@cafe.local');
   const lines = [
     { item_key: 'V_CROISSANT', item_name: 'Croissant', pars: [3, 5, 7, 9, 11, 13, 15] },
-    { item_key: 'V_BROWNIE', item_name: 'Brownie', pars: [null, null, null, null, null, null, null] },
+    { item_key: 'V_BROWNIE', item_name: 'Brownie', pars: [null, 4, 4, 4, 4, 6, 0] },
+    { item_key: 'V_NOTHING', item_name: 'Not budgeted', pars: [null, null, null, null, null, null, null] },
   ];
-  const draft = await a('/par-levels', { method: 'PUT', body: { location_id: site, category: 'Bakery', version: 'draft', lines } });
-  assert.equal(draft.status, 200);
-  assert.equal(draft.data.final, null, 'no final version yet');
-  let r = (await a(`/par-levels?category=Bakery&location_id=${site}`)).data;
-  assert.deepEqual(r.draft.lines.find((l) => l.item_key === 'V_CROISSANT').pars, [3, 5, 7, 9, 11, 13, 15]);
+  assert.equal((await a('/par-levels/reports', { method: 'POST', body: { location_id: site, category: 'Bakery', lines } })).status, 400, 'needs a name');
+  const made = await a('/par-levels/reports', { method: 'POST', body: { name: 'Bakery – autumn', location_id: site, category: 'Bakery', lines } });
+  assert.equal(made.status, 201);
+  assert.deepEqual(made.data.lines.map((l) => l.item_name), ['Croissant', 'Brownie'], 'items with no par level are left out');
+  assert.deepEqual(made.data.lines[1].pars, [null, 4, 4, 4, 4, 6, 0]);
 
-  lines[1].pars = [0, 4, 4, 4, 4, 6, 0];
-  assert.equal((await a('/par-levels', { method: 'PUT', body: { location_id: site, category: 'Bakery', version: 'final', lines } })).status, 200);
-  r = (await a(`/par-levels?category=Bakery&location_id=${site}`)).data;
-  assert.deepEqual(r.final.lines.find((l) => l.item_key === 'V_BROWNIE').pars, [null, 4, 4, 4, 4, 6, null], 'only budgeted (non-zero) levels in the final');
-  assert.equal(r.final.saved_by, r.draft.saved_by);
+  const list = (await a('/par-levels/reports')).data;
+  assert.deepEqual(list.map((r) => [r.name, r.category, r.items]), [['Bakery – autumn', 'Bakery', 2]]);
 
-  // Working on the draft again leaves the final version as it was.
+  // Opened again to change it: the builder gets its levels, and saving updates it.
+  const edit = (await a(`/par-levels?category=Bakery&location_id=${site}&report=${made.data.id}`)).data;
+  assert.equal(edit.report.name, 'Bakery – autumn');
   lines[0].pars = [1, 1, 1, 1, 1, 1, 1];
-  await a('/par-levels', { method: 'PUT', body: { location_id: site, category: 'Bakery', version: 'draft', lines } });
-  r = (await a(`/par-levels?category=Bakery&location_id=${site}`)).data;
-  assert.deepEqual(r.final.lines.find((l) => l.item_key === 'V_CROISSANT').pars, [3, 5, 7, 9, 11, 13, 15]);
-  assert.deepEqual(r.draft.lines.find((l) => l.item_key === 'V_CROISSANT').pars, [1, 1, 1, 1, 1, 1, 1]);
+  const updated = await a(`/par-levels/reports/${made.data.id}`, { method: 'PUT', body: { name: 'Bakery – winter', location_id: site, category: 'Bakery', lines } });
+  assert.equal(updated.data.name, 'Bakery – winter');
+  assert.deepEqual(updated.data.lines[0].pars, [1, 1, 1, 1, 1, 1, 1]);
+  assert.equal((await a('/par-levels/reports')).data.length, 1);
 
   const staff = await login('staff1@cafe.local');
-  assert.equal((await staff(`/par-levels?category=Bakery&location_id=${site}`)).status, 403);
-  assert.equal((await a('/par-levels', { method: 'PUT', body: { location_id: site, category: 'Bakery', lines: [{ item_key: 'x', item_name: 'X', pars: [-1] }] } })).status, 400);
+  assert.equal((await staff(`/par-levels/reports/${made.data.id}`)).status, 403);
+  assert.equal((await a('/par-levels/reports', { method: 'POST', body: { name: 'X', location_id: site, category: 'Bakery', lines: [{ item_key: 'x', item_name: 'X', pars: [-1] }] } })).status, 400);
+  assert.equal((await a(`/par-levels/reports/${made.data.id}`, { method: 'DELETE' })).status, 200);
+  assert.deepEqual((await a('/par-levels/reports')).data, []);
 });

@@ -76,63 +76,7 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 ## Connecting Square
 
 1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "Atlas").
-2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders, locations, team members and timecards (the token needs `ORDERS_READ`, `MERCHANT_PROFILE_READ`, `EMPLOYEES_READ`, `TIMECARDS_READ` and `ITEMS_READ` – the last one gives each item's category, for **Reporting → Par levels**). Treat it like a password.
-3. Start Atlas with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
-4. In Atlas go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
-5. Click **Import sales** to backfill history (up to 92 days per run). After that, sales and clock-ins refresh automatically every 30 minutes. The first automatic run backfills the last 28 days.
-6. To use your Square team as your staff list, go to **Setup → Staff → Import from Square**. It shows what will change before anything is saved. Everyone in Square Team is added, or updated if already here (matched by email, then name). Their hourly rate comes from their pay in Square. New people's home site comes from their assigned Square locations (or where they usually clock in); after that the home site is yours to change on the Staff page, and importing again keeps it. Tick **Deactivate staff who aren't in Square** to switch off everyone else, such as the demo staff; they keep their history, and the admin running the import stays active. New people get a random password, so set one (click their name) if they need to sign in. Run it again any time to pick up changes.
-7. Once your sites are linked and your staff imported, **Setup → Square → Remove what isn't in Square** deletes the sites not linked to Square and the staff not in your Square team (for example the demo data), with their rotas and records. It lists what will go first, never removes you, moves anyone in Square whose home site is removed to a site you keep, and saves a copy of the database as `data/cafe-before-cleanup-<date>.db` before deleting.
-8. Staff clock in and out on Square (Square Team / Timecards). Each Square team member is matched to a Atlas user by **email address**, then by name, so use the same email in both. If the token can't read timecards, sales still sync and the reason is shown on the Trading page and in the sync history.
-
-How the numbers are worked out:
-- **Net sales** = line-item totals after discounts, minus VAT (UK Square prices include VAT), minus itemised returns. Tips and service charges are excluded. Only `COMPLETED` orders are counted, and each is assigned to a business day by its close time in UK time.
-- **Labour %** = rostered hours × each person's hourly rate ÷ net sales. For today it only counts hours worked up to now, and days with no Square sales are left out. The colours are green at 30% or below and amber up to 35%. Change `LABOUR_TARGET` in `public/js/views/sales.js` if your target differs.
-- **Clocked labour** = paid hours on each Square timecard (unpaid breaks removed; still-open timecards count up to now) × the wage set on the job in Square, or the person's hourly rate in Atlas if Square has none. Each timecard counts on the day it started.
-- **Sales per labour hour** = net sales ÷ clocked hours, on days that have both. **Staff on the clock** by hour is paid clocked hours in that hour, averaged over the days with sales.
-- Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
-
-## Installing the app
-
-Atlas can be installed as an app (a Progressive Web App) – an icon on the home screen or in the computer's apps, opening full screen. It's the same website underneath, so it updates itself whenever the site does.
-
-- **iPhone / iPad:** open the site in Safari → **Share** → **Add to Home Screen**.
-- **Android:** in Chrome, tap **Install app** (or ⋮ → **Install app**).
-- **Windows / Mac:** in Chrome or Edge, click the install icon in the address bar, or **Install app** at the bottom of the menu in Atlas.
-
-**Your account** shows the right steps for the device you're on. Installing needs the site on https (Railway provides it); the app needs a connection to work and says so when it's offline.
-
-## Supplier invoices
-
-**Stock and Ordering → Invoices** reads supplier invoices for you. Upload a PDF (or a photo of a paper invoice) – several at once, or drag them onto the page – and Atlas reads the supplier, invoice number, dates, every line (description, code, quantity, price, total) and the totals, whatever the supplier's layout. It then:
-
-- recognises the **supplier** (by name, or their email address's domain), or offers to add them;
-- matches each **line to your products** – by what you matched it to last time for that supplier, then the supplier's product code, then the name, then the closest similar name – and says how sure it is;
-- shows **price changes** against your current cost (e.g. £3.20 → £3.40 ▲6%), ticked to update the cost unless the change is so big the units probably differ;
-- warns about **duplicates** (the same invoice number from the same supplier) and **totals that don't add up**.
-
-You check it next to the original, correct anything, then **Confirm**: new suppliers and products are added, ticked costs are updated, and lines you matched by hand are remembered for that supplier's future invoices. **Save for later** keeps it under *To check*.
-
-Invoices are read by Claude (Anthropic's AI model, `claude-opus-5-5`), which costs roughly 5–10p per invoice. To switch it on:
-
-1. Sign up at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, and create a key under **API keys**.
-2. Set `ANTHROPIC_API_KEY` to the key in the app's environment (Railway → Variables) and deploy. Create the key **inside a workspace** (Console → Workspaces → your workspace → API keys); a key made at organisation level also needs `ANTHROPIC_WORKSPACE_ID` set to the workspace's ID. Optional: `INVOICE_MODEL` to use a different Claude model.
-
-The uploaded file is sent to Anthropic to be read and stored in Atlas's database with the invoice.
-
-## Email reports
-
-Admins can email the dashboard to chosen people at a set time (**Setup → Email reports**): pick the time, the days, whether it covers **yesterday's full day** (good for a morning email) or **today so far**, and who gets it. Each person gets the sites they can access, with sales and labour figures only if their permissions include sales. Just before sending, the app fetches the latest figures from Square. **Preview** shows exactly what each person will get; **Send me a test** emails just you.
-
-Email goes through [Brevo](https://www.brevo.com) (free for up to 300 emails a day), because hosts such as Railway block ordinary email on their cheaper plans. To switch it on:
-
-1. Sign up at brevo.com.
-2. Under **Senders, domains & dedicated IPs → Senders**, add the address emails should come from and confirm it from the email Brevo sends.
-3. Under **SMTP & API → API keys**, generate a key.
-4. Set `BREVO_API_KEY` (the key) and `EMAIL_FROM` (the sender address) in the app's environment (Railway → Variables), and deploy. Optional: `EMAIL_FROM_NAME` (default "Atlas") and `APP_URL` (your Atlas address, for an "Open Atlas" button; on Railway it's found automatically).
-
-## Par levels
-
-**Reporting → Par levels**: pick a Square category, then a site. Each item in that category shows its average sold on each day of the week (Monday to Sunday) over the last 6 full weeks – days the site didn't trade are left out – with a row under it to budget the par level for each day. **Fill empty with averages** puts in each day's average rounded up. **Save draft** keeps your work; **Save as final version** saves a clean copy with only the budgeted par levels (the **Final version** tab, which prints). Working on the draft afterwards doesn't change the final version until you save it as final again. Categories come from Square's Items library, read with each Square sync (at most hourly).
+2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders, locations, team members and timecards (the token needs `ORDERS_READ`, `MERCHANT_PROFILE_READ`, `EMPLOYEES_READ`, `TIMECARDS_READ` and `ITEMS_READ` – the last one gives each item's category, for **Reporting → Par levels** has two tiles. **Create a new par level report**: pick a Square category, then a site. Each item in that category shows its average sold on each day of the week (Monday to Sunday) over the last 6 full weeks – days the site didn't trade are left out – with a row under it to budget the par level for each day. **Fill budget with average sold** puts in each day's average rounded up, to adjust from. **Save par levels** asks for a name and saves just the budgeted levels. **View saved par levels** lists the saved reports; each opens to its par levels, to print, change (saving the changes or as a new report) or delete. Categories come from Square's Items library, read with each Square sync (at most hourly).
 
 ## Phone notifications
 
