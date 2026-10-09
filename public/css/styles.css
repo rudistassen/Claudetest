@@ -2331,3 +2331,45 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
   .mb-inbox-text { display: none; }
   .mb-stub::before, .mb-stub::after { right: 4rem; }
 }
+
+/* Your week cards on My Atlas: the site's colour, outlined like a sticker, with a tilted cream label. */
+.mb-hip .mb-row { padding: 0.2rem 0.3rem 0.6rem 0.1rem; }
+.mb-hip .mb-cover { border-radius: 16px; border: 1.5px solid var(--mb-ink); box-shadow: 4px 4px 0 var(--mb-ink);
+  background: radial-gradient(circle at 85% 15%, rgba(255, 255, 255, 0.28), transparent 45%), repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.035) 0 1px, transparent 1px 3px), var(--site); }
+.mb-hip .mb-cover.is-today { box-shadow: inset 0 0 0 3px #fffaf2, 4px 4px 0 var(--mb-ink); }
+.mb-hip .mb-cover.is-open { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--site) 80%, #fffaf2) 0 10px, var(--site) 10px 20px); }
+.mb-hip .mb-day { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.45rem; font-weight: 700; }
+.mb-hip .mb-strip { left: 0.55rem; bottom: 0.7rem; max-width: 84%; border: 1.5px solid #2b2118; border-radius: 6px; background: #fffaf2; color: #2b2118;
+  transform: rotate(-3deg); box-shadow: 2px 2px 0 #2b2118; }
+.mb-hip .mb-card-sub { color: var(--mb-ink-soft); }
+
+/* Rota day view on phones, in the same cream sticker style. */
+.pd-datebar { margin-left: 0; margin-right: 0; border: 1.5px solid var(--mb-ink); border-radius: 999px; background: #fffaf2; box-shadow: 3px 3px 0 var(--mb-ink); }
+.pd-step { color: #2b2118; }
+.pd-date { color: #2b2118; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight: 700; }
+.pd-stat, .pd-cost, .pd-card { border: 1.5px solid var(--mb-ink); border-radius: 14px; background: #fffaf2; color: #2b2118; box-shadow: 3px 3px 0 var(--mb-ink); }
+.pd-stat strong, .pd-cost strong, .pd-name { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight: 700; color: #2b2118; }
+.pd-stat small, .pd-cost small, .pd-line, .pd-break, .pd-chev, .pd-note svg { color: #6e5d4b; }
+.pd-stat-icon { background: #e8b24a; color: #2b2118; border: 1.5px solid rgba(43, 33, 24, 0.85); transform: rotate(-4deg); }
+.pd-stat-icon.is-leave { background: #8fb8b5; color: #2b2118; transform: rotate(3deg); }
+.pd-list { gap: 0.85rem; }
+.pd-card { padding-left: 1.25rem; transition: transform 0.15s, box-shadow 0.15s; }
+.pd-card::before { left: 0.5rem; top: 0.75rem; bottom: 0.75rem; height: auto; width: 5px; }
+.pd-card:not(:disabled):active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--mb-ink); }
+.pd-time { color: #2b2118; }
+.pd-avatar { background: var(--site, #e8b24a); color: #fff; border: 1.5px solid rgba(43, 33, 24, 0.85); border-radius: 12px; font-weight: 800; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3); transform: rotate(-4deg); }
+.pd-item:nth-child(even) .pd-avatar { transform: rotate(3deg); }
+.pd-card.is-new { background: #eef6e9; }
+.pd-card.is-changed { background: #fbf0d6; }
+.pd-open { border-style: dashed; background: repeating-linear-gradient(135deg, #fffaf2 0 12px, #f6ecdc 12px 24px); }
+.pd-open .pd-avatar { background: #fffaf2; color: #2b2118; text-shadow: none; border-style: dashed; }
+.pd-tick { color: #4f6b47; }
+.pd-card .shift-tag { border: 1.5px solid currentColor; border-radius: 999px; transform: rotate(-3deg); }
+.pd-fab { background: #c4552d; border: 1.5px solid var(--mb-ink); box-shadow: 3px 3px 0 var(--mb-ink); }
+.pd-fab-menu { border: 1.5px solid var(--mb-ink); border-radius: 14px; background: #fffaf2; box-shadow: 4px 4px 0 var(--mb-ink); }
+.pd-fab-menu button { color: #2b2118; }
+.pd-fab-menu button:hover, .pd-fab-menu button:focus-visible { background: #f6ecdc; }
+.pd-fab-menu small { color: #6e5d4b; }
+.pd-head .seg { background: none; border: 0; gap: 0.45rem; padding: 0 4px 5px 0; overflow: visible; }
+.pd-head .seg button { border: 1.5px solid var(--mb-ink); border-radius: 999px; background: #fffaf2; color: #2b2118; font-weight: 700; padding: 0.3rem 0.85rem; box-shadow: 2px 2px 0 var(--mb-ink); }
+.pd-head .seg button.is-on { background: #e8b24a; color: #2b2118; }
