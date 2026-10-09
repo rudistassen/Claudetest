@@ -360,7 +360,21 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
   // ---- Admins: analyse a week's rota (published and draft) against forecast sales, and suggest savings ----
 
   const toMins = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-  router.post('/rota/analyse', requireAdmin, async (req, res) => {
+  // Claude can take a few minutes over a whole week, longer than a web request may stay open, so the analysis runs in
+  // the background: POST starts it and returns a job id, and the page asks GET /rota/analyse/:job until it's done.
+  const analyses = new Map();
+  const forget = () => {
+    const old = Date.now() - 30 * 60 * 1000;
+    for (const [k, v] of analyses) if (v.started < old) analyses.delete(k);
+  };
+  router.get('/rota/analyse/:job', requireAdmin, (req, res) => {
+    const job = analyses.get(req.params.job);
+    if (!job || job.user_id !== req.user.id) throw notFound('Rota analysis');
+    if (job.status === 'running') return res.json({ status: 'running', seconds: Math.round((Date.now() - job.started) / 1000) });
+    if (job.status === 'failed') return res.json({ status: 'failed', error: job.error });
+    res.json({ status: 'done', ...job.result });
+  });
+  router.post('/rota/analyse', requireAdmin, (req, res) => {
     if (!rotaAnalyst) throw badRequest('Analysing the rota needs ANTHROPIC_API_KEY (the same key as the invoice reader) – add it in Railway → Variables');
     const b = req.body ?? {};
     const ids = rotaSites(req, b.location_id);
@@ -451,40 +465,54 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     };
     if (!draft.length) throw badRequest('There are no shifts on this week’s rota to analyse');
 
-    const result = await rotaAnalyst.analyse(week);
-    const siteByName = new Map(sites.map((l) => [l.name.toLowerCase(), l]));
-    const timeOk2 = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(t ?? ''));
-    const recommendations = (result.recommendations ?? []).map((r) => {
-      const shiftIds = (r.shift_ids ?? []).filter((x) => byId.has(x));
-      const shifts = shiftIds.map((x) => byId.get(x));
-      // Savings are worked out here where we can (rather than trusting Claude's arithmetic).
-      let saving = typeof r.saving === 'number' ? r.saving : null;
-      if (r.kind === 'cut_shift' && shifts.length) saving = shifts.reduce((t, s) => t + costOf(s), 0);
-      if (shifts.length === 1 && (timeOk2(r.new_start_time) || timeOk2(r.new_end_time))) {
-        const s = shifts[0];
-        const start = timeOk2(r.new_start_time) ? r.new_start_time : s.start_time;
-        const end = timeOk2(r.new_end_time) ? r.new_end_time : s.end_time;
-        if (toMins(end) > toMins(start)) saving = costOf(s) - shiftHours(start, end, s.break_minutes) * (rates.get(s.user_id) ?? 0);
-      }
-      const site = siteByName.get(String(r.site ?? '').toLowerCase()) ?? sites.find((l) => l.id === shifts[0]?.location_id) ?? null;
+    forget();
+    const jobId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    const job = { status: 'running', started: Date.now(), user_id: req.user.id };
+    analyses.set(jobId, job);
+    const finish = (result) => {
+      const siteByName = new Map(sites.map((l) => [l.name.toLowerCase(), l]));
+      const timeOk2 = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(t ?? ''));
+      const recommendations = (result.recommendations ?? []).map((r) => {
+        const shiftIds = (r.shift_ids ?? []).filter((x) => byId.has(x));
+        const shifts = shiftIds.map((x) => byId.get(x));
+        // Savings are worked out here where we can (rather than trusting Claude's arithmetic).
+        let saving = typeof r.saving === 'number' ? r.saving : null;
+        if (r.kind === 'cut_shift' && shifts.length) saving = shifts.reduce((t, s) => t + costOf(s), 0);
+        if (shifts.length === 1 && (timeOk2(r.new_start_time) || timeOk2(r.new_end_time))) {
+          const s = shifts[0];
+          const start = timeOk2(r.new_start_time) ? r.new_start_time : s.start_time;
+          const end = timeOk2(r.new_end_time) ? r.new_end_time : s.end_time;
+          if (toMins(end) > toMins(start)) saving = costOf(s) - shiftHours(start, end, s.break_minutes) * (rates.get(s.user_id) ?? 0);
+        }
+        const site = siteByName.get(String(r.site ?? '').toLowerCase()) ?? sites.find((l) => l.id === shifts[0]?.location_id) ?? null;
+        return {
+          ...r, shift_ids: shiftIds, location_id: site?.id ?? null, site: site?.name ?? r.site,
+          saving: saving === null ? null : round2(Math.max(0, saving)),
+          shifts: shifts.map((s) => ({ id: s.id, user_name: s.user_name, date: s.date, start_time: s.start_time, end_time: s.end_time })),
+        };
+      });
       return {
-        ...r, shift_ids: shiftIds, location_id: site?.id ?? null, site: site?.name ?? r.site,
-        saving: saving === null ? null : round2(Math.max(0, saving)),
-        shifts: shifts.map((s) => ({ id: s.id, user_name: s.user_name, date: s.date, start_time: s.start_time, end_time: s.end_time })),
+        week: ws,
+        demo: !!rotaAnalyst.demo,
+        headline: result.headline ?? '',
+        watch_outs: result.watch_outs ?? [],
+        recommendations,
+        total_saving: round2(recommendations.reduce((t, r) => t + (r.saving ?? 0), 0)),
+        sites: week.sites.map((x, i) => ({ id: sites[i].id, name: x.name, forecast_net_sales: x.week_forecast_net_sales, labour_cost: x.week_labour_cost,
+          labour_pct: x.week_labour_pct, published_labour_cost: x.published_rota_labour_cost,
+          days: x.days.map((d) => ({ date: d.date, forecast_gross_sales: d.forecast_gross_sales, labour_cost: d.labour_cost, labour_pct: d.labour_pct })) })),
+        target_pct: LABOUR_TARGET_PCT,
       };
+    };
+    Promise.resolve().then(() => rotaAnalyst.analyse(week)).then((result) => {
+      job.result = finish(result);
+      job.status = 'done';
+    }).catch((err) => {
+      console.error('Rota analysis failed:', err.message);
+      job.error = err.message || 'Something went wrong – try again';
+      job.status = 'failed';
     });
-    res.json({
-      week: ws,
-      demo: !!rotaAnalyst.demo,
-      headline: result.headline ?? '',
-      watch_outs: result.watch_outs ?? [],
-      recommendations,
-      total_saving: round2(recommendations.reduce((t, r) => t + (r.saving ?? 0), 0)),
-      sites: week.sites.map((x, i) => ({ id: sites[i].id, name: x.name, forecast_net_sales: x.week_forecast_net_sales, labour_cost: x.week_labour_cost,
-        labour_pct: x.week_labour_pct, published_labour_cost: x.published_rota_labour_cost,
-        days: x.days.map((d) => ({ date: d.date, forecast_gross_sales: d.forecast_gross_sales, labour_cost: d.labour_cost, labour_pct: d.labour_pct })) })),
-      target_pct: LABOUR_TARGET_PCT,
-    });
+    res.status(202).json({ job: jobId });
   });
 
   // Adds the shifts an admin ticked: { shifts: [{ user_id, location_id, date, start_time, end_time, break_minutes, position, notes }] }.

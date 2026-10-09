@@ -19,12 +19,31 @@ const pctText = (p) => (p === null ? '–' : `${Math.round(p * 10) / 10}%`);
 export async function openRotaAnalysis({ location, week, onShow }) {
   const waiting = openModal({
     title: '📊 Analysing this week’s rota',
-    body: `<p class="ri-reading"><span class="ri-spinner" aria-hidden="true"></span> Claude is comparing every shift with your forecast sales and usual trade by the hour – this can take a minute or two…</p>
+    body: `<p class="ri-reading"><span class="ri-spinner" aria-hidden="true"></span> Claude is comparing every shift with your forecast sales and usual trade by the hour – this can take a few minutes. <span class="ra-elapsed muted"></span></p>
       <p class="muted small">It looks at the rota as it stands, including draft changes that aren’t published yet. Nothing on the rota is changed.</p>`,
   });
+  // It runs in the background on the server (it can take a few minutes); check on it every few seconds.
   let r;
   try {
-    r = await api('/rota/analyse', { method: 'POST', body: { location_id: location, week } });
+    const { job } = await api('/rota/analyse', { method: 'POST', body: { location_id: location, week } });
+    const started = Date.now();
+    for (;;) {
+      await new Promise((ok) => setTimeout(ok, 3000));
+      if (!document.contains(waiting.form)) return; // closed while waiting
+      let s;
+      try {
+        s = await api(`/rota/analyse/${job}`);
+      } catch (err) {
+        // A dropped connection or a busy server (e.g. the phone changing network) shouldn't lose the analysis.
+        if (err.status === 404) throw new Error('The analysis was lost (Atlas restarted) – try again');
+        if ((err.status && err.status < 500) || Date.now() - started > 15 * 60 * 1000) throw err;
+        continue;
+      }
+      if (s.status === 'failed') throw new Error(s.error || 'The analysis didn’t work – try again');
+      if (s.status === 'done') { r = s; break; }
+      const note = waiting.form.querySelector('.ra-elapsed');
+      if (note) note.textContent = `${Math.floor(s.seconds / 60)}:${String(s.seconds % 60).padStart(2, '0')} so far`;
+    }
   } catch (err) {
     waiting.close();
     showError(err);

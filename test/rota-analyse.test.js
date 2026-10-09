@@ -33,6 +33,17 @@ async function login(email) {
   };
 }
 const week = weekStart(today());
+// Starts an analysis and waits for it, as the page does.
+async function analyse(as, body) {
+  const start = await as('/rota/analyse', { method: 'POST', body });
+  if (start.status !== 202) return start;
+  for (let i = 0; i < 50; i += 1) {
+    const r = await as(`/rota/analyse/${start.data.job}`);
+    if (r.data.status !== 'running') return r;
+    await new Promise((ok) => setTimeout(ok, 20));
+  }
+  throw new Error('analysis never finished');
+}
 
 test('only admins can analyse the rota', async () => {
   answer = () => ({ headline: '', recommendations: [], watch_outs: [] });
@@ -56,8 +67,9 @@ test('the week is sent with forecasts, hourly cover and every shift; savings are
     ],
     watch_outs: ['Saturday lunch looks thin'],
   });
-  const { status, data } = await a('/rota/analyse', { method: 'POST', body: { location_id: 'all', week } });
+  const { status, data } = await analyse(a, { location_id: 'all', week });
   assert.equal(status, 200, JSON.stringify(data));
+  assert.equal(data.status, 'done');
   // What Claude was sent.
   const sentSite = sent.sites.find((x) => x.name === site);
   const sentDay = sentSite.days.find((d) => d.date === shift.date);
@@ -78,7 +90,21 @@ test('the week is sent with forecasts, hourly cover and every shift; savings are
 test('the demo stand-in gives suggestions from the same data', async () => {
   answer = (w) => demoRotaAnalyst().analyse(w);
   const a = await login('admin@cafe.local');
-  const { status, data } = await a('/rota/analyse', { method: 'POST', body: { location_id: 'all', week } });
+  const { status, data } = await analyse(a, { location_id: 'all', week });
   assert.equal(status, 200);
   assert.ok(Array.isArray(data.recommendations));
+});
+
+test('the analysis runs in the background, and a failure is reported back', async () => {
+  let release;
+  answer = () => new Promise((ok, fail) => { release = fail; });
+  const a = await login('admin@cafe.local');
+  const start = await a('/rota/analyse', { method: 'POST', body: { location_id: 'all', week } });
+  assert.equal(start.status, 202);
+  assert.equal((await a(`/rota/analyse/${start.data.job}`)).data.status, 'running');
+  release(new Error('Claude is busy – try again in a minute'));
+  await new Promise((ok) => setTimeout(ok, 20));
+  const r = await a(`/rota/analyse/${start.data.job}`);
+  assert.deepEqual(r.data, { status: 'failed', error: 'Claude is busy – try again in a minute' });
+  assert.equal((await a('/rota/analyse/nope')).status, 404);
 });
