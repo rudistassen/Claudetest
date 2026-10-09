@@ -1,4 +1,4 @@
-import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
+import { assertLocation, can, reportLocations, requireAdmin, requirePerm, resolveLocation } from '../auth.js';
 import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { availabilityOn } from '../availability.js';
 import { leaveFor, onHoliday } from './leave.js';
@@ -70,7 +70,7 @@ export function salesForecast(db, locationIds, weekStartDate) {
 // The labour cost we aim for, as a share of net sales.
 export const LABOUR_TARGET_PCT = 30;
 
-export function registerRotaRoutes(router, db) {
+export function registerRotaRoutes(router, db, { rotaReader = null } = {}) {
   /**
    * Reporting → Rota costs: for a week, each site's rota cost against a labour budget of 30% of its planned net
    * sales. Sales are shown gross (what the business talks in): the sales budget for the day (Rota → Sales budget)
@@ -284,6 +284,118 @@ export function registerRotaRoutes(router, db) {
     if (raw === 'all') return reportLocations(req).map((l) => l.id);
     return [resolveLocation(req, raw)];
   }
+
+  // ---- Admins: read a rota from a photo or PDF with Claude, check it, then add the shifts as drafts ----
+
+  const READ_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+  const clean = (v) => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const timeOk = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(t ?? ''));
+
+  router.post('/rota/import/read', requireAdmin, async (req, res) => {
+    if (!rotaReader) throw badRequest('Reading rotas needs ANTHROPIC_API_KEY (the same key as the invoice reader) – add it in Railway → Variables');
+    const b = req.body ?? {};
+    const mediaType = oneOf(b.media_type, 'media_type', READ_TYPES, { required: true });
+    const data = String(b.data ?? '').replace(/^data:[^,]*,/, '').replace(/\s+/g, '');
+    if (!data) throw badRequest('Choose a photo or PDF of the rota');
+    if (data.length > 14 * 1024 * 1024) throw badRequest('That file is too big – keep photos and PDFs under 10 MB');
+    const siteIds = rotaSites(req, b.location_id);
+    const week = weekStart(date(b.week, 'week') ?? today());
+    const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
+    const sites = db.prepare(`SELECT id, name, opening_hours FROM locations WHERE id IN (${siteIds.map(() => '?').join(',')}) ORDER BY name`).all(...siteIds);
+    const team = db.prepare(`SELECT u.id, u.name, u.rota_group, u.position, u.location_id, l.name AS site FROM users u LEFT JOIN locations l ON l.id = u.location_id
+      WHERE u.active = 1 AND u.role != 'admin' ORDER BY u.name`).all();
+    const reading = await rotaReader.read({ media_type: mediaType, data }, {
+      week: days, sites: sites.map((x) => ({ name: x.name, hours: x.opening_hours })), team: team.map((t) => ({ name: t.name, role: t.rota_group || t.position, site: t.site })),
+    });
+    if (!reading?.is_rota) throw badRequest('That doesn’t look like a rota – try a clearer photo, or the PDF');
+
+    // Match names and sites to Atlas, and check each shift as it would be added.
+    const byName = (n) => {
+      const c = clean(n);
+      if (!c) return null;
+      const exact = team.filter((t) => clean(t.name) === c);
+      if (exact.length === 1) return exact[0];
+      const first = team.filter((t) => clean(t.name).replace(/\s*\(.*\)$/, '').split(' ')[0] === c.split(' ')[0]);
+      return first.length === 1 ? first[0] : null;
+    };
+    const siteBy = (n) => sites.find((x) => clean(x.name) === clean(n)) ?? null;
+    const seen = new Set();
+    const proposals = (reading.shifts ?? []).map((r, i) => {
+      const who = byName(r.person) ?? byName(r.written_as);
+      const site = siteBy(r.site) ?? (sites.length === 1 ? sites[0] : sites.find((x) => x.id === who?.location_id) ?? null);
+      const p = {
+        key: i, written_as: r.written_as || r.person || '', unsure: r.unsure || '', notes: r.notes || '', position: r.role || '',
+        user_id: who?.id ?? null, user_name: who?.name ?? null, location_id: site?.id ?? null, location_name: site?.name ?? null,
+        date: r.date, start_time: r.start_time, end_time: r.end_time, break_minutes: Number.isInteger(r.break_minutes) ? r.break_minutes : 0,
+      };
+      let status = 'ready';
+      let problem = '';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(p.date ?? '')) || !timeOk(p.start_time) || !timeOk(p.end_time) || p.start_time === p.end_time) {
+        status = 'check'; problem = 'The day or times couldn’t be read clearly – check them';
+      } else if (!p.user_id) {
+        status = 'check'; problem = `Nobody matches “${p.written_as}” – choose who it is`;
+      } else if (!p.location_id) {
+        status = 'check'; problem = 'Choose which site this shift is at';
+      } else {
+        const dupKey = `${p.user_id}|${p.date}|${p.start_time}|${p.end_time}`;
+        const existing = db.prepare('SELECT 1 FROM draft_shifts WHERE user_id = ? AND date = ? AND start_time = ? AND end_time = ?').get(p.user_id, p.date, p.start_time, p.end_time);
+        const holiday = onHoliday(db, p.user_id, p.date);
+        const clash = findClash(p);
+        if (existing || seen.has(dupKey)) { status = 'exists'; problem = 'Already on the rota – it won’t be added twice'; }
+        else if (holiday) { status = 'holiday'; problem = `${p.user_name} is on holiday then`; }
+        else if (clash) { status = 'clash'; problem = `${p.user_name} already has ${clash.start_time}–${clash.end_time} at ${clash.location_name} that day`; }
+        else if (!days.includes(p.date)) { status = 'check'; problem = 'This date isn’t in the week you’re looking at – check it'; }
+        else if (p.unsure) { status = 'check'; problem = p.unsure; }
+        seen.add(dupKey);
+      }
+      return { ...p, status, problem };
+    });
+    res.json({
+      week, proposals, notes: reading.notes || '', demo: !!rotaReader.demo,
+      team: team.map((t) => ({ id: t.id, name: t.name, location_id: t.location_id })),
+      sites: sites.map((x) => ({ id: x.id, name: x.name })),
+    });
+  });
+
+  // Adds the shifts an admin ticked: { shifts: [{ user_id, location_id, date, start_time, end_time, break_minutes, position, notes }] }.
+  // They're drafts (staff don't see them until the rota is published); any that would double-book someone are skipped.
+  router.post('/rota/import/apply', requireAdmin, (req, res) => {
+    const list = Array.isArray(req.body?.shifts) ? req.body.shifts : [];
+    if (!list.length) throw badRequest('Tick the shifts to add');
+    if (list.length > 500) throw badRequest('Add at most 500 shifts at once');
+    const added = [];
+    const skipped = [];
+    tx(db, () => {
+      const insert = db.prepare('INSERT INTO shifts (location_id, user_id, date, start_time, end_time, break_minutes, position, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      for (const b of list) {
+        try {
+          const s = {
+            location_id: resolveLocation(req, b.location_id),
+            user_id: id(b.user_id, 'Person', { required: true }),
+            date: date(b.date, 'Date', { required: true }),
+            start_time: time(b.start_time, 'Start', { required: true }),
+            end_time: time(b.end_time, 'End', { required: true }),
+            break_minutes: num(b.break_minutes, 'Break', { min: 0, max: 600, int: true }) ?? 0,
+            position: str(b.position, 'Role', { max: 100 }),
+            notes: str(b.notes, 'Notes'),
+          };
+          if (s.start_time === s.end_time) throw badRequest('Start and end are the same');
+          const person = db.prepare('SELECT name FROM users WHERE id = ? AND active = 1').get(s.user_id);
+          if (!person) throw badRequest('That person isn’t on the team');
+          if (onHoliday(db, s.user_id, s.date)) throw badRequest(`${person.name} is on holiday`);
+          const clash = findClash(s);
+          if (clash) throw badRequest(`${person.name} already has ${clash.start_time}–${clash.end_time} that day`);
+          const r = insert.run(s.location_id, s.user_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes);
+          logRota(db, req, { action: 'add', location_id: s.location_id, shift: { ...s, id: r.lastInsertRowid }, details: `${shiftText(s)} — from an uploaded rota` });
+          added.push({ id: Number(r.lastInsertRowid), location_id: s.location_id });
+        } catch (err) {
+          skipped.push({ ...b, problem: err.message });
+        }
+      }
+      if (added.length) rememberUndo(req, `Added ${added.length} shift${added.length === 1 ? '' : 's'} from an uploaded rota`, added[0].location_id, [], added.map((a) => a.id));
+    });
+    res.json({ added: added.length, ids: added.map((a) => a.id), skipped });
+  });
 
   /**
    * The shift window's quick times: a site's five most used shift times (each with the break it usually has), most

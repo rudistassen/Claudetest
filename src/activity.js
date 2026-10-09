@@ -83,6 +83,8 @@ const ACTIONS = [
   ['POST', '/rota/copy-week', 'Rota', 'Copied a week of the rota', (db, p, b) => join(week(b), site(db, b.location_id))],
   ['POST', '/rota/discard', 'Rota', 'Discarded unpublished rota changes', (db, p, b) => join(week(b), site(db, b.location_id))],
   ['POST', '/rota/undo', 'Rota', 'Undid a rota change'],
+  ['POST', '/rota/import/read', 'Rota', 'Uploaded a rota for Claude to read'],
+  ['POST', '/rota/import/apply', 'Rota', 'Added shifts from an uploaded rota', (db, p, b) => (Array.isArray(b.shifts) ? `${b.shifts.length} shift${b.shifts.length === 1 ? '' : 's'}` : null)],
   ['PUT', '/sales-budgets', 'Rota', 'Published a sales budget', (db, p, b) => join(week(b), site(db, b.location_id))],
   ['POST', '/shift-drops', 'Rota', 'Asked to drop a shift', (db, p, b) => shift(db, b.shift_id)],
   ['POST', '/shift-drops/:id/approve', 'Rota', 'Approved a request to drop a shift'],

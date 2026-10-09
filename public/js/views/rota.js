@@ -3,6 +3,7 @@ import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openMod
 import { shiftHistory } from './rotalog.js';
 import { openStaffEditor } from './admin.js';
 import { askToDrop, claimRequest, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
+import { justImported, openRotaImport } from './rotaimport.js';
 import { sickDialog } from './sickness.js';
 
 // A shift copied with Ctrl/⌘+click: its times stay here (across weeks and sites) until it's pasted somewhere with a
@@ -549,6 +550,7 @@ export async function render(ctx) {
         ${all ? '<button class="btn" id="collapse-all"></button>' : ''}
         <a class="btn" href="#/rota${qs({ view: 'mine', week })}">My shifts</a>
         ${canEdit ? '<button class="btn" id="copy-week">Copy previous week</button>' : ''}
+        ${state.isAdmin ? '<button class="btn btn-ai" id="read-rota" title="Upload a photo or PDF of a rota and Claude adds the shifts">✨ Read a rota</button>' : ''}
         <button class="btn" id="print">Print</button>
       </div>
     </div>
@@ -975,6 +977,12 @@ export async function render(ctx) {
       ctx.rerender();
     } catch (err) { showError(err); }
   });
+  el.querySelector('#read-rota')?.addEventListener('click', () => openRotaImport({ location: all ? 'all' : siteId, week, onDone: () => ctx.rerender() }));
+  // Shifts just added from an uploaded rota glow until the page is next opened.
+  if (justImported.size) {
+    el.querySelectorAll('[data-shift]').forEach((b) => { if (justImported.has(Number(b.dataset.shift))) b.classList.add('is-imported'); });
+    setTimeout(() => justImported.clear(), 0);
+  }
   el.querySelector('#copy-week')?.addEventListener('click', async () => {
     const hasShifts = data.shifts.length > 0;
     if (!(await confirmDialog(

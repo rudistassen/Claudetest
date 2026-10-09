@@ -17,6 +17,7 @@ import { startReportScheduler } from './reports.js';
 import { SquareClient, squareConfig, startAutoSync, syncSales } from './square.js';
 import { addDays, today } from './util.js';
 import { configurePush, startLateAlerts } from './push.js';
+import { rotaReaderFromEnv } from './rota-reader.js';
 
 const args = new Set(process.argv.slice(2));
 const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'data', 'cafe.db');
@@ -77,6 +78,7 @@ if (mailer) {
 
 // Reading supplier invoices with Claude.
 const invoiceReader = invoiceReaderFromEnv();
+const rotaReader = rotaReaderFromEnv();
 if (invoiceReader) console.log(`Invoice reading switched on (${invoiceReader.model}).`);
 
 const port = Number(process.env.PORT) || 3000;
@@ -133,4 +135,4 @@ try {
 const version = appVersion(publicDir);
 const xeroSettings = xeroConfig();
 if (xeroSettings) console.log('Xero: set up – connect it under Setup → Xero.');
-createApp(db, { square, mailer, invoiceReader, mailbox, careers, events, enquiryReader, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Atlas running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, rotaReader, mailbox, careers, events, enquiryReader, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Atlas running at http://localhost:${port}`));
