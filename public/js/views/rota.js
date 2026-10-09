@@ -183,6 +183,22 @@ export async function render(ctx) {
   } else {
     rows.push(...(byGroup ? byRotaGroup(data.staff, siteId, null) : data.staff.map((u) => ({ u, site: siteId, groupId: null }))));
   }
+  // On the timeline, people within each site / role are ordered by when they're in: earliest first, people not
+  // working (that day, or that week) at the bottom.
+  if (timeline) {
+    const firstIn = (u, site) => data.shifts
+      .filter((x) => x.user_id === u.id && x.state !== 'removed' && (!all || x.location_id === site) && (tday ? x.date === tday : true))
+      .map((x) => `${x.date} ${x.start_time} ${x.end_time}`).sort()[0] ?? null;
+    for (let i = 0; i < rows.length;) {
+      if (!rows[i].u) { i += 1; continue; }
+      let j = i;
+      while (j < rows.length && rows[j].u) j += 1;
+      const run = rows.slice(i, j).map((r) => ({ r, key: firstIn(r.u, r.site) }))
+        .sort((a, b) => (a.key === null) - (b.key === null) || (a.key ?? '').localeCompare(b.key ?? '') || a.r.u.name.localeCompare(b.r.u.name));
+      rows.splice(i, j - i, ...run.map((x) => x.r));
+      i = j;
+    }
+  }
   // Site layouts use the site id as each group's id.
   const siteOfGroup = (groupId) => (groupId && /^\d+$/.test(groupId) ? Number(groupId) : null);
   const groupForecast = (groupId) => {
