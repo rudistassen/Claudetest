@@ -359,7 +359,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const labourLastWeek = lwNet ? Math.round((lwSites.reduce((n, l) => n + l.last_week.labour_cost, 0) / lwNet) * 1000) / 10 : null;
   const labourPct = todayTotals ? (tradeToday.labour_synced && todayTotals.labour_pct !== null ? todayTotals.labour_pct : todayTotals.rostered_labour_pct) : null;
 
-  el.innerHTML = `
+  el.innerHTML = `<div class="dash-hip">
     <div class="page-head">
       <h1>${state.multiSite ? 'All sites' : esc(state.location?.name ?? 'Dashboard')}</h1>
       <div class="actions">
@@ -400,7 +400,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       <h2>Your upcoming shifts</h2>
       <ul class="shift-list">${myShifts.slice(0, 7).map((s) => `<li><strong>${fmtDate(s.date)}</strong> ${s.start_time}–${s.end_time} · ${esc(s.location_name)}</li>`).join('')}</ul>
     </section>` : ''}
-    <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div>`;
+    <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div></div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
   // The date menu: pick an earlier day; today goes back to the live dashboard.

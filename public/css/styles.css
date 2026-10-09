@@ -2450,3 +2450,43 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .hub-rail .hub-tile.is-active { background: #e8b24a; border-color: var(--mb-ink); box-shadow: 2px 2px 0 var(--mb-ink); }
 .hub-rail .hub-tile.is-active .hub-icon { background: #fffaf2; }
 .hub-rail .hub-text strong { font-size: 1rem; }
+
+/* Dashboard in the cream sticker style. Cards stay dark in dark mode so charts and tables keep their colours. */
+:root { --mb-card: #fffaf2; }
+:root[data-theme="dark"] { --mb-card: var(--surface); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --mb-card: var(--surface); } }
+@media screen {
+  .dash-hip .page-head h1 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 2rem; font-weight: 700; padding-bottom: 0.35rem; color: var(--mb-ink);
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5 Q 30 1 60 4.5 T 118 3' fill='none' stroke='%23c4552d' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") left bottom / 4rem 0.55rem no-repeat; }
+  .dash-hip .card, .dash-hip .kpi { background: var(--mb-card); border: 1.5px solid var(--mb-ink); border-radius: 16px; box-shadow: 3px 3px 0 var(--mb-ink); }
+  .dash-hip .kpis, .dash-hip .site-cards, .dash-hip .dash-hero { padding: 0 4px 4px 0; }
+  .dash-hip .kpi-feature { background: #e8b24a; border: 1.5px solid var(--mb-ink); }
+  .dash-hip .kpi-feature, .dash-hip .kpi-feature span, .dash-hip .kpi-feature strong, .dash-hip .kpi-feature small, .dash-hip .kpi-feature .muted { color: #2b2118; }
+  .dash-hip .kpi-feature::after { color: rgba(43, 33, 24, 0.35); }
+  .dash-hip .kpi strong { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.85rem; letter-spacing: -0.01em; }
+  .dash-hip .kpi > span:first-child { font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem; color: var(--mb-ink-soft); }
+  .dash-hip .kpi-feature > span:first-child { color: #2b2118; }
+  .dash-hip .kpi-feature small, .dash-hip .kpi-feature small * { color: #2b2118; }
+  .dash-hip .kpi.kpi-feature .kpi-vs span.muted { color: #4a3a2a; }
+  .dash-hip .kpi.kpi-feature .kpi-vs span.tone-bad { color: #9b1c1c; }
+  .dash-hip .kpi.kpi-feature .kpi-vs span.tone-good { color: #1f5e2d; }
+  .dash-hip .kpi-button:hover, .dash-hip .site-cards .card:hover { transform: translate(-1px, -2px); box-shadow: 4px 5px 0 var(--mb-ink); border-color: var(--mb-ink); }
+  .dash-hip .kpi-button u { color: #c4552d; }
+  .dash-hip .card h2, .dash-hip .weather-title { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight: 700; font-size: 1.2rem; }
+  .dash-hip .dash-sites > .card-head, .dash-hip .whos-in > .card-head { background: transparent; border-bottom: 1.5px dashed var(--mb-line); border-radius: 16px 16px 0 0; }
+  .dash-hip .weather-days li:first-child { background: #e8b24a; color: #2b2118; border: 1.5px solid #2b2118; border-radius: 12px; box-shadow: 2px 2px 0 #2b2118; transform: rotate(-1.5deg); }
+  .dash-hip .weather-days li:first-child .wd-rain { color: #2b2118; }
+  .dash-hip .site-card { border-top: 1.5px solid var(--mb-ink); }
+  .dash-hip .site-card > .card-head { background: var(--site); border-bottom: 1.5px solid var(--mb-ink); }
+  .dash-hip .site-card > .card-head h2 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); font-size: 1.2rem; }
+  .dash-hip .site-card > .card-head h2::before { background: #fffaf2; color: #2b2118; border: 1.5px solid #2b2118; border-radius: 10px; outline: 0; text-shadow: none; font-family: system-ui, sans-serif; transform: rotate(-4deg); }
+  .dash-hip .btn { border: 1.5px solid var(--mb-ink); border-radius: 999px; background: var(--mb-card); color: var(--mb-ink); font-weight: 700; box-shadow: 2px 2px 0 var(--mb-ink); }
+  .dash-hip .site-card > .card-head .btn { border-color: #2b2118; background: #fffaf2; color: #2b2118; box-shadow: 2px 2px 0 #2b2118; }
+  .dash-hip .btn:active { transform: translate(2px, 2px); box-shadow: none; }
+  .dash-hip .dash-date { border: 1.5px solid var(--mb-ink); border-radius: 999px; color: var(--mb-ink); font-weight: 600; }
+  .dash-hip .seg { background: none; border: 0; gap: 0.4rem; padding: 0 4px 4px 0; overflow: visible; }
+  .dash-hip .seg button { border: 1.5px solid var(--mb-ink); border-radius: 999px; background: var(--mb-card); color: var(--mb-ink); font-weight: 700; box-shadow: 2px 2px 0 var(--mb-ink); }
+  .dash-hip .seg button.is-on { background: #e8b24a; color: #2b2118; }
+  .dash-hip .notice { border: 1.5px solid var(--mb-ink); border-radius: 14px; box-shadow: 3px 3px 0 var(--mb-ink); }
+  .dash-hip .whos-in-site-head { border-radius: 8px; }
+}
