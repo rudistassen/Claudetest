@@ -50,7 +50,7 @@ export function planCleanup(db, { currentUserId }) {
 export function applyCleanup(db, { currentUserId, removeLocations, removeStaff }) {
   const plan = planCleanup(db, { currentUserId });
   if (removeLocations && !plan.linked_sites.length) throw new HttpError(400, 'Link at least one site to Square first, or every site would be removed');
-  if (removeStaff && !plan.team_linked) throw new HttpError(400, 'Import your staff from Square first (Setup → Staff), or every staff member would be removed');
+  if (removeStaff && !plan.team_linked) throw new HttpError(400, 'Import your staff from Square first (People → Staff), or every staff member would be removed');
   const backup = backupDatabase(db);
 
   tx(db, () => {

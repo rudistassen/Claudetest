@@ -393,7 +393,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     <section class="card weather" id="weather" hidden></section>
     ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
     ${locs.some((l) => l.roster) ? whosIn(locs, data, fresh) : ''}
-    ${security?.demo_password_accounts?.length ? `<p class="notice security-warning"><strong>⚠ Security: ${security.demo_password_accounts.length} account${security.demo_password_accounts.length === 1 ? '' : 's'} can still sign in with the demo password</strong> (${esc(security.demo_password_accounts.slice(0, 4).map((u) => u.email).join(', '))}${security.demo_password_accounts.length > 4 ? ', …' : ''}). Anyone who knows it could get in. Add <code>SEED_DEMO</code> = <code>false</code> in Railway → Variables to switch them all off, or give each a new password under Setup → Staff.</p>` : ''}
+    ${security?.demo_password_accounts?.length ? `<p class="notice security-warning"><strong>⚠ Security: ${security.demo_password_accounts.length} account${security.demo_password_accounts.length === 1 ? '' : 's'} can still sign in with the demo password</strong> (${esc(security.demo_password_accounts.slice(0, 4).map((u) => u.email).join(', '))}${security.demo_password_accounts.length > 4 ? ', …' : ''}). Anyone who knows it could get in. Add <code>SEED_DEMO</code> = <code>false</code> in Railway → Variables to switch them all off, or give each a new password under People → Staff.</p>` : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
     ${myShifts.length ? `
     <section class="card">

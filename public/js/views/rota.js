@@ -610,7 +610,7 @@ export async function render(ctx) {
         </tfoot>
       </table>
     </div>
-    ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under Setup → Staff.</div>` : ''}
+    ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under People → Staff.</div>` : ''}
     ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is covering at another site.</p>' : ''}
     ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a role yet – set one for each person on the Staff page.</p>' : ''}
     ${fcNote ? `<p class="muted small">${fcNote}</p>` : ''}

@@ -79,7 +79,7 @@ export function openForgot(root, email, back) {
         ${r.email_ready
           ? `<p>If <strong>${esc(form.email.value.trim())}</strong> has a Atlas account, we’ve sent it a link to choose a new password. It works for 2 hours.</p>
              <p class="muted small">Nothing arrived after a few minutes? Check your junk folder, or ask your manager to set a new password for you.</p>`
-          : '<p>Atlas can’t send emails yet, so ask your manager to set a new password for you (Setup → Staff).</p>'}
+          : '<p>Atlas can’t send emails yet, so ask your manager to set a new password for you (People → Staff).</p>'}
         <button class="btn btn-block" type="button" data-back>Back to sign in</button>`;
       form.querySelector('[data-back]').addEventListener('click', () => back());
     } catch (ex) {

@@ -749,7 +749,7 @@ function cleanupSection(c) {
   return `
     <section class="card" id="cleanup">
       <h2>Remove what isn’t in Square</h2>
-      ${!c.ready ? `<p class="notice">${!c.linked_sites.length ? 'Link your sites to Square locations above first.' : 'Import your staff from Square first (Setup → Staff → Import from Square), so Atlas knows who to keep.'}</p>` : ''}
+      ${!c.ready ? `<p class="notice">${!c.linked_sites.length ? 'Link your sites to Square locations above first.' : 'Import your staff from Square first (People → Staff → Import from Square), so Atlas knows who to keep.'}</p>` : ''}
       <p class="muted">Deletes sites that aren’t linked to a Square location and staff who aren’t in your Square team, such as the made-up demo data, along with their rotas and records. Sites linked to Square (${esc(c.linked_sites.join(', ') || 'none yet')}) and you are always kept. A backup copy of your data is saved first.</p>
       ${c.locations.length ? `
         <label class="check-row"><input type="checkbox" name="remove_locations" ${c.linked_sites.length ? '' : 'disabled'}>

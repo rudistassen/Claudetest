@@ -337,7 +337,7 @@ export async function renderRecruitment(ctx) {
   el.querySelectorAll('[data-stage]').forEach((s) => s.addEventListener('change', async () => {
     try {
       await api(`/candidates/${s.dataset.stage}`, { method: 'PUT', body: { stage: s.value } });
-      toast(s.value === 'hired' ? 'Hired! Add them in Square (or Setup → Staff) so they can sign in and go on the rota.' : `Moved to ${STAGE[s.value]}`);
+      toast(s.value === 'hired' ? 'Hired! Add them in Square (or People → Staff) so they can sign in and go on the rota.' : `Moved to ${STAGE[s.value]}`);
       rerender();
     } catch (err) { showError(err); }
   }));

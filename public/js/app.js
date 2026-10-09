@@ -162,6 +162,7 @@ function navGroups() {
       ['people/training', 'Learning & development', '✦', ['people.manage']],
       ['people/performance', 'Performance', '★', ['people.manage']],
       ['people/areas', 'Areas', '◫', ['people.manage']],
+      ['admin/staff', 'Staff', '☺', ['staff.manage']],
     ]],
     ['Menu', [
       ['recipes', 'Sold items', '≡', RECIPES],
@@ -190,7 +191,6 @@ function navGroups() {
       ['reviews', 'Reviews', '★', ['sales.view']],
     ]],
     ['Setup', [
-      ['admin/staff', 'Staff', '☺', ['staff.manage']],
       ['admin/permissions', 'Permissions', '⚿', 'admin'],
       ['admin/locations', 'Locations', '⌂', 'admin'],
       ['admin/square', 'Square', '▢', 'admin'],
@@ -300,6 +300,7 @@ const TILE_NOTES = {
   'people/training': 'Training courses and who has done them',
   'people/performance': 'One-to-ones, probation reviews and appraisals',
   'people/areas': 'Who is trained to work in each area',
+  'admin/staff': 'Everyone’s access, home site, role and pay',
   recipes: 'What you sell, costed and linked to Square sales',
   'recipes/prep': 'Sauces, fillings and bakes made in a batch, with their yield',
   'recipes/allergens': 'Every dish and the allergens it contains',
@@ -322,9 +323,9 @@ function hubOf(path) {
 }
 
 // Tiles shown under a "Set up" heading at the end of their section's tiles.
-// Tiles shown under an "Admin" heading after the rest of the Rota section's tiles (for managers).
+// Tiles shown under an "Admin" heading after the rest of their section's tiles (for managers).
 const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories']);
-const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log']);
+const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log', 'admin/staff']);
 const hubTiles = (items, active) => {
   const main = items.filter(([p]) => !SETUP_TILES.has(p) && !ADMIN_TILES.has(p));
   const group = (title, set) => {
