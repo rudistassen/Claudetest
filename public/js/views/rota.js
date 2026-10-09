@@ -53,6 +53,9 @@ export async function render(ctx) {
   const scopeQs = (extra = {}) => qs({ view: mode, ...extra, site: state.multiSite ? siteParam : undefined });
   const [data, drops] = await Promise.all([api(`/rota${qs({ location_id: all ? 'all' : siteId, week })}`), api('/shift-drops')]);
   if (stale()) return;
+  // The timeline can show one day of the week (?tday=) across the full width, or the whole week.
+  const tday = timeline && data.days.includes(query.tday) ? query.tday : null;
+  const shownDays = tday ? [tday] : data.days;
   // Open shifts (dropped and approved) at the sites shown, and shifts someone has asked to drop.
   const dropAsked = new Set(data.drop_requested ?? []);
   const openOn = (d) => (data.open_shifts ?? []).filter((x) => x.date === d);
@@ -494,7 +497,8 @@ export async function render(ctx) {
   // --- Timeline: hours across each day, from the earliest start to the latest finish this week ---
   const toHours = (t) => { const [h, m] = t.split(':').map(Number); return h + m / 60; };
   const spanOf = (x) => { const a = toHours(x.start_time); let b = toHours(x.end_time); if (b <= a) b = 24; return [a, b]; };
-  const allShown = [...data.shifts, ...data.away_shifts];
+  // The hours shown run from the earliest start to the latest finish (that day, when showing one day).
+  const allShown = [...data.shifts, ...data.away_shifts].filter((x) => !tday || x.date === tday);
   let tlFrom = allShown.length ? Math.floor(Math.min(...allShown.map((x) => spanOf(x)[0]))) : 7;
   let tlTo = allShown.length ? Math.ceil(Math.max(...allShown.map((x) => spanOf(x)[1]))) : 19;
   if (tlTo - tlFrom < 8) { tlTo = Math.min(24, tlFrom + 8); tlFrom = Math.max(0, tlTo - 8); }
@@ -566,14 +570,18 @@ export async function render(ctx) {
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
     ${labourTracker()}
     ${gapsBox(gapList)}
+    ${timeline ? `<div class="tl-days" role="group" aria-label="Show one day or the whole week">
+      <a class="tl-day ${tday ? '' : 'is-on'}" href="#/rota${scopeQs({ week })}">Whole week</a>
+      ${data.days.map((d) => `<a class="tl-day ${d === tday ? 'is-on' : ''} ${d === today ? 'is-today' : ''}" href="#/rota${scopeQs({ week, tday: d })}">${fmtDate(d, { weekday: 'short', day: 'numeric' })}</a>`).join('')}
+    </div>` : ''}
     <div class="table-wrap rota-scroll">
-      <table class="rota ${timeline ? 'rota-gantt' : ''}">
-        <thead><tr><th>Staff</th>${data.days.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: 'day', day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}${gapTag(d)}${timeline ? tlScale : ''}</th>`).join('')}<th>Hours</th></tr></thead>
+      <table class="rota ${timeline ? 'rota-gantt' : ''} ${tday ? 'rota-oneday' : ''}">
+        <thead><tr><th>Staff</th>${shownDays.map((d) => `<th class="${d === today ? 'is-today' : ''}"><a class="day-link" href="#/rota${scopeQs({ view: 'day', day: d })}" title="See this day">${fmtDate(d)}</a>${bankHol(d) ? `<small class="bank-hol" title="${esc(bankHol(d))}">Bank holiday</small>` : ''}${gapTag(d)}${timeline ? tlScale : ''}</th>`).join('')}<th>${tday ? 'Week hours' : 'Hours'}</th></tr></thead>
         <tbody>
-          ${(data.open_shifts ?? []).length ? `<tr class="rota-open"><th>Open shifts<small>tap to pick up</small></th>${data.days.map((d) => `<td class="${d === today ? 'is-today' : ''}">${openOn(d).map(openButton).join('')}</td>`).join('')}<td></td></tr>` : ''}
+          ${(data.open_shifts ?? []).length ? `<tr class="rota-open"><th>Open shifts<small>tap to pick up</small></th>${shownDays.map((d) => `<td class="${d === today ? 'is-today' : ''}">${openOn(d).map(openButton).join('')}</td>`).join('')}<td></td></tr>` : ''}
           ${rows.map(({ header, groupId, summary, u, site, sub, people: subPeople, hours: subHours }) => (sub !== undefined ? `<tr class="rota-subgroup" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
-            <th colspan="${data.days.length + 2}"><span class="rota-subgroup-name">${esc(sub)}</span>
-              <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group ${layout === 'group-site' && all ? 'rota-group-by-rg' : ''}" data-group="${esc(groupId)}"${siteOfGroup(groupId) ? ` style="--site: ${siteColour(siteName(siteOfGroup(groupId)), siteOfGroup(groupId))}"` : ''}><th colspan="${data.days.length + 2}">
+            <th colspan="${shownDays.length + 2}"><span class="rota-subgroup-name">${esc(sub)}</span>
+              <span class="rota-group-meta">${subPeople} ${subPeople === 1 ? 'person' : 'people'} · ${subHours} h</span></th></tr>` : header ? `<tr class="rota-group ${layout === 'group-site' && all ? 'rota-group-by-rg' : ''}" data-group="${esc(groupId)}"${siteOfGroup(groupId) ? ` style="--site: ${siteColour(siteName(siteOfGroup(groupId)), siteOfGroup(groupId))}"` : ''}><th colspan="${shownDays.length + 2}">
             <div class="rota-group-line"><button class="rota-group-toggle" aria-expanded="true" data-toggle="${esc(groupId)}">
               <span class="rota-chevron" aria-hidden="true">▾</span>
               <span class="rota-group-name">${esc(header)}</span>
@@ -581,10 +589,10 @@ export async function render(ctx) {
             </button>
             ${canEdit && data.can_publish && siteOfGroup(groupId) && data.unpublished_by_site?.[siteOfGroup(groupId)] ? `<button class="btn btn-small rota-publish-site" data-publish-site="${siteOfGroup(groupId)}">Publish ${esc(header)} (${data.unpublished_by_site[siteOfGroup(groupId)]})</button>` : ''}</div>
           </th></tr>
-          ${fc && siteOfGroup(groupId) ? `<tr class="rota-forecast" data-in-group="${esc(groupId)}"><th>${budgeted([siteOfGroup(groupId)]) ? 'Budget' : 'Forecast'} gross sales · labour %</th>${data.days.map((d) => `<td class="num">${fcCell([siteOfGroup(groupId)], d)}</td>`).join('')}<td></td></tr>` : ''}` : `
+          ${fc && siteOfGroup(groupId) ? `<tr class="rota-forecast" data-in-group="${esc(groupId)}"><th>${budgeted([siteOfGroup(groupId)]) ? 'Budget' : 'Forecast'} gross sales · labour %</th>${shownDays.map((d) => `<td class="num">${fcCell([siteOfGroup(groupId)], d)}</td>`).join('')}<td></td></tr>` : ''}` : `
             <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
               <th>${personName(u.id, u.name, 'strong')}${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
-              ${data.days.map((d) => {
+              ${shownDays.map((d) => {
                 const shifts = (byCell.get(cellKey(u.id, site, d)) ?? []).filter((x) => !x.away);
                 const off = !!holidayOn(u.id, d, 'approved');
                 // On every row they appear in: a day spent working at another site is greyed out and says where.
@@ -602,15 +610,15 @@ export async function render(ctx) {
               <td class="num">${rowHours(u, site)}</td>
             </tr>`)).join('')}
         </tbody>
-        <tfoot>${timeline ? `<tr class="gt-cover-row"><th>People on<small>by the hour</small></th>${data.days.map((d) => `<td>${tlCover(d)}</td>`).join('')}<td></td></tr>` : ''}<tr><th>Total hours</th>${dayHours.map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>
+        <tfoot>${timeline ? `<tr class="gt-cover-row"><th>People on<small>by the hour</small></th>${shownDays.map((d) => `<td>${tlCover(d)}</td>`).join('')}<td></td></tr>` : ''}<tr><th>Total hours</th>${shownDays.map((d) => dayHours[data.days.indexOf(d)]).map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>
           ${data.daily_money ? `
-          <tr><th>Labour cost</th>${data.daily_money.map((m) => `<td class="num">${money(m.labour_cost)}</td>`).join('')}<td class="num">${money(data.labour_cost)}</td></tr>
-          ${fc ? `<tr class="rota-forecast-total"><th>Forecast gross sales<small>average for the day</small></th>${data.days.map((d) => { const f = avgFor(shownSites, d); return `<td class="num">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num">${avgWeek(shownSites) === null ? '–' : whole((avgWeek(shownSites)))}</td></tr>
-          ${budgeted(shownSites) ? `<tr class="rota-forecast-total rota-budget-row"><th>Sales budget (gross)<small><a href="#/rota/budget${qs({ week })}">forecast where none is set</a></small></th>${data.days.map((d) => { const f = grossFor(shownSites, d); return `<td class="num ${budgeted(shownSites, d) ? 'is-budget' : ''}">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num"><strong>${grossWeek(shownSites) === null ? '–' : whole(grossWeek(shownSites))}</strong></td></tr>` : ''}
-          <tr class="rota-forecast-total"><th>Rota labour %<small>of net sales</small></th>${data.days.map((d) => { const p = pctOf(rotaCost(shownSites, d), forecastFor(shownSites, d)); return `<td class="num tone-${labourTone(p)}">${fmtPct(p)}</td>`; }).join('')}<td class="num tone-${labourTone(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}"><strong>${fmtPct(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}</strong></td></tr>` : ''}
+          <tr><th>Labour cost</th>${shownDays.map((d) => data.daily_money[data.days.indexOf(d)]).map((m) => `<td class="num">${money(m?.labour_cost)}</td>`).join('')}<td class="num">${money(data.labour_cost)}</td></tr>
+          ${fc ? `<tr class="rota-forecast-total"><th>Forecast gross sales<small>average for the day</small></th>${shownDays.map((d) => { const f = avgFor(shownSites, d); return `<td class="num">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num">${avgWeek(shownSites) === null ? '–' : whole((avgWeek(shownSites)))}</td></tr>
+          ${budgeted(shownSites) ? `<tr class="rota-forecast-total rota-budget-row"><th>Sales budget (gross)<small><a href="#/rota/budget${qs({ week })}">forecast where none is set</a></small></th>${shownDays.map((d) => { const f = grossFor(shownSites, d); return `<td class="num ${budgeted(shownSites, d) ? 'is-budget' : ''}">${f === null ? '–' : whole((f))}</td>`; }).join('')}<td class="num"><strong>${grossWeek(shownSites) === null ? '–' : whole(grossWeek(shownSites))}</strong></td></tr>` : ''}
+          <tr class="rota-forecast-total"><th>Rota labour %<small>of net sales</small></th>${shownDays.map((d) => { const p = pctOf(rotaCost(shownSites, d), forecastFor(shownSites, d)); return `<td class="num tone-${labourTone(p)}">${fmtPct(p)}</td>`; }).join('')}<td class="num tone-${labourTone(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}"><strong>${fmtPct(pctOf(rotaCost(shownSites), forecastWeek(shownSites)))}</strong></td></tr>` : ''}
           ${data.daily_money.some((m) => m.net_sales !== null) ? `
-          <tr><th>Gross sales (Square)<small>actual so far</small></th>${data.daily_money.map((m) => `<td class="num">${m.gross_sales === null ? '–' : money(m.gross_sales)}</td>`).join('')}<td class="num">${money(data.week_gross_sales)}</td></tr>
-          <tr><th>Labour %<small>of net sales</small></th>${data.daily_money.map((m) => `<td class="num tone-${labourTone(m.labour_pct)}">${fmtPct(m.labour_pct)}</td>`).join('')}<td class="num tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</td></tr>` : ''}` : ''}
+          <tr><th>Gross sales (Square)<small>actual so far</small></th>${shownDays.map((d) => data.daily_money[data.days.indexOf(d)] ?? {}).map((m) => `<td class="num">${m.gross_sales === null ? '–' : money(m.gross_sales)}</td>`).join('')}<td class="num">${money(data.week_gross_sales)}</td></tr>
+          <tr><th>Labour %<small>of net sales</small></th>${shownDays.map((d) => data.daily_money[data.days.indexOf(d)] ?? {}).map((m) => `<td class="num tone-${labourTone(m.labour_pct)}">${fmtPct(m.labour_pct)}</td>`).join('')}<td class="num tone-${labourTone(data.labour_pct)}">${fmtPct(data.labour_pct)}</td></tr>` : ''}` : ''}
         </tfoot>
       </table>
     </div>

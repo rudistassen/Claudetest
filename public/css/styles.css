@@ -2688,3 +2688,13 @@ img.lesson-media { background: transparent; }
    heading reaches it. */
 .rota-scroll .rota tr.rota-group th { position: sticky; top: var(--rota-head, 38px); left: 0; z-index: 3; background: var(--surface); }
 .rota-scroll .rota tr.rota-group th::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--border); }
+/* Timeline: pick one day of the week, or the whole week. */
+.tl-days { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.7rem; }
+.tl-day { padding: 0.3rem 0.75rem; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600; font-size: 0.88rem; text-decoration: none; }
+.tl-day:hover { border-color: var(--brand); }
+.tl-day.is-today { border-color: color-mix(in srgb, var(--brand) 55%, var(--border)); }
+.tl-day.is-on { background: var(--brand); border-color: var(--brand); color: var(--brand-contrast, #fff); }
+/* Timeline showing one day: the day stretches across the full width. */
+.rota.rota-oneday { width: 100%; }
+.rota.rota-oneday thead th:first-child, .rota.rota-oneday tbody th:first-child, .rota.rota-oneday tfoot th:first-child { width: 200px; }
+.rota.rota-oneday thead th:last-child { width: 110px; }
