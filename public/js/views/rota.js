@@ -561,7 +561,6 @@ export async function render(ctx) {
       <span><strong>${pending} unpublished change${pending === 1 ? '' : 's'}</strong> – staff can’t see ${pending === 1 ? 'it' : 'them'} yet.
         ${data.can_publish ? '' : 'Ask someone who can publish the rota to publish it.'}</span>
       <span class="publish-actions">
-        <button class="btn" id="discard">Discard changes</button>
         ${data.can_publish ? `<button class="btn btn-primary" id="publish">Publish ${all ? 'all sites' : 'this week'}</button>` : ''}
       </span>
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
@@ -970,14 +969,6 @@ export async function render(ctx) {
     shiftModal(null, { date: day, location_id: fabSite, open: b.dataset.fab === 'open' });
   }));
   fabScrim?.addEventListener('click', () => showFabMenu(false));
-  el.querySelector('#discard')?.addEventListener('click', async () => {
-    if (!(await confirmDialog('Throw away every unpublished change this week? New shifts are deleted, changed ones go back to what staff can see, and removed ones come back.', { confirmLabel: 'Discard changes', title: 'Discard changes' }))) return;
-    try {
-      const r = await api('/rota/discard', { method: 'POST', body: scopeBody });
-      toast(`Discarded ${r.discarded} change${r.discarded === 1 ? '' : 's'}`);
-      ctx.rerender();
-    } catch (err) { showError(err); }
-  });
   // Site headings stick just under the day headings while the rota scrolls.
   const scroller = el.querySelector('.rota-scroll');
   const head = scroller?.querySelector('thead');
