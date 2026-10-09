@@ -55,15 +55,37 @@ function parseCookies(header = '') {
 
 export function loadUser(db) {
   const stmt = db.prepare(`
-    SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM sessions s JOIN users u ON u.id = s.user_id ${ACCESS_JOIN}
+    SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, s.view_as_user_id FROM sessions s JOIN users u ON u.id = s.user_id ${ACCESS_JOIN}
     WHERE s.token = ? AND s.expires_at > datetime('now') AND u.active = 1`);
+  const byId = db.prepare(`SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS} FROM users u ${ACCESS_JOIN} WHERE u.id = ? AND u.active = 1`);
   return (req, _res, next) => {
     const token = parseCookies(req.headers.cookie)[COOKIE];
-    req.user = token ? withPermissions(stmt.get(token)) ?? null : null;
-    if (req.user) req.user.site_ids = siteIdsFor(db, req.user);
+    const row = token ? stmt.get(token) : null;
+    req.user = null;
+    req.realUser = null;
+    if (row) {
+      const { view_as_user_id: viewAs, ...me } = row;
+      const self = withPermissions(me);
+      // An admin viewing as someone: the app sees that person (with their access); changes are blocked below.
+      const other = viewAs && self.role === 'admin' ? withPermissions(byId.get(viewAs)) : null;
+      if (other && other.role !== 'admin') {
+        req.realUser = { ...self, site_ids: siteIdsFor(db, self) };
+        req.user = { ...other, viewed_by: self.name };
+      } else req.user = self;
+      req.user.site_ids = siteIdsFor(db, req.user);
+    }
     req.sessionToken = req.user ? token : null;
     next();
   };
+}
+
+// Saves that quietly do nothing while viewing as someone (opening pages makes them), rather than showing an error.
+const VIEW_AS_QUIET = /^\/(notifications\/read|auth\/tour)$/;
+/** While an admin views Atlas as someone else, nothing can be changed (except stopping, or signing out). */
+export function blockWhileViewingAs(req, res, next) {
+  if (!req.realUser || ['GET', 'HEAD', 'OPTIONS'].includes(req.method) || /^\/auth\/(view-as\/stop|logout)$/.test(req.path)) return next();
+  if (VIEW_AS_QUIET.test(req.path)) return res.json({ ok: true });
+  next(new HttpError(403, `You’re viewing Atlas as ${req.user.name}, so changes are switched off. Tap “Stop viewing” to make changes.`));
 }
 
 export function requireAuth(req, _res, next) {
@@ -183,7 +205,7 @@ export function registerAuthRoutes(router, db) {
   });
 
   router.post('/auth/logout', (req, res) => {
-    if (req.user) logActivity(db, req, { kind: 'sign_out', action: 'Signed out' });
+    if (req.user) logActivity(db, req, { kind: 'sign_out', action: 'Signed out', user_id: (req.realUser ?? req.user).id });
     if (req.sessionToken) db.prepare('DELETE FROM sessions WHERE token = ?').run(req.sessionToken);
     res.clearCookie(COOKIE, { path: '/' });
     res.json({ ok: true });
@@ -192,6 +214,28 @@ export function registerAuthRoutes(router, db) {
   router.get('/auth/me', (req, res) => {
     if (!req.user) throw new HttpError(401, 'Please sign in');
     res.json({ user: req.user });
+  });
+
+  // An admin starts or stops seeing Atlas as someone else would (look only – changes are blocked).
+  router.post('/auth/view-as', (req, res) => {
+    if (!req.user) throw new HttpError(401, 'Please sign in');
+    const admin = req.realUser ?? req.user;
+    if (admin.role !== 'admin') throw forbidden('Only admins can view Atlas as someone else');
+    const target = db.prepare('SELECT id, name, role, active FROM users WHERE id = ?').get(Number(req.body?.user_id));
+    if (!target || !target.active) throw notFound('Person');
+    if (target.role === 'admin') throw badRequest('Admins already see everything – choose a manager or member of staff');
+    db.prepare('UPDATE sessions SET view_as_user_id = ? WHERE token = ?').run(target.id, req.sessionToken);
+    logActivity(db, req, { kind: 'change', area: 'Setup', action: 'Started viewing Atlas as someone', detail: target.name, user_id: admin.id, path: 'POST /auth/view-as' });
+    res.json({ ok: true });
+  });
+
+  router.post('/auth/view-as/stop', (req, res) => {
+    if (!req.user) throw new HttpError(401, 'Please sign in');
+    if (req.realUser) {
+      db.prepare('UPDATE sessions SET view_as_user_id = NULL WHERE token = ?').run(req.sessionToken);
+      logActivity(db, req, { kind: 'change', area: 'Setup', action: 'Stopped viewing Atlas as someone', detail: req.user.name, user_id: req.realUser.id, path: 'POST /auth/view-as/stop' });
+    }
+    res.json({ ok: true });
   });
 
   // The guided tour is done (finished or skipped), so it isn't shown again on sign-in.

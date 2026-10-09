@@ -406,7 +406,10 @@ function renderShell() {
   document.body.dataset.section = section ? (NAV_TONES[section] ?? 'setup') : '';
   document.body.style.setProperty('--section-label', section ? JSON.stringify(section) : '""');
   const link = ([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}"><span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'rota/requests' ? '<span class="nav-badge" data-req-badge hidden></span>' : ''}</a>`;
-  document.getElementById('app').innerHTML = `
+  const viewing = state.user.viewed_by ? `<div class="view-as-bar" role="status"><span>👁 Viewing as <strong>${esc(state.user.name)}</strong><span class="view-as-note"> · look only</span></span>
+      <button type="button" class="btn btn-small" id="view-as-stop">Stop viewing</button></div>` : '';
+  document.body.classList.toggle('is-viewing-as', !!state.user.viewed_by);
+  document.getElementById('app').innerHTML = `${viewing}
     <header class="topbar">
       <button class="icon-btn menu-toggle" aria-label="Menu" title="Menu">☰</button>
       <a class="brand" href="#/${home()}" aria-label="Atlas – home">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
@@ -473,6 +476,15 @@ function renderShell() {
       <main id="view"></main>
     </div>
     ${tabBar(groups.flatMap(([, items]) => items), active)}`;
+  document.getElementById('view-as-stop')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      await api('/auth/view-as/stop', { method: 'POST' });
+      history.replaceState(null, '', `${location.pathname}${location.search}#/admin/staff`);
+      window.scrollTo(0, 0);
+      start();
+    } catch (err) { showError(err); e.target.disabled = false; }
+  });
   showNewsBadge();
   showRequestBadge();
   showEventsBadge();
@@ -765,5 +777,7 @@ window.addEventListener('resize', placeNav);
 
 window.addEventListener('hashchange', route);
 window.addEventListener('auth:expired', () => { if (state.user) { state.user = null; start(); } });
+// Someone else's view of Atlas has started (an admin viewing as them): load the app again as that person.
+window.addEventListener('auth:switched', () => { window.scrollTo(0, 0); start(); });
 setUpInstall();
 start();

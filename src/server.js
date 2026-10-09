@@ -2,7 +2,7 @@ import { registerParLevelRoutes } from './routes/par-levels.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadUser, registerAuthRoutes, requireAuth } from './auth.js';
+import { loadUser, registerAuthRoutes, requireAuth, blockWhileViewingAs } from './auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerOrderingRoutes } from './routes/ordering.js';
 import { registerRecipeRoutes } from './routes/recipes.js';
@@ -93,6 +93,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
 
   const api = express.Router();
   api.get('/version', (_req, res) => res.set('Cache-Control', 'no-store').json({ version }));
+  api.use(blockWhileViewingAs);
   registerAuthRoutes(api, db);
   registerPasswordRoutes(api, db, mailer);
   api.use(requireAuth);

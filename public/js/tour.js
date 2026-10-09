@@ -141,6 +141,6 @@ export async function startTour(state, navigate) {
 
 /** Starts the tour for someone who hasn't seen it, once they're signed in. */
 export function maybeStartTour(state, navigate) {
-  if (!state.user || state.user.tour_done_at || running || document.querySelector('.tour')) return;
+  if (!state.user || state.user.tour_done_at || state.user.viewed_by || running || document.querySelector('.tour')) return;
   setTimeout(() => startTour(state, navigate), 600);
 }

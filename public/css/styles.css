@@ -2623,3 +2623,12 @@ img.lesson-media { background: transparent; }
 .sl-detail { color: var(--text); }
 .sl-times { font-size: 0.75rem; font-weight: 800; padding: 0 0.4rem; border-radius: 99px; background: #e8b24a; color: #2b2118; }
 .sl-more { text-align: center; margin: 1rem 0; }
+
+/* An admin viewing Atlas as someone else: a bar across the top with a way back. */
+.view-as-bar { position: sticky; top: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; min-height: 46px; box-sizing: border-box;
+  padding: calc(0.35rem + env(safe-area-inset-top)) 0.9rem 0.35rem; background: #c4552d; color: #fff; font-size: 0.9rem; border-bottom: 1.5px solid #2b2118; }
+.view-as-bar > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.view-as-bar .btn { flex: none; border: 1.5px solid #2b2118; border-radius: 999px; background: #fffaf2; color: #2b2118; font-weight: 800; box-shadow: 2px 2px 0 #2b2118; }
+@media (max-width: 800px) { body.is-viewing-as .sidebar { top: calc(46px + env(safe-area-inset-top)); } }
+.view-as-box { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.6rem 0; padding: 0.7rem 0.8rem; border: 1.5px dashed var(--mb-line); border-radius: 12px; }
+.view-as-box .btn { align-self: flex-start; }

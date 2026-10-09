@@ -2,7 +2,7 @@
 // and window.fetch('/api/...') is answered locally instead of by a server.
 import { registerParLevelRoutes } from '../src/routes/par-levels.js';
 import initSqlJs from 'sql.js/dist/sql-asm.js';
-import { loadUser, registerAuthRoutes, requireAuth } from '../src/auth.js';
+import { loadUser, registerAuthRoutes, requireAuth, blockWhileViewingAs } from '../src/auth.js';
 import { openDb, publishAllShifts } from '../src/db.js';
 import { registerAdminRoutes } from '../src/routes/admin.js';
 import { registerOrderingRoutes } from '../src/routes/ordering.js';
@@ -122,6 +122,7 @@ async function boot() {
   const cookies = {};
   api.use((req, _res, next) => { req.db = db; next(); });
   api.use(loadUser(db));
+  api.use(blockWhileViewingAs);
   registerAuthRoutes(api, db);
   registerPasswordRoutes(api, db, demoMailer);
   api.use(requireAuth);

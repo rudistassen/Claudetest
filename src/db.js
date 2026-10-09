@@ -1036,6 +1036,8 @@ CREATE TABLE IF NOT EXISTS user_areas (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // An admin looking at Atlas as someone else would see it (read-only), on this sign-in only.
+  ['sessions', 'view_as_user_id', 'ALTER TABLE sessions ADD COLUMN view_as_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL'],
   // Training courses built in Atlas: shown to staff once published, maybe open to everyone, a quiz pass mark, and
   // whether a manager signs it off in person before it counts.
   ['training_courses', 'published', 'ALTER TABLE training_courses ADD COLUMN published INTEGER NOT NULL DEFAULT 0'],

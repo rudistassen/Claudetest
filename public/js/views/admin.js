@@ -264,6 +264,8 @@ function staffEditor(state, rows, perms, settings = {}) {
       <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
       ${squareBox(u, settings)}
       ${u.id ? inviteBox(u) : ''}
+      ${u.id && state.isAdmin && u.active && u.role !== 'admin' && u.id !== state.user.id ? `<div class="view-as-box"><button type="button" class="btn btn-small" data-view-as="${u.id}">👁 View Atlas as ${esc(u.name.split(' ')[0])}</button>
+        <small class="muted">See exactly what they see – their menus, shifts and tasks. Look only: nothing can be changed while you’re viewing.</small></div>` : ''}
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password (optional)', input('password', '', 'type="password" minlength="8" autocomplete="new-password"'), { hint: u.id ? 'At least 8 characters' : 'Leave blank and send them an invite, so they choose their own' })}
       ${activeBox(u.active)}
       <label class="check-row"><input type="checkbox" name="paid_breaks" ${u.paid_breaks ? 'checked' : ''}>
@@ -459,6 +461,19 @@ function inviteBox(u) {
     <small class="muted">They choose their own password from the link. ${s.key === 'joined' ? 'They’ve already signed in, so they only need this if they’re locked out.' : ''}</small>
   </div>`;
 }
+
+// "View Atlas as them" from a person's details: the app reloads as they'd see it, until the admin stops viewing.
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-view-as]');
+  if (!b) return;
+  b.disabled = true;
+  try {
+    await api('/auth/view-as', { method: 'POST', body: { user_id: Number(b.dataset.viewAs) } });
+    document.getElementById('modal-root').innerHTML = '';
+    history.replaceState(null, '', `${location.pathname}${location.search}#/mybrew`);
+    window.dispatchEvent(new Event('auth:switched'));
+  } catch (err) { toast(err.message, 'error'); b.disabled = false; }
+});
 
 // Invites from a person's details (buttons are inside the edit dialog).
 document.addEventListener('click', async (e) => {
