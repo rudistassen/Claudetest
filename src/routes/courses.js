@@ -6,6 +6,7 @@ import { can, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
 import { notify, peopleWith } from '../push.js';
 import { badRequest, bool, date, forbidden, id, notFound, num, str, today } from '../util.js';
+import { COURSE_TEMPLATES, templateSummaries } from '../course-templates.js';
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from './news.js';
 
 const MEDIA_TYPES = {
@@ -100,6 +101,25 @@ export function registerCourseRoutes(router, db) {
       courses: courses.map((c) => ({ ...summary(c), assigned: assigned.find((a) => a.course_id === c.id)?.n ?? 0 })),
       signoffs: waiting,
     });
+  });
+
+  // Ready-made courses (e.g. a health & safety induction) to start from.
+  router.get('/training/templates', perm, (req, res) => {
+    res.json({ templates: templateSummaries() });
+  });
+
+  // Adds a ready-made course as a draft, to check and change in the designer before publishing.
+  router.post('/training/templates/:key', perm, (req, res) => {
+    const t = COURSE_TEMPLATES.find((x) => x.key === req.params.key);
+    if (!t) throw notFound('Ready-made course');
+    const courseId = tx(db, () => {
+      const cid = Number(db.prepare(`INSERT INTO training_courses (name, description, renew_months, pass_mark, needs_signoff, published, open_to_all)
+        VALUES (?, ?, ?, ?, ?, 0, 0)`).run(t.name, t.description, t.renew_months, t.pass_mark, t.needs_signoff ? 1 : 0).lastInsertRowid);
+      const add = db.prepare('INSERT INTO training_steps (course_id, position, kind, title, body, options, answer) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      t.steps.forEach((s, i) => add.run(cid, i, s.kind, s.title, s.body || null, s.options ? JSON.stringify(s.options) : null, s.answer ?? null));
+      return cid;
+    });
+    res.status(201).json({ id: courseId });
   });
 
   // A course to design: its settings, every step (with the right answers) and who it's been given to.

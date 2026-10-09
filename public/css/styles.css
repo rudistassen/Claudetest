@@ -2698,3 +2698,9 @@ img.lesson-media { background: transparent; }
 .rota.rota-oneday { width: 100%; }
 .rota.rota-oneday thead th:first-child, .rota.rota-oneday tbody th:first-child, .rota.rota-oneday tfoot th:first-child { width: 200px; }
 .rota.rota-oneday thead th:last-child { width: 110px; }
+
+/* Ready-made courses */
+.course-list-card .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.course-ready-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.course-ready-list li { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.course-ready-list p { margin: 4px 0; }

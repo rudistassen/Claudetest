@@ -192,3 +192,22 @@ test('managers who only look after some sites can’t give courses to people els
   const r = await m(`/training/courses/${courseId}/assign`, { method: 'POST', body: { user_ids: [userId('staff2@cafe.local')] } });
   assert.equal(r.status, 403);
 });
+
+test('a ready-made health & safety course is added as a draft that passes the designer’s own checks', async () => {
+  const m = await login('admin@cafe.local');
+  const { data: list } = await m('/training/templates');
+  const hs = list.templates.find((t) => t.key === 'health-safety-induction');
+  assert.ok(hs && hs.pages >= 10 && hs.questions >= 10);
+  const { status, data } = await m('/training/templates/health-safety-induction', { method: 'POST' });
+  assert.equal(status, 201);
+  const { data: design } = await m(`/training/courses/${data.id}/design`);
+  assert.equal(design.course.published, false);
+  assert.equal(design.course.needs_signoff, true);
+  assert.equal(design.steps.length, hs.pages + hs.questions);
+  // Saving it unchanged (and publishing) goes through the same rules as a course built by hand.
+  const saved = await m(`/training/courses/${data.id}/design`, { method: 'PUT', body: { steps: design.steps, published: true } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.data));
+  assert.equal((await m('/training/templates/nope', { method: 'POST' })).status, 404);
+  const staff = await login('staff1@cafe.local');
+  assert.equal((await staff('/training/templates')).status, 403);
+});

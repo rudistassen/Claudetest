@@ -61,7 +61,7 @@ export async function coursesPanel(root, { rerender }) {
         <button type="button" class="btn btn-small" data-sendback="${w.id}">Not yet</button></span></li>`).join('')}</ul>
     </section>` : ''}
     <section class="card course-list-card">
-      <div class="card-head"><h2>Online courses</h2></div>
+      <div class="card-head"><h2>Online courses</h2><button type="button" class="btn btn-small" id="course-ready">📚 Ready-made courses</button></div>
       <p class="muted small">Build a course from pages and quiz questions, then give it to people or open it to everyone. Passing it records their training here automatically.</p>
       ${data.courses.length ? `<ul class="course-list">${data.courses.map((c) => `<li class="course-row">
         <div class="course-row-main"><strong>${esc(c.name)}</strong>
@@ -82,7 +82,30 @@ export async function coursesPanel(root, { rerender }) {
     },
   });
   root.querySelectorAll('[data-signoff]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.signoff, true)));
+  root.querySelector('#course-ready').addEventListener('click', readyMade);
   root.querySelectorAll('[data-sendback]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.sendback, false)));
+}
+
+// Ready-made courses (e.g. a health & safety induction): one tap adds a draft copy to check, change and publish.
+async function readyMade() {
+  let list;
+  try { ({ templates: list } = await api('/training/templates')); } catch (err) { showError(err); return; }
+  const { close, form } = openModal({
+    title: '📚 Ready-made courses',
+    body: `<p class="muted small">Add one as a draft, then check it fits your sites (fire exits, first aiders, your own rules) and change anything you like before you publish it.</p>
+      <ul class="course-ready-list">${list.map((t) => `<li><div><strong>${esc(t.name)}</strong><p class="small">${esc(t.description)}</p>
+        <small class="muted">${plural(t.pages, 'page')} · ${plural(t.questions, 'question')}${t.renew_months ? ` · every ${t.renew_months} months` : ''}${t.needs_signoff ? ' · signed off in person' : ''}</small></div>
+        <button type="button" class="btn btn-primary btn-small" data-template="${esc(t.key)}">Add</button></li>`).join('')}</ul>`,
+  });
+  form.querySelectorAll('[data-template]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      const r = await api(`/training/templates/${encodeURIComponent(b.dataset.template)}`, { method: 'POST' });
+      close();
+      toast('Added as a draft – check it, then publish');
+      location.hash = `#/people/training/courses/${r.id}`;
+    } catch (err) { showError(err); b.disabled = false; }
+  }));
 }
 
 // ---- The designer ----
