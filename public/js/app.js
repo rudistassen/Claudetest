@@ -343,7 +343,7 @@ function renderHub({ el, params }) {
     return;
   }
   el.innerHTML = `
-    <div class="page-head"><h1>${esc(TOP_LABELS[heading] ?? heading)}</h1></div>
+    <div class="page-head"><h1 class="hub-title">${esc(TOP_LABELS[heading] ?? heading)}</h1></div>
     <div class="hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}">${hubTiles(items, null)}</div>`;
 }
 
