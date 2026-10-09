@@ -193,7 +193,7 @@ export async function renderMyBrew(ctx) {
   const tasks = [
     toRead ? { icon: '📌', title: `Confirm you’ve read ${toRead} update${toRead === 1 ? '' : 's'}`, detail: 'In the newsfeed below', action: 'Read', go: 'news', primary: true } : null,
     checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} Trail check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety', primary: true } : null,
-    toReview ? { icon: '✉', title: `${toReview} request${toReview === 1 ? '' : 's'} to review`, detail: [leaveCount.count ? `${leaveCount.count} holiday` : '', drops.to_approve.length ? `${drops.to_approve.length} shift drop${drops.to_approve.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), action: 'Review', href: '#/rota/requests', primary: true } : null,
+    toReview ? { icon: '✉', title: `${toReview} request${toReview === 1 ? '' : 's'} to review`, detail: [leaveCount.count ? `${leaveCount.count} holiday` : '', drops.to_approve.length ? `${drops.to_approve.length} shift request${drops.to_approve.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), action: 'Review', href: '#/rota/requests', primary: true } : null,
     ...(training?.records ?? []).filter((r) => r.status !== 'done').map((r) => ({ icon: '🎓', title: r.status === 'expired' ? `Your ${r.course_name} has run out` : `Your ${r.course_name} runs out soon`, detail: `${r.status === 'expired' ? 'Ran out' : 'Runs out'} ${fmtDate(r.expires_on, { day: 'numeric', month: 'short', year: 'numeric' })} – speak to your manager about redoing it`, action: 'See training', go: 'training' })),
     ...coursesToDo.map((c) => ({ icon: '🎓', title: `Do your ${c.name} training`, detail: c.due_on ? `${c.due_on < today ? 'Overdue – was due' : 'Due'} ${fmtDate(c.due_on, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Your manager has given you this course', action: 'Start', href: `#/learn/${c.id}`, primary: true })),
     claimable ? { icon: '🙋', title: `${claimable} open shift${claimable === 1 ? '' : 's'} you could pick up`, detail: 'Extra hours, if you want them', action: 'See shifts', go: 'open' } : null,
@@ -274,7 +274,7 @@ export async function renderMyBrew(ctx) {
             : '<p class="muted">No shifts on the rota for the next two weeks.</p>'}
         </section>
         ${drops.open.length ? `<section class="mb-section" data-mb="shifts" id="mb-open">
-          <div class="mb-section-head"><h2>Open shifts</h2><span class="small muted">Pick one up – it goes straight on your rota</span></div>
+          <div class="mb-section-head"><h2>Open shifts</h2><span class="small muted">Ask to pick one up – a manager approves it</span></div>
           <div class="mb-row">${drops.open.map(openCard).join('')}</div>
         </section>` : ''}
         <section class="mybrew-news" data-mb="news">

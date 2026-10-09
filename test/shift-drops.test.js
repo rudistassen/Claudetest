@@ -68,10 +68,25 @@ test('a dropped shift is approved by a manager, becomes open at the site, and is
   const rota = (await manager(`/rota?week=${day}`)).data;
   assert.ok(rota.open_shifts.some((d) => d.id === asked.data.id), 'shown on the rota');
 
+  // Picking it up is a request: held for them until a manager approves.
   const claimed = await colleague(`/shift-drops/${asked.data.id}/claim`, { method: 'POST' });
   assert.equal(claimed.status, 200);
+  assert.equal(claimed.data.status, 'claim_pending');
+  assert.ok(!(await colleague('/my-shifts')).data.some((s) => s.date === day), 'not on their rota until approved');
+  assert.deepEqual((await colleague('/shift-drops')).data.my_claims.map((d) => d.id), [asked.data.id]);
+  assert.ok(!(await staff('/shift-drops')).data.open.some((d) => d.id === asked.data.id), 'held – nobody else is offered it');
+  const held = await staff(`/shift-drops/${asked.data.id}/claim`, { method: 'POST' });
+  assert.equal(held.status, 400);
+  assert.match(held.data.error, /already asked/);
+  assert.equal((await colleague(`/shift-drops/${asked.data.id}/approve-claim`, { method: 'POST' })).status, 403, 'staff can’t approve');
+  const request = (await manager('/shift-drops')).data.to_approve.find((d) => d.id === asked.data.id);
+  assert.equal(request.kind, 'claim');
+  assert.equal((await manager(`/rota?week=${day}`)).data.open_shifts.find((d) => d.id === asked.data.id).status, 'claim_pending', 'shown on the rota as requested');
+  assert.equal((await manager(`/shift-drops/${asked.data.id}/approve-claim`, { method: 'POST' })).status, 200);
   const mine = (await colleague('/my-shifts')).data.find((s) => s.date === day);
-  assert.deepEqual([mine.start_time, mine.end_time, mine.break_minutes], ['09:00', '17:00', 30], 'straight onto their published rota');
+  assert.deepEqual([mine.start_time, mine.end_time, mine.break_minutes], ['09:00', '17:00', 30], 'onto their published rota once approved');
+  const colleagueId = db.prepare(`SELECT id FROM users WHERE email = 'staff1-2@cafe.local'`).get().id;
+  assert.ok(db.prepare(`SELECT 1 FROM notifications WHERE user_id = ? AND title LIKE 'Shift pick-up approved%'`).get(colleagueId));
   const again = await staff(`/shift-drops/${asked.data.id}/claim`, { method: 'POST' });
   assert.equal(again.status, 400);
   assert.match(again.data.error, /already picked up/);
@@ -176,6 +191,7 @@ test('a manager adds a new open shift, which anyone at the site can pick up', as
   assert.ok((await manager(`/rota?week=${day}`)).data.open_shifts.some((d) => d.id === added.data.id), 'on the rota');
   assert.ok((await staff('/shift-drops')).data.open.find((d) => d.id === added.data.id).can_claim);
   assert.equal((await staff(`/shift-drops/${added.data.id}/claim`, { method: 'POST' })).status, 200);
+  assert.equal((await manager(`/shift-drops/${added.data.id}/approve-claim`, { method: 'POST' })).status, 200);
   const mine = (await staff('/my-shifts')).data.find((s) => s.date === day);
   assert.deepEqual([mine.start_time, mine.end_time, mine.notes], ['10:00', '16:00', 'Busy lunch']);
   assert.ok(db.prepare(`SELECT 1 FROM rota_log WHERE action = 'open'`).get(), 'logged');
@@ -195,6 +211,26 @@ test('staff from another site can see and pick up an open shift', async () => {
   assert.ok(seen, 'shown to staff at other sites');
   assert.equal(seen.can_claim, true);
   assert.equal((await visitor(`/shift-drops/${added.data.id}/claim`, { method: 'POST' })).status, 200);
+  assert.equal((await manager(`/shift-drops/${added.data.id}/approve-claim`, { method: 'POST' })).status, 200);
   const mine = (await visitor('/my-shifts')).data.find((s) => s.date === day);
   assert.equal(mine.location_id, site, 'the shift is at the open shift’s site');
+});
+
+test('a declined or cancelled pick-up opens the shift up again; managers who publish the rota get it straight away', async () => {
+  const day = addDays(today(), 6);
+  const manager = await login('manager1@cafe.local');
+  const site = db.prepare('SELECT location_id FROM users WHERE email = ?').get('manager1@cafe.local').location_id;
+  for (const email of ['staff1-3@cafe.local', 'manager1@cafe.local']) db.prepare('DELETE FROM shifts WHERE user_id = (SELECT id FROM users WHERE email = ?) AND date = ?').run(email, day);
+  const added = (await manager('/shift-drops', { method: 'POST', body: { location_id: site, date: day, start_time: '18:00', end_time: '22:00' } })).data;
+  const staff = await login('staff1-3@cafe.local');
+  await staff(`/shift-drops/${added.id}/claim`, { method: 'POST' });
+  assert.equal((await manager(`/shift-drops/${added.id}/decline-claim`, { method: 'POST', body: { note: 'Need a closer' } })).status, 200);
+  assert.ok((await staff('/shift-drops')).data.open.some((d) => d.id === added.id), 'open again');
+  await staff(`/shift-drops/${added.id}/claim`, { method: 'POST' });
+  assert.equal((await staff(`/shift-drops/${added.id}/cancel-claim`, { method: 'POST' })).status, 200);
+  assert.ok((await staff('/shift-drops')).data.open.some((d) => d.id === added.id), 'open again after cancelling');
+  // A manager at that site picking it up themselves doesn't need anyone's approval.
+  const r = await manager(`/shift-drops/${added.id}/claim`, { method: 'POST' });
+  assert.equal(r.data.status, 'claimed');
+  assert.ok((await manager('/my-shifts')).data.some((s) => s.date === day && s.start_time === '18:00'));
 });

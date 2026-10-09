@@ -2,7 +2,7 @@ import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite, siteColour } from '../lib.js';
 import { shiftHistory } from './rotalog.js';
 import { openStaffEditor } from './admin.js';
-import { askToDrop, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
+import { askToDrop, claimRequest, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
 import { sickDialog } from './sickness.js';
 
 // A shift copied with Ctrl/⌘+click: its times stay here (across weeks and sites) until it's pasted somewhere with a
@@ -56,7 +56,9 @@ export async function render(ctx) {
   const dropAsked = new Set(data.drop_requested ?? []);
   const openOn = (d) => (data.open_shifts ?? []).filter((x) => x.date === d);
   const dropTag = (s) => (s.sick ? '<em class="shift-tag tag-sick">Sick</em>' : '') + (dropAsked.has(s.id) ? '<em class="shift-tag tag-drop">Drop asked</em>' : '');
-  const openButton = (x) => `<button class="shift shift-open" data-open-shift="${x.id}" title="Open shift – tap to pick it up"><span class="shift-time">${x.start_time}–${x.end_time}</span>${all ? `<small>@ ${esc(x.location_name)}</small>` : ''}</button>`;
+  const openButton = (x) => (x.status === 'claim_pending'
+    ? `<button class="shift shift-open is-requested" data-open-shift="${x.id}" title="${esc(x.claimed_by_name)} has asked to pick this up – tap to approve"><span class="shift-time">${x.start_time}–${x.end_time}</span><small>✋ ${esc(x.claimed_by_name)} asked</small></button>`
+    : `<button class="shift shift-open" data-open-shift="${x.id}" title="Open shift – tap to pick it up"><span class="shift-time">${x.start_time}–${x.end_time}</span>${all ? `<small>@ ${esc(x.location_name)}</small>` : ''}</button>`);
   const canEdit = state.can('rota.edit');
   const today = todayISO();
   const siteName = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
@@ -470,7 +472,7 @@ export async function render(ctx) {
       ${gapsBox(gapsOn(day))}
       ${open.length ? `<ul class="pd-list">${open.map((x) => `<li class="pd-item"><button class="pd-card pd-open" data-open-shift="${x.id}" style="--site:${siteColour(x.location_name, x.location_id)}">
           <span class="pd-avatar" aria-hidden="true">?</span>
-          <span class="pd-body"><span class="pd-time">${x.start_time} – ${x.end_time}<span class="pd-break">${pdIcon('cup')}${x.break_minutes ?? 0}m</span></span><span class="pd-name">Open shift – ${canEdit ? 'nobody on it yet' : 'tap to pick it up'}</span>
+          <span class="pd-body"><span class="pd-time">${x.start_time} – ${x.end_time}<span class="pd-break">${pdIcon('cup')}${x.break_minutes ?? 0}m</span></span><span class="pd-name">${x.status === 'claim_pending' ? `✋ ${esc(x.claimed_by_name)} asked to pick this up${canEdit ? ' – tap to approve' : ''}` : `Open shift – ${canEdit ? 'nobody on it yet' : 'tap to pick it up'}`}</span>
             <span class="pd-line">${pdIcon('pin')}${esc(x.location_name)}</span></span></button></li>`).join('')}</ul>` : ''}
       ${onDay.length ? `<ul class="pd-list">${onDay.map(card).join('')}</ul>` : `<div class="card empty">Nobody is on the rota ${day === today ? 'today' : 'this day'}.</div>`}
       ${canEdit ? `<button class="pd-fab" id="pd-fab" aria-label="Add a shift" aria-haspopup="${data.can_publish ? 'menu' : 'false'}" aria-expanded="false">+</button>
@@ -861,6 +863,7 @@ export async function render(ctx) {
     const id = Number(b.dataset.openShift);
     const mine = drops.open.find((x) => x.id === id);
     const x = mine ?? data.open_shifts.find((o) => o.id === id);
+    if (x.status === 'claim_pending') { claimRequest(x, () => ctx.rerender(), { canDecide: state.can('rota.publish') }); return; }
     claimShift(x, () => ctx.rerender(), { canClaim: !!mine?.can_claim, problem: mine ? mine.claim_problem : 'You don’t work at this site', canWithdraw: !!mine?.can_withdraw });
   }));
   el.querySelectorAll('[data-person]').forEach((b) => b.addEventListener('click', (e) => {

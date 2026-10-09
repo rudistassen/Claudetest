@@ -2,7 +2,7 @@ import { api, esc, field, fmtDate, openModal, showError, siteColour, textarea, t
 import { dropsPanel, wireDrops } from './shiftdrops.js';
 import { teamAvailabilityCard } from './availability.js';
 
-// Rota → Requests: everything waiting for a manager in one place – holiday requests and shift drop requests – and
+// Rota → Requests: everything waiting for a manager in one place – holiday requests, shift drop requests and pick-up requests – and
 // the team's availability for the next two weeks.
 
 const day = (d) => fmtDate(d, { weekday: 'short', day: 'numeric', month: 'short' });
@@ -35,7 +35,7 @@ export async function render(ctx) {
       <p class="small"><a href="#/timeoff?tab=requests">All holiday requests →</a></p>
     </section>` : ''}
     ${canDrops ? `<section class="req-section">
-      ${drops.to_approve.length ? dropsPanel({ ...drops, open: [], mine: [] }) : '<section class="card"><h2>Shift drop requests <span class="badge">0</span></h2><p class="muted small">No shifts waiting to be dropped.</p></section>'}
+      ${drops.to_approve.length ? dropsPanel({ ...drops, open: [], mine: [], my_claims: [] }) : '<section class="card"><h2>Shift requests <span class="badge">0</span></h2><p class="muted small">No shifts waiting to be dropped or picked up.</p></section>'}
       ${drops.open.length ? `<p class="small muted">${drops.open.length} open shift${drops.open.length === 1 ? '' : 's'} waiting for someone to pick up – see the rota.</p>` : ''}
     </section>` : ''}
     ${team ? teamAvailabilityCard(team) : ''}`;

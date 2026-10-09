@@ -21,6 +21,7 @@ export const ACTIONS = {
   sick: ['Sickness', 'log-change'],
   open: ['Open shift added', 'log-add'],
   claim: ['Open shift picked up', 'log-add'],
+  claim_decline: ['Pick-up declined', 'log-change'],
   withdraw: ['Open shift withdrawn', 'log-remove'],
 };
 const FILTERS = [['', 'All changes'], ['add', 'Added'], ['change', 'Changed'], ['remove', 'Removed'], ['restore', 'Put back'], ['publish', 'Published'], ['discard', 'Discarded'], ['copy', 'Copied week'], ['drop', 'Drop requests'], ['open', 'Open shifts added'], ['claim', 'Picked up'], ['holiday', 'Holiday'], ['sick', 'Sickness'], ['timecard_site', 'Clock-ins moved'], ['timecard_breaks', 'Breaks changed']];

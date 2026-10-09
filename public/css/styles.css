@@ -2632,3 +2632,11 @@ img.lesson-media { background: transparent; }
 @media (max-width: 800px) { body.is-viewing-as .sidebar { top: calc(46px + env(safe-area-inset-top)); } }
 .view-as-box { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.6rem 0; padding: 0.7rem 0.8rem; border: 1.5px dashed var(--mb-line); border-radius: 12px; }
 .view-as-box .btn { align-self: flex-start; }
+/* An open shift someone has asked to pick up, waiting for a manager. */
+.shift.shift-open.is-requested { border-color: #c4552d; background: #fbefe8; color: #2b2118; }
+.shift.shift-open.is-requested small { font-weight: 700; color: #c4552d; }
+.mb-hip .drops-card { background: #fffaf2; color: #2b2118; border: 1.5px solid var(--mb-ink); border-radius: 16px; box-shadow: 3px 3px 0 var(--mb-ink); }
+.mb-hip .drops-card h2 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+.mb-hip .drops-card small { color: #6e5d4b; }
+.mb-hip .drops-card .btn, .mb-hip .mb-card-sub .btn { border: 1.5px solid #2b2118; border-radius: 999px; background: #fffaf2; color: #2b2118; font-weight: 700; box-shadow: 2px 2px 0 #2b2118; }
+.mb-hip .drops-card .btn-primary, .mb-hip .mb-card-sub .btn-primary { background: #c4552d; color: #fff; }
