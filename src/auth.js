@@ -68,7 +68,7 @@ export function loadUser(db) {
       const self = withPermissions(me);
       // An admin viewing as someone: the app sees that person (with their access); changes are blocked below.
       const other = viewAs && self.role === 'admin' ? withPermissions(byId.get(viewAs)) : null;
-      if (other && other.role !== 'admin') {
+      if (other && other.id !== self.id) {
         req.realUser = { ...self, site_ids: siteIdsFor(db, self) };
         req.user = { ...other, viewed_by: self.name };
       } else req.user = self;
@@ -223,7 +223,7 @@ export function registerAuthRoutes(router, db) {
     if (admin.role !== 'admin') throw forbidden('Only admins can view Atlas as someone else');
     const target = db.prepare('SELECT id, name, role, active FROM users WHERE id = ?').get(Number(req.body?.user_id));
     if (!target || !target.active) throw notFound('Person');
-    if (target.role === 'admin') throw badRequest('Admins already see everything – choose a manager or member of staff');
+    if (target.id === admin.id) throw badRequest('That’s you – choose someone else to view Atlas as');
     db.prepare('UPDATE sessions SET view_as_user_id = ? WHERE token = ?').run(target.id, req.sessionToken);
     logActivity(db, req, { kind: 'change', area: 'Setup', action: 'Started viewing Atlas as someone', detail: target.name, user_id: admin.id, path: 'POST /auth/view-as' });
     res.json({ ok: true });

@@ -63,11 +63,19 @@ test('an admin sees Atlas as a member of staff would, and can’t change anythin
   assert.deepEqual(logged.map((l) => [l.action, l.detail]), [['Started viewing Atlas as someone', staff.name], ['Stopped viewing Atlas as someone', staff.name]]);
 });
 
-test('only admins can view as someone, and not as another admin or someone switched off', async () => {
+test('only admins can view as someone (another admin too, but not themselves or someone switched off)', async () => {
   const m = await login('manager1@cafe.local');
   assert.equal((await m('/auth/view-as', { method: 'POST', body: { user_id: user('staff1@cafe.local').id } })).status, 403);
   const a = await login('admin@cafe.local');
   assert.equal((await a('/auth/view-as', { method: 'POST', body: { user_id: user('admin@cafe.local').id } })).status, 400);
+  // Another admin: they see it as that admin, still look only.
+  const other = db.prepare(`INSERT INTO users (name, email, password_hash, role) VALUES ('Second Admin', 'admin2@cafe.local', 'x', 'admin')`).run().lastInsertRowid;
+  assert.equal((await a('/auth/view-as', { method: 'POST', body: { user_id: Number(other) } })).status, 200);
+  const me = (await a('/auth/me')).data.user;
+  assert.deepEqual([me.name, me.role, me.viewed_by], ['Second Admin', 'admin', 'Owner']);
+  assert.equal((await a('/locations', { method: 'POST', body: { name: 'Nope' } })).status, 403);
+  await a('/auth/view-as/stop', { method: 'POST' });
+  assert.equal((await a('/auth/me')).data.user.name, 'Owner');
   const off = user('staff1-3@cafe.local');
   db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(off.id);
   try {

@@ -264,7 +264,7 @@ function staffEditor(state, rows, perms, settings = {}) {
       <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
       ${squareBox(u, settings)}
       ${u.id ? inviteBox(u) : ''}
-      ${u.id && state.isAdmin && u.active && u.role !== 'admin' && u.id !== state.user.id ? `<div class="view-as-box"><button type="button" class="btn btn-small" data-view-as="${u.id}">👁 View Atlas as ${esc(u.name.split(' ')[0])}</button>
+      ${u.id && state.isAdmin && u.active && u.id !== state.user.id ? `<div class="view-as-box"><button type="button" class="btn btn-small" data-view-as="${u.id}">👁 View Atlas as ${esc(u.name.split(' ')[0])}</button>
         <small class="muted">See exactly what they see – their menus, shifts and tasks. Look only: nothing can be changed while you’re viewing.</small></div>` : ''}
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password (optional)', input('password', '', 'type="password" minlength="8" autocomplete="new-password"'), { hint: u.id ? 'At least 8 characters' : 'Leave blank and send them an invite, so they choose their own' })}
       ${activeBox(u.active)}
