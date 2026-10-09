@@ -105,3 +105,16 @@ test('things that aren’t rotas are turned away', async () => {
   assert.match(r.data.error, /doesn’t look like a rota/);
   assert.equal((await a('/rota/import/read', { method: 'POST', body: { media_type: 'text/plain', data: png } })).status, 400);
 });
+
+test('the Claude reader streams (big rotas take a while) and turns problems into plain messages', async () => {
+  const { claudeRotaReader } = await import('../src/rota-reader.js');
+  const context = { week: ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18'], team: [{ name: 'Sam' }], sites: [{ name: 'High Street' }] };
+  let sent = null;
+  const ok = { beta: { messages: { stream: (params) => { sent = params; return { finalMessage: async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"is_rota":true,"week_starting":"","shifts":[],"notes":""}' }] }) }; } } } };
+  const r = await claudeRotaReader({ client: ok }).read({ media_type: 'application/pdf', data: 'JVBERi0=' }, context);
+  assert.equal(r.is_rota, true);
+  assert.equal(sent.messages[0].content[0].type, 'document', 'PDFs go as documents');
+  assert.match(sent.messages[0].content[1].text, /Sam/);
+  const broken = { beta: { messages: { stream: () => ({ finalMessage: async () => { throw new Error('socket hang up'); } }) } } };
+  await assert.rejects(claudeRotaReader({ client: broken }).read({ media_type: 'image/png', data: 'x' }, context), (err) => err.status === 502 && /socket hang up/.test(err.message));
+});

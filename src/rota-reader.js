@@ -77,7 +77,8 @@ export function claudeRotaReader({ client, model = DEFAULT_MODEL }) {
       ].join('\n\n');
       let response;
       try {
-        response = await client.beta.messages.create({
+        // Streamed: a big rota can take a while to read, and long requests must stream.
+        response = await client.beta.messages.stream({
           model,
           max_tokens: 32000,
           betas: ['server-side-fallback-2026-07-01'],
@@ -88,14 +89,15 @@ export function claudeRotaReader({ client, model = DEFAULT_MODEL }) {
             role: 'user',
             content: [mediaType === 'application/pdf' ? { type: 'document', source } : { type: 'image', source }, { type: 'text', text: brief }],
           }],
-        });
+        }).finalMessage();
       } catch (err) {
         if (err instanceof Anthropic.AuthenticationError) throw new HttpError(502, 'The Claude API key was refused – check ANTHROPIC_API_KEY');
         if (err instanceof Anthropic.PermissionDeniedError) throw new HttpError(502, 'The Claude API key isn’t allowed to use this model');
         if (err instanceof Anthropic.RateLimitError) throw new HttpError(503, 'Claude is busy – try again in a minute');
         if (err instanceof Anthropic.BadRequestError) throw new HttpError(400, `The rota couldn’t be read: ${err.message}`);
         if (err instanceof Anthropic.APIError) throw new HttpError(502, `Claude had a problem (${err.status ?? 'network'}) – try again`);
-        throw err;
+        // Anything else (e.g. the connection dropping) still says what happened, rather than "Something went wrong".
+        throw new HttpError(502, `The rota couldn’t be read: ${err.message || 'unknown problem'} – try again`);
       }
       if (response.stop_reason === 'refusal') throw new HttpError(422, 'Claude declined to read this document');
       if (response.stop_reason === 'max_tokens') throw new HttpError(422, 'This rota is too big to read in one go – try one page or one site at a time');
