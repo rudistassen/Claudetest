@@ -38,7 +38,7 @@ function stepsFor(state) {
     { sels: ['.tabbar a[href="#/safety"]', '.topnav-btn[href="#/hub/trail"]'], title: 'Trail checks ✅', text: 'Your site’s food safety checks. Record readings and tick off each check – My Atlas tells you how many are left today.', optional: true },
     { go: 'timeoff', sels: ['#request'], title: 'Need a day off? 🌴', text: 'Request holiday here. You’ll get a notification when it’s approved. Use My availability to say when you can and can’t work.', optional: true },
     manager ? { title: 'For managers', text: 'Sales budget, Requests and Rota changes are under Rota → Admin, and your reports are under Reporting. The Manager Guide walks through your week.' } : null,
-    { sels: ['.tabbar-menu', '.user-btn'], title: 'Everything else', text: 'The menu has everything else you can use – and “Take the tour” if you’d like to see this again.' },
+    { sels: ['.tabbar-menu', '.user-btn'], title: 'Everything else', text: 'The menu has everything else you can use, plus your account, notifications and “Take the tour”.' },
     { title: 'You’re all set! 🎉', text: 'That’s the tour. If you get stuck, the Staff Guide has the details, or ask your manager.', end: true },
   ].filter(Boolean).filter((s) => !s.need || s.need());
 }

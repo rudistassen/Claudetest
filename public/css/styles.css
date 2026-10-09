@@ -2403,3 +2403,21 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .nav-group[data-tone] .nav-links { padding: 0 0.3rem 0.35rem; }
 .nav-group[data-tone] .nav-links a { margin: 1px 0; }
 .sidebar > .nav-heading:empty { height: 0; margin: 0.5rem 0.5rem 0.3rem; border-top: 1.5px dashed var(--mb-line); }
+
+/* The account section at the bottom of the slide-out menu. */
+.nav-account { margin: 0.2rem 0 0.4rem; padding: 0.3rem 0.3rem 0.4rem; border: 1.5px solid var(--mb-ink); border-radius: 14px; background: #fffaf2; box-shadow: 3px 3px 0 var(--mb-ink); }
+.nav-account a { color: #2b2118; }
+.nav-account a:hover { background: rgba(43, 33, 24, 0.06); }
+.sidebar .nav-account a.nav-account-head { gap: 0.65rem; padding: 0.45rem 0.5rem; margin-bottom: 0.2rem; border-bottom: 1.5px dashed #d9c9b0; border-radius: 10px 10px 0 0; }
+.nav-account-head .avatar { width: 34px; height: 34px; font-size: 0.75rem; }
+.nav-account-who { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.nav-account-who strong { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; }
+.nav-account-who small { color: #c4552d; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.nav-account-head .nav-caret { margin-left: auto; color: #6e5d4b; }
+.sidebar .nav-account a.active { box-shadow: 2px 2px 0 #2b2118; }
+
+/* Phones: no top bar – the bottom bar's Menu opens everything, with the account at the bottom of it. */
+@media (max-width: 800px) {
+  .topbar { display: none; }
+  .sidebar { top: 0; bottom: calc(64px + env(safe-area-inset-bottom)); padding-top: calc(0.8rem + env(safe-area-inset-top)); width: 272px; }
+}

@@ -451,10 +451,15 @@ function renderShell() {
           </div>`;
         }).join('')}
         <div class="nav-heading"></div>
-        <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
-        <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
-        <a href="#" data-tour><span class="nav-icon">✦</span><span class="nav-label">Take the tour</span></a>
-        <a href="#" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
+        <div class="nav-account">
+          <a href="#/account" class="nav-account-head ${path === 'account' ? 'active' : ''}"><span class="ring" aria-hidden="true"><span class="avatar">${esc(initials(state.user.name) || '?')}</span></span>
+            <span class="nav-account-who"><strong>${esc(state.user.name)}</strong><small>My account</small></span><span class="nav-caret" aria-hidden="true">›</span></a>
+          <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span></a>
+          <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
+          <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
+          <a href="#" data-tour><span class="nav-icon">✦</span><span class="nav-label">Take the tour</span></a>
+          <a href="#" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
+        </div>
       </nav>
       <main id="view"></main>
     </div>
