@@ -109,15 +109,16 @@ export async function render(ctx) {
     byCell.set(k, [...(byCell.get(k) ?? []), s]);
   }
   for (const list of byCell.values()) list.sort((a, b) => a.start_time.localeCompare(b.start_time));
-  // Shifts someone is covering away from their home site, by person and day: their home-site day is greyed out
-  // and says where they are.
-  const coverAway = new Map();
+  // Every shift someone works each day, at any site: wherever they appear on the rota, a day they're working at a
+  // different site is greyed out and says where they are.
+  const workingOn = new Map();
   for (const x of [...data.shifts, ...data.away_shifts]) {
-    const u = data.staff.find((p) => p.id === x.user_id);
-    if (!u || x.state === 'removed' || !u.location_id || x.location_id === u.location_id) continue;
+    if (x.state === 'removed') continue;
     const k = `${x.user_id}|${x.date}`;
-    coverAway.set(k, [...(coverAway.get(k) ?? []), x].sort((a, b) => a.start_time.localeCompare(b.start_time)));
+    workingOn.set(k, [...(workingOn.get(k) ?? []), x].sort((a, b) => a.start_time.localeCompare(b.start_time)));
   }
+  const elsewhere = (userId, day, site) => (workingOn.get(`${userId}|${day}`) ?? []).filter((x) => x.location_id !== site);
+  const coverAway = new Set(data.staff.flatMap((u) => data.days.filter((d) => elsewhere(u.id, d, u.location_id).length).map((d) => `${u.id}|${d}`)));
   // Removed shifts still show (struck through) for editors until the rota is published, but don't count.
   // Removed shifts and sickness don't count towards hours or labour cost.
   const counted = data.shifts.filter((x) => x.state !== 'removed' && !x.sick);
@@ -587,12 +588,12 @@ export async function render(ctx) {
               ${data.days.map((d) => {
                 const shifts = (byCell.get(cellKey(u.id, site, d)) ?? []).filter((x) => !x.away);
                 const off = !!holidayOn(u.id, d, 'approved');
-                // On their home site's row: a day spent covering elsewhere is greyed out and says where.
-                const away = site === u.location_id ? coverAway.get(`${u.id}|${d}`) ?? [] : [];
+                // On every row they appear in: a day spent working at another site is greyed out and says where.
+                const away = elsewhere(u.id, d, site);
                 const covering = away.length > 0 && !shifts.length;
                 return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''} ${covering ? 'is-covering' : ''}" ${canEdit ? 'data-drop' : ''} data-user="${u.id}" data-date="${d}" data-site="${site}">
                   ${cellNotes(u.id, d)}
-                  ${timeline ? '' : away.map((x) => `<span class="cover-away" title="Covering at ${esc(x.location_name)} ${x.start_time}–${x.end_time}">Covering at ${esc(x.location_name)}<small>${x.start_time}–${x.end_time}</small></span>`).join('')}
+                  ${timeline ? '' : away.map((x) => { const where = x.location_name ?? siteName(x.location_id); const verb = site === u.location_id ? 'Covering at' : 'At'; return `<span class="cover-away" title="${verb} ${esc(where)} ${x.start_time}–${x.end_time}">${verb} ${esc(where)}<small>${x.start_time}–${x.end_time}</small></span>`; }).join('')}
                   ${timeline ? `<div class="gt-track">${tlGrid}${away.map((x) => tlBar(x, site, { away: true })).join('')}${shifts.map((x) => tlBar(x, site)).join('')}</div>`
                     : shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''} ${s.sick ? 'shift-sick' : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
                   ${canEdit && !shifts.length && !off && !covering ? '<span class="add-hint">+</span>' : ''}
@@ -615,7 +616,7 @@ export async function render(ctx) {
       </table>
     </div>
     ${!data.staff.length ? `<div class="empty">No staff ${all ? 'yet' : 'at this location yet'}. Add them under People → Staff.</div>` : ''}
-    ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is covering at another site.</p>' : ''}
+    ${coverAway.size ? '<p class="muted small">Greyed-out days: that person is working at another site that day.</p>' : ''}
     ${byGroup && !data.staff.some((u) => u.rota_group) ? '<p class="muted small">Nobody has a role yet – set one for each person on the Staff page.</p>' : ''}
     ${fcNote ? `<p class="muted small">${fcNote}</p>` : ''}
     ${noHoursNote}
