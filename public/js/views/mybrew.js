@@ -216,10 +216,11 @@ export async function renderMyBrew(ctx) {
     </div>`;
 
   const hours = Math.round(weekHours * 10) / 10;
+  // Each sticker goes somewhere: hours to My shifts, the to-do count to My tasks, open shifts to those shifts.
   const stickers = [
-    [`${hours} hrs`, 'next 7 days', 'mb-sticker-1'],
-    [tasks.length ? `${tasks.length} to do` : 'All done', tasks.length ? 'on your list' : 'nothing waiting', 'mb-sticker-2'],
-    claimable ? [`${claimable} open`, `shift${claimable === 1 ? '' : 's'} going`, 'mb-sticker-3'] : null,
+    [`${hours} hrs`, 'next 7 days', 'mb-sticker-1', 'href="#/rota?view=mine" aria-label="My shifts"'],
+    [tasks.length ? `${tasks.length} to do` : 'All done', tasks.length ? 'on your list' : 'nothing waiting', 'mb-sticker-2', 'data-sticker-show="tasks" data-sticker-to="#mb-tasks"'],
+    claimable ? [`${claimable} open`, `shift${claimable === 1 ? '' : 's'} going`, 'mb-sticker-3', 'data-sticker-show="shifts" data-sticker-to="#mb-open"'] : null,
   ].filter(Boolean);
   el.innerHTML = `
     <header class="mb-hero">
@@ -234,7 +235,8 @@ export async function renderMyBrew(ctx) {
         <span class="mb-stub-main"><strong>${esc(dayWord(nextShift.date))}</strong> ${nextShift.start_time}–${nextShift.end_time}</span>
         <span class="mb-stub-site">${esc(nextShift.location_name ?? '')}</span>
       </a>` : '<p class="mb-stub mb-stub-empty"><span class="mb-stub-label">Next up</span><span class="mb-stub-main">Nothing on the rota yet – enjoy it</span></p>'}
-      <div class="mb-stickers">${stickers.map(([big, small, cls]) => `<span class="mb-sticker ${cls}"><strong>${esc(big)}</strong><small>${esc(small)}</small></span>`).join('')}</div>
+      <div class="mb-stickers">${stickers.map(([big, small, cls, go]) => go.startsWith('href') ? `<a class="mb-sticker ${cls}" ${go}><strong>${esc(big)}</strong><small>${esc(small)}</small></a>`
+        : `<button type="button" class="mb-sticker ${cls}" ${go}><strong>${esc(big)}</strong><small>${esc(small)}</small></button>`).join('')}</div>
     </header>
     <div class="mb-pills" role="group" aria-label="Show">
       ${[['all', 'All'], ['shifts', 'Shifts'], ['tasks', 'My tasks'], hasTraining ? ['training', 'My training'] : null, ['news', 'Newsfeed']].filter(Boolean).map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
@@ -296,6 +298,10 @@ export async function renderMyBrew(ctx) {
     const show = b.dataset.mbShow;
     el.querySelectorAll('[data-mb-show]').forEach((x) => x.classList.toggle('is-on', x === b));
     el.querySelectorAll('[data-mb]').forEach((sec) => { sec.hidden = show !== 'all' && sec.dataset.mb !== show; });
+  }));
+  el.querySelectorAll('[data-sticker-show]').forEach((b) => b.addEventListener('click', () => {
+    el.querySelector(`[data-mb-show="${b.dataset.stickerShow}"]`)?.click();
+    el.querySelector(b.dataset.stickerTo)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
   el.querySelectorAll('[data-task-go]').forEach((b) => b.addEventListener('click', () => {
     const go = b.dataset.taskGo;

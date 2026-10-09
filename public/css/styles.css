@@ -1605,7 +1605,7 @@ button.mini-tag { border: 0; font-family: inherit; line-height: inherit; cursor:
 .mb-shortcut-text { min-width: 0; padding-right: 0.5rem; }
 .mb-shortcut-text strong { display: block; font-size: 0.92rem; line-height: 1.2; }
 .mb-shortcut-text small { display: block; color: var(--muted); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mb-section { margin-bottom: 1.2rem; }
+.mb-section { margin-bottom: 1.2rem; scroll-margin-top: 90px; }
 .mb-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.6rem; }
 .mb-section-head { flex-wrap: wrap; }
 .mybrew .mb-section-head h2 { white-space: nowrap; font-size: 1.25rem; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
@@ -2262,6 +2262,9 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .mb-sticker { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 6.2rem; padding: 0.45rem 0.8rem; border-radius: 14px;
   background: #e8b24a; color: #2b2118; box-shadow: 2px 3px 0 #2b2118; transform: rotate(-2.5deg); transition: transform 0.15s; }
 .mb-sticker:hover { transform: rotate(0) scale(1.04); }
+.mb-sticker { border: 0; font: inherit; text-decoration: none; cursor: pointer; }
+.mb-sticker:active { transform: translate(2px, 3px) rotate(0); box-shadow: none; }
+.mb-sticker small::after { content: " ›"; }
 .mb-sticker strong { font-size: 1.1rem; line-height: 1.1; }
 .mb-sticker small { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: inherit; opacity: 0.78; }
 .mb-sticker-2 { background: #a9c49f; transform: rotate(2deg); border-radius: 999px; }
