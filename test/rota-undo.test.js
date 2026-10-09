@@ -58,9 +58,9 @@ test('the last unpublished rota change can be undone, until the next change or a
   await undo();
   assert.deepEqual(snapshot(id), original);
 
-  // Removing a published shift (marked removed): undo brings it back.
+  // Deleting a published shift (gone straight away): undo brings it back as it was.
   await manager(`/shifts/${id}`, { method: 'DELETE' });
-  assert.equal(row(id).removed, 1);
+  assert.equal(row(id), undefined);
   await undo();
   assert.deepEqual(snapshot(id), original);
 

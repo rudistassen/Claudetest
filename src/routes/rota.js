@@ -729,17 +729,30 @@ export function registerRotaRoutes(router, db, { rotaReader = null } = {}) {
   });
 
   // A shift staff have never seen is deleted; a published one is marked removed until the rota is published.
+  // Deleting a shift takes it off straight away – including from what staff see – for anyone who can publish that
+  // site's rota (Undo puts it back). For people who can only edit, a published shift is marked removed until someone
+  // publishes, as before. A shift staff have never seen is simply deleted.
   router.delete('/shifts/:id', requirePerm('rota.edit'), (req, res) => {
     const shift = loadShift(req);
+    const published = shift.pub_date !== null;
+    const now = !published || (can(req.user, 'rota.publish') && (!shift.pub_location_id || req.user.site_ids.includes(shift.pub_location_id)));
     tx(db, () => {
       const before = rowsById([shift.id]);
-      if (shift.pub_date === null) db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
+      if (now) db.prepare('DELETE FROM shifts WHERE id = ?').run(shift.id);
       else db.prepare('UPDATE shifts SET removed = 1 WHERE id = ?').run(shift.id);
       logRota(db, req, { action: 'remove', location_id: shift.location_id, shift,
-        details: `${shiftText(shift)}${shift.pub_date === null ? ' (never published)' : ' (staff see it until the rota is published)'}` });
+        details: `${shiftText(shift)}${!published ? ' (never published)' : now ? ' (taken off staff’s rota straight away)' : ' (staff see it until the rota is published)'}` });
       rememberUndo(req, `Removed ${personName(shift.user_id)}’s shift ${shiftText(shift)}`, shift.location_id, before);
     });
-    res.json({ ok: true });
+    // They could see it, so tell them it's gone (only for shifts still to come).
+    if (published && now && shift.pub_date >= today()) {
+      notify(db, [shift.pub_user_id], 'shift_changed', {
+        title: 'Shift removed',
+        body: `${fmtDay(shift.pub_date)} ${shift.pub_start_time}–${shift.pub_end_time} is no longer on your rota`,
+        url: `/#/rota?view=mine&week=${weekStart(shift.pub_date)}`,
+      });
+    }
+    res.json({ ok: true, removed_now: now });
   });
 
   // Marks a shift as the person being off sick (or not, with { sick: false }). It applies straight away, to the

@@ -103,8 +103,8 @@ test('rota: forecast for managers only; publish one shift, one site, or one day'
   // Publishing a removal deletes the shift.
   await admin(`/shifts/${d.data.id}`, { method: 'DELETE' });
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM shifts WHERE id = ?').get(d.data.id).n, 0, 'never-published shifts are simply deleted');
-  await admin(`/shifts/${a.data.id}`, { method: 'DELETE' });
-  assert.equal(db.prepare('SELECT removed FROM shifts WHERE id = ?').get(a.data.id).removed, 1);
+  // A removal waiting to be published (made by someone who can't publish) is published on its own like any change.
+  db.prepare('UPDATE shifts SET removed = 1 WHERE id = ?').run(a.data.id);
   assert.deepEqual((await admin(`/shifts/${a.data.id}/publish`, { method: 'POST' })).data, { published: 1, removed: true });
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM shifts WHERE id = ?').get(a.data.id).n, 0);
 });

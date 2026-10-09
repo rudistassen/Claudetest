@@ -67,19 +67,15 @@ test('every rota change is logged with who did it, when, and what changed', asyn
   assert.equal(entries[0].action, 'publish');
   assert.match(entries[0].details, /^Published 1 change for the week of /);
 
+  // Deleting a published shift takes it off straight away (for people who can publish), and says so.
   await manager(`/shifts/${id}`, { method: 'DELETE' });
-  assert.equal((await log())[0].action, 'remove');
-  await manager(`/shifts/${id}/restore`, { method: 'POST' });
-  assert.equal((await log())[0].action, 'restore');
-  await manager(`/shifts/${id}`, { method: 'DELETE' });
-  await manager(`/shifts/${id}/publish`, { method: 'POST' });
   entries = await log();
-  assert.equal(entries[0].action, 'publish_shift');
-  assert.match(entries[0].details, /^Published the removal of /);
+  assert.equal(entries[0].action, 'remove');
+  assert.match(entries[0].details, /taken off staff’s rota straight away/);
 
   // One shift's own history, newest first (publishing a whole week is logged for the site, not each shift).
   const history = (await manager(`/rota/log?shift_id=${id}`)).data.entries.map((e) => e.action);
-  assert.deepEqual(history, ['publish_shift', 'remove', 'restore', 'remove', 'change', 'add']);
+  assert.deepEqual(history, ['remove', 'change', 'add']);
 
   // Filters: by kind of change and by person.
   assert.ok((await log('&action=publish')).every((e) => e.action === 'publish' || e.action === 'publish_shift'));

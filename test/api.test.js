@@ -214,19 +214,16 @@ describe('rota publishing', () => {
     assert.equal(discard.data.discarded, 1);
     assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.find((x) => x.id === shift.id).start_time, '09:00');
 
-    // Deleting a published shift keeps it visible to staff until the rota is published again.
+    // Deleting a published shift takes it off straight away – staff stop seeing it, with nothing left to publish –
+    // and Undo puts it back.
     await admin(`/shifts/${shift.id}`, { method: 'DELETE' });
-    assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.find((x) => x.id === shift.id).state, 'removed');
-    assert.deepEqual(await seen(), ['09:00-13:00']);
-    const again = await admin('/shifts', { method: 'POST', body: { location_id: 1, user_id: person.id, date: d, start_time: '09:30', end_time: '12:00' } });
-    assert.equal(again.status, 201, 'a removed shift no longer blocks the slot');
-    await admin(`/shifts/${again.data.id}`, { method: 'DELETE' });
-    assert.equal((await admin(`/shifts/${shift.id}/restore`, { method: 'POST' })).status, 200);
-    assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.find((x) => x.id === shift.id).state, 'published');
-    await admin(`/shifts/${shift.id}`, { method: 'DELETE' });
-    await admin('/rota/publish', { method: 'POST', body: { location_id: 1, week } });
-    assert.deepEqual(await seen(), []);
     assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.shifts.some((x) => x.id === shift.id), false);
+    assert.deepEqual(await seen(), []);
+    assert.equal((await admin(`/rota?location_id=1&week=${week}`)).data.unpublished, 0);
+    assert.equal((await admin('/rota/undo', { method: 'POST' })).status, 200);
+    assert.deepEqual(await seen(), ['09:00-13:00']);
+    await admin(`/shifts/${shift.id}`, { method: 'DELETE' });
+    assert.deepEqual(await seen(), []);
   });
 
   test('"My shifts" shows only your own published shifts for the week, with who else is on', async () => {

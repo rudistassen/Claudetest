@@ -715,8 +715,8 @@ export async function render(ctx) {
         ${shift ? '<details class="shift-history"><summary>History of this shift</summary><div id="shift-history" class="muted small">Loading…</div></details>' : ''}`,
       danger: shift ? 'Delete shift' : null,
       onDanger: async () => {
-        await api(`/shifts/${shift.id}`, { method: 'DELETE' });
-        toast(shift.state === 'new' ? 'Shift deleted' : 'Shift removed. Staff will stop seeing it once you publish.');
+        const r = await api(`/shifts/${shift.id}`, { method: 'DELETE' });
+        toast(r.removed_now ? (shift.state === 'new' ? 'Shift deleted' : 'Shift deleted – it’s off their rota now') : 'Shift removed. Staff will stop seeing it once someone publishes the rota.');
         ctx.rerender();
       },
       onSubmit: async (v) => {
