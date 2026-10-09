@@ -2673,3 +2673,9 @@ img.lesson-media { background: transparent; }
 /* Shifts just added from an uploaded rota. */
 .shift.is-imported, .day-card.is-imported, .pd-card.is-imported { outline: 3px solid #e0a83a; outline-offset: 1px; animation: ri-glow 1.4s ease-in-out 3; }
 @keyframes ri-glow { 50% { outline-color: #c4552d; } }
+/* Team holiday: buttons wrap, and go under the details on phones. */
+.leave-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; align-items: center; }
+@media (max-width: 640px) {
+  .leave-list > li { flex-direction: column; align-items: stretch; }
+  .leave-list .leave-actions { justify-content: flex-start; margin-top: 0.5rem; }
+}

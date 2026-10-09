@@ -1,6 +1,6 @@
 import { api, confirmDialog, esc, field, fmtDate, input, openModal, qs, showError, textarea, toast, todayISO } from '../lib.js';
 
-// Time off: your holiday requests; for managers, approving them.
+// Time off: your holiday requests; for managers, approving them, and adding, changing or taking off people's holiday.
 
 const STATUS = { pending: 'Waiting', approved: 'Approved', declined: 'Declined', cancelled: 'Cancelled' };
 const BADGE = { pending: 'in_progress', approved: 'completed', declined: 'fail', cancelled: 'draft' };
@@ -11,7 +11,7 @@ const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
 
 function tabs(state, active) {
   const items = [['mine', 'My holiday']];
-  if (state.can('leave.manage')) items.push(['requests', 'Holiday requests']);
+  if (state.can('leave.manage')) items.push(['requests', 'Team holiday']);
   return `<div class="tabs">${items.map(([k, l]) => `<a href="#/timeoff${k === 'mine' ? '' : qs({ tab: k })}" class="${active === k ? 'active' : ''}">${l}</a>`).join('')}</div>`;
 }
 
@@ -91,7 +91,7 @@ async function renderRequests(ctx) {
   const views = [['pending', 'Waiting'], ['upcoming', 'Approved, coming up'], ['past', 'Past and declined']];
 
   el.innerHTML = `
-    <div class="page-head"><h1>Time off</h1></div>
+    <div class="page-head"><h1>Time off</h1><div class="actions"><button class="btn btn-primary" id="leave-add">+ Add holiday</button></div></div>
     ${tabs(state, 'requests')}
     <div class="filters">${views.map(([k, l]) => `<a class="btn ${status === k ? 'btn-primary' : ''}" href="#/timeoff${qs({ tab: 'requests', status: k })}">${l}</a>`).join('')}</div>
     <section class="card">
@@ -104,8 +104,54 @@ async function renderRequests(ctx) {
         <span class="leave-actions">
           ${r.status === 'pending' ? `<button class="btn btn-small" data-decide="${r.id}" data-status="declined">Decline</button>
             <button class="btn btn-small btn-primary" data-decide="${r.id}" data-status="approved">Approve</button>` : badge(r.status)}
+          ${r.status === 'approved' ? `<button class="btn btn-small" data-edit-leave="${r.id}">Change dates</button>
+            <button class="btn btn-small btn-ghost" data-remove-leave="${r.id}">Take off</button>` : ''}
         </span></li>`).join('')}</ul>` : `<p class="muted">${status === 'pending' ? 'No holiday requests waiting.' : 'Nothing here.'}</p>`}
     </section>`;
+
+  // Add holiday for someone (approved straight away), change its dates, or take it off.
+  const datesFields = (r) => `<div class="row">${field('First day', input('start_date', r?.start_date ?? todayISO(), 'type="date" required'))}
+    ${field('Last day', input('end_date', r?.end_date ?? r?.start_date ?? todayISO(), 'type="date" required'))}</div>`;
+  const afterSave = (res, verb) => {
+    toast(`${verb}${res?.shifts_then ? ` – they’re on the rota for ${res.shifts_then} shift${res.shifts_then === 1 ? '' : 's'} then, so move ${res.shifts_then === 1 ? 'it' : 'them'}` : ''}`);
+    ctx.rerender();
+  };
+  el.querySelector('#leave-add').addEventListener('click', async () => {
+    try {
+      const people = await api('/leave/people');
+      const { form } = openModal({
+        title: 'Add holiday',
+        body: `${field('Who', `<select name="user_id" required><option value="">Choose who…</option>${people.map((p) => `<option value="${p.id}">${esc(p.name)}${p.location_name ? ` – ${esc(p.location_name)}` : ''}</option>`).join('')}</select>`)}
+          ${datesFields(null)}
+          ${field('Note (optional, they’ll see it)', textarea('note', '', 'maxlength="500" placeholder="e.g. Booked by phone"'))}
+          <p class="muted small">It’s approved straight away and they get a notification. Past dates are fine, to record holiday already taken.</p>`,
+        submitLabel: 'Add holiday',
+        onSubmit: async (v) => afterSave(await api('/leave/add', { method: 'POST', body: v }), 'Holiday added'),
+      });
+      const [start, end] = [form.querySelector('[name=start_date]'), form.querySelector('[name=end_date]')];
+      start.addEventListener('change', () => { if (!end.value || end.value < start.value) end.value = start.value; });
+    } catch (err) { showError(err); }
+  });
+  el.querySelectorAll('[data-edit-leave]').forEach((b) => b.addEventListener('click', () => {
+    const r = rows.find((x) => x.id === Number(b.dataset.editLeave));
+    openModal({
+      title: `Change ${r.user_name}’s holiday`,
+      body: `<p class="muted">Now: ${range(r)} · ${days(r.days)}</p>${datesFields(r)}
+        <p class="muted small">Make it shorter or longer, or move it. They’ll get a notification.</p>`,
+      submitLabel: 'Save',
+      onSubmit: async (v) => afterSave(await api(`/leave/${r.id}`, { method: 'PUT', body: { start_date: v.start_date, end_date: v.end_date } }), 'Holiday changed'),
+    });
+  }));
+  el.querySelectorAll('[data-remove-leave]').forEach((b) => b.addEventListener('click', () => {
+    const r = rows.find((x) => x.id === Number(b.dataset.removeLeave));
+    openModal({
+      title: `Take off ${r.user_name}’s holiday?`,
+      body: `<p><strong>${range(r)}</strong> · ${days(r.days)}</p>${field('Note for them (optional)', textarea('note', '', 'maxlength="500"'))}
+        <p class="muted small">It comes off their holiday and they can be put on the rota those days.</p>`,
+      submitLabel: 'Take off',
+      onSubmit: async (v) => { await api(`/leave/${r.id}/remove`, { method: 'POST', body: { note: v.note } }); toast('Holiday taken off'); ctx.rerender(); },
+    });
+  }));
 
   el.querySelectorAll('[data-decide]').forEach((b) => b.addEventListener('click', () => {
     const r = rows.find((x) => x.id === Number(b.dataset.decide));

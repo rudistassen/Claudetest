@@ -117,6 +117,84 @@ export function registerLeaveRoutes(router, db) {
     res.json(withDays(db.prepare(`${withNames} WHERE r.id = ?`).get(r.id)));
   });
 
+  // --- Managers changing someone's holiday: add it for them, change the dates, or take it off ---
+
+  const span = (from, to) => (from === to ? fmtDay(from) : `${fmtDay(from)} – ${fmtDay(to)}`);
+  const holidayLog = (req, userId, from, details) => {
+    const person = db.prepare('SELECT location_id FROM users WHERE id = ?').get(userId);
+    logRota(db, req, { action: 'holiday', location_id: person?.location_id ?? null, staff_id: userId, date: from, details });
+  };
+  const onRotaThen = (userId, from, to) => db.prepare('SELECT COUNT(*) AS n FROM draft_shifts WHERE user_id = ? AND date BETWEEN ? AND ?').get(userId, from, to).n;
+  // The dates for holiday a manager adds or changes: past dates are fine (recording holiday already taken).
+  const holidayDates = (b, userId, ignoreId = 0) => {
+    const start = date(b.start_date, 'First day', { required: true });
+    const end = date(b.end_date, 'Last day') ?? start;
+    if (end < start) throw badRequest('The last day must be on or after the first day');
+    if (daysBetween(start, end) > MAX_LEAVE_DAYS) throw badRequest(`Add at most ${MAX_LEAVE_DAYS} days at a time`);
+    if (start < addDays(today(), -400) || end > addDays(today(), 730)) throw badRequest('Choose dates within the last year or the next two');
+    const overlap = db.prepare(`SELECT start_date, end_date FROM leave_requests WHERE user_id = ? AND id != ? AND status IN ('pending', 'approved') AND start_date <= ? AND end_date >= ?`)
+      .get(userId, ignoreId, end, start);
+    if (overlap) throw badRequest(`They already have holiday booked or requested ${span(overlap.start_date, overlap.end_date)} – change that one instead`);
+    return { start, end };
+  };
+  const mine = (req, r) => {
+    if (!r || !manageable(req).some((u) => u.id === r.user_id)) {
+      if (r && r.user_id === req.user.id) throw forbidden('Someone else needs to change your own holiday');
+      throw notFound('Holiday');
+    }
+    return r;
+  };
+
+  // Who this manager can add holiday for.
+  router.get('/leave/people', requirePerm('leave.manage'), (req, res) => {
+    res.json(manageable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name })));
+  });
+
+  // Add holiday for someone: { user_id, start_date, end_date, note }. It's approved straight away.
+  router.post('/leave/add', requirePerm('leave.manage'), (req, res) => {
+    const userId = id(req.body?.user_id, 'Person', { required: true });
+    const person = manageable(req).find((u) => u.id === userId);
+    if (!person) throw userId === req.user.id ? forbidden('Someone else needs to add your own holiday') : notFound('Person');
+    const { start, end } = holidayDates(req.body ?? {}, userId);
+    const note = str(req.body?.note, 'note', { max: 500 });
+    const r = db.prepare(`INSERT INTO leave_requests (user_id, start_date, end_date, note, status, decided_by, decided_at, decision_note)
+      VALUES (?, ?, ?, ?, 'approved', ?, datetime('now'), ?)`).run(userId, start, end, note, req.user.id, 'Added by a manager');
+    const days = daysBetween(start, end);
+    const clash = onRotaThen(userId, start, end);
+    holidayLog(req, userId, start, `Holiday ${span(start, end)} (${days} day${days === 1 ? '' : 's'}) added for ${person.name} by ${req.user.name}${note ? ` – “${note}”` : ''}${clash ? `; ${clash} shift${clash === 1 ? ' is' : 's are'} still on the rota then` : ''}`);
+    if (end >= today()) notify(db, [userId], 'holiday_decision', { title: 'Holiday added ✓', body: `${span(start, end)} – added by ${req.user.name}`, url: '/#/timeoff' });
+    res.status(201).json({ ...withDays(db.prepare(`${withNames} WHERE r.id = ?`).get(r.lastInsertRowid)), shifts_then: clash });
+  });
+
+  // Change the dates (or note) of someone's approved or waiting holiday.
+  router.put('/leave/:id', requirePerm('leave.manage'), (req, res) => {
+    const r = mine(req, db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(Number(req.params.id)));
+    if (!['approved', 'pending'].includes(r.status)) throw badRequest('Only booked or waiting holiday can be changed');
+    const { start, end } = holidayDates(req.body ?? {}, r.user_id, r.id);
+    const note = req.body?.note === undefined ? r.note : str(req.body.note, 'note', { max: 500 });
+    db.prepare('UPDATE leave_requests SET start_date = ?, end_date = ?, note = ? WHERE id = ?').run(start, end, note, r.id);
+    const name = db.prepare('SELECT name FROM users WHERE id = ?').get(r.user_id)?.name ?? '';
+    if (start !== r.start_date || end !== r.end_date) {
+      const clash = r.status === 'approved' ? onRotaThen(r.user_id, start, end) : 0;
+      holidayLog(req, r.user_id, start, `${name}’s holiday changed from ${span(r.start_date, r.end_date)} to ${span(start, end)} (${daysBetween(start, end)} days) by ${req.user.name}${clash ? `; ${clash} shift${clash === 1 ? ' is' : 's are'} still on the rota then` : ''}`);
+      if (end >= today() || r.end_date >= today()) notify(db, [r.user_id], 'holiday_decision', { title: 'Your holiday has changed', body: `Now ${span(start, end)} (was ${span(r.start_date, r.end_date)})`, url: '/#/timeoff' });
+    }
+    res.json(withDays(db.prepare(`${withNames} WHERE r.id = ?`).get(r.id)));
+  });
+
+  // Take someone's holiday off (it was booked by mistake, or they're no longer going).
+  router.post('/leave/:id/remove', requirePerm('leave.manage'), (req, res) => {
+    const r = mine(req, db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(Number(req.params.id)));
+    if (!['approved', 'pending'].includes(r.status)) throw badRequest('This holiday has already been taken off or declined');
+    const note = str(req.body?.note, 'note', { max: 500 });
+    db.prepare(`UPDATE leave_requests SET status = 'cancelled', decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?`)
+      .run(req.user.id, note ?? 'Taken off by a manager', r.id);
+    const name = db.prepare('SELECT name FROM users WHERE id = ?').get(r.user_id)?.name ?? '';
+    holidayLog(req, r.user_id, r.start_date, `${name}’s holiday ${span(r.start_date, r.end_date)} taken off by ${req.user.name}${note ? ` – “${note}”` : ''}`);
+    if (r.end_date >= today()) notify(db, [r.user_id], 'holiday_decision', { title: 'Holiday taken off', body: `${span(r.start_date, r.end_date)}${note ? ` – “${note}”` : ''}`, url: '/#/timeoff' });
+    res.json({ ok: true });
+  });
+
   // --- Availability: a calendar of days and repeating patterns (see availability.js) ---
 
   // Whose availability this person can see and change: their own, and (with leave.manage) the people they look after.
