@@ -2211,3 +2211,16 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .sb-site.is-changed { box-shadow: inset 4px 0 0 var(--warn); }
 .tone-warn { color: var(--warn); }
 @media (max-width: 700px) { .sb-foot .btn { width: 100%; } }
+
+/* Guided tour */
+.tour { position: fixed; inset: 0; z-index: 200; }
+.tour.is-center { background: rgba(0, 0, 0, 0.55); }
+.tour-spot { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); outline: 3px solid var(--brand); outline-offset: 0; transition: all 0.25s ease; pointer-events: none; }
+.tour-card { position: fixed; background: var(--surface); color: var(--text); border-radius: 16px; padding: 1rem 1.1rem; box-shadow: var(--shadow-lift); transition: top 0.25s ease, left 0.25s ease; }
+.tour-card h2 { margin: 0.1rem 0 0.4rem; font-size: 1.15rem; }
+.tour-card p { margin: 0 0 0.8rem; line-height: 1.45; }
+.tour-progress { height: 4px; border-radius: 4px; background: var(--surface-2); margin-bottom: 0.7rem; overflow: hidden; }
+.tour-progress span { display: block; height: 100%; background: var(--brand); transition: width 0.25s ease; }
+.tour-actions { display: flex; align-items: center; gap: 0.5rem; }
+.tour-gap { flex: 1; }
+@media (prefers-reduced-motion: reduce) { .tour-spot, .tour-card { transition: none; } }

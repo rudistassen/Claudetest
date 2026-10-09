@@ -58,6 +58,17 @@ describe('auth', () => {
   });
 });
 
+describe('guided tour', () => {
+  test('shown until someone finishes or skips it, then not again', async () => {
+    const staff = await login('staff1-2@cafe.local');
+    assert.equal((await staff('/auth/me')).data.user.tour_done_at, null);
+    assert.equal((await staff('/auth/tour', { method: 'POST' })).status, 200);
+    assert.ok((await staff('/auth/me')).data.user.tour_done_at);
+    const again = await login('staff1-2@cafe.local');
+    assert.ok((await again('/auth/me')).data.user.tour_done_at, 'remembered on the next sign-in');
+  });
+});
+
 describe('location access', () => {
   test('admin sees all 7 sites, managers only their own', async () => {
     const admin = await login('admin@cafe.local');

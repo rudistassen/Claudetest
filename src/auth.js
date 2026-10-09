@@ -25,7 +25,7 @@ export function validatePassword(password) {
   return p;
 }
 
-export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, u.rota_group, u.paid_breaks';
+export const PUBLIC_USER_FIELDS = 'u.id, u.name, u.email, u.role, u.location_id, u.position, u.hourly_rate, u.active, u.permission_set_id, u.all_sites, u.rota_group, u.paid_breaks, u.tour_done_at';
 
 // Joins a user's permission set, or the built-in set for their role when they don't have one.
 export const ACCESS_JOIN = `LEFT JOIN permission_sets ps ON ps.id = u.permission_set_id
@@ -187,6 +187,13 @@ export function registerAuthRoutes(router, db) {
   router.get('/auth/me', (req, res) => {
     if (!req.user) throw new HttpError(401, 'Please sign in');
     res.json({ user: req.user });
+  });
+
+  // The guided tour is done (finished or skipped), so it isn't shown again on sign-in.
+  router.post('/auth/tour', (req, res) => {
+    if (!req.user) throw new HttpError(401, 'Please sign in');
+    db.prepare(`UPDATE users SET tour_done_at = datetime('now') WHERE id = ?`).run(req.user.id);
+    res.json({ ok: true });
   });
 
   router.post('/auth/password', (req, res) => {

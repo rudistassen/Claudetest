@@ -1,5 +1,6 @@
 import { api, chooseSite, esc, isDemo, qs, showError } from './lib.js';
 import { logo } from './logo.js';
+import { maybeStartTour, startTour } from './tour.js';
 import { install, installState, setUpInstall } from './install.js';
 import * as admin from './views/admin.js';
 import * as breaks from './views/breaks.js';
@@ -426,6 +427,7 @@ function renderShell() {
             <a href="#/account" class="${path === 'account' ? 'active' : ''}"><span class="nav-icon">☺</span><span class="nav-label">My account</span></a>
             <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span></a>
             <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
+            <a href="#" data-tour><span class="nav-icon">✦</span><span class="nav-label">Take the tour</span></a>
             <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
             <a href="#" id="logout" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
           </div>
@@ -451,6 +453,7 @@ function renderShell() {
         <div class="nav-heading"></div>
         <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
         <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
+        <a href="#" data-tour><span class="nav-icon">✦</span><span class="nav-label">Take the tour</span></a>
         <a href="#" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
       </nav>
       <main id="view"></main>
@@ -460,6 +463,11 @@ function renderShell() {
   showRequestBadge();
   showEventsBadge();
   document.querySelectorAll('[data-install]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); install(); }));
+  document.querySelectorAll('[data-tour]').forEach((a) => a.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.body.classList.remove('nav-open');
+    startTour(state, navigate);
+  }));
   document.querySelectorAll('[data-logout]').forEach((a) => a.addEventListener('click', async (e) => {
     e.preventDefault();
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
@@ -623,6 +631,8 @@ export async function route() {
   };
   try {
     await match.view(ctx);
+    // The first time someone signs in, the guided tour (not in the demo, where everyone signs in afresh).
+    if (!isDemo && seq === routeSeq) maybeStartTour(state, navigate);
     showRequestBadge();
     showEventsBadge();
   } catch (err) {
