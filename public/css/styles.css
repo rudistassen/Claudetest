@@ -2267,13 +2267,26 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .mb-sticker-2 { background: #a9c49f; transform: rotate(2deg); border-radius: 999px; }
 .mb-sticker-3 { background: #c4552d; color: #fff; transform: rotate(-1deg); }
 /* The rest of the page picks up the same feel. */
-.mb-pills .mb-pill { border: 1.5px solid var(--mb-ink); background: transparent; color: var(--mb-ink); font-size: 0.85rem; letter-spacing: 0.04em; }
-.mb-pills .mb-pill.is-on { background: var(--mb-ink); color: var(--mb-paper); }
+.mb-pills { padding: 0 4px 5px 0; }
+.mb-pills .mb-pill { border: 1.5px solid var(--mb-ink); background: #fffaf2; color: #2b2118; font-size: 0.85rem; letter-spacing: 0.04em; box-shadow: 2px 2px 0 var(--mb-ink); }
+.mb-pills .mb-pill.is-on { background: #e8b24a; color: #2b2118; }
 .mb-hip .mb-section-head h2 { font-weight: 600; font-size: 1.45rem; padding-bottom: 0.3rem; color: var(--mb-ink);
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5 Q 30 1 60 4.5 T 118 3' fill='none' stroke='%23c4552d' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") left bottom / 3.5rem 0.5rem no-repeat; }
-.mb-hip .mb-shortcut { border-radius: 14px; border: 1.5px solid var(--mb-line); transition: transform 0.15s, box-shadow 0.15s; }
-.mb-hip .mb-shortcut:hover { transform: translateY(-2px) rotate(-0.6deg); box-shadow: 3px 4px 0 var(--mb-line); background: var(--surface); }
-.mb-hip .mb-art { margin: 0.35rem; width: 48px; border-radius: 12px; }
+.mb-hip .mb-shortcut { border-radius: 14px; border: 1.5px solid var(--mb-ink); background: #fffaf2; color: #2b2118; box-shadow: 3px 3px 0 var(--mb-ink);
+  transition: transform 0.15s, box-shadow 0.15s; }
+.mb-hip .mb-shortcut:hover { transform: translate(-1px, -2px) rotate(-0.6deg); box-shadow: 4px 5px 0 var(--mb-ink); background: #fffaf2; }
+.mb-hip .mb-shortcut:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--mb-ink); }
+.mb-hip .mb-shortcut-text strong { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.02rem; font-weight: 700; }
+.mb-hip .mb-shortcut-text small { color: #6e5d4b; }
+.mb-hip .mb-art { margin: 0.35rem; width: 48px; border-radius: 12px; background: var(--mb-tile, #e8b24a); border: 1.5px solid rgba(43, 33, 24, 0.85); }
+.mb-hip .mb-shortcut:nth-child(6n+1) { --mb-tile: #e8b24a; }
+.mb-hip .mb-shortcut:nth-child(6n+2) { --mb-tile: #e08a63; }
+.mb-hip .mb-shortcut:nth-child(6n+3) { --mb-tile: #a9c49f; }
+.mb-hip .mb-shortcut:nth-child(6n+4) { --mb-tile: #8fb8b5; }
+.mb-hip .mb-shortcut:nth-child(6n+5) { --mb-tile: #c9a7d6; }
+.mb-hip .mb-shortcut:nth-child(6n) { --mb-tile: #e9a3a3; }
+.mb-hip .mb-shortcut:nth-child(odd) .mb-art { transform: rotate(-4deg); }
+.mb-hip .mb-shortcut:nth-child(even) .mb-art { transform: rotate(3deg); }
 .mb-hip .mb-cover { border-radius: 14px; }
 .mb-hip .mb-strip { font-family: "Iowan Old Style", Palatino, Georgia, serif; font-style: italic; }
 .mb-hip .mb-task { border-radius: 14px; border-style: dashed; border-color: var(--mb-line); }
