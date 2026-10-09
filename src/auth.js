@@ -1,6 +1,7 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { ALL_PERMISSIONS, parsePermissions } from './permissions.js';
 import { HttpError, badRequest, forbidden, notFound, str } from './util.js';
+import { logActivity } from './activity.js';
 
 const SESSION_DAYS = 30;
 const COOKIE = 'sid';
@@ -172,13 +173,17 @@ export function registerAuthRoutes(router, db) {
     const user = db.prepare('SELECT * FROM users WHERE email = ? AND active = 1').get(email);
     if (!user || !verifyPassword(password, user.password_hash)) {
       for (const [key] of keys) loginFails.set(key, [...recentFails(key, now), now]);
+      const known = user ?? db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+      logActivity(db, req, { kind: 'sign_in_failed', action: 'Failed sign-in', user_id: known?.id ?? null, detail: known ? (user ? 'Wrong password' : 'Account switched off') : `Unknown email: ${email}` });
       throw new HttpError(401, 'Incorrect email or password');
     }
     loginFails.delete(keys[1][0]);
+    logActivity(db, req, { kind: 'sign_in', action: 'Signed in', user_id: user.id });
     res.json({ user: startSession(db, req, res, user.id) });
   });
 
   router.post('/auth/logout', (req, res) => {
+    if (req.user) logActivity(db, req, { kind: 'sign_out', action: 'Signed out' });
     if (req.sessionToken) db.prepare('DELETE FROM sessions WHERE token = ?').run(req.sessionToken);
     res.clearCookie(COOKIE, { path: '/' });
     res.json({ ok: true });
@@ -204,6 +209,7 @@ export function registerAuthRoutes(router, db) {
     if (!verifyPassword(current, row.password_hash)) throw badRequest('Current password is incorrect');
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(next), req.user.id);
     db.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?').run(req.user.id, req.sessionToken);
+    logActivity(db, req, { kind: 'password', action: 'Changed their password' });
     res.json({ ok: true });
   });
 }

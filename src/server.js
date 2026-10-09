@@ -33,6 +33,7 @@ import { registerReviewRoutes } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from './invites.js';
 import { HttpError } from './util.js';
 import { registerPushRoutes } from './push.js';
+import { activityLogger, registerActivityRoutes } from './activity.js';
 
 export const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -95,6 +96,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerAuthRoutes(api, db);
   registerPasswordRoutes(api, db, mailer);
   api.use(requireAuth);
+  api.use(activityLogger(db));
   registerInviteRoutes(api, db, mailer, { square });
   registerAdminRoutes(api, db, square);
   registerRotaRoutes(api, db);
@@ -117,6 +119,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerEventRoutes(api, db, { mailbox: events, reader: enquiryReader });
   registerNewsRoutes(api, db);
   registerCourseRoutes(api, db);
+  registerActivityRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);
   registerTimecardRoutes(api, db, square);

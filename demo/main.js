@@ -41,6 +41,7 @@ import { HttpError, addDays, today } from '../src/util.js';
 import { seedActivity, seedCourse } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
 import { registerPushRoutes } from '../src/push.js';
+import { activityLogger, registerActivityRoutes } from '../src/activity.js';
 
 // --- A tiny Express-compatible router ---
 
@@ -124,6 +125,7 @@ async function boot() {
   registerAuthRoutes(api, db);
   registerPasswordRoutes(api, db, demoMailer);
   api.use(requireAuth);
+  api.use(activityLogger(db));
   registerInviteRoutes(api, db, demoMailer, { demo: true, square });
   registerAdminRoutes(api, db, square);
   registerRotaRoutes(api, db);
@@ -216,6 +218,7 @@ async function boot() {
   ], 'invoices@brewandbarrel.example') });
   registerNewsRoutes(api, db);
   registerCourseRoutes(api, db);
+  registerActivityRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);
   registerTimecardRoutes(api, db, square);

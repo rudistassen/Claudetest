@@ -986,6 +986,22 @@ CREATE TABLE IF NOT EXISTS training_attempts (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_training_attempts_user ON training_attempts(user_id, course_id);
+-- Setup → Staff log: sign-ins (and failed ones) and every change people make, kept for a year.
+CREATE TABLE IF NOT EXISTS activity_log (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('sign_in', 'sign_in_failed', 'sign_out', 'password', 'change')),
+  area TEXT,
+  action TEXT NOT NULL,
+  detail TEXT,
+  path TEXT,
+  ip TEXT,
+  device TEXT,
+  times INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_log_user ON activity_log(user_id, id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_time ON activity_log(created_at);
 
 -- People → Performance: one-to-ones, probation reviews and appraisals.
 CREATE TABLE IF NOT EXISTS performance_reviews (

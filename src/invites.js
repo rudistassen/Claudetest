@@ -4,6 +4,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { hashPassword, requirePerm, startSession, validatePassword } from './auth.js';
 import { appUrl } from './reports.js';
+import { logActivity } from './activity.js';
 import { squareTeamUrl } from './square-staff.js';
 import { badRequest, forbidden, HttpError, id, str } from './util.js';
 
@@ -114,6 +115,8 @@ export function registerPasswordRoutes(router, db, mailer) {
     db.prepare(`UPDATE password_tokens SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL`).run(t.user_id);
     // Signed out everywhere else, in case the old password was known to someone.
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(t.user_id);
+    logActivity(db, req, { kind: 'password', action: t.purpose === 'invite' ? 'Set their password from an invite' : 'Reset their password', user_id: t.user_id });
+    logActivity(db, req, { kind: 'sign_in', action: 'Signed in', user_id: t.user_id });
     res.json({ user: startSession(db, req, res, t.user_id) });
   });
 }

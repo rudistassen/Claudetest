@@ -8,6 +8,7 @@ import * as rotalog from './views/rotalog.js';
 import * as inbox from './views/inbox.js';
 import * as salesbudget from './views/salesbudget.js';
 import * as courses from './views/courses.js';
+import * as stafflog from './views/stafflog.js';
 import * as parlevels from './views/parlevels.js';
 import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
@@ -114,6 +115,7 @@ const ROUTES = [
   [/^orders\/(\d+)$/, orders.renderOrder, ['orders.manage']],
   [/^admin\/staff$/, admin.renderStaff, ['staff.manage']],
   [/^admin\/permissions$/, admin.renderPermissions, 'admin'],
+  [/^admin\/staff-log$/, stafflog.render, 'admin'],
   [/^admin\/locations$/, admin.renderLocations, 'admin'],
   [/^admin\/suppliers$/, supplierViews.renderList, SUPPLIERS],
   [/^admin\/suppliers\/(\d+)$/, supplierViews.renderSupplier, SUPPLIERS],
@@ -196,6 +198,7 @@ function navGroups() {
     ]],
     ['Setup', [
       ['admin/permissions', 'Permissions', '⚿', 'admin'],
+      ['admin/staff-log', 'Staff log', '☰', 'admin'],
       ['admin/locations', 'Locations', '⌂', 'admin'],
       ['admin/square', 'Square', '▢', 'admin'],
       ['admin/xero', 'Xero', '⇄', 'admin'],
@@ -305,6 +308,7 @@ const TILE_NOTES = {
   'people/performance': 'One-to-ones, probation reviews and appraisals',
   'people/areas': 'Who is trained to work in each area',
   'admin/staff': 'Everyone’s access, home site, role and pay',
+  'admin/staff-log': 'Who signed in, and every change people made',
   recipes: 'What you sell, costed and linked to Square sales',
   'recipes/prep': 'Sauces, fillings and bakes made in a batch, with their yield',
   'recipes/allergens': 'Every dish and the allergens it contains',

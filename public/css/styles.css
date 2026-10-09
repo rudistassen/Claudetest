@@ -2603,3 +2603,23 @@ img.lesson-media { background: transparent; }
 .hip .card { background: var(--mb-card); border: 1.5px solid var(--mb-ink); border-radius: 16px; box-shadow: 3px 3px 0 var(--mb-ink); }
 .hip .card h2 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
 .hip .course-signoffs { border-color: #c4552d; box-shadow: 3px 3px 0 #c4552d; }
+
+/* Setup → Staff log */
+.sl-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem 0.9rem; align-items: end; }
+.sl-filters label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 600; font-size: 0.85rem; }
+.sl-day { margin-top: 1.1rem; }
+.sl-day-head { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.15rem; margin: 0 0 0.5rem; }
+.sl-list { list-style: none; margin: 0; padding: 0; border: 1.5px solid var(--mb-ink); border-radius: 16px; background: var(--mb-card); box-shadow: 3px 3px 0 var(--mb-ink); overflow: hidden; }
+.sl-row { display: grid; grid-template-columns: 3.4rem 2rem minmax(0, 1fr); gap: 0.5rem; align-items: start; padding: 0.6rem 0.8rem; border-top: 1px dashed var(--mb-line); }
+.sl-row:first-child { border-top: 0; }
+.sl-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--mb-ink-soft); padding-top: 0.1rem; }
+.sl-icon { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 8px; background: var(--surface-2); font-size: 0.95rem; }
+.sl-sign_in .sl-icon, .sl-sign_out .sl-icon { background: #dcefe2; }
+.sl-sign_in_failed .sl-icon { background: #f6d5cc; }
+.sl-sign_in_failed .sl-main > strong { color: #c4552d; }
+.sl-password .sl-icon { background: #fbefc9; }
+.sl-main { min-width: 0; }
+.sl-main small { display: block; margin-top: 0.1rem; overflow-wrap: anywhere; }
+.sl-detail { color: var(--text); }
+.sl-times { font-size: 0.75rem; font-weight: 800; padding: 0 0.4rem; border-radius: 99px; background: #e8b24a; color: #2b2118; }
+.sl-more { text-align: center; margin: 1rem 0; }
