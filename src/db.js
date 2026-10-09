@@ -1003,6 +1003,17 @@ CREATE TABLE IF NOT EXISTS activity_log (
 CREATE INDEX IF NOT EXISTS idx_activity_log_user ON activity_log(user_id, id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_time ON activity_log(created_at);
 
+-- Rota → Analyse this week's rota: the latest analyses, so their suggestions can be opened again.
+CREATE TABLE IF NOT EXISTS rota_analyses (
+  id INTEGER PRIMARY KEY,
+  week TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  result TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rota_analyses_week ON rota_analyses(week, scope, id);
+
 -- People → Performance: one-to-ones, probation reviews and appraisals.
 CREATE TABLE IF NOT EXISTS performance_reviews (
   id INTEGER PRIMARY KEY,

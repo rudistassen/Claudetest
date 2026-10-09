@@ -108,3 +108,21 @@ test('the analysis runs in the background, and a failure is reported back', asyn
   assert.deepEqual(r.data, { status: 'failed', error: 'Claude is busy – try again in a minute' });
   assert.equal((await a('/rota/analyse/nope')).status, 404);
 });
+
+test('a finished analysis is saved, so its suggestions can be opened again from the rota', async () => {
+  answer = () => ({ headline: 'Saved one', recommendations: [], watch_outs: [] });
+  const a = await login('admin@cafe.local');
+  const site = db.prepare('SELECT id FROM locations ORDER BY id LIMIT 1').get().id;
+  const done = await analyse(a, { location_id: site, week });
+  assert.equal(done.data.status, 'done');
+  const latest = await a(`/rota/analyses/latest?location_id=${site}&week=${week}`);
+  assert.equal(latest.data.analysis.id, done.data.id);
+  assert.equal(latest.data.analysis.headline, 'Saved one');
+  assert.ok(latest.data.analysis.created_at);
+  // The rota tells admins there's one to open; the whole-group view keeps its own.
+  assert.equal((await a(`/rota?location_id=${site}&week=${week}`)).data.last_analysis.id, done.data.id);
+  assert.notEqual((await a(`/rota?location_id=all&week=${week}`)).data.last_analysis?.id, done.data.id);
+  const m = await login('manager1@cafe.local');
+  assert.equal((await m(`/rota?week=${week}`)).data.last_analysis, undefined);
+  assert.equal((await m(`/rota/analyses/latest?week=${week}`)).status, 403);
+});

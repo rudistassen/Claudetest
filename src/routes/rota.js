@@ -367,6 +367,16 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     const old = Date.now() - 30 * 60 * 1000;
     for (const [k, v] of analyses) if (v.started < old) analyses.delete(k);
   };
+  // A whole-group analysis is kept under 'all', a single site's under its id.
+  const analysisScope = (raw, ids) => (raw === 'all' ? 'all' : String(ids[0]));
+  const savedAnalysis = (row) => (row ? { ...JSON.parse(row.result), id: row.id, created_at: row.created_at, created_by_name: row.created_by_name ?? null } : null);
+  const SAVED = `SELECT a.*, u.name AS created_by_name FROM rota_analyses a LEFT JOIN users u ON u.id = a.created_by`;
+  // The latest saved analysis for a week (?location_id=…&week=…), or null.
+  router.get('/rota/analyses/latest', requireAdmin, (req, res) => {
+    const ids = rotaSites(req, req.query.location_id);
+    const ws = weekStart(date(req.query.week, 'week') ?? today());
+    res.json({ analysis: savedAnalysis(db.prepare(`${SAVED} WHERE a.week = ? AND a.scope = ? ORDER BY a.id DESC LIMIT 1`).get(ws, analysisScope(req.query.location_id, ids))) });
+  });
   router.get('/rota/analyse/:job', requireAdmin, (req, res) => {
     const job = analyses.get(req.params.job);
     if (!job || job.user_id !== req.user.id) throw notFound('Rota analysis');
@@ -506,6 +516,12 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     };
     Promise.resolve().then(() => rotaAnalyst.analyse(week)).then((result) => {
       job.result = finish(result);
+      // Kept so the suggestions can be opened again from the rota (the last 20 for each week and scope).
+      const scope = analysisScope(b.location_id, ids);
+      job.result.id = Number(db.prepare('INSERT INTO rota_analyses (week, scope, created_by, result) VALUES (?, ?, ?, ?)')
+        .run(ws, scope, req.user.id, JSON.stringify(job.result)).lastInsertRowid);
+      db.prepare(`DELETE FROM rota_analyses WHERE week = ? AND scope = ? AND id NOT IN (SELECT id FROM rota_analyses WHERE week = ? AND scope = ? ORDER BY id DESC LIMIT 20)`)
+        .run(ws, scope, ws, scope);
       job.status = 'done';
     }).catch((err) => {
       console.error('Rota analysis failed:', err.message);
@@ -701,6 +717,9 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
       sales_budget: manager ? salesBudgets(db, ids, ws) : undefined,
       bank_holidays: Object.fromEntries(days.map((d) => [d, bankHoliday(d)]).filter(([, n]) => n)),
       can_publish: editor ? can(req.user, 'rota.publish') : undefined,
+      // Admins: when this week was last analysed (Analyse this week's rota), so its suggestions can be opened again.
+      last_analysis: req.user.role === 'admin' ? db.prepare('SELECT id, created_at FROM rota_analyses WHERE week = ? AND scope = ? ORDER BY id DESC LIMIT 1')
+        .get(ws, all ? 'all' : String(ids[0])) ?? null : undefined,
       // Their last change, if it can still be undone.
       undo: editor ? undoFor(req.user.id) : undefined,
       // Dropped shifts that are open for anyone to pick up, and shifts someone has asked to drop.

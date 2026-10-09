@@ -1,4 +1,4 @@
-import { api, esc, fmtDate, money, openModal, showError } from '../lib.js';
+import { api, esc, fmtDate, money, openModal, qs, showError } from '../lib.js';
 
 // Rota → Analyse this week's rota (admins): Claude compares the week's rota – published and draft – with forecast
 // sales and the usual trade hour by hour, and suggests where labour could be saved. Nothing changes on the rota;
@@ -13,6 +13,8 @@ const CONFIDENCE = { high: 'Strong case', medium: 'Worth a look', low: 'Maybe' }
 export const flaggedShifts = new Set();
 
 const tone = (p, target) => (p === null ? '' : p > target + 5 ? 'ra-bad' : p > target ? 'ra-warn' : 'ra-good');
+// Saved times are UTC; shown in UK time.
+const when = (sqlUtc) => new Date(`${sqlUtc.replace(' ', 'T')}Z`).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
 const pctText = (p) => (p === null ? '–' : `${Math.round(p * 10) / 10}%`);
 
 /** location: a site id or 'all'; week: its Monday; onShow: redraw the rota (with flaggedShifts highlighted). */
@@ -50,6 +52,22 @@ export async function openRotaAnalysis({ location, week, onShow }) {
     return;
   }
   waiting.close();
+  // Redraw the rota underneath so its 📋 Suggestions button appears for next time.
+  onShow();
+  showAnalysis(r, { week, onShow });
+}
+
+/** Opens the latest saved analysis for the week (from the rota's 📋 Suggestions button). */
+export async function openSavedAnalysis({ location, week, onShow }) {
+  try {
+    const { analysis } = await api(`/rota/analyses/latest${qs({ location_id: location, week })}`);
+    if (!analysis) throw new Error('There’s no saved analysis for this week yet – press Analyse this week’s rota');
+    showAnalysis(analysis, { week, onShow });
+  } catch (err) { showError(err); }
+}
+
+// The results: labour % by site, the suggestions (each can be shown on the rota) and what to watch out for.
+function showAnalysis(r, { week, onShow }) {
   const day = (d) => (d ? fmtDate(d, { weekday: 'short', day: 'numeric', month: 'short' }) : 'All week');
   const draftNote = (s) => (Math.abs(s.labour_cost - s.published_labour_cost) >= 1
     ? `<small class="muted">Published rota: ${money(s.published_labour_cost)} · with draft changes: ${money(s.labour_cost)}</small>` : '');
@@ -57,6 +75,7 @@ export async function openRotaAnalysis({ location, week, onShow }) {
     title: `📊 Rota analysis – w/c ${fmtDate(week, { day: 'numeric', month: 'long' })}`,
     wide: true,
     body: `<div class="ra">
+      ${r.created_at ? `<p class="muted small">Analysed ${esc(when(r.created_at))}${r.created_by_name ? ` by ${esc(r.created_by_name)}` : ''}. If the rota has changed since, run it again for up-to-date suggestions.</p>` : ''}
       ${r.demo ? '<p class="notice">Demo – these suggestions come from simple rules. In the live app Claude reviews the rota.</p>' : ''}
       <p class="ra-headline">${esc(r.headline)}</p>
       <div class="ra-kpis">

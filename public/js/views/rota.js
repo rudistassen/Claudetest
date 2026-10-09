@@ -4,7 +4,7 @@ import { shiftHistory } from './rotalog.js';
 import { openStaffEditor } from './admin.js';
 import { askToDrop, claimRequest, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
 import { justImported, openRotaImport } from './rotaimport.js';
-import { flaggedShifts, openRotaAnalysis } from './rotaanalyse.js';
+import { flaggedShifts, openRotaAnalysis, openSavedAnalysis } from './rotaanalyse.js';
 import { sickDialog } from './sickness.js';
 
 // A shift copied with Ctrl/⌘+click: its times stay here (across weeks and sites) until it's pasted somewhere with a
@@ -574,6 +574,7 @@ export async function render(ctx) {
         ${canEdit ? '<button class="btn" id="copy-week">Copy previous week</button>' : ''}
         ${state.isAdmin ? '<button class="btn btn-ai" id="read-rota" title="Upload a photo or PDF of a rota and Claude adds the shifts">✨ Read a rota</button>' : ''}
         ${state.isAdmin && data.shifts.length ? '<button class="btn btn-ai" id="analyse-rota" title="Claude compares this week’s rota with forecast sales and suggests where to save">📊 Analyse this week’s rota</button>' : ''}
+        ${state.isAdmin && data.last_analysis ? '<button class="btn btn-ai" id="analysis-saved" title="Open the suggestions from the last analysis of this week">📋 Suggestions</button>' : ''}
         <button class="btn" id="print">Print</button>
       </div>
     </div>
@@ -1001,6 +1002,7 @@ export async function render(ctx) {
   if (head) scroller.style.setProperty('--rota-head', `${head.getBoundingClientRect().height}px`);
   el.querySelector('#read-rota')?.addEventListener('click', () => openRotaImport({ location: all ? 'all' : siteId, week, onDone: () => ctx.rerender() }));
   el.querySelector('#analyse-rota')?.addEventListener('click', () => openRotaAnalysis({ location: all ? 'all' : siteId, week, onShow: () => ctx.rerender() }));
+  el.querySelector('#analysis-saved')?.addEventListener('click', () => openSavedAnalysis({ location: all ? 'all' : siteId, week, onShow: () => ctx.rerender() }));
   // Shifts a rota-analysis suggestion is about glow, and the first is scrolled into view.
   if (flaggedShifts.size) {
     const hits = [...el.querySelectorAll('[data-shift]')].filter((b) => flaggedShifts.has(Number(b.dataset.shift)));
