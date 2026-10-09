@@ -2373,3 +2373,30 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .pd-head .seg { background: none; border: 0; gap: 0.45rem; padding: 0 4px 5px 0; overflow: visible; }
 .pd-head .seg button { border: 1.5px solid var(--mb-ink); border-radius: 999px; background: #fffaf2; color: #2b2118; font-weight: 700; padding: 0.3rem 0.85rem; box-shadow: 2px 2px 0 var(--mb-ink); }
 .pd-head .seg button.is-on { background: #e8b24a; color: #2b2118; }
+
+/* The slide-out menu, in the same cream sticker style. */
+.sidebar { background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.018) 0 1px, transparent 1px 3px), var(--mb-paper); border-right: 1.5px solid var(--mb-ink); gap: 4px; padding: 0.8rem 0.75rem 1rem 0.65rem; }
+.sidebar a { color: var(--mb-ink); font-weight: 600; }
+.sidebar a:hover { background: color-mix(in srgb, var(--mb-ink) 7%, transparent); }
+.sidebar > a.active, .nav-group[data-tone] a.active { background: #e8b24a; color: #2b2118; font-weight: 700; border: 1.5px solid #2b2118; box-shadow: 2px 2px 0 #2b2118; }
+.sidebar .nav-icon { color: inherit; }
+.nav-group[data-tone] { --tile: #e8b24a; margin: 0.35rem 0; padding: 0; border: 1.5px solid var(--mb-ink); border-radius: 14px; background: #fffaf2; box-shadow: 3px 3px 0 var(--mb-ink); }
+.nav-group[data-tone="team"] { --tile: #e8b24a; }
+.nav-group[data-tone="trail"] { --tile: #8fb8b5; }
+.nav-group[data-tone="events"] { --tile: #e08a63; }
+.nav-group[data-tone="people"] { --tile: #c9a7d6; }
+.nav-group[data-tone="menu"] { --tile: #a9c49f; }
+.nav-group[data-tone="stock"] { --tile: #e9a3a3; }
+.nav-group[data-tone="reporting"] { --tile: #a9c49f; }
+.nav-group[data-tone]:nth-child(odd) .nav-hub .nav-icon { transform: rotate(-5deg); }
+.nav-group[data-tone]:nth-child(even) .nav-hub .nav-icon { transform: rotate(4deg); }
+.nav-group[data-tone] a { color: #2b2118; }
+.nav-group[data-tone] a:hover { background: rgba(43, 33, 24, 0.06); }
+.sidebar a.nav-hub { padding: 0.5rem 0.6rem; border-radius: 13px; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.08rem; font-weight: 700; }
+.sidebar a.nav-hub .nav-icon { display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 10px; background: var(--tile); border: 1.5px solid rgba(43, 33, 24, 0.85); font-family: system-ui, sans-serif; font-size: 1rem; }
+.sidebar a.nav-hub .nav-caret { color: #6e5d4b; font-size: 1.1rem; }
+.sidebar a.nav-hub.active { background: var(--tile); border: 0; box-shadow: none; }
+.nav-group[data-tone] .nav-heading { margin: 0.55rem 0.75rem 0.3rem; color: #c4552d; letter-spacing: 0.14em; font-weight: 800; }
+.nav-group[data-tone] .nav-links { padding: 0 0.3rem 0.35rem; }
+.nav-group[data-tone] .nav-links a { margin: 1px 0; }
+.sidebar > .nav-heading:empty { height: 0; margin: 0.5rem 0.5rem 0.3rem; border-top: 1.5px dashed var(--mb-line); }
