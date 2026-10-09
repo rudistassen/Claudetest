@@ -636,6 +636,104 @@ Ground rules:
       ], 1),
     ],
   },
+  {
+    key: 'manual-handling',
+    name: 'Manual handling',
+    description: 'Lifting, carrying, pushing and pulling safely – deliveries, milk crates, kegs, bins, furniture and trays. Uses TILE to plan every lift, and a manager watches a practical lift before signing it off.',
+    renew_months: 36,
+    pass_mark: 80,
+    needs_signoff: true,
+    steps: [
+      page('Why it matters 💪', `**Manual handling** means lifting, carrying, putting down, pushing or pulling anything by hand – a box of cups, a milk crate, a bin bag, a keg, a stack of chairs.
+
+Injuries from handling are one of the most common reasons people are off work. Most are **back injuries**, and they often build up slowly from the same small strains, day after day. Once you’ve hurt your back, it’s much easier to hurt it again.
+
+The law (the Manual Handling Operations Regulations) says, in order:
+- **Avoid** risky handling if you can
+- **Assess** what can’t be avoided
+- **Reduce** the risk as far as possible
+
+Your part: follow the safe ways of working you’re shown, use the equipment provided, and tell your manager about anything that isn’t safe.`),
+      page('Avoid it if you can 🛒', `Before you pick anything up, ask: **do I need to lift this at all?**
+- Use a **trolley, sack truck or cage** for deliveries – don’t carry what you can wheel
+- Ask for deliveries to be put **where they’re needed**, not left at the door
+- **Split loads** – carry two trips of half a box rather than one heavy one
+- **Store heavy things at waist height**, light things up high and down low
+- **Kegs and gas cylinders are never lifted** – roll them on their bottom rim or use the keg lifter or trolley
+- **Never drag** full bins – use the wheels`),
+      page('Plan every lift – TILE', `Before any lift, think **TILE**:
+- **T**ask – how far, how high, how often? Will you have to twist, stoop or reach?
+- **I**ndividual – can you manage it? Are you tired, injured or pregnant? If in doubt, **ask for help**
+- **L**oad – how heavy is it? Is it awkward, hot, sharp, sloshing or likely to move? Test it by **tipping one corner**
+- **E**nvironment – is the route clear, dry and well lit? Are there steps, doors or tight corners? Where will you put it down?
+
+As a rough guide, most people shouldn’t lift more than about **25kg** (men) or **16kg** (women) at waist height with the load close to the body – and much less if it’s held away from the body, above the shoulders or below the knees. These are guidelines, not targets: **if it feels too heavy, it is.**`),
+      page('How to lift safely', `- **Plan** – clear the route and know where it’s going
+- **Stand close** to the load, feet apart, one foot slightly forward
+- **Bend your knees**, keep your back straight – don’t stoop
+- Get a **good grip**, hugging the load close to your body
+- **Lift smoothly** with your legs – no jerking
+- Keep the load **close to your waist**, heaviest side towards you
+- **Don’t twist** – move your feet to turn
+- **Look ahead**, not down at the load
+- **Put it down**, then adjust it – bend your knees on the way down too
+
+**Team lifts** (tables, heavy boxes): one person leads and calls it – “Ready, steady, lift” – and everyone lifts and lowers together.`),
+      page('Pushing, pulling, reaching and repeating', `**Pushing and pulling**
+- **Push rather than pull** – you can see where you’re going and use your body weight
+- Keep trolleys **in good repair** and don’t overload them so you can’t see over them
+- Go slowly on slopes and ramps
+
+**Reaching**
+- Use a **step stool** for high shelves – never a chair, crate or counter
+- Don’t lift heavy things down from above your shoulders – ask for help or move them lower
+
+**Repetitive work** (tamping, pouring, carrying trays, wiping tables)
+- **Vary your tasks** where you can, and take your breaks
+- Carry trays with **both hands** close to your body, and don’t overload them
+- Keep your wrists straight when tamping, and keep the station set up so you’re not over-reaching`),
+      page('Look after yourself', `- Wear **sensible shoes** with a good grip
+- **Warm up** a little before a big delivery
+- **Report pain early** – aches in your back, neck, shoulders or wrists are a warning sign, not something to work through
+- Tell your manager if you’re **pregnant**, have an **injury** or a health condition, or are returning after time off – they’ll look at what you lift and adjust it
+- Report broken trolleys, wobbly shelves and anything stored in an unsafe place
+- **Every handling injury goes in the accident book**
+
+Once you’ve passed, your manager will watch you do a lift and sign you off.`),
+      question('A delivery of six cases of drinks has been left at the door. What’s the best way to move them?', [
+        'Carry them all at once to save time',
+        'Use a trolley or sack truck',
+        'Drag them across the floor',
+      ], 1),
+      question('What does TILE stand for?', ['Time, Item, Lift, Effort', 'Task, Individual, Load, Environment', 'Turn, Inspect, Lift, Exit'], 1),
+      question('When lifting a box from the floor, you should…', [
+        'Keep your legs straight and bend your back',
+        'Bend your knees, keep your back straight and hold the box close',
+        'Lift it quickly with your arms held out',
+      ], 1),
+      question('You’re carrying a heavy box and need to turn to put it on a shelf. What do you do?', [
+        'Twist at the waist',
+        'Move your feet to turn, rather than twisting',
+        'Throw it onto the shelf',
+      ], 1),
+      question('A beer keg needs moving to the cellar. What should you do?', [
+        'Lift it on your own and carry it',
+        'Never lift it – roll it on its bottom rim or use the keg trolley',
+        'Lift it with a colleague and carry it down the stairs',
+      ], 1),
+      question('Is it better to push or pull a loaded trolley?', ['Pull', 'Push', 'It makes no difference'], 1, 'Pushing lets you see where you’re going and use your body weight.'),
+      question('A bag of coffee beans is on the top shelf, above your head. What do you do?', [
+        'Climb on a chair',
+        'Stretch up and pull it down',
+        'Use a step stool, and ask for heavy stock to be stored lower',
+      ], 2),
+      question('Your lower back has been aching after deliveries for the past week. What do you do?', [
+        'Work through it – it’ll pass',
+        'Tell your manager so they can look at how deliveries are handled',
+        'Only mention it if it gets worse',
+      ], 1),
+    ],
+  },
 ];
 
 /** The list shown to managers: what each ready-made course is and how long it is. */
