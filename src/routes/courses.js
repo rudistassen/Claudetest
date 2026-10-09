@@ -105,7 +105,8 @@ export function registerCourseRoutes(router, db) {
 
   // Ready-made courses (e.g. a health & safety induction) to start from.
   router.get('/training/templates', perm, (req, res) => {
-    res.json({ templates: templateSummaries() });
+    const have = new Set(db.prepare('SELECT name FROM training_courses WHERE active = 1').all().map((c) => c.name));
+    res.json({ templates: templateSummaries().map((t) => ({ ...t, added: have.has(t.name) })) });
   });
 
   // Adds a ready-made course as a draft, to check and change in the designer before publishing.

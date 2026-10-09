@@ -225,3 +225,16 @@ test('deleting a course hides it from staff and the designer but keeps training 
   assert.ok(!(await m('/training/designs')).data.courses.some((c) => c.id === data.id));
   assert.equal((await m(`/training/courses/${data.id}/design`)).status, 404);
 });
+
+test('every ready-made course can be added, saved and published as it is', async () => {
+  const m = await login('admin@cafe.local');
+  const { data } = await m('/training/templates');
+  assert.ok(data.templates.length >= 6);
+  for (const t of data.templates) {
+    const { data: made } = await m(`/training/templates/${t.key}`, { method: 'POST' });
+    const { data: design } = await m(`/training/courses/${made.id}/design`);
+    const saved = await m(`/training/courses/${made.id}/design`, { method: 'PUT', body: { steps: design.steps, published: true } });
+    assert.equal(saved.status, 200, `${t.key}: ${JSON.stringify(saved.data)}`);
+  }
+  assert.ok((await m('/training/templates')).data.templates.every((t) => t.added));
+});

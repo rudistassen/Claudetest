@@ -107,8 +107,8 @@ async function readyMade() {
     title: '📚 Ready-made courses',
     body: `<p class="muted small">Add one as a draft, then check it fits your sites (fire exits, first aiders, your own rules) and change anything you like before you publish it.</p>
       <ul class="course-ready-list">${list.map((t) => `<li><div><strong>${esc(t.name)}</strong><p class="small">${esc(t.description)}</p>
-        <small class="muted">${plural(t.pages, 'page')} · ${plural(t.questions, 'question')}${t.renew_months ? ` · every ${t.renew_months} months` : ''}${t.needs_signoff ? ' · signed off in person' : ''}</small></div>
-        <button type="button" class="btn btn-primary btn-small" data-template="${esc(t.key)}">Add</button></li>`).join('')}</ul>`,
+        <small class="muted">${t.added ? '✓ Already added · ' : ''}${plural(t.pages, 'page')} · ${plural(t.questions, 'question')}${t.renew_months ? ` · every ${t.renew_months} months` : ''}${t.needs_signoff ? ' · signed off in person' : ''}</small></div>
+        <button type="button" class="btn ${t.added ? '' : 'btn-primary'} btn-small" data-template="${esc(t.key)}">${t.added ? 'Add again' : 'Add'}</button></li>`).join('')}</ul>`,
   });
   form.querySelectorAll('[data-template]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true;
