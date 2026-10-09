@@ -734,6 +734,144 @@ Once you’ve passed, your manager will watch you do a lift and sign you off.`),
       ], 1),
     ],
   },
+  {
+    key: 'fire-safety',
+    name: 'Fire safety',
+    description: 'How fires start and how to prevent them, fire doors and escape routes, what to do when the alarm goes off, getting customers out, which extinguisher to use (and when not to), and gas leaks. A manager walks them through the escape routes before signing it off.',
+    renew_months: 12,
+    pass_mark: 80,
+    needs_signoff: true,
+    steps: [
+      page('Why fire safety matters 🔥', `A fire can take hold in **minutes**, and smoke is what usually kills – it can fill a room long before the flames reach it.
+
+By law (the Regulatory Reform (Fire Safety) Order 2005), every site has a **fire risk assessment** and a plan for getting everyone out. Your part is to:
+- know **what to do** when the alarm goes off
+- know your site’s **escape routes, exits and assembly point**
+- help **prevent** fires day to day
+- **report** anything that puts fire safety at risk
+
+If you work at more than one site, learn the routes at each one – they’re all different.`),
+      page('How fires start', `A fire needs three things – the **fire triangle**:
+- **Heat** – a hob, oven, toaster, panini grill, faulty electrics, a cigarette
+- **Fuel** – paper, cardboard, packaging, cloths, cooking oil, furniture, rubbish
+- **Oxygen** – in the air all around us
+
+Take any one away and the fire goes out. Prevention is about **keeping heat and fuel apart**.
+
+**Common causes in cafés and bars:**
+- cooking oil and fat overheating or left unattended
+- grease build-up in grills, extractors and toasters
+- faulty or overloaded electrics and chargers
+- cloths, paper or packaging left near heat
+- rubbish and cardboard piling up, inside or by the building
+- careless smoking`),
+      page('Preventing fires every day', `- **Never leave cooking unattended**, and keep oil and grills clean
+- Keep **cloths, paper cups, menus and packaging away** from hobs, grills, toasters and heaters
+- **Switch off and unplug** equipment at closing time, unless it’s meant to stay on (like fridges)
+- Don’t overload sockets or **daisy-chain extension leads**, and report damaged plugs and cables
+- Empty bins and **flatten and remove cardboard** regularly – don’t store it by the doors or outside walls
+- Store chemicals and gas cylinders where they’re meant to go
+- Smoking only in the permitted outside area, and put cigarettes out properly
+- **Report** anything that worries you – a burning smell, a scorched plug, a broken detector`),
+      page('Fire doors and escape routes 🚪', `**Fire doors** hold back fire and smoke for long enough for everyone to get out.
+- **Never prop or wedge a fire door open** – not with a bin, a chair or a wedge, even on a hot day
+- Don’t stop them closing properly or tie them back
+- Report doors that don’t close fully or are damaged
+
+**Escape routes and exits** must always be clear:
+- Keep corridors, stairs and exits **free of boxes, deliveries, chairs and bins**
+- Fire exits must be **unlocked** and easy to open whenever people are in the building
+- Never block **fire extinguishers, alarm call points or exit signs**
+- Check your route is clear when you open up`),
+      page('When the alarm goes off 🚨', `**If you discover a fire:**
+- **Raise the alarm** – break the glass at the nearest call point and shout “Fire!”
+- Call **999** (or make sure someone has) – give the address clearly
+
+**When the alarm sounds:**
+- **Stop what you’re doing** – leave orders, payments and the till
+- **Get customers out** calmly by the nearest safe exit – be clear and firm: “Please leave the building now”
+- Check toilets and back areas on your way out if it’s safe and it’s your job to
+- **Close doors** behind you to slow the fire
+- **Don’t use lifts**, and **don’t stop for belongings**
+- Go to the **assembly point** and stay there so the manager can check everyone is out
+- **Never go back in** until the fire service or manager says it’s safe
+
+**Weekly alarm tests** are announced – if the alarm goes on for longer or isn’t expected, treat it as real.`),
+      page('Helping everyone get out', `Some people will need help to leave:
+- **wheelchair users** and people who find stairs difficult
+- people who are **deaf or hard of hearing** – they may not hear the alarm
+- people who are **blind or partially sighted**
+- **children**, older people and anyone who is confused or upset
+
+Your site’s fire plan says how to help – for example a **refuge point** where someone can wait safely for help if they can’t use the stairs, and who goes with them. Ask your manager to show you.
+
+In a busy café, bar or theatre, **calm, clear instructions** stop people panicking. Point to the exit and keep people moving.`),
+      page('Fire extinguishers 🧯', `**Only use an extinguisher if you’ve been trained, the fire is small, you’ve raised the alarm, and you have a clear way out behind you.** If in doubt, get out.
+
+Extinguishers are red with a **coloured band** that tells you what they’re for:
+- **Red – Water**: paper, wood, fabric. **Not** on electrics or cooking oil
+- **Cream – Foam**: paper, wood, fabric and flammable liquids. Not on cooking oil
+- **Black – CO₂**: **electrical fires** (e.g. a coffee machine, till or toaster) and flammable liquids
+- **Blue – Dry powder**: most fires including electrical – but it makes it hard to see and breathe indoors
+- **Yellow – Wet chemical**: **cooking oil and fat fires** (fryers, pans)
+
+To use one, remember **PASS**:
+- **P**ull the pin
+- **A**im at the **base** of the fire
+- **S**queeze the handle
+- **S**weep from side to side
+
+**Fire blanket**: for a small pan fire, turn off the heat if it’s safe, place the blanket over the pan away from you, and leave it. **Never put water on burning oil** – it can explode into a fireball.`),
+      page('If you smell gas', `If you smell gas:
+- **Don’t** turn electrical switches on or off, use a lighter, or anything that could make a spark
+- **Turn off the gas** at the meter if you know where it is and it’s safe
+- **Open doors and windows**
+- **Get everyone out** and tell your manager
+- Call the **National Gas Emergency number: 0800 111 999** from outside`),
+      page('Nearly done ✅', `Remember:
+- Keep **heat and fuel apart**, and never leave cooking unattended
+- **Never prop fire doors open**, and keep exits clear and unlocked
+- Alarm: **stop, get everyone out, close doors, assembly point, never go back in**
+- **Help** anyone who needs it to get out
+- Only fight a fire if it’s **small, you’re trained and you have a way out** – CO₂ for electrics, wet chemical or a fire blanket for oil, **never water on oil**
+- Gas: **no switches, open windows, get out, 0800 111 999**
+
+Now the questions – you need **80%** to pass. Once you’ve passed, your manager will walk you through your site’s escape routes and assembly point.`),
+      question('What three things does a fire need?', ['Heat, fuel and oxygen', 'Heat, water and smoke', 'Fuel, wind and sparks'], 0),
+      question('It’s a hot day and a colleague wedges the kitchen fire door open. What should you do?', [
+        'Leave it – it’s only for today',
+        'Remove the wedge and let it close, and tell your manager',
+        'Leave it open but stand next to it',
+      ], 1),
+      question('The fire alarm goes off and it isn’t the usual weekly test. What do you do?', [
+        'Wait to see if it stops',
+        'Finish serving the queue, then leave',
+        'Stop, get customers out by the nearest exit, and go to the assembly point',
+      ], 2),
+      question('At the assembly point you realise you left your phone inside. What do you do?', [
+        'Run back in quickly to get it',
+        'Stay at the assembly point – never go back in until it’s declared safe',
+        'Ask a customer to get it',
+      ], 1),
+      question('A pan of oil on the hob catches fire. What should you never do?', ['Turn off the heat', 'Use a fire blanket', 'Throw water on it'], 2, 'Water on burning oil can explode into a fireball.'),
+      question('The coffee machine’s plug catches fire. Which extinguisher is right?', ['Water (red band)', 'CO₂ (black band)', 'Foam (cream band)'], 1),
+      question('What does PASS stand for when using an extinguisher?', [
+        'Pull, Aim, Squeeze, Sweep',
+        'Push, Alarm, Spray, Stop',
+        'Point, Aim, Shoot, Spray',
+      ], 0),
+      question('A customer in a wheelchair is upstairs when the alarm goes off. What happens?', [
+        'They use the lift',
+        'They’re left to wait for the fire service',
+        'Follow your site’s fire plan – help them to the refuge point or out, and make sure the manager and fire service know where they are',
+      ], 2),
+      question('You smell gas when you open up in the morning. What do you do?', [
+        'Turn the lights on to look for the leak',
+        'Don’t use any switches, open windows, get out and call 0800 111 999',
+        'Light the hob to check it’s working',
+      ], 1),
+    ],
+  },
 ];
 
 /** The list shown to managers: what each ready-made course is and how long it is. */
