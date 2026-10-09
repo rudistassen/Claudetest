@@ -52,7 +52,7 @@ export function trustProxy(env) {
 // places: Google Maps, for each site's rating and reviews (see google-reviews.js), or null when it isn't set up.
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
 // xero: { config, fetch? } when Xero is set up (see xero.js), otherwise null.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, events = null, enquiryReader = null, rotaReader = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, events = null, enquiryReader = null, rotaReader = null, rotaAnalyst = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
   const xeroClient = xero ? new Xero(db, xero.config, xero.fetch) : null;
   const app = express();
   app.disable('x-powered-by');
@@ -102,7 +102,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   api.use(activityLogger(db));
   registerInviteRoutes(api, db, mailer, { square });
   registerAdminRoutes(api, db, square);
-  registerRotaRoutes(api, db, { rotaReader });
+  registerRotaRoutes(api, db, { rotaReader, rotaAnalyst });
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
   registerPushRoutes(api, db);

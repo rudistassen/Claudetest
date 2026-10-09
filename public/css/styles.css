@@ -2745,3 +2745,23 @@ img.lesson-media { background: transparent; }
 .as-course.is-due { background: var(--warn-soft); }
 @media (max-width: 640px) { .as-person { grid-template-columns: 1fr; gap: 0.5rem; } .as-person .btn { justify-self: start; } }
 @media (max-width: 640px) { .ld-tiles .hub-icon { width: 34px; height: 34px; font-size: 0.95rem; border-radius: 10px; } }
+
+/* Rota analysis */
+.ra h3 { margin: 1.1rem 0 0.5rem; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+.ra-headline { font-size: 1.05rem; line-height: 1.5; margin: 0 0 0.9rem; }
+.ra-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.6rem; }
+.ra-kpi { border: 1.5px solid var(--mb-ink, #2b2118); border-radius: 14px; padding: 0.7rem 0.85rem; background: #fffaf2; color: #2b2118; display: flex; flex-direction: column; gap: 0.15rem; }
+.ra-kpi span { font-weight: 700; }
+.ra-kpi strong { font-size: 1.5rem; }
+.ra-kpi small { color: #6e5d4b; }
+.ra-kpi:first-child { background: #e8b24a; }
+.ra-kpi:first-child small { color: #2b2118; }
+.ra-good { color: #2e7d4f; } .ra-warn { color: #b26a00; } .ra-bad { color: #c0392b; }
+.ra-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.6rem; counter-reset: ra; }
+.ra-rec { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start; }
+.ra-rec p { margin: 0; }
+.ra-rec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.ra-kind { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #c4552d; }
+.ra-save { margin-left: auto; font-weight: 800; color: #2e7d4f; background: var(--good-soft); border-radius: 99px; padding: 0.1rem 0.6rem; white-space: nowrap; }
+.ra-watch { margin: 0; padding-left: 1.2rem; }
+.ra-watch li { margin: 0.25rem 0; }

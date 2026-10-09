@@ -70,7 +70,7 @@ export function salesForecast(db, locationIds, weekStartDate) {
 // The labour cost we aim for, as a share of net sales.
 export const LABOUR_TARGET_PCT = 30;
 
-export function registerRotaRoutes(router, db, { rotaReader = null } = {}) {
+export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst = null } = {}) {
   /**
    * Reporting → Rota costs: for a week, each site's rota cost against a labour budget of 30% of its planned net
    * sales. Sales are shown gross (what the business talks in): the sales budget for the day (Rota → Sales budget)
@@ -354,6 +354,136 @@ export function registerRotaRoutes(router, db, { rotaReader = null } = {}) {
       week, proposals, notes: reading.notes || '', demo: !!rotaReader.demo,
       team: team.map((t) => ({ id: t.id, name: t.name, location_id: t.location_id })),
       sites: sites.map((x) => ({ id: x.id, name: x.name })),
+    });
+  });
+
+  // ---- Admins: analyse a week's rota (published and draft) against forecast sales, and suggest savings ----
+
+  const toMins = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  router.post('/rota/analyse', requireAdmin, async (req, res) => {
+    if (!rotaAnalyst) throw badRequest('Analysing the rota needs ANTHROPIC_API_KEY (the same key as the invoice reader) – add it in Railway → Variables');
+    const b = req.body ?? {};
+    const ids = rotaSites(req, b.location_id);
+    const ws = weekStart(date(b.week, 'week') ?? today());
+    const we = addDays(ws, 6);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+    const inList = ids.map(() => '?').join(', ');
+    const sites = db.prepare(`SELECT id, name, opening_hours FROM locations WHERE id IN (${inList}) ORDER BY name`).all(...ids);
+    const forecast = salesForecast(db, ids, ws);
+    const budgets = salesBudgets(db, ids, ws);
+    const rates = new Map(db.prepare('SELECT id, hourly_rate FROM users').all().map((u) => [u.id, u.hourly_rate ?? 0]));
+    const people = new Map(db.prepare('SELECT id, rota_group, position FROM users').all().map((u) => [u.id, u]));
+
+    // What a usual hour of each weekday looks like at each site, over the same weeks as the forecast.
+    const usual = new Map();
+    const tradingDays = new Map();
+    for (const h of db.prepare(`SELECT location_id, date, hour, net_sales, orders FROM sales_hourly WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?`)
+      .all(...ids, forecast.from, forecast.to)) {
+      if (bankHoliday(h.date)) continue;
+      const dow = (new Date(`${h.date}T00:00:00Z`).getUTCDay() + 6) % 7;
+      const k = `${h.location_id}|${dow}|${h.hour}`;
+      const v = usual.get(k) ?? { net: 0, orders: 0 };
+      v.net += h.net_sales;
+      v.orders += h.orders;
+      usual.set(k, v);
+      const dk = `${h.location_id}|${dow}`;
+      tradingDays.set(dk, (tradingDays.get(dk) ?? new Set()).add(h.date));
+    }
+
+    // The rota as it will be once published (the draft, without removed shifts or sickness), and as staff see it now.
+    const draft = db.prepare(`${select('shifts')} WHERE s.location_id IN (${inList}) AND s.date BETWEEN ? AND ? ORDER BY s.date, s.start_time`).all(...ids, ws, we)
+      .filter((s) => !s.removed && !s.sick);
+    const published = db.prepare(`${select('published_shifts')} WHERE s.location_id IN (${inList}) AND s.date BETWEEN ? AND ?`).all(...ids, ws, we).filter((s) => !s.sick);
+    const costOf = (s) => shiftHours(s.start_time, s.end_time, s.break_minutes) * (rates.get(s.user_id) ?? 0);
+    const stateOf = (s) => (s.pub_date === null ? 'draft – not published yet'
+      : ['location_id', 'user_id', 'date', 'start_time', 'end_time', 'break_minutes'].some((c) => s[`pub_${c}`] !== s[c]) ? 'draft – changed since published' : 'published');
+    const byId = new Map(draft.map((s) => [s.id, s]));
+
+    const week = {
+      week_starting: ws,
+      labour_target_pct: LABOUR_TARGET_PCT,
+      sites: sites.map((l) => {
+        const ratio = forecast.ratios[l.id];
+        const siteDays = days.map((d, i) => {
+          const f = forecast.sites[l.id]?.[i];
+          const budget = budgets[l.id]?.[i] ?? null;
+          const gross = budget ?? (f ? f.gross : null);
+          const net = budget !== null ? budget * ratio : f ? f.avg : null;
+          const shifts = draft.filter((s) => s.location_id === l.id && s.date === d);
+          const cost = shifts.reduce((t, s) => t + costOf(s), 0);
+          const n = tradingDays.get(`${l.id}|${i}`)?.size ?? 0;
+          const onAt = (h) => shifts.filter((s) => Math.min(toMins(s.end_time), (h + 1) * 60) - Math.max(toMins(s.start_time), h * 60) >= 30).length;
+          const hours = [];
+          for (let h = 5; h < 24; h += 1) {
+            const u = usual.get(`${l.id}|${i}|${h}`);
+            const on = onAt(h);
+            if (on || u) hours.push({ hour: `${String(h).padStart(2, '0')}:00`, people_on: on, usual_net_sales: u && n ? round2(u.net / n) : 0, usual_orders: u && n ? Math.round(u.orders / n) : 0 });
+          }
+          return {
+            date: d,
+            weekday: new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' }),
+            bank_holiday: bankHoliday(d) || null,
+            forecast_gross_sales: gross === null ? null : round2(gross),
+            forecast_net_sales: net === null ? null : round2(net),
+            sales_figure_is: budget !== null ? 'manager’s sales budget' : f ? `average of the last ${f.days} ${new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })}s` : 'no forecast',
+            labour_cost: round2(cost),
+            labour_pct: net ? pct(cost, net) : null,
+            hours,
+            people_on_by_hour: Array.from({ length: 24 }, (_, h) => onAt(h)),
+            shifts: shifts.map((s) => {
+              const u = people.get(s.user_id);
+              const hrs = shiftHours(s.start_time, s.end_time, s.break_minutes);
+              return { id: s.id, person: s.user_name, role: u?.rota_group || u?.position || '', start_time: s.start_time, end_time: s.end_time,
+                break_minutes: s.break_minutes, hours: round2(hrs), hourly_cost: round2(rates.get(s.user_id) ?? 0), cost: round2(costOf(s)), status: stateOf(s) };
+            }),
+          };
+        });
+        const cost = siteDays.reduce((t, d) => t + d.labour_cost, 0);
+        const net = siteDays.some((d) => d.forecast_net_sales !== null) ? siteDays.reduce((t, d) => t + (d.forecast_net_sales ?? 0), 0) : null;
+        const pubCost = published.filter((s) => s.location_id === l.id).reduce((t, s) => t + costOf(s), 0);
+        return {
+          name: l.name, opening_hours: l.opening_hours || 'not set', labour_target_pct: LABOUR_TARGET_PCT,
+          week_forecast_net_sales: net === null ? null : round2(net), week_labour_cost: round2(cost), week_labour_pct: net ? pct(cost, net) : null,
+          published_rota_labour_cost: round2(pubCost),
+          days: siteDays,
+        };
+      }),
+    };
+    if (!draft.length) throw badRequest('There are no shifts on this week’s rota to analyse');
+
+    const result = await rotaAnalyst.analyse(week);
+    const siteByName = new Map(sites.map((l) => [l.name.toLowerCase(), l]));
+    const timeOk2 = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(t ?? ''));
+    const recommendations = (result.recommendations ?? []).map((r) => {
+      const shiftIds = (r.shift_ids ?? []).filter((x) => byId.has(x));
+      const shifts = shiftIds.map((x) => byId.get(x));
+      // Savings are worked out here where we can (rather than trusting Claude's arithmetic).
+      let saving = typeof r.saving === 'number' ? r.saving : null;
+      if (r.kind === 'cut_shift' && shifts.length) saving = shifts.reduce((t, s) => t + costOf(s), 0);
+      if (shifts.length === 1 && (timeOk2(r.new_start_time) || timeOk2(r.new_end_time))) {
+        const s = shifts[0];
+        const start = timeOk2(r.new_start_time) ? r.new_start_time : s.start_time;
+        const end = timeOk2(r.new_end_time) ? r.new_end_time : s.end_time;
+        if (toMins(end) > toMins(start)) saving = costOf(s) - shiftHours(start, end, s.break_minutes) * (rates.get(s.user_id) ?? 0);
+      }
+      const site = siteByName.get(String(r.site ?? '').toLowerCase()) ?? sites.find((l) => l.id === shifts[0]?.location_id) ?? null;
+      return {
+        ...r, shift_ids: shiftIds, location_id: site?.id ?? null, site: site?.name ?? r.site,
+        saving: saving === null ? null : round2(Math.max(0, saving)),
+        shifts: shifts.map((s) => ({ id: s.id, user_name: s.user_name, date: s.date, start_time: s.start_time, end_time: s.end_time })),
+      };
+    });
+    res.json({
+      week: ws,
+      demo: !!rotaAnalyst.demo,
+      headline: result.headline ?? '',
+      watch_outs: result.watch_outs ?? [],
+      recommendations,
+      total_saving: round2(recommendations.reduce((t, r) => t + (r.saving ?? 0), 0)),
+      sites: week.sites.map((x, i) => ({ id: sites[i].id, name: x.name, forecast_net_sales: x.week_forecast_net_sales, labour_cost: x.week_labour_cost,
+        labour_pct: x.week_labour_pct, published_labour_cost: x.published_rota_labour_cost,
+        days: x.days.map((d) => ({ date: d.date, forecast_gross_sales: d.forecast_gross_sales, labour_cost: d.labour_cost, labour_pct: d.labour_pct })) })),
+      target_pct: LABOUR_TARGET_PCT,
     });
   });
 

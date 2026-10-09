@@ -43,6 +43,7 @@ import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js
 import { registerPushRoutes } from '../src/push.js';
 import { activityLogger, registerActivityRoutes } from '../src/activity.js';
 import { demoRotaReader } from '../src/rota-reader.js';
+import { demoRotaAnalyst } from '../src/rota-analyst.js';
 
 // --- A tiny Express-compatible router ---
 
@@ -130,7 +131,7 @@ async function boot() {
   api.use(activityLogger(db));
   registerInviteRoutes(api, db, demoMailer, { demo: true, square });
   registerAdminRoutes(api, db, square);
-  registerRotaRoutes(api, db, { rotaReader: demoRotaReader() });
+  registerRotaRoutes(api, db, { rotaReader: demoRotaReader(), rotaAnalyst: demoRotaAnalyst() });
   registerOrderingRoutes(api, db);
   registerStockRoutes(api, db);
   registerPushRoutes(api, db);
