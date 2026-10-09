@@ -45,6 +45,15 @@ export function courseStatus(c) {
   return [c.assigned ? 'To do' : 'Open to everyone', c.assigned ? 'is-due' : 'is-open'];
 }
 
+// Deletes a course after checking. Training people have already done is kept on their record.
+async function deleteCourse(c) {
+  const msg = `Delete “${c.name}”? Staff won’t see it any more${c.assigned ? ` and it comes off the ${plural(c.assigned, 'person').replace('persons', 'people')} it was given to` : ''}. Training people have already done is kept on their record.`;
+  if (!(await confirmDialog(msg, { title: 'Delete this course?', confirmLabel: 'Delete course' }))) return false;
+  await api(`/training/courses/${c.id}`, { method: 'DELETE' });
+  toast('Course deleted');
+  return true;
+}
+
 // ---- People → Learning & development: the courses, and who's waiting for a sign-off ----
 
 export async function coursesPanel(root, { rerender }) {
@@ -68,7 +77,8 @@ export async function coursesPanel(root, { rerender }) {
           <span class="course-tags">${c.published ? '<span class="course-tag is-live">Published</span>' : '<span class="course-tag">Draft</span>'}
             ${c.open_to_all ? '<span class="course-tag">Open to everyone</span>' : ''}${c.needs_signoff ? '<span class="course-tag">Sign-off in person</span>' : ''}</span>
           <small class="muted">${c.pages || c.questions ? `${plural(c.pages, 'page')} · ${plural(c.questions, 'question')}${c.questions ? ` · pass mark ${c.pass_mark}%` : ''}` : 'Nothing in it yet'}${c.assigned ? ` · given to ${plural(c.assigned, 'person').replace('persons', 'people')}` : ''}</small></div>
-        <span class="course-row-actions"><a class="btn btn-small ${c.pages || c.questions ? '' : 'btn-primary'}" href="#/people/training/courses/${c.id}">${c.pages || c.questions ? 'Edit' : 'Design it'}</a></span>
+        <span class="course-row-actions"><a class="btn btn-small ${c.pages || c.questions ? '' : 'btn-primary'}" href="#/people/training/courses/${c.id}">${c.pages || c.questions ? 'Edit' : 'Design it'}</a>
+          <button type="button" class="icon-btn course-del" data-delete-course="${c.id}" aria-label="Delete ${esc(c.name)}" title="Delete course">🗑</button></span>
       </li>`).join('')}</ul>` : '<p class="muted">Add a course with <strong>+ Course</strong> above, then design it here.</p>'}
     </section>`;
   const decide = (attemptId, approve) => openModal({
@@ -81,6 +91,9 @@ export async function coursesPanel(root, { rerender }) {
       rerender();
     },
   });
+  root.querySelectorAll('[data-delete-course]').forEach((b) => b.addEventListener('click', async () => {
+    try { if (await deleteCourse(data.courses.find((c) => c.id === Number(b.dataset.deleteCourse)))) rerender(); } catch (err) { showError(err); }
+  }));
   root.querySelectorAll('[data-signoff]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.signoff, true)));
   root.querySelector('#course-ready').addEventListener('click', readyMade);
   root.querySelectorAll('[data-sendback]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.sendback, false)));
@@ -159,7 +172,8 @@ export async function renderDesigner(ctx) {
       <div class="page-head"><h1 class="hub-title">${esc(settings.name)}</h1>
         <div class="actions"><a class="btn" href="#/people/training">← Learning &amp; development</a>
           <button type="button" class="btn" id="cd-preview">Preview</button>
-          ${settings.published ? '<button type="button" class="btn" id="cd-assign">Give to people</button>' : ''}</div></div>
+          ${settings.published ? '<button type="button" class="btn" id="cd-assign">Give to people</button>' : ''}
+          <button type="button" class="btn btn-danger" id="cd-delete">Delete course</button></div></div>
       <div class="cd-layout">
         <section class="card cd-settings">
           <h2>Course details</h2>
@@ -279,6 +293,11 @@ export async function renderDesigner(ctx) {
         draw();
       } catch (err) { showError(err); }
       e.target.disabled = false;
+    });
+    el.querySelector('#cd-delete').addEventListener('click', async () => {
+      try {
+        if (await deleteCourse({ id: courseId, name: settings.name, assigned: design.assigned.length })) { dirty = false; navigate('people/training'); }
+      } catch (err) { showError(err); }
     });
     el.querySelector('#cd-preview').addEventListener('click', async () => {
       try {

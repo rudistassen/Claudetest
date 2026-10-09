@@ -211,3 +211,17 @@ test('a ready-made health & safety course is added as a draft that passes the de
   const staff = await login('staff1@cafe.local');
   assert.equal((await staff('/training/templates')).status, 403);
 });
+
+test('deleting a course hides it from staff and the designer but keeps training already done', async () => {
+  const m = await login('manager1@cafe.local');
+  const { data } = await m('/training/templates/health-safety-induction', { method: 'POST' });
+  const { data: design } = await m(`/training/courses/${data.id}/design`);
+  await m(`/training/courses/${data.id}/design`, { method: 'PUT', body: { steps: design.steps, published: true } });
+  await m(`/training/courses/${data.id}/assign`, { method: 'POST', body: { user_ids: [userId('staff1@cafe.local')] } });
+  const staff = await login('staff1@cafe.local');
+  assert.ok((await staff('/learn')).data.some((c) => c.id === data.id));
+  assert.equal((await m(`/training/courses/${data.id}`, { method: 'DELETE' })).status, 200);
+  assert.ok(!(await staff('/learn')).data.some((c) => c.id === data.id));
+  assert.ok(!(await m('/training/designs')).data.courses.some((c) => c.id === data.id));
+  assert.equal((await m(`/training/courses/${data.id}/design`)).status, 404);
+});

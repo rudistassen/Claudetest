@@ -2704,3 +2704,7 @@ img.lesson-media { background: transparent; }
 .course-ready-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
 .course-ready-list li { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .course-ready-list p { margin: 4px 0; }
+.course-row-actions { display: inline-flex; align-items: center; gap: 6px; }
+.course-del { opacity: .7; }
+.course-del:hover { opacity: 1; }
+.hip .btn.btn-danger { color: var(--bad); }
