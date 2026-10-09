@@ -2684,3 +2684,7 @@ img.lesson-media { background: transparent; }
 .rota tr.rota-subgroup th { padding-top: 0.25rem; padding-bottom: 0.2rem; }
 .rota-subgroup-name { font-size: 0.72rem; letter-spacing: 0.06em; }
 .rota tr.rota-subgroup .rota-group-meta { font-size: 0.72rem; }
+/* Scrolling the week rota: each site's heading stays at the top (under the day headings) until the next site's
+   heading reaches it. */
+.rota-scroll .rota tr.rota-group th { position: sticky; top: var(--rota-head, 38px); left: 0; z-index: 3; background: var(--surface); }
+.rota-scroll .rota tr.rota-group th::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--border); }

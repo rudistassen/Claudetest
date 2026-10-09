@@ -977,6 +977,10 @@ export async function render(ctx) {
       ctx.rerender();
     } catch (err) { showError(err); }
   });
+  // Site headings stick just under the day headings while the rota scrolls.
+  const scroller = el.querySelector('.rota-scroll');
+  const head = scroller?.querySelector('thead');
+  if (head) scroller.style.setProperty('--rota-head', `${head.getBoundingClientRect().height}px`);
   el.querySelector('#read-rota')?.addEventListener('click', () => openRotaImport({ location: all ? 'all' : siteId, week, onDone: () => ctx.rerender() }));
   // Shifts just added from an uploaded rota glow until the page is next opened.
   if (justImported.size) {
