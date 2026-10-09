@@ -608,7 +608,27 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopMe
 
 let routeSeq = 0;
 
-export async function route() {
+// Scrolling areas inside a page (the rota grid, wide tables) whose position is kept when the page redraws.
+const KEEP_SCROLL = '.rota-scroll, .table-wrap, [data-keep-scroll]';
+// After saving something, a page redraws: keep the page (and any scrolling areas in it) where they were, rather
+// than jumping back to the top.
+function rememberScroll() {
+  const inner = [...document.querySelectorAll(`#view ${KEEP_SCROLL}`)].map((n) => [n.scrollTop, n.scrollLeft]);
+  const at = { x: window.scrollX, y: window.scrollY, inner };
+  // Hold the page's height while it redraws, so the browser doesn't scroll up to fit a short "Loading…".
+  document.body.style.minHeight = `${document.documentElement.scrollHeight}px`;
+  setTimeout(() => { document.body.style.minHeight = ''; }, 8000); // in case the page never finishes
+  return () => {
+    document.querySelectorAll(`#view ${KEEP_SCROLL}`).forEach((n, i) => {
+      if (inner[i]) { n.scrollTop = inner[i][0]; n.scrollLeft = inner[i][1]; }
+    });
+    window.scrollTo(at.x, at.y);
+    document.body.style.minHeight = '';
+  };
+}
+
+export async function route({ keepScroll = false } = {}) {
+  const restoreScroll = keepScroll ? rememberScroll() : null;
   const { path, query } = parseHash();
   if (path === 'set-password') return start();
   if (!state.user) return;
@@ -652,17 +672,19 @@ export async function route() {
     params: match.m.slice(1),
     query,
     navigate,
-    rerender: () => route(),
+    rerender: () => route({ keepScroll: true }),
     stale: () => seq !== routeSeq,
   };
   try {
     await match.view(ctx);
+    if (seq === routeSeq) restoreScroll?.();
     // The first time someone signs in, the guided tour (not in the demo, where everyone signs in afresh).
     if (!isDemo && seq === routeSeq) maybeStartTour(state, navigate);
     showRequestBadge();
     showEventsBadge();
   } catch (err) {
     if (seq !== routeSeq) return;
+    if (restoreScroll) document.body.style.minHeight = '';
     view.innerHTML = `<div class="empty">Could not load this page: ${esc(err.message)}</div>`;
     showError(err);
   }
