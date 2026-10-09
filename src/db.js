@@ -937,6 +937,55 @@ CREATE TABLE IF NOT EXISTS training_records (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_training_records_user ON training_records(user_id, course_id);
+-- Courses built in Atlas: pages (text, a picture or video, a YouTube link) and multiple-choice questions, in order.
+CREATE TABLE IF NOT EXISTS training_media (
+  id INTEGER PRIMARY KEY,
+  course_id INTEGER REFERENCES training_courses(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('image', 'video')),
+  file_name TEXT,
+  file_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  data BLOB NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS training_steps (
+  id INTEGER PRIMARY KEY,
+  course_id INTEGER NOT NULL REFERENCES training_courses(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL CHECK (kind IN ('page', 'question')),
+  title TEXT,
+  body TEXT,
+  media_id INTEGER REFERENCES training_media(id) ON DELETE SET NULL,
+  video_url TEXT,
+  options TEXT,
+  answer INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_training_steps_course ON training_steps(course_id, position);
+-- Who has been given a course to do, and by when.
+CREATE TABLE IF NOT EXISTS training_assignments (
+  id INTEGER PRIMARY KEY,
+  course_id INTEGER NOT NULL REFERENCES training_courses(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  due_on TEXT,
+  assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (course_id, user_id)
+);
+-- Each go at a course: the score, and (for courses that need it) a manager's sign-off before it counts.
+CREATE TABLE IF NOT EXISTS training_attempts (
+  id INTEGER PRIMARY KEY,
+  course_id INTEGER NOT NULL REFERENCES training_courses(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  score INTEGER,
+  status TEXT NOT NULL CHECK (status IN ('passed', 'failed', 'awaiting_signoff', 'signed_off', 'sent_back')),
+  answers TEXT,
+  record_id INTEGER REFERENCES training_records(id) ON DELETE SET NULL,
+  decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  decided_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_training_attempts_user ON training_attempts(user_id, course_id);
 
 -- People → Performance: one-to-ones, probation reviews and appraisals.
 CREATE TABLE IF NOT EXISTS performance_reviews (
@@ -971,6 +1020,12 @@ CREATE TABLE IF NOT EXISTS user_areas (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // Training courses built in Atlas: shown to staff once published, maybe open to everyone, a quiz pass mark, and
+  // whether a manager signs it off in person before it counts.
+  ['training_courses', 'published', 'ALTER TABLE training_courses ADD COLUMN published INTEGER NOT NULL DEFAULT 0'],
+  ['training_courses', 'open_to_all', 'ALTER TABLE training_courses ADD COLUMN open_to_all INTEGER NOT NULL DEFAULT 0'],
+  ['training_courses', 'pass_mark', 'ALTER TABLE training_courses ADD COLUMN pass_mark INTEGER NOT NULL DEFAULT 80'],
+  ['training_courses', 'needs_signoff', 'ALTER TABLE training_courses ADD COLUMN needs_signoff INTEGER NOT NULL DEFAULT 0'],
   // When someone finished (or skipped) the guided tour shown the first time they sign in.
   ['users', 'tour_done_at', 'ALTER TABLE users ADD COLUMN tour_done_at TEXT'],
   // Staff on paid breaks don't clock breaks in Square, so they're never flagged for a missed or short break.

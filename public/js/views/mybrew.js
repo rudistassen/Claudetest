@@ -8,7 +8,7 @@ const MAX_VIDEO_MB = 25;
 const mediaUrl = (id) => `/api/news/media/${id}`;
 // The standalone demo has no real server, so its media is loaded through fetch and shown from memory.
 const srcAttr = (id) => (isDemo ? `data-src="${mediaUrl(id)}"` : `src="${mediaUrl(id)}"`);
-async function hydrateMedia(root) {
+export async function hydrateMedia(root) {
   if (!isDemo) return;
   for (const el of root.querySelectorAll('[data-src]')) {
     const blob = await (await fetch(el.dataset.src)).blob();
@@ -33,7 +33,7 @@ function wireGallery(root) {
 
 // Big phone photos are resized (longest side 1600px, JPEG) before uploading, so they load quickly on mobile data.
 // This also turns iPhone HEIC photos into JPEGs where the browser can open them.
-async function shrinkImage(file) {
+export async function shrinkImage(file) {
   if (file.type === 'image/gif') return file;
   const url = URL.createObjectURL(file);
   try {
@@ -59,7 +59,7 @@ async function shrinkImage(file) {
   }
 }
 
-const toBase64 = (file) => new Promise((resolve, reject) => {
+export const toBase64 = (file) => new Promise((resolve, reject) => {
   const r = new FileReader();
   r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ''));
   r.onerror = () => reject(new Error(`Couldn’t read ${file.name}`));
@@ -129,7 +129,7 @@ const quipFor = (iso) => QUIPS.at(Math.floor(Date.parse(`${iso}T00:00:00Z`) / 86
 
 export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
-  const [shifts, news, drops, training] = await Promise.all([api('/my-shifts'), api('/news'), api('/shift-drops'), api('/training/mine').catch(() => null)]);
+  const [shifts, news, drops, training, learn] = await Promise.all([api('/my-shifts'), api('/news'), api('/shift-drops'), api('/training/mine').catch(() => null), api('/learn').catch(() => [])]);
   if (stale()) return;
   // For My tasks: today's Trail checks where they're working (their shift today, or for a manager their site),
   // and requests waiting for managers.
@@ -171,11 +171,14 @@ export async function renderMyBrew(ctx) {
   const dayWord = (d) => (d === today ? 'Today' : d === addDaysISO(today, 1) ? 'Tomorrow' : fmtDate(d, { weekday: 'short', day: 'numeric', month: 'short' }));
   const nextShift = shifts[0];
   const can = (...p) => state.can(...p);
+  // Online training courses given to this person that they haven't done yet.
+  const coursesToDo = learn.filter((c) => c.assigned && c.status === 'to_do');
   const shortcuts = [
     { href: '#/rota?view=mine', icon: '📅', label: 'My shifts', detail: nextShift ? `${dayWord(nextShift.date)} ${nextShift.start_time}` : 'Nothing booked yet', c: ['#4f8cff', '#2a5bd7'] },
     { href: drops.open.length ? '#/mybrew' : '#/rota', icon: '🙋', label: 'Open shifts', detail: drops.open.length ? `${drops.open.length} to pick up` : 'None right now', c: ['#ff8a5c', '#e2552e'], open: true },
     can('rota.view', 'rota.edit') ? { href: '#/rota', icon: '👥', label: 'Rota', detail: 'Who’s on when', c: ['#3ccf91', '#16935e'] } : null,
     { href: '#/timeoff', icon: '🌴', label: 'Time off', detail: 'Book holiday', c: ['#ffc94d', '#e09a12'] },
+    learn.length ? { href: '#/learn', icon: '🎓', label: 'Training', detail: coursesToDo.length ? `${coursesToDo.length} course${coursesToDo.length === 1 ? '' : 's'} to do` : 'Courses to take', c: ['#7fc8c0', '#3f938a'] } : null,
     can('safety.complete', 'safety.manage', 'safety.report') ? { href: '#/safety', icon: '✅', label: 'Checks', detail: 'Today’s checklist', c: ['#b07cff', '#7a45e0'] } : null,
     can('wastage.record', 'wastage.reports', 'wastage.manage') ? { href: '#/wastage', icon: '🗑️', label: 'Wastage', detail: 'Log what’s thrown away', c: ['#ff6f91', '#d93a64'] } : null,
     can('dashboard.view') ? { href: '#/dashboard', icon: '📊', label: 'Dashboard', detail: 'Today at every site', c: ['#38c3d6', '#16879a'] } : null,
@@ -192,6 +195,7 @@ export async function renderMyBrew(ctx) {
     checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} Trail check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety', primary: true } : null,
     toReview ? { icon: '✉', title: `${toReview} request${toReview === 1 ? '' : 's'} to review`, detail: [leaveCount.count ? `${leaveCount.count} holiday` : '', drops.to_approve.length ? `${drops.to_approve.length} shift drop${drops.to_approve.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), action: 'Review', href: '#/rota/requests', primary: true } : null,
     ...(training?.records ?? []).filter((r) => r.status !== 'done').map((r) => ({ icon: '🎓', title: r.status === 'expired' ? `Your ${r.course_name} has run out` : `Your ${r.course_name} runs out soon`, detail: `${r.status === 'expired' ? 'Ran out' : 'Runs out'} ${fmtDate(r.expires_on, { day: 'numeric', month: 'short', year: 'numeric' })} – speak to your manager about redoing it`, action: 'See training', go: 'training' })),
+    ...coursesToDo.map((c) => ({ icon: '🎓', title: `Do your ${c.name} training`, detail: c.due_on ? `${c.due_on < today ? 'Overdue – was due' : 'Due'} ${fmtDate(c.due_on, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Your manager has given you this course', action: 'Start', href: `#/learn/${c.id}`, primary: true })),
     claimable ? { icon: '🙋', title: `${claimable} open shift${claimable === 1 ? '' : 's'} you could pick up`, detail: 'Extra hours, if you want them', action: 'See shifts', go: 'open' } : null,
   ].filter(Boolean);
   // Big cards (like Spotify's mixes): each shift in its site's colour, with the site on a label strip.

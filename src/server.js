@@ -20,6 +20,7 @@ import { registerXeroRoutes } from './routes/xero.js';
 import { registerPeopleRoutes } from './routes/people.js';
 import { Xero } from './xero.js';
 import { registerNewsRoutes } from './routes/news.js';
+import { registerCourseRoutes } from './routes/courses.js';
 import { registerDocumentRoutes } from './routes/documents.js';
 import { registerBreakRoutes } from './routes/breaks.js';
 import { registerTimecardRoutes } from './routes/timecards.js';
@@ -60,7 +61,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
     res.set({
       'Content-Security-Policy': [
         "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: blob: https:", "media-src 'self' blob:", "frame-src 'self' blob:",
+        "img-src 'self' data: blob: https:", "media-src 'self' blob:", "frame-src 'self' blob: https://www.youtube-nocookie.com",
         "connect-src 'self'", "font-src 'self' data:", "object-src 'none'", "base-uri 'self'",
         "form-action 'self'", "frame-ancestors 'none'",
       ].join('; '),
@@ -115,6 +116,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerCareersRoutes(api, db, { mailbox: careers });
   registerEventRoutes(api, db, { mailbox: events, reader: enquiryReader });
   registerNewsRoutes(api, db);
+  registerCourseRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);
   registerTimecardRoutes(api, db, square);

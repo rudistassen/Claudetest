@@ -107,3 +107,21 @@ export function seedActivity(db) {
   });
   db.exec('COMMIT');
 }
+
+// A sample online training course, given to the first member of staff at the first site and open to everyone.
+export function seedCourse(db) {
+  const course = Number(db.prepare(`INSERT INTO training_courses (name, description, renew_months, published, open_to_all, pass_mark)
+    VALUES ('Barista basics', 'How we pull a great espresso and steam milk for our flat whites.', 12, 1, 1, 80)`).run().lastInsertRowid);
+  const step = db.prepare(`INSERT INTO training_steps (course_id, position, kind, title, body, options, answer) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const steps = [
+    ['page', 'Welcome to the bar ☕', 'Every coffee we serve should taste the same, whichever site you’re at and whoever makes it.\n\nThis short course covers the two things that matter most:\n- Pulling a **double espresso** in 25–30 seconds\n- Steaming silky milk to **60–65°C**', null, null],
+    ['page', 'Pulling the shot', 'Grind fresh for every shot and dose **18g** into the basket. Level it, tamp firmly and evenly, then lock in and start straight away.\n\nYou’re aiming for about **36g** of espresso in **25–30 seconds**.\n- Too fast and sour? Grind finer.\n- Too slow and bitter? Grind coarser.', null, null],
+    ['page', 'Steaming the milk', 'Purge the wand, then put the tip just under the surface to stretch the milk for 2–3 seconds – you’ll hear a gentle tearing sound.\n\nThen sink the tip a little deeper to spin the milk until the jug is too hot to hold (60–65°C). Tap, swirl and pour straight away.', null, null],
+    ['question', 'How much espresso should a double shot give you?', null, JSON.stringify(['About 18g', 'About 36g', 'About 60g']), 1],
+    ['question', 'Your shot ran in 18 seconds and tastes sour. What do you change?', 'A fast, sour shot means the water is getting through too easily.', JSON.stringify(['Grind finer', 'Grind coarser', 'Use less coffee']), 0],
+    ['question', 'What temperature should milk be steamed to?', null, JSON.stringify(['40–45°C', '60–65°C', '80–85°C']), 1],
+  ];
+  steps.forEach(([kind, title, body, options, answer], i) => step.run(course, i, kind, title, body, options, answer));
+  const who = db.prepare(`SELECT id FROM users WHERE email = 'staff1@cafe.local'`).get();
+  if (who) db.prepare(`INSERT INTO training_assignments (course_id, user_id, due_on) VALUES (?, ?, date('now', '+5 days'))`).run(course, who.id);
+}

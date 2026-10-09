@@ -2490,3 +2490,116 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
   .dash-hip .notice { border: 1.5px solid var(--mb-ink); border-radius: 14px; box-shadow: 3px 3px 0 var(--mb-ink); }
   .dash-hip .whos-in-site-head { border-radius: 8px; }
 }
+
+/* ---- Online training courses: the list on Learning & development, the designer and the course player ---- */
+.course-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.course-row { display: flex; align-items: center; gap: 0.8rem; padding: 0.7rem 0.85rem; border: 1.5px solid var(--mb-ink); border-radius: 14px; background: var(--mb-card); box-shadow: 2px 2px 0 var(--mb-ink); }
+.course-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.course-row-main strong { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.08rem; }
+.course-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.course-tag { font-size: 0.7rem; font-weight: 700; padding: 0.05rem 0.5rem; border-radius: 99px; border: 1.5px solid currentColor; color: var(--mb-ink-soft); }
+.course-tag.is-live { color: #2f6b3a; background: #dcefe2; }
+.course-signoff-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.course-signoff-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; justify-content: space-between; padding: 0.6rem 0.75rem; border: 1.5px dashed var(--mb-line); border-radius: 12px; }
+.course-signoff-list small { display: block; }
+.course-signoff-actions { display: flex; gap: 0.4rem; }
+.course-signoffs { border: 1.5px solid #c4552d; box-shadow: 3px 3px 0 #c4552d; }
+.course-status { display: inline-block; font-size: 0.75rem; font-weight: 800; padding: 0.15rem 0.6rem; border-radius: 99px; border: 1.5px solid #2b2118; color: #2b2118; background: #fffaf2; white-space: nowrap; }
+.course-status.is-done { background: #a9c49f; }
+.course-status.is-due { background: #e8b24a; }
+.course-status.is-late { background: #c4552d; color: #fff; }
+.course-status.is-wait { background: #8fb8b5; }
+.course-status.is-open { background: #fffaf2; }
+
+.cd-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); max-width: 860px; }
+.cd-settings h2, .cd-assigned h2, .cd-steps-title { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.25rem; margin: 0 0 0.7rem; }
+.cd-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 1rem; }
+.cd-suffix { display: flex; align-items: center; gap: 0.4rem; }
+.cd-suffix input { width: 6rem; }
+.cd-settings .check { display: block; margin: 0.5rem 0; }
+.cd-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.9rem; }
+.cd-step { padding: 0.8rem 1rem 0.4rem; border: 1.5px solid var(--mb-ink); border-radius: 16px; background: var(--mb-card); box-shadow: 3px 3px 0 var(--mb-ink); }
+.cd-step header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem; }
+.cd-kind { font-weight: 800; font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: #c4552d; }
+.cd-question { border-style: dashed; }
+.cd-step-tools { display: flex; gap: 0.15rem; }
+.cd-step textarea, .cd-step input:not([type=radio]):not([type=file]) { width: 100%; }
+.cd-options { border: 0; margin: 0 0 0.6rem; padding: 0; }
+.cd-options legend { font-weight: 600; margin-bottom: 0.35rem; }
+.cd-option { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; padding: 0.15rem 0.4rem; border-radius: 10px; }
+.cd-option.is-right { background: #dcefe2; }
+.cd-option input[type=radio] { width: 1.2rem; height: 1.2rem; flex: none; accent-color: #2f6b3a; }
+.cd-media { display: grid; gap: 0.4rem; margin-bottom: 0.4rem; }
+.cd-thumb { display: flex; align-items: center; gap: 0.8rem; }
+.cd-thumb img, .cd-thumb video { max-width: 160px; max-height: 110px; border-radius: 10px; border: 1.5px solid var(--mb-ink); object-fit: cover; }
+.cd-upload { justify-self: start; cursor: pointer; }
+.cd-add { display: flex; gap: 0.6rem; margin-top: 0.9rem; }
+.cd-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.cd-people li { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; border-bottom: 1px dashed var(--mb-line); }
+.cd-people li > span:first-child { flex: 1; min-width: 0; }
+.cd-people small { display: block; }
+.cd-savebar { position: sticky; bottom: 0.6rem; z-index: 5; display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; max-width: 860px; margin-top: 1rem; padding: 0.6rem 0.9rem;
+  border: 1.5px solid var(--mb-ink); border-radius: 999px; background: var(--mb-card); box-shadow: 3px 3px 0 var(--mb-ink); }
+.cd-savebar .spacer { flex: 1; }
+.cd-publish { margin: 0; }
+.cd-pick-chips { margin: 0.4rem 0; align-items: center; }
+@media (max-width: 800px) { .cd-savebar { bottom: calc(72px + env(safe-area-inset-bottom)); border-radius: 18px; } }
+
+.learn-list { list-style: none; margin: 0; padding: 0 4px 4px 0; display: grid; gap: 0.8rem; max-width: 760px; }
+.learn-card { display: flex; align-items: center; gap: 0.8rem; padding: 0.85rem 1rem; border: 1.5px solid var(--mb-ink); border-radius: 16px; background: var(--mb-card); color: var(--text); text-decoration: none; box-shadow: 3px 3px 0 var(--mb-ink); }
+.learn-card:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--mb-ink); }
+.learn-card-icon { flex: none; display: grid; place-items: center; width: 2.8rem; height: 2.8rem; border-radius: 12px; background: #8fb8b5; border: 1.5px solid rgba(43, 33, 24, 0.85); font-size: 1.4rem; transform: rotate(-4deg); }
+.learn-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.learn-card-text strong { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.12rem; }
+.learn-card-text small { font-size: 0.85rem; }
+@media (max-width: 520px) { .learn-card { flex-wrap: wrap; } .learn-card .course-status { margin-left: 3.6rem; } }
+
+.learn { max-width: 720px; }
+.learn .card { border: 1.5px solid var(--mb-ink); border-radius: 18px; background: var(--mb-card); box-shadow: 4px 4px 0 var(--mb-ink); }
+.learn-front { text-align: center; padding: 1.4rem 1.2rem; }
+.learn-front h2, .learn-step h2, .learn-result h2 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.5rem; margin: 0.4rem 0 0.6rem; }
+.learn-badge { display: inline-grid; place-items: center; width: 4rem; height: 4rem; border-radius: 18px; background: #e8b24a; border: 1.5px solid #2b2118; box-shadow: 3px 3px 0 #2b2118; font-size: 2rem; transform: rotate(-5deg); }
+.learn-facts { list-style: none; margin: 0.6rem auto 1rem; padding: 0; display: grid; gap: 0.35rem; text-align: left; max-width: 26rem; }
+.learn-go { font-size: 1.05rem; padding: 0.6rem 1.6rem; }
+.learn-progress { height: 10px; border-radius: 99px; border: 1.5px solid var(--mb-ink); background: var(--mb-card); overflow: hidden; margin-bottom: 0.4rem; }
+.learn-progress span { display: block; height: 100%; background: #e8b24a; transition: width 0.3s; }
+.learn-count { margin: 0 0 0.6rem; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mb-ink-soft); }
+.learn-step { padding: 1.1rem 1.2rem; }
+.learn-step.is-question { border-style: dashed; }
+.learn-q-no { margin: 0; font-weight: 800; font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase; color: #c4552d; }
+.lesson-media { display: block; width: 100%; max-height: 60vh; object-fit: contain; border-radius: 12px; border: 1.5px solid var(--mb-ink); background: #000; margin: 0.4rem 0 0.8rem; }
+img.lesson-media { background: transparent; }
+.lesson-video { position: relative; aspect-ratio: 16 / 9; margin: 0.4rem 0 0.8rem; border-radius: 12px; overflow: hidden; border: 1.5px solid var(--mb-ink); background: #000; }
+.lesson-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.lesson-text { font-size: 1.05rem; line-height: 1.6; }
+.lesson-text ul { padding-left: 1.3rem; }
+.learn-options { display: grid; gap: 0.6rem; margin-top: 0.6rem; }
+.learn-option { display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.75rem 0.9rem; border: 1.5px solid var(--mb-ink); border-radius: 14px; background: var(--surface); color: var(--text);
+  font: inherit; font-size: 1.02rem; text-align: left; cursor: pointer; box-shadow: 2px 2px 0 var(--mb-ink); }
+.learn-option-mark { flex: none; display: grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; border: 1.5px solid var(--mb-ink); font-weight: 800; }
+.learn-option.is-on { background: #e8b24a; color: #2b2118; }
+.learn-option.is-on .learn-option-mark { background: #2b2118; color: #e8b24a; border-color: #2b2118; }
+.learn-nav { display: flex; justify-content: space-between; gap: 0.6rem; margin-top: 1rem; flex-wrap: wrap; }
+.learn-result { text-align: center; padding: 1.4rem 1.2rem; }
+.learn-score { display: inline-grid; place-items: center; min-width: 6rem; height: 6rem; padding: 0 1rem; border-radius: 999px; border: 1.5px solid #2b2118; box-shadow: 3px 3px 0 #2b2118;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-size: 2.2rem; font-weight: 700; color: #2b2118; transform: rotate(-4deg); }
+.learn-result.is-pass .learn-score { background: #a9c49f; }
+.learn-result.is-fail .learn-score { background: #e9a3a3; }
+.learn-review { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.5rem; text-align: left; }
+.learn-review li { display: flex; gap: 0.7rem; padding: 0.6rem 0.75rem; border-radius: 12px; border: 1.5px solid var(--mb-line); }
+.learn-review li.is-wrong { border-color: #c4552d; }
+.learn-review small { display: block; margin-top: 0.15rem; }
+.learn-review-mark { flex: none; display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; font-weight: 800; color: #fff; background: #4f6b47; }
+.learn-review .is-wrong .learn-review-mark { background: #c4552d; }
+.learn-right { color: #2f6b3a; font-weight: 700; }
+.learn-result .learn-nav { justify-content: center; }
+/* Buttons on the training pages, in the sticker style. */
+.hip .btn { border: 1.5px solid var(--mb-ink); border-radius: 999px; background: var(--mb-card); color: var(--mb-ink); font-weight: 700; box-shadow: 2px 2px 0 var(--mb-ink); }
+.hip .btn-primary { background: #c4552d; border-color: #2b2118; color: #fff; box-shadow: 2px 2px 0 #2b2118; }
+.hip .btn:disabled { opacity: 0.45; box-shadow: none; }
+.hip .btn:not(:disabled):active { transform: translate(2px, 2px); box-shadow: none; }
+.hip .icon-btn { border-radius: 8px; }
+.hip .link-btn { color: #c4552d; }
+.hip .card { background: var(--mb-card); border: 1.5px solid var(--mb-ink); border-radius: 16px; box-shadow: 3px 3px 0 var(--mb-ink); }
+.hip .card h2 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+.hip .course-signoffs { border-color: #c4552d; box-shadow: 3px 3px 0 #c4552d; }

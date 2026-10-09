@@ -7,6 +7,7 @@ import * as breaks from './views/breaks.js';
 import * as rotalog from './views/rotalog.js';
 import * as inbox from './views/inbox.js';
 import * as salesbudget from './views/salesbudget.js';
+import * as courses from './views/courses.js';
 import * as parlevels from './views/parlevels.js';
 import * as rotacosts from './views/rotacosts.js';
 import * as reviews from './views/reviews.js';
@@ -99,6 +100,9 @@ const ROUTES = [
   [/^people\/recruitment$/, people.renderRecruitment, ['people.manage']],
   [/^people\/recruitment\/candidates\/(\d+)$/, people.renderCandidate, ['people.manage']],
   [/^people\/training$/, people.renderTraining, ['people.manage']],
+  [/^people\/training\/courses\/(\d+)$/, courses.renderDesigner, ['people.manage']],
+  [/^learn$/, courses.renderLearnList],
+  [/^learn\/(\d+)$/, courses.renderLearn],
   [/^people\/performance$/, people.renderPerformance, ['people.manage']],
   [/^people\/performance\/(\d+)$/, people.renderPerson, ['people.manage']],
   [/^people\/areas$/, people.renderAreas, ['people.manage']],

@@ -1,3 +1,4 @@
+import { coursesPanel } from './courses.js';
 import { api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, siteColour, siteFilter, siteScope, textarea, toast, todayISO } from '../lib.js';
 
 // People: Recruitment (jobs and their candidates), Learning and development (training and who has done it),
@@ -496,6 +497,7 @@ export async function renderTraining(ctx) {
       <button class="btn" id="pp-new-course">+ Course</button>
       ${data.courses.length ? '<button class="btn btn-primary" id="pp-record">Record training</button>' : ''}</div></div>
     ${filters(state, scope)}
+    <div id="pp-courses"></div>
     ${data.courses.length ? `<div class="kpis">
       <div class="kpi ${expired.length ? 'kpi-bad' : ''}" data-icon="!"><span>Out of date</span><strong>${expired.length}</strong></div>
       <div class="kpi ${soon.length ? 'kpi-warn' : ''}" data-icon="◷"><span>Due in the next month</span><strong>${soon.length}</strong></div>
@@ -519,6 +521,7 @@ export async function renderTraining(ctx) {
     </section>`}`;
 
   wireFilters(el, 'people/training', navigate);
+  coursesPanel(el.querySelector('#pp-courses'), { rerender });
   const course = (cid) => data.courses.find((c) => c.id === Number(cid));
   const who = (uid) => data.people.find((p) => p.id === Number(uid));
 
@@ -529,9 +532,10 @@ export async function renderTraining(ctx) {
       ${field('Notes', textarea('description', c?.description, 'maxlength="1000" placeholder="e.g. Online course link, who runs it"'))}`,
     submitLabel: c ? 'Save' : 'Add course',
     onSubmit: async (v) => {
-      await api(c ? `/training/courses/${c.id}` : '/training/courses', { method: c ? 'PUT' : 'POST', body: v });
-      toast(c ? 'Course saved' : 'Course added');
-      rerender();
+      const saved = await api(c ? `/training/courses/${c.id}` : '/training/courses', { method: c ? 'PUT' : 'POST', body: v });
+      toast(c ? 'Course saved' : 'Course added – now add its pages and questions');
+      if (c) rerender();
+      else navigate(`people/training/courses/${saved.id}`);
     },
     danger: c ? 'Remove course' : null,
     onDanger: async () => {
