@@ -284,7 +284,7 @@ const TILE_NOTES = {
   'rota/requests': 'Holiday and shift drops waiting for you, and team availability',
   availability: 'When you can and can’t work, day by day or repeating',
   'rota/log': 'Every change to the rota, and who made it',
-  'rota/budget': 'Each site’s forecast net sales for the week, and the budget to plan the rota against',
+  'rota/budget': 'Each site’s forecast gross sales for the week, and the budget to plan the rota against',
   timeoff: 'Ask for holiday and see your requests',
   stock: 'Count stock and see past stock takes',
   wastage: 'Record what’s thrown away and see the cost',
