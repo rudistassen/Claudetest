@@ -102,6 +102,8 @@ const ROUTES = [
   [/^people\/recruitment\/candidates\/(\d+)$/, people.renderCandidate, ['people.manage']],
   [/^people\/training$/, people.renderTraining, ['people.manage']],
   [/^people\/training\/courses\/(\d+)$/, courses.renderDesigner, ['people.manage']],
+  [/^people\/training\/elearning$/, courses.renderElearning, ['people.manage']],
+  [/^people\/training\/assign$/, courses.renderAssign, ['people.manage']],
   [/^learn$/, courses.renderLearnList],
   [/^learn\/(\d+)$/, courses.renderLearn],
   [/^people\/performance$/, people.renderPerformance, ['people.manage']],

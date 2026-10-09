@@ -2,7 +2,7 @@
 // picture or video, a YouTube link) and multiple-choice questions, then gives it to people with a due date and/or opens
 // it to everyone. Staff work through it on their phone; passing records the training (or, for courses that need it,
 // waits for a manager to sign it off in person first).
-import { can, requirePerm } from '../auth.js';
+import { assertLocation, can, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
 import { notify, peopleWith } from '../push.js';
 import { badRequest, bool, date, forbidden, id, notFound, num, str, today } from '../util.js';
@@ -100,6 +100,30 @@ export function registerCourseRoutes(router, db) {
     res.json({
       courses: courses.map((c) => ({ ...summary(c), assigned: assigned.find((a) => a.course_id === c.id)?.n ?? 0 })),
       signoffs: waiting,
+    });
+  });
+
+  // Assign courses: everyone at the chosen site (or all this manager's sites) with the online courses they've been
+  // given and where they are with each, plus the published courses that can be given.
+  router.get('/training/assignments', perm, (req, res) => {
+    const locationId = id(req.query.location_id, 'location_id');
+    if (locationId) assertLocation(req, locationId);
+    const sites = locationId ? [locationId] : req.user.site_ids;
+    const people = sites.length ? db.prepare(`SELECT u.id, u.name, u.position, u.location_id, l.name AS location_name FROM users u
+      LEFT JOIN locations l ON l.id = u.location_id
+      WHERE u.active = 1 AND u.role != 'admin' AND u.location_id IN (${sites.map(() => '?').join(',')}) ORDER BY u.name`).all(...sites) : [];
+    const courses = db.prepare('SELECT * FROM training_courses WHERE active = 1 AND published = 1 ORDER BY name').all();
+    const given = db.prepare(`SELECT a.course_id, a.user_id FROM training_assignments a JOIN training_courses c ON c.id = a.course_id
+      WHERE c.active = 1 AND c.published = 1`).all();
+    const byId = new Map(courses.map((c) => [c.id, c]));
+    res.json({
+      courses: courses.map((c) => ({ id: c.id, name: c.name, open_to_all: !!c.open_to_all })),
+      people: people.map((p) => ({
+        ...p,
+        courses: given.filter((g) => g.user_id === p.id).map((g) => byId.get(g.course_id))
+          .map((c) => ({ course_id: c.id, course_name: c.name, ...progress(c, p.id) }))
+          .sort((a, b) => a.course_name.localeCompare(b.course_name)),
+      })),
     });
   });
 

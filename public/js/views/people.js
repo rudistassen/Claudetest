@@ -1,4 +1,4 @@
-import { coursesPanel } from './courses.js';
+import { ldTiles } from './courses.js';
 import { api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, siteColour, siteFilter, siteScope, textarea, toast, todayISO } from '../lib.js';
 
 // People: Recruitment (jobs and their candidates), Learning and development (training and who has done it),
@@ -496,8 +496,8 @@ export async function renderTraining(ctx) {
     <div class="page-head"><h1>Learning &amp; development</h1><div class="actions">
       <button class="btn" id="pp-new-course">+ Course</button>
       ${data.courses.length ? '<button class="btn btn-primary" id="pp-record">Record training</button>' : ''}</div></div>
+    ${ldTiles('people/training')}
     ${filters(state, scope)}
-    <div id="pp-courses"></div>
     ${data.courses.length ? `<div class="kpis">
       <div class="kpi ${expired.length ? 'kpi-bad' : ''}" data-icon="!"><span>Out of date</span><strong>${expired.length}</strong></div>
       <div class="kpi ${soon.length ? 'kpi-warn' : ''}" data-icon="◷"><span>Due in the next month</span><strong>${soon.length}</strong></div>
@@ -521,7 +521,6 @@ export async function renderTraining(ctx) {
     </section>`}`;
 
   wireFilters(el, 'people/training', navigate);
-  coursesPanel(el.querySelector('#pp-courses'), { rerender });
   const course = (cid) => data.courses.find((c) => c.id === Number(cid));
   const who = (uid) => data.people.find((p) => p.id === Number(uid));
 

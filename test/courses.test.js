@@ -238,3 +238,20 @@ test('every ready-made course can be added, saved and published as it is', async
   }
   assert.ok((await m('/training/templates')).data.templates.every((t) => t.added));
 });
+
+test('assign courses lists each person with the courses they’ve been given', async () => {
+  const m = await login('manager1@cafe.local');
+  const c = await makeCourse(m);
+  const staffId = userId('staff1@cafe.local');
+  await m(`/training/courses/${c}/assign`, { method: 'POST', body: { user_ids: [staffId], due_on: addDays(today(), 3) } });
+  const { status, data } = await m('/training/assignments');
+  assert.equal(status, 200);
+  assert.ok(data.courses.some((x) => x.id === c));
+  const me = data.people.find((p) => p.id === staffId);
+  const given = me.courses.find((x) => x.course_id === c);
+  assert.equal(given.status, 'to_do');
+  assert.equal(given.due_on, addDays(today(), 3));
+  assert.ok(!data.people.some((p) => p.role === 'admin'));
+  const staff = await login('staff1@cafe.local');
+  assert.equal((await staff('/training/assignments')).status, 403);
+});

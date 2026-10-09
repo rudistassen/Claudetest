@@ -1,4 +1,4 @@
-import { api, confirmDialog, esc, field, fmtDate, input, isDemo, openModal, showError, textarea, toast, todayISO } from '../lib.js';
+import { api, confirmDialog, esc, field, fmtDate, input, isDemo, openModal, qs, showError, siteFilter, siteScope, textarea, toast, todayISO } from '../lib.js';
 import { hydrateMedia, shrinkImage, toBase64 } from './mybrew.js';
 
 // Training courses built in Atlas (People → Learning & development): managers design them from pages and quiz
@@ -52,6 +52,130 @@ async function deleteCourse(c) {
   await api(`/training/courses/${c.id}`, { method: 'DELETE' });
   toast('Course deleted');
   return true;
+}
+
+// ---- People → Learning & development: its three tiles ----
+
+const LD_TILES = [
+  ['people/training', 'Training matrix', '▦', 'Who has done which training, and what’s running out'],
+  ['people/training/elearning', 'E-Learning', '🎓', 'Online courses – build them, or add a ready-made one'],
+  ['people/training/assign', 'Assign courses', '✓', 'Your staff and the courses each has been given'],
+];
+/** The tiles along the top of each Learning & development page; `active` is the page's path. */
+export const ldTiles = (active, badges = {}) => `<nav class="ld-tiles" aria-label="Learning & development">${LD_TILES.map(([p, label, ic, note]) => `
+  <a class="hub-tile ${p === active ? 'is-active' : ''}" href="#/${p}" ${p === active ? 'aria-current="page"' : ''}>
+    <span class="hub-icon" aria-hidden="true">${ic}</span>
+    <span class="hub-text"><strong>${esc(label)}${badges[p] ? ` <span class="nav-badge">${badges[p]}</span>` : ''}</strong><small>${esc(note)}</small></span>
+    <span class="hub-go" aria-hidden="true">›</span></a>`).join('')}</nav>`;
+
+// E-Learning: the online courses (and anyone waiting for a sign-off).
+export async function renderElearning(ctx) {
+  const { el, navigate, rerender } = ctx;
+  el.innerHTML = `<div class="hip"><div class="page-head"><h1 class="hub-title">E-Learning</h1><div class="actions"><button class="btn btn-primary" id="el-new">+ Online course</button></div></div>
+    ${ldTiles('people/training/elearning')}<div id="el-courses"></div></div>`;
+  await coursesPanel(el.querySelector('#el-courses'), { rerender });
+  el.querySelector('#el-new').addEventListener('click', () => openModal({
+    title: 'New online course',
+    body: `${field('Course name', input('name', '', 'required maxlength="100" placeholder="e.g. Making our hot chocolate"'))}
+      <p class="muted small">Next you’ll add its pages and questions. Or start from one of the <strong>📚 Ready-made courses</strong>.</p>`,
+    submitLabel: 'Create and design it',
+    onSubmit: async (v) => {
+      const saved = await api('/training/courses', { method: 'POST', body: { name: v.name } });
+      navigate(`people/training/courses/${saved.id}`);
+    },
+  }));
+}
+
+// Assign courses: every member of staff with the online courses they've been given, to give or take off courses.
+export async function renderAssign(ctx) {
+  const { el, state, query, stale, navigate, rerender } = ctx;
+  const scope = siteScope(state, query.scope);
+  const data = await api(`/training/assignments${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`);
+  if (stale()) return;
+  const show = ['todo', 'late', 'none'].includes(query.show) ? query.show : '';
+  const late = (c) => c.status !== 'done' && c.status !== 'awaiting_signoff' && c.due_on && c.due_on < todayISO();
+  const todo = (c) => c.status !== 'done';
+  const shown = data.people.filter((p) => (show === 'todo' ? p.courses.some(todo) : show === 'late' ? p.courses.some(late) : show === 'none' ? !p.courses.length : true));
+  const counts = {
+    todo: data.people.filter((p) => p.courses.some(todo)).length,
+    late: data.people.filter((p) => p.courses.some(late)).length,
+    none: data.people.filter((p) => !p.courses.length).length,
+  };
+  const chip = (p, c) => {
+    const [label, tone] = courseStatus(c);
+    return `<span class="as-course ${tone}"><span><strong>${esc(c.course_name)}</strong><small>${esc(label)}${c.status !== 'done' && c.last_result === 'failed' ? ` · last try ${c.last_score}%` : ''}</small></span>
+      <button type="button" class="icon-btn" data-unassign="${p.id}|${c.course_id}" aria-label="Take ${esc(p.name)} off ${esc(c.course_name)}" title="Take off this course">✕</button></span>`;
+  };
+  const filterLink = (key, label, n) => `<a class="chip ${show === key ? 'is-on' : ''}" href="#/people/training/assign${qs({ scope: query.scope, show: key || undefined })}">${label}${n !== undefined ? ` <b>${n}</b>` : ''}</a>`;
+
+  el.innerHTML = `<div class="hip">
+    <div class="page-head"><h1 class="hub-title">Assign courses</h1>
+      <div class="actions">${data.courses.length ? '<button class="btn btn-primary" id="as-give">Give a course</button>' : ''}</div></div>
+    ${ldTiles('people/training/assign')}
+    ${state.multiSite ? `<form class="filters" id="as-filters">${siteFilter(state, scope)}</form>` : ''}
+    ${data.courses.length ? '' : '<p class="notice">There are no published online courses yet – build one or add a ready-made course in <a href="#/people/training/elearning">E-Learning</a>, publish it, then give it to people here.</p>'}
+    <div class="as-tools">
+      <input type="search" id="as-search" placeholder="Search names…" aria-label="Search names" autocomplete="off">
+      <div class="chips">${filterLink('', 'Everyone', data.people.length)}${filterLink('todo', 'Courses to do', counts.todo)}${filterLink('late', 'Overdue', counts.late)}${filterLink('none', 'No courses yet', counts.none)}</div>
+    </div>
+    ${shown.length ? `<ul class="as-list">${shown.map((p) => `<li class="as-person card" data-name="${esc(p.name.toLowerCase())}">
+      <div class="as-who"><strong>${esc(p.name)}</strong><small class="muted">${esc([p.position, state.multiSite ? p.location_name : null].filter(Boolean).join(' · '))}</small></div>
+      <div class="as-courses">${p.courses.length ? p.courses.map((c) => chip(p, c)).join('') : '<span class="muted small">No courses given yet</span>'}</div>
+      ${data.courses.length ? `<button type="button" class="btn btn-small" data-give-to="${p.id}">+ Give a course</button>` : ''}
+    </li>`).join('')}</ul>` : '<div class="card empty">Nobody here.</div>'}
+  </div>`;
+
+  const form = el.querySelector('#as-filters');
+  form?.addEventListener('submit', (e) => { e.preventDefault(); navigate(`people/training/assign${qs({ scope: form.scope?.value, show: show || undefined })}`); });
+  form?.addEventListener('change', () => form.requestSubmit());
+  el.querySelector('#as-search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    el.querySelectorAll('.as-person').forEach((li) => { li.hidden = !!q && !li.dataset.name.includes(q); });
+  });
+
+  // Give one or more courses to one or more people, with an optional due date.
+  const give = (userIds) => {
+    const person = userIds.length === 1 ? data.people.find((p) => p.id === userIds[0]) : null;
+    const has = new Set(person ? person.courses.map((c) => c.course_id) : []);
+    const { form: f } = openModal({
+      title: person ? `Give ${person.name} a course` : 'Give a course',
+      wide: !person,
+      body: `<fieldset class="pp-pick"><legend>Which course${person ? 's' : ''}</legend><div class="pp-pick-list">${data.courses.map((c) => `<label class="pp-pick-item">
+          <input type="${person ? 'checkbox' : 'radio'}" name="course" value="${c.id}" ${person ? '' : 'required'}><span>${esc(c.name)}${has.has(c.id) ? ' <small class="muted">· already given</small>' : ''}${c.open_to_all ? '<small class="muted">Open to everyone</small>' : ''}</span></label>`).join('')}</div></fieldset>
+        ${person ? '' : `<fieldset class="pp-pick"><legend>Who should do it <span class="muted small" data-picked></span></legend>
+          <div class="pp-pick-tools"><button type="button" class="btn btn-small" data-pick-all>Tick everyone shown</button><button type="button" class="btn btn-small btn-ghost" data-pick-none>Clear</button></div>
+          <div class="pp-pick-list">${shown.map((p) => `<label class="pp-pick-item"><input type="checkbox" data-who="${p.id}"><span>${esc(p.name)}<small class="muted">${esc([p.position, p.location_name].filter(Boolean).join(' · '))}</small></span></label>`).join('')}</div></fieldset>`}
+        ${field('Due by (optional)', input('due_on', '', `type="date" min="${todayISO()}"`))}
+        <p class="muted small">They’ll see it in My tasks on My Atlas and get a notification. Giving a course to someone who has done it before asks them to do it again.</p>`,
+      submitLabel: 'Give course',
+      onSubmit: async (v, fm) => {
+        const courseIds = [...fm.querySelectorAll('[name=course]:checked')].map((b) => Number(b.value));
+        const ids = person ? userIds : [...fm.querySelectorAll('[data-who]:checked')].map((b) => Number(b.dataset.who));
+        if (!courseIds.length) throw new Error('Choose a course');
+        if (!ids.length) throw new Error('Tick who should do the course');
+        for (const cid of courseIds) await api(`/training/courses/${cid}/assign`, { method: 'POST', body: { user_ids: ids, due_on: v.due_on || null } });
+        toast(person ? `Given to ${person.name}` : `Given to ${ids.length === 1 ? '1 person' : `${ids.length} people`}`);
+        rerender();
+      },
+    });
+    const count = () => { const n = f.querySelectorAll('[data-who]:checked').length; const c = f.querySelector('[data-picked]'); if (c) c.textContent = n ? `· ${n} ticked` : ''; };
+    f.querySelector('[data-pick-all]')?.addEventListener('click', () => { f.querySelectorAll('[data-who]').forEach((b) => { b.checked = true; }); count(); });
+    f.querySelector('[data-pick-none]')?.addEventListener('click', () => { f.querySelectorAll('[data-who]').forEach((b) => { b.checked = false; }); count(); });
+    f.addEventListener('change', count);
+  };
+  el.querySelector('#as-give')?.addEventListener('click', () => give([]));
+  el.querySelectorAll('[data-give-to]').forEach((b) => b.addEventListener('click', () => give([Number(b.dataset.giveTo)])));
+  el.querySelectorAll('[data-unassign]').forEach((b) => b.addEventListener('click', async () => {
+    const [uid, cid] = b.dataset.unassign.split('|').map(Number);
+    const p = data.people.find((x) => x.id === uid);
+    const c = p.courses.find((x) => x.course_id === cid);
+    if (!(await confirmDialog(`Take ${p.name} off “${c.course_name}”? Any training they’ve already done is kept.`, { confirmLabel: 'Take off' }))) return;
+    try {
+      await api(`/training/courses/${cid}/assign/${uid}`, { method: 'DELETE' });
+      toast('Taken off the course');
+      rerender();
+    } catch (err) { showError(err); }
+  }));
 }
 
 // ---- People → Learning & development: the courses, and who's waiting for a sign-off ----
@@ -170,7 +294,7 @@ export async function renderDesigner(ctx) {
     const questions = steps.filter((s) => s.kind === 'question').length;
     el.innerHTML = `<div class="hip">
       <div class="page-head"><h1 class="hub-title">${esc(settings.name)}</h1>
-        <div class="actions"><a class="btn" href="#/people/training">← Learning &amp; development</a>
+        <div class="actions"><a class="btn" href="#/people/training/elearning">← E-Learning</a>
           <button type="button" class="btn" id="cd-preview">Preview</button>
           ${settings.published ? '<button type="button" class="btn" id="cd-assign">Give to people</button>' : ''}
           <button type="button" class="btn btn-danger" id="cd-delete">Delete course</button></div></div>
@@ -296,7 +420,7 @@ export async function renderDesigner(ctx) {
     });
     el.querySelector('#cd-delete').addEventListener('click', async () => {
       try {
-        if (await deleteCourse({ id: courseId, name: settings.name, assigned: design.assigned.length })) { dirty = false; navigate('people/training'); }
+        if (await deleteCourse({ id: courseId, name: settings.name, assigned: design.assigned.length })) { dirty = false; navigate('people/training/elearning'); }
       } catch (err) { showError(err); }
     });
     el.querySelector('#cd-preview').addEventListener('click', async () => {
