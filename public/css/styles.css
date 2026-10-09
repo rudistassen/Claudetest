@@ -2290,6 +2290,41 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .mb-hip .mb-cover { border-radius: 14px; }
 .mb-hip .mb-strip { font-family: "Iowan Old Style", Palatino, Georgia, serif; font-style: italic; }
 .mb-hip .mb-task { border-radius: 14px; border-style: dashed; border-color: var(--mb-line); }
+/* Tasks, training and the newsfeed in the same sticker style. */
+.mb-hip .mb-task, .mb-hip .mb-training li, .mb-hip .news-post, .mb-hip .mb-tasks-done { border: 1.5px solid var(--mb-ink); border-radius: 14px; background: #fffaf2; color: #2b2118; box-shadow: 3px 3px 0 var(--mb-ink); }
+.mb-hip .mb-tasks { gap: 0.7rem; }
+.mb-hip .mb-task-text strong, .mb-hip .mb-training strong, .mb-hip .news-post h3, .mb-hip .post-who strong { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight: 700; color: #2b2118; }
+.mb-hip .mb-task-text strong { font-size: 1.02rem; }
+.mb-hip .mb-task-text small, .mb-hip .mb-training small, .mb-hip .post-who .muted, .mb-hip .news-body { color: #6e5d4b; }
+.mb-hip .mb-task-icon { background: var(--mb-tile, #e8b24a); border: 1.5px solid rgba(43, 33, 24, 0.85); border-radius: 12px; transform: rotate(-4deg); }
+.mb-hip .mb-task:nth-child(4n+2) .mb-task-icon { --mb-tile: #e08a63; transform: rotate(3deg); }
+.mb-hip .mb-task:nth-child(4n+3) .mb-task-icon { --mb-tile: #a9c49f; }
+.mb-hip .mb-task:nth-child(4n) .mb-task-icon { --mb-tile: #8fb8b5; transform: rotate(3deg); }
+.mb-hip .mb-task .btn, .mb-hip .news-post .btn { border: 1.5px solid #2b2118; border-radius: 999px; background: #fffaf2; color: #2b2118; font-weight: 700; box-shadow: 2px 2px 0 #2b2118; }
+.mb-hip .mb-task .btn-primary, .mb-hip .news-post .btn-primary { background: #c4552d; color: #fff; }
+.mb-hip .mb-task .btn:active, .mb-hip .news-post .btn:active { transform: translate(2px, 2px); box-shadow: none; }
+.mb-hip .mb-tasks-done { color: #4f6b47; padding: 0.8rem 1rem; }
+.mb-hip .mb-training { gap: 0.7rem; }
+.mb-hip .mb-training-mark { border: 1.5px solid rgba(43, 33, 24, 0.85); }
+.mb-hip .mybrew-news .news-head h2 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight: 600; font-size: 1.45rem; padding-bottom: 0.3rem; color: var(--mb-ink);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5 Q 30 1 60 4.5 T 118 3' fill='none' stroke='%23c4552d' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") left bottom / 3.5rem 0.5rem no-repeat; }
+.mb-hip .mybrew-news .seg { background: none; border: 0; overflow: visible; gap: 0.45rem; padding: 0 4px 5px 0; flex-wrap: wrap; }
+.mb-hip .mybrew-news .seg button { border: 1.5px solid var(--mb-ink); border-radius: 999px; background: #fffaf2; color: #2b2118; font-weight: 700; padding: 0.3rem 0.8rem; box-shadow: 2px 2px 0 var(--mb-ink); }
+.mb-hip .mybrew-news .seg button.is-on { background: #e8b24a; color: #2b2118; }
+.mb-hip .news-post { overflow: hidden; margin-bottom: 1rem; }
+.mb-hip .news-post.needs-read { box-shadow: inset 0 4px 0 #c4552d, 3px 3px 0 var(--mb-ink); }
+.mb-hip .news-post h3 { font-size: 1.15rem; }
+.mb-hip .post-head .ring > span { background: #e8b24a; color: #2b2118; border-color: #fffaf2; }
+.mb-hip .news-tag { border: 1.5px solid currentColor; transform: rotate(-2deg); }
+.mb-hip .news-announcement { background: #dcefe2; color: #1c6b3c; }
+.mb-hip .news-policy { background: #dde9f8; color: #1d5a9e; }
+.mb-hip .news-event { background: #f3e1f5; color: #7a3a86; }
+.mb-hip .news-reminder { background: #fbefc9; color: #7a5a06; }
+.mb-hip .post-head .ring.is-seen { background: #d9c9b0; }
+.mb-hip .news-post .link-btn { color: #c4552d; }
+.mb-hip .mb-section-head a, .mb-hip .mb-card-sub .link-btn { color: var(--mb-rust); font-weight: 700; }
+.mb-hip .news-read { color: #4f6b47; }
+.mb-hip .news-post > .news-media { border-top: 1.5px solid var(--mb-ink); border-bottom: 1.5px solid var(--mb-ink); }
 @media (max-width: 520px) {
   .mb-hero { border-radius: 14px; padding: 0.95rem 1rem 1.1rem; }
   .mb-hero .mb-inbox { padding: 0.3rem 0.6rem; }
