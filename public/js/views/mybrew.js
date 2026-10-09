@@ -116,8 +116,16 @@ const initials = (name) => String(name).replace(/\(.*?\)/g, '').trim().split(/\s
 
 function greeting() {
   const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
 }
+
+// A line for the day, the same for everyone all day (a new one each day).
+const QUIPS = [
+  'Stay grounded.', 'Espresso yourself.', 'Rise and grind.', 'Keep calm and froth on.', 'Life happens, coffee helps.',
+  'Bean there, nailed that.', 'Brew-tiful day ahead.', 'You’re one in a melon.', 'Whisk it for the biscuit.', 'Latte love for the team.',
+  'Good vibes, great brews.', 'Donut worry, be happy.', 'Sip happens.', 'Keep it fresh.', 'Today’s special: you.',
+];
+const quipFor = (iso) => QUIPS.at(Math.floor(Date.parse(`${iso}T00:00:00Z`) / 86400000) % QUIPS.length);
 
 export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
@@ -207,15 +215,31 @@ export async function renderMyBrew(ctx) {
         ${d.can_withdraw ? `<button type="button" class="link-btn" data-withdraw="${d.id}">Withdraw</button>` : ''}</p>
     </div>`;
 
+  const hours = Math.round(weekHours * 10) / 10;
+  const stickers = [
+    [`${hours} hrs`, 'next 7 days', 'mb-sticker-1'],
+    [tasks.length ? `${tasks.length} to do` : 'All done', tasks.length ? 'on your list' : 'nothing waiting', 'mb-sticker-2'],
+    claimable ? [`${claimable} open`, `shift${claimable === 1 ? '' : 's'} going`, 'mb-sticker-3'] : null,
+  ].filter(Boolean);
   el.innerHTML = `
-    <div class="page-head">
-      <div><h1>My Atlas</h1><p class="muted my-greeting">${greeting()}, ${esc(firstName(u.name))} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
-      <a class="btn mb-inbox" href="#/notifications" aria-label="Notifications">🔔 Notifications<span class="nav-badge" id="mb-inbox-count" hidden></span></a>
-    </div>
+    <header class="mb-hero">
+      <div class="mb-hero-top">
+        <p class="mb-eyebrow">My Atlas · ${fmtDate(today, { weekday: 'short', day: 'numeric', month: 'short' })}</p>
+        <a class="btn mb-inbox" href="#/notifications" aria-label="Notifications">🔔 <span class="mb-inbox-text">Notifications</span><span class="nav-badge" id="mb-inbox-count" hidden></span></a>
+      </div>
+      <h1 class="mb-hello">${greeting()}, <em>${esc(firstName(u.name))}.</em></h1>
+      <p class="mb-quip">“${esc(quipFor(today))}” <span>— today’s brew</span></p>
+      ${nextShift ? `<a class="mb-stub" href="#/rota?view=mine" style="--site: ${siteColour(nextShift.location_name, nextShift.location_id)}">
+        <span class="mb-stub-label">Next up</span>
+        <span class="mb-stub-main"><strong>${esc(dayWord(nextShift.date))}</strong> ${nextShift.start_time}–${nextShift.end_time}</span>
+        <span class="mb-stub-site">${esc(nextShift.location_name ?? '')}</span>
+      </a>` : '<p class="mb-stub mb-stub-empty"><span class="mb-stub-label">Next up</span><span class="mb-stub-main">Nothing on the rota yet – enjoy it</span></p>'}
+      <div class="mb-stickers">${stickers.map(([big, small, cls]) => `<span class="mb-sticker ${cls}"><strong>${esc(big)}</strong><small>${esc(small)}</small></span>`).join('')}</div>
+    </header>
     <div class="mb-pills" role="group" aria-label="Show">
       ${[['all', 'All'], ['shifts', 'Shifts'], ['tasks', 'My tasks'], hasTraining ? ['training', 'My training'] : null, ['news', 'Newsfeed']].filter(Boolean).map(([k, l]) => `<button type="button" class="mb-pill ${k === 'all' ? 'is-on' : ''}" data-mb-show="${k}">${l}</button>`).join('')}
     </div>
-    <div class="mybrew">
+    <div class="mybrew mb-hip">
         <div class="mb-shortcuts" data-mb="all">${shortcuts.map((t) => `<a class="mb-shortcut" href="${t.href}">
           <span class="mb-art" style="--c1: ${t.c[0]}; --c2: ${t.c[1]}" aria-hidden="true">${t.icon}</span>
           <span class="mb-shortcut-text"><strong>${esc(t.label)}</strong><small>${esc(t.detail)}</small></span></a>`).join('')}</div>

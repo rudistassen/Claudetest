@@ -2224,3 +2224,62 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .tour-actions { display: flex; align-items: center; gap: 0.5rem; }
 .tour-gap { flex: 1; }
 @media (prefers-reduced-motion: reduce) { .tour-spot, .tour-card { transition: none; } }
+
+/* My Atlas, hipster edition: a paper hero with a serif hello, a ticket stub for the next shift and tilted stickers. */
+:root { --mb-paper: #f6efe3; --mb-ink: #2b2118; --mb-ink-soft: #6e5d4b; --mb-rust: #c4552d; --mb-sage: #7f9a76; --mb-mustard: #e0a83a; --mb-line: #d9c9b0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --mb-paper: #2a241d; --mb-ink: #f3e8d6; --mb-ink-soft: #bba88f; --mb-rust: #e27a52; --mb-sage: #9bb892; --mb-mustard: #e8b85a; --mb-line: #4a3f33; }
+}
+:root[data-theme="dark"] { --mb-paper: #2a241d; --mb-ink: #f3e8d6; --mb-ink-soft: #bba88f; --mb-rust: #e27a52; --mb-sage: #9bb892; --mb-mustard: #e8b85a; --mb-line: #4a3f33; }
+.mb-serif, .mb-hello, .mb-quip, .mb-hip .mb-section-head h2, .mb-stub-main strong, .mb-sticker strong { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; }
+.mb-hero { position: relative; max-width: 760px; margin: 0 0 1rem; padding: 1.1rem 1.2rem 1.25rem; border-radius: 18px; color: var(--mb-ink); overflow: hidden;
+  background: radial-gradient(circle at 12% 18%, rgba(196, 85, 45, 0.10), transparent 40%), radial-gradient(circle at 92% 85%, rgba(127, 154, 118, 0.16), transparent 45%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.018) 0 1px, transparent 1px 3px), var(--mb-paper);
+  border: 1px solid var(--mb-line); box-shadow: 0 10px 24px -18px rgba(60, 35, 10, 0.55); }
+.mb-hero::after { content: "☕"; position: absolute; right: -0.4rem; top: 2.6rem; font-size: 5.5rem; opacity: 0.09; transform: rotate(-14deg); pointer-events: none; }
+.mb-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.mb-eyebrow { margin: 0; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--mb-ink-soft); }
+.mb-hero .mb-inbox { background: transparent; color: var(--mb-ink); border: 1.5px solid var(--mb-ink); border-radius: 999px; font-size: 0.85rem; padding: 0.3rem 0.8rem; }
+.mb-hero .mb-inbox:hover { background: var(--mb-ink); color: var(--mb-paper); }
+.mb-hello { margin: 0.6rem 0 0.1rem; font-size: clamp(2rem, 7vw, 2.9rem); font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; color: var(--mb-ink); }
+.mb-hello em { color: var(--mb-rust); font-style: italic; }
+.mb-quip { margin: 0.35rem 0 0.9rem; font-size: 1.05rem; font-style: italic; color: var(--mb-ink-soft); }
+.mb-quip span { font-style: normal; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; margin-left: 0.25rem; }
+.mb-stub { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 0.9rem; align-items: center; max-width: 420px; margin: 0;
+  padding: 0.65rem 1rem; border-radius: 10px; background: #fffaf2; color: #2b2118; text-decoration: none; border-left: 6px solid var(--site, var(--mb-rust));
+  box-shadow: 0 6px 14px -10px rgba(60, 35, 10, 0.6); }
+.mb-stub::before, .mb-stub::after { content: ""; position: absolute; right: 5.2rem; width: 14px; height: 14px; border-radius: 50%; background: var(--mb-paper); }
+.mb-stub::before { top: -7px; }
+.mb-stub::after { bottom: -7px; }
+.mb-stub-label { grid-row: 1 / 3; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--mb-rust); }
+.mb-stub-main { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.mb-stub-main strong { font-size: 1.25rem; margin-right: 0.3rem; }
+.mb-stub-site { font-size: 0.8rem; font-weight: 700; color: #6e5d4b; padding-top: 0.15rem; border-top: 1.5px dashed #d9c9b0; }
+.mb-stub-empty { grid-template-rows: auto; }
+.mb-stub-empty .mb-stub-label { grid-row: 1; }
+.mb-stub-empty::before, .mb-stub-empty::after { display: none; }
+.mb-stickers { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
+.mb-sticker { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 6.2rem; padding: 0.45rem 0.8rem; border-radius: 14px;
+  background: #e8b24a; color: #2b2118; box-shadow: 2px 3px 0 #2b2118; transform: rotate(-2.5deg); transition: transform 0.15s; }
+.mb-sticker:hover { transform: rotate(0) scale(1.04); }
+.mb-sticker strong { font-size: 1.1rem; line-height: 1.1; }
+.mb-sticker small { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: inherit; opacity: 0.78; }
+.mb-sticker-2 { background: #a9c49f; transform: rotate(2deg); border-radius: 999px; }
+.mb-sticker-3 { background: #c4552d; color: #fff; transform: rotate(-1deg); }
+/* The rest of the page picks up the same feel. */
+.mb-pills .mb-pill { border: 1.5px solid var(--mb-ink); background: transparent; color: var(--mb-ink); font-size: 0.85rem; letter-spacing: 0.04em; }
+.mb-pills .mb-pill.is-on { background: var(--mb-ink); color: var(--mb-paper); }
+.mb-hip .mb-section-head h2 { font-weight: 600; font-size: 1.45rem; padding-bottom: 0.3rem; color: var(--mb-ink);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5 Q 30 1 60 4.5 T 118 3' fill='none' stroke='%23c4552d' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") left bottom / 3.5rem 0.5rem no-repeat; }
+.mb-hip .mb-shortcut { border-radius: 14px; border: 1.5px solid var(--mb-line); transition: transform 0.15s, box-shadow 0.15s; }
+.mb-hip .mb-shortcut:hover { transform: translateY(-2px) rotate(-0.6deg); box-shadow: 3px 4px 0 var(--mb-line); background: var(--surface); }
+.mb-hip .mb-art { margin: 0.35rem; width: 48px; border-radius: 12px; }
+.mb-hip .mb-cover { border-radius: 14px; }
+.mb-hip .mb-strip { font-family: "Iowan Old Style", Palatino, Georgia, serif; font-style: italic; }
+.mb-hip .mb-task { border-radius: 14px; border-style: dashed; border-color: var(--mb-line); }
+@media (max-width: 520px) {
+  .mb-hero { border-radius: 14px; padding: 0.95rem 1rem 1.1rem; }
+  .mb-hero .mb-inbox { padding: 0.3rem 0.6rem; }
+  .mb-inbox-text { display: none; }
+  .mb-stub::before, .mb-stub::after { right: 4rem; }
+}
