@@ -2679,3 +2679,9 @@ img.lesson-media { background: transparent; }
   .leave-list > li { flex-direction: column; align-items: stretch; }
   .leave-list .leave-actions { justify-content: flex-start; margin-top: 0.5rem; }
 }
+/* Week rota: white site headings (keeping the site's colour strip) and a smaller role label. */
+.rota tr.rota-group th { background: var(--surface); }
+.rota tr.rota-subgroup th { padding-top: 0.25rem; padding-bottom: 0.2rem; }
+.rota-subgroup-name { font-size: 0.72rem; letter-spacing: 0.06em; }
+.rota tr.rota-subgroup .rota-group-meta { font-size: 0.72rem; }
+.rota { background: var(--surface); }
