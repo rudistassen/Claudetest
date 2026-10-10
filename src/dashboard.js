@@ -17,7 +17,7 @@ const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: BUSINESS_TZ, hou
  * far; with { date, fullDay: true } a whole past day (e.g. yesterday, for a morning email). Sales and labour are
  * compared with the same weekday a week earlier, up to the same time of day.
  */
-export function siteSummaries(db, { locations, seeSales = false, seeOrders = false, seeClockIns = false, date = today(), fullDay = false }) {
+export function siteSummaries(db, { locations, seeSales = false, seeOrders = false, seeClockIns = false, date = today(), fullDay = false, periodFrom = null }) {
   const d = date;
   const ws = weekStart(d);
   const lastWeek = addDays(d, -7);
@@ -134,9 +134,31 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
     const orders = seeOrders
       ? db.prepare(`SELECT status, COUNT(*) AS n FROM purchase_orders WHERE location_id = ? AND status IN ('draft', 'sent') GROUP BY status`).all(loc.id)
       : [];
+    // Over a period (the HQ Dashboard's week / month / year to date): daily checks done and failed, and wastage.
+    let period;
+    if (periodFrom) {
+      const dailyIds = tasks.filter((t) => t.frequency === 'daily').map((t) => t.id);
+      const inIds = dailyIds.map(() => '?').join(', ');
+      // Checks only count as due from the first day the site recorded any (so a site that started using Trail
+      // part-way through the year isn't marked down for the months before).
+      const first = dailyIds.length ? db.prepare(`SELECT MIN(period) AS p FROM safety_checks WHERE location_id = ? AND period BETWEEN ? AND ? AND task_id IN (${inIds})`)
+        .get(loc.id, periodFrom, d, ...dailyIds).p : null;
+      const start = first && first > periodFrom ? first : periodFrom;
+      const n = first ? Math.round((Date.parse(d) - Date.parse(start)) / 86400000) + 1 : 0;
+      const done = first ? db.prepare(`SELECT status FROM safety_checks WHERE location_id = ? AND period BETWEEN ? AND ?
+        AND task_id IN (${inIds})`).all(loc.id, start, d, ...dailyIds) : [];
+      period = {
+        from: periodFrom,
+        checks_from: first ? start : null,
+        days: n,
+        daily: { due: dailyIds.length * n, done: done.length, fails: done.filter((c) => c.status === 'fail').length },
+        wastage: round2(db.prepare('SELECT COALESCE(SUM(total_cost), 0) AS total FROM wastage WHERE location_id = ? AND date BETWEEN ? AND ?').get(loc.id, periodFrom, d).total),
+      };
+    }
     return {
       id: loc.id,
       name: loc.name,
+      ...(period ? { period } : {}),
       daily: count('daily', d),
       weekly: count('weekly', ws),
       shifts_today: shiftsToday,

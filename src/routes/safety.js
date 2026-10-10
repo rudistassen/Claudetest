@@ -243,6 +243,9 @@ export function registerSafetyRoutes(router, db) {
     const site = req.query.location_id ?? (hq ? undefined : req.user.location_id ?? req.user.site_ids[0]);
     const day = date(req.query.date, 'date') ?? today();
     if (day > today()) throw badRequest('Choose today or an earlier day');
+    // ?from= adds checks and wastage over a period ending on the day (up to a year).
+    const from = date(req.query.from, 'from');
+    if (from && (from > day || (Date.parse(day) - Date.parse(from)) / 86400000 > 366)) throw badRequest('Choose a period of up to a year ending on the day shown');
     res.json(siteSummaries(db, {
       date: day,
       fullDay: day < today(),
@@ -251,6 +254,7 @@ export function registerSafetyRoutes(router, db) {
       seeSales: can(req.user, 'sales.view'),
       seeOrders: can(req.user, 'orders.manage'),
       seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage'),
+      periodFrom: from,
     }));
   });
 }

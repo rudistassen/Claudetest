@@ -2810,3 +2810,5 @@ img.lesson-media { background: transparent; }
 .dash-sites .card-head { flex-wrap: wrap; gap: 0.5rem; }
 .dash-periods { flex-wrap: wrap; }
 @media (max-width: 640px) { .dash-periods { width: 100%; } .dash-periods button { flex: 1 1 auto; font-size: 0.8rem; padding-inline: 0.5rem; } }
+.dash-periods-top { margin: 0 0 0.4rem; }
+.dash-period-note { margin: 0 0 0.9rem; }

@@ -65,3 +65,21 @@ test('the two dashboards have their own permissions; Manager Dashboard alone onl
     db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(set.permissions, set.id);
   }
 });
+
+test('the HQ Dashboard data can cover a period: checks done and wastage from the start date', async () => {
+  const a = await login('admin@cafe.local');
+  const { today, addDays } = await import('../src/util.js');
+  const from = addDays(today(), -6);
+  const r = await a(`/dashboard?from=${from}`);
+  assert.equal(r.status, 200);
+  for (const l of r.data.locations) {
+    assert.equal(l.period.from, from);
+    assert.ok(l.period.daily.done <= l.period.daily.due);
+    assert.ok(l.period.wastage >= 0);
+    assert.ok(l.period.days <= 7);
+  }
+  // A day without ?from= has no period, and a period can't end before it starts or run past a year.
+  assert.equal((await a('/dashboard')).data.locations[0].period, undefined);
+  assert.equal((await a(`/dashboard?from=${addDays(today(), 1)}`)).status, 400);
+  assert.equal((await a(`/dashboard?from=${addDays(today(), -400)}`)).status, 400);
+});

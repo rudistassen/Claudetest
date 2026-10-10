@@ -1,5 +1,5 @@
 import { attachTip, pairedBarChart } from '../charts.js';
-import { addDays, api, esc, fmtDate, isDemo, money, openModal, siteColour, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, isDemo, money, openModal, qs, siteColour, toast, todayISO } from '../lib.js';
 import { clockInActions, wireClockInActions } from './breaks.js';
 import { sickAttrs, wireSickButtons } from './sickness.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
@@ -14,7 +14,11 @@ function progress(done, due) {
 // "4h 05m" from hours.
 // The day the dashboard is showing: today (so far, the default) or a whole earlier day picked from the date menu.
 // isToday/day: the day shown; canSick: whether this person can mark a rota shift as sickness (rota editors).
-const shown = { isToday: true, day: '', canSick: false };
+const shown = { isToday: true, day: '', canSick: false, period: 'today' };
+// What the figures are compared with, in words: "last week" / "last month" / "last year", and the longer form.
+const cmpShort = () => (shown.period === 'mtd' ? 'last month' : shown.period === 'ytd' ? 'last year' : 'last week');
+const cmpLong = () => (shown.period === 'today' ? (shown.isToday ? 'by this time last week' : 'the same day last week')
+  : shown.period === 'mtd' ? 'over the same dates last month' : shown.period === 'ytd' ? 'over the same dates last year' : 'over the same time last week');
 const dayWord = () => (shown.isToday ? 'today' : fmtDate(shown.day, { weekday: 'short', day: 'numeric', month: 'short' }));
 
 // Names on the dashboard are shortened to first name and last initial: "Boudebza Sid Ali" → "Boudebza A.".
@@ -32,10 +36,10 @@ const duration = (h) => { const m = Math.round(h * 60); return `${Math.floor(m /
 // Today so far against the same weekday last week up to the same time. Up is good for sales; labour is neutral.
 function versus(now, then, { goodUp = true } = {}) {
   if (now === null || now === undefined) return `<span class="muted">No sales synced ${shown.isToday ? 'today' : 'for this day'}</span>`;
-  if (!then) return `<span class="muted">${then === null ? 'Nothing to compare' : '£0'} last week</span>`;
+  if (!then) return `<span class="muted">${then === null ? 'Nothing to compare' : '£0'} ${cmpShort()}</span>`;
   const change = ((now - then) / then) * 100;
   const tone = !goodUp || Math.abs(change) < 0.5 ? '' : (change > 0) === goodUp ? 'tone-good' : 'tone-bad';
-  return `<span class="${tone}">${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%</span><br><span class="muted">${money(then)} last week</span>`;
+  return `<span class="${tone}">${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%</span><br><span class="muted">${money(then)} ${cmpShort()}</span>`;
 }
 
 // Clock-ins with the people in right now (including on a break) first, each group in the order they clocked in.
@@ -100,7 +104,7 @@ function change(now, then) {
   if (!then) return '';
   const c = ((now - then) / then) * 100;
   const tone = Math.abs(c) < 0.5 ? 'muted' : c > 0 ? 'tone-good' : 'tone-bad';
-  return `<span class="dash-vs ${tone}" title="${money(then)} last week">${Math.abs(c) < 0.05 ? '■ 0.0%' : `${c > 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%`}</span>`;
+  return `<span class="dash-vs ${tone}" title="${money(then)} ${cmpShort()}">${Math.abs(c) < 0.05 ? '■ 0.0%' : `${c > 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%`}</span>`;
 }
 
 // "incl. £312.40 in 9 open orders": tabs and tickets not paid yet, counted in today's sales until they're paid.
@@ -115,21 +119,21 @@ function openNote(locs) {
 // For the labour tile: the change in percentage points on last week by this time. Lower labour is good (green).
 function labourVersus(now, then) {
   if (now === null || now === undefined) return '<span class="muted">of net sales so far</span>';
-  if (then === null || then === undefined) return '<span class="muted">of net sales · nothing to compare last week</span>';
+  if (then === null || then === undefined) return `<span class="muted">of net sales · nothing to compare ${cmpShort()}</span>`;
   const d = Math.round((now - then) * 10) / 10;
   const tone = Math.abs(d) < 0.5 ? 'muted' : d > 0 ? 'tone-bad' : 'tone-good';
-  return `<span class="${tone}">${d === 0 ? '■ 0.0 pts' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)} pts`}</span> <span class="muted">on last week</span><br>
-    <span class="muted">${then.toFixed(1)}% ${shown.isToday ? 'by this time last week' : 'the same day last week'}</span>`;
+  return `<span class="${tone}">${d === 0 ? '■ 0.0 pts' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)} pts`}</span> <span class="muted">on ${cmpShort()}</span><br>
+    <span class="muted">${then.toFixed(1)}% ${cmpLong()}</span>`;
 }
 
 // For a tile: "▲ 4.2% on last week", then what last week had taken by the same time.
 function versusLine(now, then) {
   if (now === null) return `<span class="muted">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}</span>`;
-  if (!then) return '<span class="muted">Nothing to compare last week</span>';
+  if (!then) return `<span class="muted">Nothing to compare ${cmpShort()}</span>`;
   const change = ((now - then) / then) * 100;
   const tone = Math.abs(change) < 0.5 ? 'muted' : change > 0 ? 'tone-good' : 'tone-bad';
-  return `<span class="${tone}">${Math.abs(change) < 0.05 ? '■ 0.0%' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%`}</span> <span class="muted">on last week</span><br>
-    <span class="muted">${money(then)} ${shown.isToday ? 'by this time last week' : 'the same day last week'}</span>`;
+  return `<span class="${tone}">${Math.abs(change) < 0.05 ? '■ 0.0%' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%`}</span> <span class="muted">on ${cmpShort()}</span><br>
+    <span class="muted">${money(then)} ${cmpLong()}</span>`;
 }
 
 const siteInitials = (name) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
@@ -173,9 +177,13 @@ const clockTitle = (c) => [
   c.breaks?.length ? `Break ${c.breaks.map((b) => `${b.start}–${b.end ?? 'now'}`).join(', ')}` : '',
 ].filter(Boolean).join(' · ');
 
-function card(loc, state, data) {
+function card(loc, state, data, slice = null) {
   const staff = loc.shifts_today;
   const lw = loc.last_week;
+  // Over a period (week / month / year to date) the money and checks are for the period; who's in stays the day.
+  const per = loc.period ?? null;
+  const g = slice ? { now: slice.gross, then: slice.grossThen, cost: slice.cost, costThen: slice.costThen, pct: slice.labourPct, rota: slice.basis === 'rota' }
+    : { now: loc.gross_today, then: lw.gross, cost: loc.labour_cost_today, costThen: lw.labour_cost, pct: loc.labour_pct_today, rota: loc.labour_basis === 'rostered' };
   const clocked = loc.clock_ins && data.labour_synced;
   return `
     <section class="card site-card" style="--site: ${siteColour(loc.name, loc.id)}">
@@ -187,18 +195,18 @@ function card(loc, state, data) {
       <div class="site-money">
         <div>
           <h3>Gross sales</h3>
-          <p class="stat">${loc.gross_today === null ? '<span class="muted">–</span>' : money(loc.gross_today)}</p>
-          <p class="small">${versus(loc.gross_today, lw.gross)}</p>
-          ${shown.isToday && loc.open_orders ? `<p class="small muted">incl. ${money(loc.open_gross)} open (${loc.open_orders})</p>` : ''}
+          <p class="stat">${g.now === null ? '<span class="muted">–</span>' : money(g.now)}</p>
+          <p class="small">${versus(g.now, g.then)}</p>
+          ${!slice && shown.isToday && loc.open_orders ? `<p class="small muted">incl. ${money(loc.open_gross)} open (${loc.open_orders})</p>` : ''}
         </div>
         <div>
           <h3>Labour cost</h3>
-          <p class="stat">${money(loc.labour_cost_today)}</p>
-          <p class="small">${versus(loc.labour_cost_today, lw.labour_cost, { goodUp: false })}</p>
-          <p class="small tone-${labourTone(loc.labour_pct_today)}">${fmtPct(loc.labour_pct_today)} of net sales${loc.labour_basis === 'rostered' ? ' (rota)' : ''}</p>
+          <p class="stat">${money(g.cost)}</p>
+          <p class="small">${versus(g.cost, g.costThen, { goodUp: false })}</p>
+          <p class="small tone-${labourTone(g.pct)}">${fmtPct(g.pct)} of net sales${g.rota ? ' (rota)' : ''}</p>
         </div>
       </div>
-      <p class="small muted site-compare">${shown.isToday ? 'Today so far' : 'The whole day'} vs ${fmtDate(data.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })}${shown.isToday ? ' at the same time' : ''}</p>` : ''}
+      <p class="small muted site-compare">${slice ? `${PERIOD_LABEL[shown.period]} vs ${COMPARE_NOTE[shown.period]}` : `${shown.isToday ? 'Today so far' : 'The whole day'} vs ${fmtDate(data.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })}${shown.isToday ? ' at the same time' : ''}`}</p>` : ''}
       <div class="site-grid">
         ${clocked ? `
         <div class="span-2">
@@ -225,9 +233,10 @@ function card(loc, state, data) {
             : '<p class="muted">Nobody rostered</p>'}
         </div>`}
         <div class="site-checks span-2">
-          <h3>Daily Trail checks</h3>
-          ${progress(loc.daily.done, loc.daily.due)}
-          ${loc.daily.fails ? `<p class="alert-text">⚠ ${loc.daily.fails} failed check(s) ${dayWord()}</p>` : ''}
+          <h3>Daily Trail checks${per ? ` · ${PERIOD_LABEL[shown.period].toLowerCase()}` : ''}</h3>
+          ${per ? progress(per.daily.done, per.daily.due) : progress(loc.daily.done, loc.daily.due)}
+          ${(per ? per.daily.fails : loc.daily.fails) ? `<p class="alert-text">⚠ ${per ? per.daily.fails : loc.daily.fails} failed check(s) ${per ? PERIOD_LABEL[shown.period].toLowerCase() : dayWord()}</p>` : ''}
+          ${per ? `<p class="small muted">Wastage ${PERIOD_LABEL[shown.period].toLowerCase()}: ${money(per.wastage)}</p>` : ''}
         </div>
       </div>
     </section>`;
@@ -303,9 +312,7 @@ function bySite(t, period, prev) {
     <section class="card dash-sites">
       <header class="card-head">
         <h2>Sales &amp; labour by site<span class="print-only"> · ${PRINT_LABEL[period] ?? dayWord()}</span></h2>
-        <div class="seg dash-periods" role="group" aria-label="Period">
-          ${PERIODS.map((p) => `<button class="${period === p ? 'is-on' : ''}" data-period="${p}">${p === 'today' && !shown.isToday ? 'This day' : p === 'week' && !shown.isToday ? '7 days to here' : PERIOD_LABEL[p]}</button>`).join('')}
-        </div>
+        <span class="muted small">${PERIOD_LABEL[period] === 'Today' ? (shown.isToday ? 'Today' : dayWord()) : PERIOD_LABEL[period]}</span>
       </header>
       <div class="table-wrap"><table class="dash-table">
         <thead><tr><th>Site</th><th>Gross sales</th><th class="num">Orders</th><th>Labour % of net sales <small class="inline">(${t.labour_synced ? 'clocked' : 'rostered'} · target ${LABOUR_TARGET}%)</small></th></tr></thead>
@@ -333,9 +340,11 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   shown.isToday = d0 === today;
   shown.day = d0;
   shown.canSick = state.can('rota.edit');
+  shown.period = period;
+  const ranged = period !== 'today';
   const range = periodRange(period, d0);
   const [data, myShifts, leave, security, fresh, tradeToday, tradeRange, tradePrev] = await Promise.all([
-    api(`/dashboard${shown.isToday ? '' : `?date=${d0}`}`),
+    api(`/dashboard${qs({ date: shown.isToday ? undefined : d0, from: ranged ? range.from : undefined })}`),
     api('/my-shifts'),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
     state.isAdmin && !isDemo ? api('/admin/security').catch(() => null) : null,
@@ -385,7 +394,39 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const lwSites = locs.filter((l) => l.last_week?.net > 0 && l.last_week?.labour_cost > 0);
   const lwNet = lwSites.reduce((n, l) => n + l.last_week.net, 0);
   const labourLastWeek = lwNet ? Math.round((lwSites.reduce((n, l) => n + l.last_week.labour_cost, 0) / lwNet) * 1000) / 10 : null;
-  const labourPct = todayTotals ? (tradeToday.labour_synced && todayTotals.labour_pct !== null ? todayTotals.labour_pct : todayTotals.rostered_labour_pct) : null;
+  let labourPct = todayTotals ? (tradeToday.labour_synced && todayTotals.labour_pct !== null ? todayTotals.labour_pct : todayTotals.rostered_labour_pct) : null;
+  // Over a period (week / month / year to date): the same tiles for the whole period, against the span it's
+  // compared with (see periodRange). Week-type periods add last week's matching day up to this time.
+  const sameTimeToo = period === 'week' || period === 'wtd';
+  const costOf = (x, synced) => (x ? (synced ? x.clocked_cost : x.rostered_cost) : 0);
+  let labourThen = labourLastWeek;
+  if (ranged) {
+    const t = tradeRange?.totals;
+    gross.now = t ? t.gross_sales : null;
+    gross.then = [...prevSales.values()].some((v) => v !== null && v !== undefined) ? [...prevSales.values()].reduce((n, v) => n + (v ?? 0), 0) : null;
+    labourPct = t ? (tradeRange.labour_synced && t.labour_pct !== null ? t.labour_pct : t.rostered_labour_pct) : null;
+    const pt = tradePrev?.totals;
+    const synced = !!tradeRange?.labour_synced;
+    const prevNet = (pt?.net_sales ?? 0) + (sameTimeToo ? locs.reduce((n, l) => n + (l.last_week?.net ?? 0), 0) : 0);
+    const prevCost = costOf(pt, synced) + (sameTimeToo ? locs.reduce((n, l) => n + (l.last_week?.labour_cost ?? 0), 0) : 0);
+    labourThen = prevNet > 0 && prevCost > 0 ? Math.round((prevCost / prevNet) * 1000) / 10 : null;
+  }
+  // Daily Trail checks over the period (or the day).
+  const checks = ranged
+    ? locs.reduce((t, l) => ({ done: t.done + (l.period?.daily.done ?? 0), due: t.due + (l.period?.daily.due ?? 0), fails: t.fails + (l.period?.daily.fails ?? 0) }), { done: 0, due: 0, fails: 0 })
+    : { done: totals.dailyDone, due: totals.dailyDue, fails: totals.fails };
+  const word = ranged ? PERIOD_LABEL[period].toLowerCase() : shown.isToday ? 'today' : '';
+  // Each site's figures over the period, for its card.
+  const siteSlice = (l) => {
+    if (!ranged || !tradeRange) return null;
+    const t = tradeRange.locations.find((x) => x.id === l.id);
+    if (!t) return null;
+    const synced = tradeRange.labour_synced;
+    const p = tradePrev?.locations.find((x) => x.id === l.id);
+    const prevCost = costOf(p, synced) + (sameTimeToo ? l.last_week?.labour_cost ?? 0 : 0);
+    return { gross: t.gross_sales, grossThen: prevSales.get(l.id) ?? null, cost: costOf(t, synced), costThen: prevCost > 0 ? prevCost : null,
+      labourPct: synced && t.labour_pct !== null ? t.labour_pct : t.rostered_labour_pct, basis: synced ? 'clocked' : 'rota' };
+  };
 
   el.innerHTML = `<div class="dash-hip">
     <div class="page-head">
@@ -399,23 +440,26 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         <button class="btn dash-pdf" id="dash-pdf">Download PDF</button>
       </div>
     </div>
+    ${seeSales ? `<div class="seg dash-periods dash-periods-top" role="group" aria-label="Show the dashboard for">
+      ${PERIODS.map((p) => `<button class="${period === p ? 'is-on' : ''}" data-period="${p}">${p === 'today' && !shown.isToday ? 'This day' : p === 'week' && !shown.isToday ? '7 days to here' : PERIOD_LABEL[p]}</button>`).join('')}
+    </div>${ranged ? `<p class="muted small dash-period-note">${PERIOD_LABEL[period]}: ${fmtDate(range.from, { day: 'numeric', month: 'short', year: period === 'ytd' ? 'numeric' : undefined })} – ${fmtDate(range.to, { day: 'numeric', month: 'short' })}, compared with ${COMPARE_NOTE[period]}. Who’s in, clock-ins and rotas are always ${shown.isToday ? 'today' : 'that day'}.</p>` : ''}` : ''}
     <p class="print-only print-meta">Atlas dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     ${hasSales ? `<div class="dash-hero">
-      <div class="kpi kpi-feature" data-icon="£"><span>Gross sales ${shown.isToday ? 'today' : ''}</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
-        <small class="kpi-vs">${versusLine(gross.now, gross.then)}${openNote(locs)}</small></div>
-      <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour ${shown.isToday ? 'today' : ''}</span><strong>${fmtPct(labourPct)}</strong>
-        <small class="kpi-vs">${labourVersus(labourPct, labourLastWeek)}</small></div>
+      <div class="kpi kpi-feature" data-icon="£"><span>Gross sales ${word}</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
+        <small class="kpi-vs">${versusLine(gross.now, gross.then)}${ranged ? '' : openNote(locs)}</small></div>
+      <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour ${word}</span><strong>${fmtPct(labourPct)}</strong>
+        <small class="kpi-vs">${labourVersus(labourPct, labourThen)}</small></div>
       <section class="card dash-hourly">
-        <header class="dash-hourly-head"><h2>Gross sales by hour</h2>
+        <header class="dash-hourly-head"><h2>Gross sales by ${period === 'today' ? 'hour' : period === 'ytd' ? 'month' : 'day'}</h2>
           ${locs.length > 1 ? `<select id="hourly-site" class="hourly-site" aria-label="Site for the chart"><option value="">All sites</option>${locs.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select>` : ''}
-          <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>${shown.isToday ? 'Today' : esc(dayWord())}</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week</span></div></header>
+          <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>${ranged ? PERIOD_LABEL[period] : shown.isToday ? 'Today' : esc(dayWord())}</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${ranged ? COMPARE_NOTE[period] : `${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week`}</span></div></header>
         <div id="hourly-chart" class="chart-box"><div class="loading">Loading…</div></div>
       </section>
     </div>` : ''}
     <div class="kpis">
-      <div class="kpi" data-icon="✓"><span>Daily checks done</span><strong>${totals.dailyDone} / ${totals.dailyDue}</strong></div>
-      <div class="kpi ${totals.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks ${shown.isToday ? 'today' : ''}</span><strong>${totals.fails}</strong></div>
+      <div class="kpi" data-icon="✓"><span>Daily checks done${ranged ? ` · ${word}` : ''}</span><strong>${checks.done} / ${checks.due}</strong>${ranged && checks.due ? `<small>${Math.round((checks.done / checks.due) * 100)}% done</small>` : ''}</div>
+      <div class="kpi ${checks.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks ${word}</span><strong>${checks.fails}</strong></div>
       ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>${shown.isToday ? 'Clocked in now' : 'Clocked in'}</span><strong>${clockedInNow}</strong><small>${shown.isToday ? `of ${totals.staff} on today’s rota` : `${totals.staff} on the rota`} · <u>see who</u></small></button>`}
     </div>` : ''}
     <section class="card weather" id="weather" hidden></section>
@@ -428,7 +472,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       <h2>Your upcoming shifts</h2>
       <ul class="shift-list">${myShifts.slice(0, 7).map((s) => `<li><strong>${fmtDate(s.date)}</strong> ${s.start_time}–${s.end_time} · ${esc(s.location_name)}</li>`).join('')}</ul>
     </section>` : ''}
-    <div class="site-cards">${locs.map((l) => card(l, state, data)).join('')}</div></div>`;
+    <div class="site-cards">${locs.map((l) => card(l, state, data, siteSlice(l))).join('')}</div></div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
   // The date menu: pick an earlier day; today goes back to the live dashboard.
@@ -484,11 +528,54 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     });
   }
   let chartSeq = 0;
+  // Over a period: gross sales by day (by month for the year), next to the matching days it's compared with.
+  const loadPeriodChart = async (seq, site) => {
+    const pick = (x) => (site ? x?.locations.find((l) => String(l.id) === site) : x?.totals);
+    const [cur, prev] = site
+      ? await Promise.all([api(`/trading?from=${range.from}&to=${range.to}&location_id=${site}`), range.prevTo ? api(`/trading?from=${range.prevFrom}&to=${range.prevTo}&location_id=${site}`) : null])
+      : [tradeRange, tradePrev];
+    if (stale() || !chartBox.isConnected || seq !== chartSeq) return;
+    if (!cur?.days?.length || !pick(cur)?.gross_sales) { chartBox.innerHTML = `<p class="muted small">No sales synced for this period${site ? ' at this site' : ''}.</p>`; return; }
+    // Last week's matching day up to this time (week-type periods): from /dashboard, which every site card has.
+    const sameTimeNow = locs.filter((l) => !site || String(l.id) === site).reduce((n, l) => n + (l.last_week?.gross ?? 0), 0);
+    let rows;
+    if (period === 'ytd') {
+      const byMonth = (days) => days.reduce((m, d) => m.set(Number(d.date.slice(5, 7)), (m.get(Number(d.date.slice(5, 7))) ?? 0) + d.gross_sales), new Map());
+      const now = byMonth(cur.days);
+      const then = byMonth(prev?.days ?? []);
+      rows = [...now.keys()].map((m) => ({ label: new Date(Date.UTC(2000, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }), title: new Date(Date.UTC(2000, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }), now: now.get(m), then: then.has(m) ? then.get(m) : null }));
+    } else {
+      rows = cur.days.map((d, i) => {
+        const pd = prev?.days?.[i];
+        const last = i === cur.days.length - 1 && sameTimeToo;
+        return { label: period === 'mtd' ? String(Number(d.date.slice(8))) : fmtDate(d.date, { weekday: 'short' }), title: fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'long' }),
+          now: d.gross_sales, then: last ? sameTimeNow : pd ? pd.gross_sales : null };
+      });
+    }
+    const whole = (v) => (v >= 1000 ? `£${(v / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })}k` : `£${Math.round(v)}`);
+    pairedBarChart(chartBox, {
+      data: rows,
+      label: (x) => x.label,
+      title: (x) => x.title,
+      series: [
+        { name: PERIOD_LABEL[period].toLowerCase(), value: (x) => x.now, color: 'var(--series-1)' },
+        { name: COMPARE_NOTE[period], value: (x) => x.then, color: 'var(--prev-bar)' },
+      ],
+      fmt: money,
+      fmtAxis: whole,
+      height: 190,
+      ariaLabel: `Gross sales by ${period === 'ytd' ? 'month' : 'day'}, ${PERIOD_LABEL[period].toLowerCase()}, against ${COMPARE_NOTE[period]}`,
+    });
+  };
   const loadChart = () => {
     const seq = ++chartSeq;
     const site = siteBox?.value || '';
     chartBox.innerHTML = '<div class="loading">Loading…</div>';
     el.querySelector('.dash-hourly .legend-open')?.remove();
+    if (ranged) {
+      loadPeriodChart(seq, site).catch(() => { if (chartBox.isConnected) chartBox.innerHTML = '<p class="muted small">Couldn’t load the chart.</p>'; });
+      return;
+    }
     api(`/trading/hourly-compare?date=${d0}${site ? `&location_id=${site}` : ''}`).then((h) => {
       if (stale() || !chartBox.isConnected || seq !== chartSeq) return;
       if (!h.hours.length) { chartBox.innerHTML = `<p class="muted small">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}${site ? ' at this site' : ''}.</p>`; return; }
