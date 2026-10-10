@@ -43,7 +43,10 @@ Today is ${today}. The emails are the conversation so far, oldest first; each sa
 - contact_name and phone: the person enquiring, as signed or given in the email.
 - site: the venue they're asking about – one of: ${sites.length ? sites.join('; ') : '(none)'} – exactly as written there, or empty if they don't say.`;
 
+// Switched off unless EVENTS_USE_CLAUDE=on is set in Railway → Variables: without it, enquiries still arrive from
+// the events inbox, but Claude doesn't read them for their details or sort out marketing emails.
 export function enquiryReaderFromEnv(env = process.env) {
+  if (cleanEnv(env.EVENTS_USE_CLAUDE)?.toLowerCase() !== 'on') return null;
   const apiKey = cleanEnv(env.ANTHROPIC_API_KEY);
   if (!apiKey) return null;
   const workspace = cleanEnv(env.ANTHROPIC_WORKSPACE_ID);

@@ -125,6 +125,8 @@ Invoices are read by Claude (Anthropic's AI model, `claude-opus-5-5`), which cos
 1. Sign up at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, and create a key under **API keys**.
 2. Set `ANTHROPIC_API_KEY` to the key in the app's environment (Railway → Variables) and deploy. Create the key **inside a workspace** (Console → Workspaces → your workspace → API keys); a key made at organisation level also needs `ANTHROPIC_WORKSPACE_ID` set to the workspace's ID. Optional: `INVOICE_MODEL` to use a different Claude model.
 
+The events inbox doesn't use Claude unless `EVENTS_USE_CLAUDE=on` is set in Railway → Variables. Without it, enquiries still arrive from the inbox, but Claude doesn't read their details, offer **Fill in from emails** or clear out marketing emails.
+
 The uploaded file is sent to Anthropic to be read and stored in Atlas's database with the invoice.
 
 ## Email reports
