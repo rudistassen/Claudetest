@@ -22,6 +22,7 @@ import * as supplierViews from './views/suppliers.js';
 import * as events from './views/events.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
+import * as managerdash from './views/managerdash.js';
 import * as login from './views/login.js';
 import { renderSetPassword } from './views/password.js';
 import * as orders from './views/orders.js';
@@ -63,6 +64,7 @@ const SUPPLIERS = ['orders.manage', 'setup.products'];
 const ROUTES = [
   [/^$/, dashboard.render],
   [/^dashboard$/, dashboard.render, ['dashboard.view']],
+  [/^manager$/, managerdash.render, ['dashboard.view']],
   [/^safety$/, safety.renderChecklist, SAFETY],
   [/^safety\/report$/, safety.renderReport, ['safety.report']],
   [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
@@ -139,15 +141,17 @@ const ROUTES = [
   [/^documents$/, mybrew.renderDocuments],
 ];
 
-// Where Atlas opens: the dashboard, or My Atlas for people who can't see it.
-const home = () => (state.can('dashboard.view') ? 'dashboard' : 'mybrew');
+// Where Atlas opens: admins on the HQ Dashboard (every site), managers on the Manager Dashboard (their site), and
+// people who can't see either on My Atlas.
+const home = () => (!state.can('dashboard.view') ? 'mybrew' : state.isAdmin ? 'dashboard' : 'manager');
 
 const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(...who));
 
 // The side menu: Dashboard, then headed groups. Items someone can't use are hidden, and so is a group left empty.
 function navGroups() {
   return [
-    [null, [['dashboard', 'Dashboard', '▦', ['dashboard.view']], ['mybrew', 'My Atlas', '◉']]],
+    ['Dashboards', [['dashboard', 'HQ Dashboard', '▦', ['dashboard.view']], ['manager', 'Manager Dashboard', '◧', ['dashboard.view']]]],
+    [null, [['mybrew', 'My Atlas', '◉']]],
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
       ['timeoff', 'Time off', '☀'],
@@ -293,6 +297,8 @@ const TILE_NOTES = {
   'rota/requests': 'Holiday and shift drops waiting for you, and team availability',
   availability: 'When you can and can’t work, day by day or repeating',
   'rota/log': 'Every change to the rota, and who made it',
+  dashboard: 'Every site’s day side by side – sales, labour, who’s in and checks',
+  manager: 'Your site today – numbers, who’s on, and everything waiting on you',
   'rota/budget': 'Each site’s forecast gross sales for the week, and the budget to plan the rota against',
   timeoff: 'Ask for holiday and see your requests',
   stock: 'Count stock and see past stock takes',
@@ -372,7 +378,7 @@ const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 // The phone icon bar: home, the everyday pages this person can use, then the full menu.
 function tabBar(items, active) {
   const has = (p) => items.some(([q]) => q === p);
-  const tabs = [state.can('dashboard.view') ? ['dashboard', 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Atlas', 'mybrew']].filter(Boolean);
+  const tabs = [state.can('dashboard.view') ? [home(), 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Atlas', 'mybrew']].filter(Boolean);
   return `<nav class="tabbar" aria-label="Quick links">
     ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'rota' ? BELL : ''}</a>`).join('')}
     <button type="button" class="tabbar-menu">${icon('menu')}<span>Menu</span></button>
@@ -644,6 +650,11 @@ export async function route({ keepScroll = false } = {}) {
   // People who can't see the dashboard start on My Atlas.
   if (match.view === dashboard.render && !state.can('dashboard.view')) {
     window.location.replace('#/mybrew');
+    return;
+  }
+  // Opening Atlas (no page in the address) goes to their home page: managers to the Manager Dashboard.
+  if (!path && home() !== 'dashboard') {
+    window.location.replace(`#/${home()}`);
     return;
   }
   if (!allowed(match.role)) {

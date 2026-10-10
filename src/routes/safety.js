@@ -242,7 +242,8 @@ export function registerSafetyRoutes(router, db) {
     res.json(siteSummaries(db, {
       date: day,
       fullDay: day < today(),
-      locations: reportLocations(req),
+      // ?location_id= for one site (the manager dashboard), otherwise every site they can see.
+      locations: reportLocations(req, req.query.location_id),
       seeSales: can(req.user, 'sales.view'),
       seeOrders: can(req.user, 'orders.manage'),
       seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage'),

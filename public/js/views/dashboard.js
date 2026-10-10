@@ -43,7 +43,7 @@ const inFirst = (list) => [...list].sort((a, b) => (a.end ? 1 : 0) - (b.end ? 1 
 
 // "Who's in today": a table of everyone on today's rota, site by site, with when they clocked in and out and
 // where they are now, then anyone clocked in without a shift.
-const ROSTER = {
+export const ROSTER = {
   in: ['In', 'is-in'], on_break: ['On break', 'is-break'], done: ['Finished', 'is-done'], due: ['Due', 'is-due'],
   late: ['Not in', 'is-late'], missed: ['Didn’t clock in', 'is-late'], elsewhere: ['Elsewhere', 'is-other'],
   extra: ['Not on rota', 'is-other'], rota: ['On the rota', 'is-due'], sick: ['Sick', 'is-sick'],
@@ -361,7 +361,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
 
   el.innerHTML = `<div class="dash-hip">
     <div class="page-head">
-      <h1>${state.multiSite ? 'All sites' : esc(state.location?.name ?? 'Dashboard')}</h1>
+      <h1>HQ Dashboard <small class="muted">· ${state.multiSite ? 'All sites' : esc(state.location?.name ?? '')}</small></h1>
       <div class="actions">
         ${shown.isToday ? '' : '<button class="btn btn-small" id="dash-today">Back to today</button>'}
         <label class="dash-date" title="Choose a day">

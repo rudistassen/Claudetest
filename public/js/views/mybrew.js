@@ -181,7 +181,7 @@ export async function renderMyBrew(ctx) {
     learn.length ? { href: '#/learn', icon: '🎓', label: 'Training', detail: coursesToDo.length ? `${coursesToDo.length} course${coursesToDo.length === 1 ? '' : 's'} to do` : 'Courses to take', c: ['#7fc8c0', '#3f938a'] } : null,
     can('safety.complete', 'safety.manage', 'safety.report') ? { href: '#/safety', icon: '✅', label: 'Checks', detail: 'Today’s checklist', c: ['#b07cff', '#7a45e0'] } : null,
     can('wastage.record', 'wastage.reports', 'wastage.manage') ? { href: '#/wastage', icon: '🗑️', label: 'Wastage', detail: 'Log what’s thrown away', c: ['#ff6f91', '#d93a64'] } : null,
-    can('dashboard.view') ? { href: '#/dashboard', icon: '📊', label: 'Dashboard', detail: 'Today at every site', c: ['#38c3d6', '#16879a'] } : null,
+    can('dashboard.view') ? { href: '#/manager', icon: '📊', label: 'Dashboard', detail: 'Your site today', c: ['#38c3d6', '#16879a'] } : null,
     { href: '#/documents', icon: '📄', label: 'Documents', detail: 'Policies and handbooks', c: ['#9aa5b8', '#5f6b80'] },
   ].filter(Boolean);
   // My tasks: things waiting for this person, each with a way straight to it.
