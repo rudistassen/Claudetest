@@ -11,7 +11,7 @@ const span = (r) => (r.start_date === r.end_date ? day(r.start_date) : `${day(r.
 export async function render(ctx) {
   const { el, state, stale, rerender } = ctx;
   const canLeave = state.can('leave.manage');
-  const canDrops = state.can('rota.publish');
+  const canDrops = state.can('rota.approve');
   const [leave, drops, team] = await Promise.all([
     canLeave ? api('/leave?status=pending') : Promise.resolve([]),
     canDrops ? api('/shift-drops') : Promise.resolve({ open: [], to_approve: [], mine: [] }),

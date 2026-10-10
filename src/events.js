@@ -455,7 +455,7 @@ export function registerEventRoutes(router, db, { mailbox = null, reader = null 
   });
 
   // The calendar: events with a date between from and to (not lost ones).
-  router.get('/events/calendar', perm, (req, res) => {
+  router.get('/events/calendar', requirePerm('events.calendar'), (req, res) => {
     const from = date(req.query.from, 'from', { required: true });
     const to = date(req.query.to, 'to', { required: true });
     const site = id(req.query.location_id, 'location_id');

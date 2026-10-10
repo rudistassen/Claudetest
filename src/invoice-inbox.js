@@ -134,14 +134,14 @@ export function registerInvoiceInboxRoutes(router, db, { mailbox, reader }) {
     recent: db.prepare('SELECT * FROM invoice_emails ORDER BY COALESCE(received_at, processed_at) DESC LIMIT 25').all()
       .map((r) => ({ ...r, invoice_ids: r.invoice_ids ? JSON.parse(r.invoice_ids) : [] })),
   });
-  router.get('/invoice-inbox', requirePerm('orders.manage'), (req, res) => res.json(status()));
+  router.get('/invoice-inbox', requirePerm('invoices.manage'), (req, res) => res.json(status()));
   router.put('/invoice-inbox', requireAdmin, (req, res) => {
     const siteId = req.body.default_site_id ? Number(req.body.default_site_id) : null;
     if (siteId && !db.prepare('SELECT 1 FROM locations WHERE id = ?').get(siteId)) throw notFound('Site');
     setSetting(db, KEY.site, siteId);
     res.json(status());
   });
-  router.post('/invoice-inbox/check', requirePerm('orders.manage'), async (req, res) => {
+  router.post('/invoice-inbox/check', requirePerm('invoices.manage'), async (req, res) => {
     if (!mailbox) throw badRequest('The invoice inbox isn’t connected yet');
     if (!reader) throw badRequest('Invoice reading isn’t switched on yet (ANTHROPIC_API_KEY)');
     const summary = await checkInbox(db, { mailbox, reader });

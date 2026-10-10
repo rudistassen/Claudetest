@@ -1,7 +1,7 @@
 // Setup → Staff log: who signed in (or tried to), and every change people make in Atlas, in plain English.
 // Sign-ins are logged by the auth routes; changes by a middleware that runs before each API request that saves
 // something and records it once the request succeeds.
-import { requireAdmin } from './auth.js';
+import { requirePerm } from './auth.js';
 import { badRequest, date, id } from './util.js';
 
 const KEEP_DAYS = 365;
@@ -294,10 +294,13 @@ const KINDS = {
 
 export function registerActivityRoutes(router, db) {
   // { user_id, kind ('sign_ins' or 'changes'), area, from, to, before (id, for the next page) } → newest first.
-  router.get('/staff-log', requireAdmin, (req, res) => {
+  // Admins see everyone; anyone else given the Staff log permission sees people at their own sites (not admins).
+  router.get('/staff-log', requirePerm('staff.log'), (req, res) => {
     const q = req.query;
     const where = [];
     const args = [];
+    const mine = req.user.role === 'admin' ? '' : `u.role != 'admin' AND u.location_id IN (${req.user.site_ids.map(() => '?').join(', ') || 'NULL'})`;
+    if (mine) { where.push(mine); args.push(...req.user.site_ids); }
     const userId = id(q.user_id, 'user_id');
     if (userId) { where.push('a.user_id = ?'); args.push(userId); }
     if (q.kind === 'sign_ins') where.push(`a.kind != 'change'`);
@@ -318,7 +321,7 @@ export function registerActivityRoutes(router, db) {
     res.json({
       rows: rows.slice(0, limit).map((r) => ({ ...r, action: r.kind === 'change' ? r.action : KINDS[r.kind] ?? r.action })),
       more: rows.length > limit,
-      people: db.prepare(`SELECT DISTINCT u.id, u.name FROM activity_log a JOIN users u ON u.id = a.user_id ORDER BY u.name`).all(),
+      people: db.prepare(`SELECT DISTINCT u.id, u.name FROM activity_log a JOIN users u ON u.id = a.user_id ${mine ? `WHERE ${mine}` : ''} ORDER BY u.name`).all(...(mine ? req.user.site_ids : [])),
       areas: db.prepare(`SELECT DISTINCT area FROM activity_log WHERE area IS NOT NULL ORDER BY area`).all().map((r) => r.area),
     });
   });

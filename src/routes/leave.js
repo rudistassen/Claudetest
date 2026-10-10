@@ -76,7 +76,7 @@ export function registerLeaveRoutes(router, db) {
 
   // --- Approving holiday (managers) ---
 
-  router.get('/leave', requirePerm('leave.manage'), (req, res) => {
+  router.get('/leave', requirePerm('leave.manage', 'leave.edit'), (req, res) => {
     const people = manageable(req);
     const ids = people.map((u) => u.id);
     const status = oneOf(req.query.status, 'status', ['pending', 'upcoming', 'past']) ?? 'pending';
@@ -146,12 +146,12 @@ export function registerLeaveRoutes(router, db) {
   };
 
   // Who this manager can add holiday for.
-  router.get('/leave/people', requirePerm('leave.manage'), (req, res) => {
+  router.get('/leave/people', requirePerm('leave.edit'), (req, res) => {
     res.json(manageable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name })));
   });
 
   // Add holiday for someone: { user_id, start_date, end_date, note }. It's approved straight away.
-  router.post('/leave/add', requirePerm('leave.manage'), (req, res) => {
+  router.post('/leave/add', requirePerm('leave.edit'), (req, res) => {
     const userId = id(req.body?.user_id, 'Person', { required: true });
     const person = manageable(req).find((u) => u.id === userId);
     if (!person) throw userId === req.user.id ? forbidden('Someone else needs to add your own holiday') : notFound('Person');
@@ -167,7 +167,7 @@ export function registerLeaveRoutes(router, db) {
   });
 
   // Change the dates (or note) of someone's approved or waiting holiday.
-  router.put('/leave/:id', requirePerm('leave.manage'), (req, res) => {
+  router.put('/leave/:id', requirePerm('leave.edit'), (req, res) => {
     const r = mine(req, db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(Number(req.params.id)));
     if (!['approved', 'pending'].includes(r.status)) throw badRequest('Only booked or waiting holiday can be changed');
     const { start, end } = holidayDates(req.body ?? {}, r.user_id, r.id);
@@ -183,7 +183,7 @@ export function registerLeaveRoutes(router, db) {
   });
 
   // Take someone's holiday off (it was booked by mistake, or they're no longer going).
-  router.post('/leave/:id/remove', requirePerm('leave.manage'), (req, res) => {
+  router.post('/leave/:id/remove', requirePerm('leave.edit'), (req, res) => {
     const r = mine(req, db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(Number(req.params.id)));
     if (!['approved', 'pending'].includes(r.status)) throw badRequest('This holiday has already been taken off or declined');
     const note = str(req.body?.note, 'note', { max: 500 });
@@ -200,7 +200,7 @@ export function registerLeaveRoutes(router, db) {
   // Whose availability this person can see and change: their own, and (with leave.manage) the people they look after.
   const targetUser = (req, raw) => {
     const userId = raw === undefined || raw === null || raw === '' ? req.user.id : id(raw, 'user_id', { required: true });
-    if (userId !== req.user.id && !(can(req.user, 'leave.manage') && manageable(req).some((u) => u.id === userId))) throw forbidden('You can’t change this person’s availability');
+    if (userId !== req.user.id && !(can(req.user, 'availability.view') && manageable(req).some((u) => u.id === userId))) throw forbidden('You can’t change this person’s availability');
     return db.prepare('SELECT id, name FROM users WHERE id = ?').get(userId) ?? (() => { throw notFound('Staff member'); })();
   };
   // A time range: all day, or from–to (to after from).
@@ -224,7 +224,7 @@ export function registerLeaveRoutes(router, db) {
     res.json({
       user, from, to, note: a.note, days: a.days,
       patterns: patternsFor(db, [user.id]),
-      people: can(req.user, 'leave.manage') ? [{ id: req.user.id, name: req.user.name }, ...manageable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name }))] : null,
+      people: can(req.user, 'availability.view') ? [{ id: req.user.id, name: req.user.name }, ...manageable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name }))] : null,
     });
   });
 
@@ -333,7 +333,7 @@ export function registerLeaveRoutes(router, db) {
   });
 
   // Managers: everyone's availability for the next two weeks, with approved holiday.
-  router.get('/availability', requirePerm('leave.manage'), (req, res) => {
+  router.get('/availability', requirePerm('availability.view'), (req, res) => {
     const people = manageable(req);
     const from = today();
     const to = addDays(from, 13);

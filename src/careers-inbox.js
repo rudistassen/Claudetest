@@ -110,7 +110,7 @@ async function handle(db, mailbox, m) {
   // A new application: whoever looks after recruitment at its site gets a notification.
   if (out.isNew) {
     const c = db.prepare('SELECT c.name, c.location_id, v.title FROM candidates c LEFT JOIN vacancies v ON v.id = c.vacancy_id WHERE c.id = ?').get(out.candidateId);
-    notify(db, peopleWith(db, ['people.manage'], c?.location_id ?? null), 'application',
+    notify(db, peopleWith(db, ['people.recruitment'], c?.location_id ?? null), 'application',
       { title: 'New job application', body: `${c?.name ?? name}${c?.title ? ` – ${c.title}` : ''}`, url: `/#/people/recruitment/candidates/${out.candidateId}`, tag: `application-${out.candidateId}` });
   }
   return out;
@@ -203,7 +203,7 @@ export function fillTemplate(text, { name, job }) {
 }
 
 export function registerCareersRoutes(router, db, { mailbox }) {
-  const perm = requirePerm('people.manage');
+  const perm = requirePerm('people.recruitment');
   const status = () => ({
     configured: !!mailbox,
     ...(mailbox ? {} : { setup: mailboxSetup(globalThis.process?.env ?? {}, CAREERS_VARIABLES) }),

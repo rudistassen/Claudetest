@@ -34,10 +34,10 @@ export async function render(ctx) {
     rota: can('rota.edit') ? api(`/rota${qs({ ...loc, week })}`) : null,
     rotaNext: can('rota.edit') ? api(`/rota${qs({ ...loc, week: nextWeek })}`) : null,
     leave: can('leave.manage') ? api('/leave/pending-count') : null,
-    drops: can('rota.publish') ? api('/shift-drops') : null,
-    designs: can('people.manage') ? api('/training/designs') : null,
-    assigned: can('people.manage') ? api(`/training/assignments${qs(loc)}`) : null,
-    reviews: can('people.manage') ? api(`/performance${qs(loc)}`) : null,
+    drops: can('rota.approve') ? api('/shift-drops') : null,
+    designs: can('people.training') ? api('/training/designs') : null,
+    assigned: can('people.training') ? api(`/training/assignments${qs(loc)}`) : null,
+    reviews: can('people.performance') ? api(`/performance${qs(loc)}`) : null,
     events: can('events.manage') ? api('/events/unread') : null,
   };
   // Each part loads on its own: one that fails just leaves its bit out.

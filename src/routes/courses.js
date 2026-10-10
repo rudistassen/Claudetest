@@ -27,7 +27,7 @@ export function youtubeEmbed(url) {
 }
 
 export function registerCourseRoutes(router, db) {
-  const perm = requirePerm('people.manage');
+  const perm = requirePerm('people.training');
   const course = (courseId) => {
     const c = db.prepare('SELECT * FROM training_courses WHERE id = ? AND active = 1').get(Number(courseId));
     if (!c) throw notFound('Course');
@@ -237,7 +237,7 @@ export function registerCourseRoutes(router, db) {
   router.get('/training/media/:id', (req, res) => {
     const m = db.prepare('SELECT id, course_id, file_type, size, created_by FROM training_media WHERE id = ?').get(Number(req.params.id));
     if (!m) throw notFound('Picture or video');
-    const manager = can(req.user, 'people.manage');
+    const manager = can(req.user, 'people.training');
     if (m.course_id) {
       const c = db.prepare('SELECT * FROM training_courses WHERE id = ?').get(m.course_id);
       if (!manager && !canTake(c, req.user)) throw notFound('Picture or video');
@@ -326,7 +326,7 @@ export function registerCourseRoutes(router, db) {
   // A course to take, without the answers. Managers can preview any course, published or not.
   router.get('/learn/:id', (req, res) => {
     const c = course(req.params.id);
-    const preview = can(req.user, 'people.manage');
+    const preview = can(req.user, 'people.training');
     if (!canTake(c, req.user) && !preview) throw notFound('Course');
     res.json({
       course: summary(c),
@@ -367,7 +367,7 @@ export function registerCourseRoutes(router, db) {
     });
     if (status === 'awaiting_signoff') {
       const me = db.prepare('SELECT location_id FROM users WHERE id = ?').get(req.user.id);
-      notify(db, peopleWith(db, ['people.manage'], me?.location_id ?? null).filter((u) => u !== req.user.id), 'training_signoff', {
+      notify(db, peopleWith(db, ['people.training'], me?.location_id ?? null).filter((u) => u !== req.user.id), 'training_signoff', {
         title: `${req.user.name} passed ${c.name}`,
         body: 'They’re ready for you to sign it off in person',
         url: '/#/people/training',

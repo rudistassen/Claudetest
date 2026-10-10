@@ -29,9 +29,9 @@ async function login(email) {
 
 const staff = () => db.prepare(`SELECT id, location_id FROM users WHERE email = 'staff1@cafe.local'`).get();
 
-test('managers get the People permission; staff can’t use it', async () => {
+test('managers get the People permissions; staff can’t use them', async () => {
   const mgr = db.prepare(`SELECT permissions FROM permission_sets WHERE built_in = 'manager'`).get();
-  assert.ok(JSON.parse(mgr.permissions).includes('people.manage'));
+  for (const p of ['people.recruitment', 'people.training', 'people.performance', 'people.areas']) assert.ok(JSON.parse(mgr.permissions).includes(p), p);
   const s = await login('staff1@cafe.local');
   assert.equal((await s('/vacancies')).status, 403);
   assert.equal((await s('/training')).status, 403);

@@ -14,8 +14,16 @@ export const PERMISSION_AREAS = [
   ]],
   ['Rota', [
     ['rota.view', 'See the rota'],
-    ['rota.edit', 'Add, change and copy shifts'],
-    ['rota.publish', 'Publish the rota so staff can see it'],
+    ['rota.edit', 'Add, change and copy shifts, and mark people as sick'],
+    ['rota.publish', 'Publish the rota so staff can see it, and open shifts up for anyone to pick up'],
+    ['rota.approve', 'Approve or decline shift drops and pick-ups'],
+    ['rota.budget', 'Set the sales budget each site’s rota is planned against'],
+    ['rota.ai', 'Use Claude on the rota: read a rota from a photo or PDF, and analyse the week against forecast sales'],
+  ]],
+  ['Holiday & availability', [
+    ['leave.manage', 'Approve or decline holiday requests'],
+    ['leave.edit', 'Add, change and take off other people’s holiday'],
+    ['availability.view', 'See everyone’s availability (and change it for them)'],
   ]],
   ['Wastage', [
     ['wastage.record', 'Record wastage'],
@@ -26,8 +34,9 @@ export const PERMISSION_AREAS = [
     ['stock.count', 'Start stock takes and count stock'],
     ['stock.complete', 'Complete or discard stock takes'],
   ]],
-  ['Orders', [
-    ['orders.manage', 'Create, send and receive supplier orders, set par levels, and upload supplier invoices'],
+  ['Orders & invoices', [
+    ['orders.manage', 'Create, send and receive supplier orders, prep orders and product par levels'],
+    ['invoices.manage', 'Upload and check supplier invoices, use the invoice inbox and send invoices to Xero'],
   ]],
   ['Recipes', [
     ['recipes.view', 'See recipes and allergens'],
@@ -35,31 +44,51 @@ export const PERMISSION_AREAS = [
     ['recipes.edit', 'Create and edit recipes'],
   ]],
   ['Sales & trading', [
-    ['sales.view', 'See sales, labour costs and the Sales and Trading pages'],
+    ['sales.view', 'See sales, labour costs and the Sales, Trading and Rota costs pages'],
     ['sales.sync', 'Sync sales from Square (up to a week at a time)'],
+    ['reviews.view', 'See Google reviews'],
     ['payments.send', 'Create and send Square payment links to customers (e.g. deposits)'],
   ]],
   ['Staff', [
-    ['staff.manage', 'Add and edit staff at their site, and see pay rates'],
+    ['staff.manage', 'Add and edit staff at their site'],
+    ['staff.pay', 'See and change pay rates'],
     ['timecards.move', 'Move a clock-in to another site they manage (changes the timecard in Square too)'],
     ['timecards.breaks', 'Add, change and remove breaks on clock-ins (changes the timecard in Square too, so it affects pay)'],
-  ]],
-  ['Events', [
-    ['events.manage', 'See and answer event enquiries from the events inbox, and manage the events calendar'],
+    ['staff.log', 'See the Staff log: sign-ins and every change people make'],
   ]],
   ['People', [
-    ['people.manage', 'Use the People section for their sites: recruitment, training records, performance reviews and areas'],
+    ['people.recruitment', 'Recruitment: jobs, candidates and the careers inbox'],
+    ['people.training', 'Learning & development: training records, online courses, giving courses to people and signing them off'],
+    ['people.performance', 'Performance: one-to-ones, probation reviews and appraisals'],
+    ['people.areas', 'Areas: who is trained to work in each area'],
+  ]],
+  ['Events', [
+    ['events.manage', 'See and answer event enquiries from the events inbox'],
+    ['events.calendar', 'See the events calendar'],
   ]],
   ['My Atlas news & documents', [
-    ['news.manage', 'Post staff news and policy updates, see who has read them, and share company documents'],
-  ]],
-  ['Holiday & availability', [
-    ['leave.manage', 'Approve holiday requests and see everyone’s availability'],
+    ['news.manage', 'Post staff news and policy updates, and see who has read them'],
+    ['documents.manage', 'Share company documents'],
   ]],
   ['Suppliers & products', [
     ['setup.products', 'Add and edit suppliers and products'],
   ]],
 ];
+
+/**
+ * What each permission was split from (or added alongside), so a set that had the old one gets the new ones too and
+ * nobody loses access when permissions are made finer. Applied once, when the database is upgraded (see db.js).
+ */
+export const PERMISSION_SPLITS = {
+  'rota.publish': ['rota.approve'],
+  'sales.view': ['rota.budget', 'reviews.view'],
+  'leave.manage': ['leave.edit', 'availability.view'],
+  'orders.manage': ['invoices.manage'],
+  'staff.manage': ['staff.pay'],
+  'events.manage': ['events.calendar'],
+  'news.manage': ['documents.manage'],
+  'people.manage': ['people.recruitment', 'people.training', 'people.performance', 'people.areas'],
+};
 
 export const ALL_PERMISSIONS = PERMISSION_AREAS.flatMap(([, perms]) => perms.map(([key]) => key));
 
@@ -69,7 +98,7 @@ export const DEFAULT_SETS = [
     built_in: 'manager',
     name: 'Manager',
     description: 'Runs a site: rota, orders, stock, staff and sales for their own site.',
-    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products', 'payments.send'].includes(p)),
+    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products', 'payments.send', 'rota.ai', 'staff.log'].includes(p)),
   },
   {
     built_in: 'staff',

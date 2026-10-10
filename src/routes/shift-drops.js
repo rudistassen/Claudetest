@@ -26,7 +26,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     if (!d) throw notFound('Shift');
     return d;
   };
-  const approver = (req, locationId) => can(req.user, 'rota.publish') && req.user.site_ids.includes(locationId);
+  const approver = (req, locationId) => can(req.user, 'rota.approve') && req.user.site_ids.includes(locationId);
   const when = (d) => `${fmtDay(d.date)} ${d.start_time}–${d.end_time}`;
   // An open shift: everyone (staff at every site can pick it up) gets a notification.
   const everyone = () => db.prepare('SELECT id FROM users WHERE active = 1').all().map((r) => r.id);
@@ -56,7 +56,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
         return { ...withHours(d), can_claim: !problem, claim_problem: problem, can_withdraw: approver(req, d.location_id) };
       });
     // Drop requests and pick-up requests ("kind") waiting for this person to approve.
-    const toApprove = can(req.user, 'rota.publish')
+    const toApprove = can(req.user, 'rota.approve')
       ? db.prepare(`${SELECT} WHERE d.status IN ('pending', 'claim_pending') AND d.date >= ? AND d.location_id IN (${inList}) ORDER BY d.date, d.start_time`)
         .all(today(), ...sites).filter((d) => d.status === 'pending' || notStarted(d))
         .map((d) => ({ ...withHours(d), kind: d.status === 'claim_pending' ? 'claim' : 'drop', claim_problem: d.status === 'claim_pending' ? claimProblem({ id: d.claimed_by }, d, d.id) : null }))
@@ -79,7 +79,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     const r = db.prepare(`INSERT INTO shift_drops (shift_id, location_id, date, start_time, end_time, break_minutes, position, notes, dropped_by, reason)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(s.id, s.location_id, s.date, s.start_time, s.end_time, s.break_minutes, s.position, s.notes, req.user.id, reason);
     const d = load(r.lastInsertRowid);
-    notify(db, peopleWith(db, ['rota.publish'], s.location_id).filter((id) => id !== req.user.id), 'drop_request',
+    notify(db, peopleWith(db, ['rota.approve'], s.location_id).filter((id) => id !== req.user.id), 'drop_request',
       { title: 'Shift drop request', body: `${req.user.name} has asked to drop ${when(d)} at ${d.location_name}${reason ? ` – “${reason}”` : ''}`, url: '/#/rota/requests' });
     res.status(201).json(withHours(d));
   });
@@ -95,7 +95,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
 
   // Approve: the shift comes off the person's rota (draft and published) and becomes an open shift at the site –
   // or, with { delete: true }, is deleted instead (it's no longer needed, so nobody is offered it).
-  router.post('/shift-drops/:id/approve', requirePerm('rota.publish'), (req, res) => {
+  router.post('/shift-drops/:id/approve', requirePerm('rota.approve'), (req, res) => {
     const d = load(req.params.id);
     assertLocation(req, d.location_id);
     if (d.status !== 'pending') throw badRequest('This request has already been dealt with');
@@ -120,7 +120,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     res.json(withHours(load(d.id)));
   });
 
-  router.post('/shift-drops/:id/decline', requirePerm('rota.publish'), (req, res) => {
+  router.post('/shift-drops/:id/decline', requirePerm('rota.approve'), (req, res) => {
     const d = load(req.params.id);
     assertLocation(req, d.location_id);
     if (d.status !== 'pending') throw badRequest('This request has already been dealt with');
@@ -164,7 +164,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     const held = db.prepare(`UPDATE shift_drops SET status = 'claim_pending', claimed_by = ?, claimed_at = datetime('now') WHERE id = ? AND status = 'open'`)
       .run(req.user.id, d.id);
     if (!held.changes) throw badRequest('Sorry – someone else has just asked to pick up this shift');
-    notify(db, peopleWith(db, ['rota.publish'], d.location_id).filter((id) => id !== req.user.id), 'pickup_request',
+    notify(db, peopleWith(db, ['rota.approve'], d.location_id).filter((id) => id !== req.user.id), 'pickup_request',
       { title: 'Shift pick-up request', body: `${req.user.name} wants to pick up ${when(d)} at ${d.location_name}`, url: '/#/rota/requests' });
     res.json(withHours(load(d.id)));
   });
@@ -178,7 +178,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
   });
 
   // A manager approves a pick-up request: the shift goes onto that person's published rota.
-  router.post('/shift-drops/:id/approve-claim', requirePerm('rota.publish'), (req, res) => {
+  router.post('/shift-drops/:id/approve-claim', requirePerm('rota.approve'), (req, res) => {
     const d = load(req.params.id);
     assertLocation(req, d.location_id);
     if (d.status !== 'claim_pending') throw badRequest('This request has already been dealt with');
@@ -190,7 +190,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
   });
 
   // A manager declines a pick-up request: the shift is open again for anyone.
-  router.post('/shift-drops/:id/decline-claim', requirePerm('rota.publish'), (req, res) => {
+  router.post('/shift-drops/:id/decline-claim', requirePerm('rota.approve'), (req, res) => {
     const d = load(req.params.id);
     assertLocation(req, d.location_id);
     if (d.status !== 'claim_pending') throw badRequest('This request has already been dealt with');
@@ -263,7 +263,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
   });
 
   // A manager takes an open shift away (it's no longer needed, or they've covered it another way).
-  router.post('/shift-drops/:id/withdraw', requirePerm('rota.publish'), (req, res) => {
+  router.post('/shift-drops/:id/withdraw', requirePerm('rota.approve'), (req, res) => {
     const d = load(req.params.id);
     assertLocation(req, d.location_id);
     if (!['open', 'claim_pending'].includes(d.status)) throw badRequest('This shift isn’t open any more');

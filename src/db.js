@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { ensureDefaultSets } from './permissions.js';
+import { ensureDefaultSets, PERMISSION_SPLITS } from './permissions.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS locations (
@@ -1404,6 +1404,27 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 12');
+  }
+  if (version < 13) {
+    // Permissions were made finer (see PERMISSION_SPLITS): every set, and everyone with their own custom
+    // permissions, keeps what they could do before.
+    const widen = (json) => {
+      const perms = JSON.parse(json || '[]');
+      const add = Object.entries(PERMISSION_SPLITS).filter(([old]) => perms.includes(old)).flatMap(([, list]) => list).filter((p) => !perms.includes(p));
+      return add.length ? JSON.stringify([...new Set([...perms, ...add])]) : null;
+    };
+    for (const ps of db.prepare('SELECT id, permissions FROM permission_sets').all()) {
+      const json = widen(ps.permissions);
+      if (json) db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(json, ps.id);
+    }
+    for (const u of db.prepare('SELECT id, custom_permissions FROM users WHERE custom_permissions IS NOT NULL').all()) {
+      // (The dashboard split in version 12 only reached permission sets, so custom permissions catch up here.)
+      const perms = JSON.parse(u.custom_permissions || '[]');
+      if (perms.includes('dashboard.view') && !perms.includes('dashboard.manager')) perms.push('dashboard.manager');
+      const json = widen(JSON.stringify(perms)) ?? (perms.length !== JSON.parse(u.custom_permissions || '[]').length ? JSON.stringify(perms) : null);
+      if (json) db.prepare('UPDATE users SET custom_permissions = ? WHERE id = ?').run(json, u.id);
+    }
+    db.exec('PRAGMA user_version = 13');
   }
   ensureDefaultSets(db);
   return db;

@@ -572,9 +572,9 @@ export async function render(ctx) {
         ${all ? '<button class="btn" id="collapse-all"></button>' : ''}
         <a class="btn" href="#/rota${qs({ view: 'mine', week })}">My shifts</a>
         ${canEdit ? '<button class="btn" id="copy-week">Copy previous week</button>' : ''}
-        ${state.isAdmin ? '<button class="btn btn-ai" id="read-rota" title="Upload a photo or PDF of a rota and Claude adds the shifts">✨ Read a rota</button>' : ''}
-        ${state.isAdmin && data.shifts.length ? '<button class="btn btn-ai" id="analyse-rota" title="Claude compares this week’s rota with forecast sales and suggests where to save">📊 Analyse this week’s rota</button>' : ''}
-        ${state.isAdmin && data.last_analysis ? '<button class="btn btn-ai" id="analysis-saved" title="Open the suggestions from the last analysis of this week">📋 Suggestions</button>' : ''}
+        ${state.can('rota.ai') ? '<button class="btn btn-ai" id="read-rota" title="Upload a photo or PDF of a rota and Claude adds the shifts">✨ Read a rota</button>' : ''}
+        ${state.can('rota.ai') && data.shifts.length ? '<button class="btn btn-ai" id="analyse-rota" title="Claude compares this week’s rota with forecast sales and suggests where to save">📊 Analyse this week’s rota</button>' : ''}
+        ${state.can('rota.ai') && data.last_analysis ? '<button class="btn btn-ai" id="analysis-saved" title="Open the suggestions from the last analysis of this week">📋 Suggestions</button>' : ''}
         <button class="btn" id="print">Print</button>
       </div>
     </div>
@@ -892,7 +892,7 @@ export async function render(ctx) {
     const id = Number(b.dataset.openShift);
     const mine = drops.open.find((x) => x.id === id);
     const x = mine ?? data.open_shifts.find((o) => o.id === id);
-    if (x.status === 'claim_pending') { claimRequest(x, () => ctx.rerender(), { canDecide: state.can('rota.publish') }); return; }
+    if (x.status === 'claim_pending') { claimRequest(x, () => ctx.rerender(), { canDecide: state.can('rota.approve') }); return; }
     claimShift(x, () => ctx.rerender(), { canClaim: !!mine?.can_claim, problem: mine ? mine.claim_problem : 'You don’t work at this site', canWithdraw: !!mine?.can_withdraw });
   }));
   el.querySelectorAll('[data-person]').forEach((b) => b.addEventListener('click', (e) => {

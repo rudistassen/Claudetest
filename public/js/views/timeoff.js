@@ -11,7 +11,7 @@ const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
 
 function tabs(state, active) {
   const items = [['mine', 'My holiday']];
-  if (state.can('leave.manage')) items.push(['requests', 'Team holiday']);
+  if (state.can('leave.manage', 'leave.edit')) items.push(['requests', 'Team holiday']);
   return `<div class="tabs">${items.map(([k, l]) => `<a href="#/timeoff${k === 'mine' ? '' : qs({ tab: k })}" class="${active === k ? 'active' : ''}">${l}</a>`).join('')}</div>`;
 }
 
@@ -20,7 +20,7 @@ export async function render(ctx) {
   // Availability has its own page (Rota → My availability); team availability is on Rota → Requests.
   if (tab === 'availability') return ctx.navigate(`availability${qs({ user: ctx.query.user, month: ctx.query.month })}`);
   if (tab === 'team') return ctx.navigate('rota/requests');
-  if (tab === 'requests' && ctx.state.can('leave.manage')) return renderRequests(ctx);
+  if (tab === 'requests' && ctx.state.can('leave.manage', 'leave.edit')) return renderRequests(ctx);
   return renderMine(ctx);
 }
 
@@ -89,9 +89,12 @@ async function renderRequests(ctx) {
   const rows = await api(`/leave${qs({ status })}`);
   if (ctx.stale()) return;
   const views = [['pending', 'Waiting'], ['upcoming', 'Approved, coming up'], ['past', 'Past and declined']];
+  // Approving requests (leave.manage) and changing people's holiday (leave.edit) are separate permissions.
+  const canDecide = state.can('leave.manage');
+  const canEdit = state.can('leave.edit');
 
   el.innerHTML = `
-    <div class="page-head"><h1>Time off</h1><div class="actions"><button class="btn btn-primary" id="leave-add">+ Add holiday</button></div></div>
+    <div class="page-head"><h1>Time off</h1><div class="actions">${canEdit ? '<button class="btn btn-primary" id="leave-add">+ Add holiday</button>' : ''}</div></div>
     ${tabs(state, 'requests')}
     <div class="filters">${views.map(([k, l]) => `<a class="btn ${status === k ? 'btn-primary' : ''}" href="#/timeoff${qs({ tab: 'requests', status: k })}">${l}</a>`).join('')}</div>
     <section class="card">
@@ -102,9 +105,9 @@ async function renderRequests(ctx) {
           ${r.shifts.length ? `<small class="tone-warn">On the rota for ${r.shifts.length} shift${r.shifts.length === 1 ? '' : 's'} then: ${r.shifts.slice(0, 3).map((s) => `${fmtDate(s.date)} ${s.start_time}–${s.end_time} (${esc(s.location_name)})`).join(', ')}${r.shifts.length > 3 ? '…' : ''}</small>` : ''}
           ${r.decision_note ? `<small>${esc(r.decided_by_name ?? '')}: ${esc(r.decision_note)}</small>` : ''}</div>
         <span class="leave-actions">
-          ${r.status === 'pending' ? `<button class="btn btn-small" data-decide="${r.id}" data-status="declined">Decline</button>
+          ${r.status === 'pending' && canDecide ? `<button class="btn btn-small" data-decide="${r.id}" data-status="declined">Decline</button>
             <button class="btn btn-small btn-primary" data-decide="${r.id}" data-status="approved">Approve</button>` : badge(r.status)}
-          ${r.status === 'approved' ? `<button class="btn btn-small" data-edit-leave="${r.id}">Change dates</button>
+          ${r.status === 'approved' && canEdit ? `<button class="btn btn-small" data-edit-leave="${r.id}">Change dates</button>
             <button class="btn btn-small btn-ghost" data-remove-leave="${r.id}">Take off</button>` : ''}
         </span></li>`).join('')}</ul>` : `<p class="muted">${status === 'pending' ? 'No holiday requests waiting.' : 'Nothing here.'}</p>`}
     </section>`;
@@ -116,7 +119,7 @@ async function renderRequests(ctx) {
     toast(`${verb}${res?.shifts_then ? ` – they’re on the rota for ${res.shifts_then} shift${res.shifts_then === 1 ? '' : 's'} then, so move ${res.shifts_then === 1 ? 'it' : 'them'}` : ''}`);
     ctx.rerender();
   };
-  el.querySelector('#leave-add').addEventListener('click', async () => {
+  el.querySelector('#leave-add')?.addEventListener('click', async () => {
     try {
       const people = await api('/leave/people');
       const { form } = openModal({

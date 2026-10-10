@@ -172,7 +172,7 @@ function openBulkStaff(ctx, people, { roles, locOptions, access }) {
       </div>
       <div class="row">
         ${field('Access', select('permission_set_id', [[KEEP, '— Leave as it is —'], ...access], KEEP))}
-        ${field('Hourly rate (£)', input('hourly_rate', '', 'type="number" min="0" step="0.01" placeholder="Leave as it is"'))}
+        ${ctx.state.can('staff.pay') ? field('Hourly rate (£)', input('hourly_rate', '', 'type="number" min="0" step="0.01" placeholder="Leave as it is"')) : ''}
         ${field('Active', select('active', [[KEEP, '— Leave as it is —'], ['1', 'Active'], ['0', 'Deactivated (can’t sign in or be rostered)']], KEEP))}
       </div>`,
     onSubmit: async (v) => {
@@ -181,7 +181,7 @@ function openBulkStaff(ctx, people, { roles, locOptions, access }) {
       if (v.role_pick === '__new' && !changes.rota_group) throw new Error('Type the new role');
       if (v.location_id !== KEEP) changes.location_id = Number(v.location_id) || null;
       if (v.permission_set_id !== KEEP) changes.permission_set_id = v.permission_set_id;
-      if (v.hourly_rate !== null && v.hourly_rate !== '') changes.hourly_rate = Number(v.hourly_rate);
+      if (v.hourly_rate !== undefined && v.hourly_rate !== null && v.hourly_rate !== '') changes.hourly_rate = Number(v.hourly_rate);
       if (v.active !== KEEP) changes.active = v.active === '1';
       if (!Object.keys(changes).length) throw new Error('Choose at least one thing to change');
       const r = await api('/users/bulk', { method: 'POST', body: { ids: people.map((p) => p.id), changes } });
@@ -259,7 +259,7 @@ function staffEditor(state, rows, perms, settings = {}) {
       <div class="row">
         <input type="hidden" name="position" value="${esc(u.position ?? '')}">
         ${field('Role', input('rota_group', u.rota_group, 'list="rota-groups" maxlength="50" placeholder="e.g. Kitchen, Front of house"'), { hint: 'What they do – groups people together on the rota' })}
-        ${field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"'))}
+        ${state.can('staff.pay') ? field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"')) : ''}
       </div>
       <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
       ${squareBox(u, settings)}
@@ -386,7 +386,7 @@ export async function renderStaff(ctx) {
       { label: 'Sites', value: sitesLabel },
       { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
       { label: 'Role', value: (r) => r.rota_group ?? '' },
-      { label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) },
+      ...(state.can('staff.pay') ? [{ label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) }] : []),
       { label: 'Active', value: (r) => yesNo(r.active) },
       { label: 'Atlas', value: (r) => joinStatus(r).label, html: (r) => joinBadge(r) },
       ...(invites.square_ready ? [{ label: 'Square', value: (r) => (r.square_member_id ? 'Linked' : '–') }] : []),

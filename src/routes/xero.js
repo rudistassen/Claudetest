@@ -105,7 +105,7 @@ export function registerXeroRoutes(router, db, xero) {
   });
 
   // Send one confirmed invoice to Xero as a draft bill.
-  router.post('/invoices/:id/xero', requirePerm('orders.manage'), async (req, res) => {
+  router.post('/invoices/:id/xero', requirePerm('invoices.manage'), async (req, res) => {
     needXero();
     const inv = db.prepare('SELECT id, location_id FROM invoices WHERE id = ?').get(Number(req.params.id));
     if (!inv || !req.user.site_ids.includes(inv.location_id)) throw notFound('Invoice');

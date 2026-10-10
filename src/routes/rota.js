@@ -1,4 +1,4 @@
-import { assertLocation, can, reportLocations, requireAdmin, requirePerm, resolveLocation } from '../auth.js';
+import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { availabilityOn } from '../availability.js';
 import { leaveFor, onHoliday } from './leave.js';
@@ -144,7 +144,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
    * averages) and the gross sales budget set for it. A budget overrides the forecast on the rota and in Rota costs;
    * labour % uses its net equivalent (net_ratio × gross).
    */
-  router.get('/sales-budgets', requirePerm('sales.view'), (req, res) => {
+  router.get('/sales-budgets', requirePerm('rota.budget'), (req, res) => {
     const ws = weekStart(date(req.query.week, 'week') ?? today());
     const locations = reportLocations(req);
     const ids = locations.map((l) => l.id);
@@ -172,7 +172,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
   });
 
   // Saves budgets: { week, sites: [{ id, budget: [Mon … Sun amount, or null to use the forecast] }] }.
-  router.put('/sales-budgets', requirePerm('sales.view'), (req, res) => {
+  router.put('/sales-budgets', requirePerm('rota.budget'), (req, res) => {
     const ws = weekStart(date(req.body?.week, 'week', { required: true }));
     if (!Array.isArray(req.body?.sites)) throw badRequest('sites must be a list');
     const rows = req.body.sites.map((x, n) => {
@@ -291,7 +291,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
   const clean = (v) => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
   const timeOk = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(t ?? ''));
 
-  router.post('/rota/import/read', requireAdmin, async (req, res) => {
+  router.post('/rota/import/read', requirePerm('rota.ai'), async (req, res) => {
     if (!rotaReader) throw badRequest('Reading rotas needs ANTHROPIC_API_KEY (the same key as the invoice reader) – add it in Railway → Variables');
     const b = req.body ?? {};
     const mediaType = oneOf(b.media_type, 'media_type', READ_TYPES, { required: true });
@@ -372,19 +372,19 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
   const savedAnalysis = (row) => (row ? { ...JSON.parse(row.result), id: row.id, created_at: row.created_at, created_by_name: row.created_by_name ?? null } : null);
   const SAVED = `SELECT a.*, u.name AS created_by_name FROM rota_analyses a LEFT JOIN users u ON u.id = a.created_by`;
   // The latest saved analysis for a week (?location_id=…&week=…), or null.
-  router.get('/rota/analyses/latest', requireAdmin, (req, res) => {
+  router.get('/rota/analyses/latest', requirePerm('rota.ai'), (req, res) => {
     const ids = rotaSites(req, req.query.location_id);
     const ws = weekStart(date(req.query.week, 'week') ?? today());
     res.json({ analysis: savedAnalysis(db.prepare(`${SAVED} WHERE a.week = ? AND a.scope = ? ORDER BY a.id DESC LIMIT 1`).get(ws, analysisScope(req.query.location_id, ids))) });
   });
-  router.get('/rota/analyse/:job', requireAdmin, (req, res) => {
+  router.get('/rota/analyse/:job', requirePerm('rota.ai'), (req, res) => {
     const job = analyses.get(req.params.job);
     if (!job || job.user_id !== req.user.id) throw notFound('Rota analysis');
     if (job.status === 'running') return res.json({ status: 'running', seconds: Math.round((Date.now() - job.started) / 1000) });
     if (job.status === 'failed') return res.json({ status: 'failed', error: job.error });
     res.json({ status: 'done', ...job.result });
   });
-  router.post('/rota/analyse', requireAdmin, (req, res) => {
+  router.post('/rota/analyse', requirePerm('rota.ai'), (req, res) => {
     if (!rotaAnalyst) throw badRequest('Analysing the rota needs ANTHROPIC_API_KEY (the same key as the invoice reader) – add it in Railway → Variables');
     const b = req.body ?? {};
     const ids = rotaSites(req, b.location_id);
@@ -533,7 +533,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
 
   // Adds the shifts an admin ticked: { shifts: [{ user_id, location_id, date, start_time, end_time, break_minutes, position, notes }] }.
   // They're drafts (staff don't see them until the rota is published); any that would double-book someone are skipped.
-  router.post('/rota/import/apply', requireAdmin, (req, res) => {
+  router.post('/rota/import/apply', requirePerm('rota.ai'), (req, res) => {
     const list = Array.isArray(req.body?.shifts) ? req.body.shifts : [];
     if (!list.length) throw badRequest('Tick the shifts to add');
     if (list.length > 500) throw badRequest('Add at most 500 shifts at once');
@@ -609,7 +609,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     const ws = weekStart(date(req.query.week, 'week') ?? today());
     const we = addDays(ws, 6);
     // Labour costs and pay rates only for people who can see sales or manage staff.
-    const manager = can(req.user, 'sales.view') || can(req.user, 'staff.manage');
+    const manager = can(req.user, 'sales.view') || can(req.user, 'staff.pay');
     // Editors see the draft, with each shift marked new, changed or removed; everyone else sees the published rota.
     const editor = can(req.user, 'rota.edit');
     const table = editor ? 'shifts' : 'published_shifts';
@@ -706,8 +706,8 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
       total_hours: round2(totalHours),
       labour_cost: manager ? round2(totalCost) : undefined,
       // For people who plan the rota: holiday (approved and requested) and usual availability for the people shown.
-      leave: editor || can(req.user, 'leave.manage') ? leaveFor(db, staffIds, ws, we) : undefined,
-      availability: editor || can(req.user, 'leave.manage') ? availabilityOn(db, staffIds, ws, we) : undefined,
+      leave: editor || can(req.user, 'leave.manage') || can(req.user, 'leave.edit') ? leaveFor(db, staffIds, ws, we) : undefined,
+      availability: editor || can(req.user, 'availability.view') ? availabilityOn(db, staffIds, ws, we) : undefined,
       // For editors: how many changes staff can't see yet, and whether this person may publish them.
       unpublished: editor ? db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`).get(...ids, ws, we).n : undefined,
       unpublished_by_site: editor ? Object.fromEntries(db.prepare(`SELECT location_id, COUNT(*) AS n FROM shifts WHERE location_id IN (${inList}) AND date BETWEEN ? AND ? AND (${UNPUBLISHED}) GROUP BY location_id`).all(...ids, ws, we).map((r) => [r.location_id, r.n])) : undefined,
@@ -718,7 +718,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
       bank_holidays: Object.fromEntries(days.map((d) => [d, bankHoliday(d)]).filter(([, n]) => n)),
       can_publish: editor ? can(req.user, 'rota.publish') : undefined,
       // Admins: when this week was last analysed (Analyse this week's rota), so its suggestions can be opened again.
-      last_analysis: req.user.role === 'admin' ? db.prepare('SELECT id, created_at FROM rota_analyses WHERE week = ? AND scope = ? ORDER BY id DESC LIMIT 1')
+      last_analysis: can(req.user, 'rota.ai') ? db.prepare('SELECT id, created_at FROM rota_analyses WHERE week = ? AND scope = ? ORDER BY id DESC LIMIT 1')
         .get(ws, all ? 'all' : String(ids[0])) ?? null : undefined,
       // Their last change, if it can still be undone.
       undo: editor ? undoFor(req.user.id) : undefined,

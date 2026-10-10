@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { ACCESS_FIELDS, ACCESS_JOIN, PUBLIC_USER_FIELDS, assertLocation, hashPassword, requireAdmin, requirePerm, validatePassword, withPermissions } from '../auth.js';
+import { ACCESS_FIELDS, ACCESS_JOIN, PUBLIC_USER_FIELDS, assertLocation, can, hashPassword, requireAdmin, requirePerm, validatePassword, withPermissions } from '../auth.js';
 import { tx } from '../db.js';
 import { demoPasswordAccounts } from '../seed.js';
 import { trySquarePush } from '../square-staff.js';
@@ -98,7 +98,12 @@ export function registerAdminRoutes(router, db, square = null) {
       rows = rows.filter((u) => u.role !== 'admin' && mine.has(u.location_id));
     }
     const extra = extraSites();
-    res.json(rows.map((u) => ({ ...withPermissions(u), site_ids: extra.get(u.id) ?? [] })));
+    const pay = can(req.user, 'staff.pay');
+    res.json(rows.map((u) => {
+      const out = { ...withPermissions(u), site_ids: extra.get(u.id) ?? [] };
+      if (!pay) delete out.hourly_rate;
+      return out;
+    }));
   });
 
   // Access is 'admin' or a permission set id (permission_set_id). The older role field (admin/manager/staff) still
@@ -113,7 +118,8 @@ export function registerAdminRoutes(router, db, square = null) {
       position: str(b.position, 'position', { max: 100 }),
       // Left as it is when not sent (e.g. by older screens).
       rota_group: b.rota_group === undefined ? existing?.rota_group ?? null : str(b.rota_group, 'rota_group', { max: 50 }),
-      hourly_rate: num(b.hourly_rate, 'hourly_rate', { min: 0 }) ?? 0,
+      // Pay rates can only be set by people who can see them (staff.pay); otherwise they stay as they are.
+      hourly_rate: can(req.user, 'staff.pay') ? num(b.hourly_rate, 'hourly_rate', { min: 0 }) ?? 0 : existing?.hourly_rate ?? 0,
       active: b.active === undefined ? 1 : bool(b.active),
       // Paid breaks: they don't clock breaks in Square, so no break warnings for them. Left as it is when not sent.
       paid_breaks: b.paid_breaks === undefined ? existing?.paid_breaks ?? 0 : bool(b.paid_breaks),

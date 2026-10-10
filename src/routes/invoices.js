@@ -175,7 +175,7 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
     return { ...inv, supplier_details: details, lines, lines_total: sum, unmatched, warnings, ...xeroInvoiceInfo(xero, inv) };
   };
 
-  router.get('/invoices', requirePerm('orders.manage'), (req, res) => {
+  router.get('/invoices', requirePerm('invoices.manage'), (req, res) => {
     const ids = req.user.site_ids;
     if (!ids.length) return res.json({ ready: !!reader, demo: !!reader?.demo, invoices: [], xero_ready: !!xero?.connected() });
     const status = req.query.status === 'confirmed' ? 'confirmed' : 'review';
@@ -192,7 +192,7 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
   });
 
   // Several confirmed invoices to Xero at once: { ids }. Each is sent in turn; one that fails doesn't stop the rest.
-  router.post('/invoices/xero', requirePerm('orders.manage'), async (req, res) => {
+  router.post('/invoices/xero', requirePerm('invoices.manage'), async (req, res) => {
     if (!xero?.connected()) throw badRequest('Connect Xero first (Setup → Xero)');
     const list = (Array.isArray(req.body?.ids) ? req.body.ids : []).map((v) => id(v, 'id', { required: true }));
     if (!list.length) throw badRequest('Tick the invoices to send');
@@ -213,7 +213,7 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
   });
 
   // Upload and read an invoice: { location_id, file_name, media_type, data (base64) }. Saved for checking.
-  router.post('/invoices/scan', requirePerm('orders.manage'), async (req, res) => {
+  router.post('/invoices/scan', requirePerm('invoices.manage'), async (req, res) => {
     if (!reader) throw badRequest('Invoice reading isn’t switched on yet. Add ANTHROPIC_API_KEY to the app’s settings (see Invoices).');
     const locationId = resolveLocation(req, req.body.location_id);
     const mediaType = String(req.body.media_type ?? '');
@@ -231,9 +231,9 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
     res.status(201).json({ ...withLines(load({ ...req, params: { id: invoiceId } })), supplier_match: supplierMatch, site_from_reference: bySite });
   });
 
-  router.get('/invoices/:id', requirePerm('orders.manage'), (req, res) => res.json(withLines(load(req))));
+  router.get('/invoices/:id', requirePerm('invoices.manage'), (req, res) => res.json(withLines(load(req))));
 
-  router.get('/invoices/:id/file', requirePerm('orders.manage'), (req, res) => {
+  router.get('/invoices/:id/file', requirePerm('invoices.manage'), (req, res) => {
     const inv = load(req);
     const row = db.prepare('SELECT file FROM invoices WHERE id = ?').get(inv.id);
     if (!row?.file) throw notFound('Invoice file');
@@ -288,7 +288,7 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
     return clean;
   };
 
-  router.put('/invoices/:id', requirePerm('orders.manage'), (req, res) => {
+  router.put('/invoices/:id', requirePerm('invoices.manage'), (req, res) => {
     const inv = load(req);
     if (inv.status === 'confirmed') throw badRequest('This invoice has been confirmed and can’t be changed');
     save(req, inv);
@@ -296,7 +296,7 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
   });
 
   // Confirm: saves the changes, then adds the new supplier and products, updates costs and remembers the matches.
-  router.post('/invoices/:id/confirm', requirePerm('orders.manage'), (req, res) => {
+  router.post('/invoices/:id/confirm', requirePerm('invoices.manage'), (req, res) => {
     const inv = load(req);
     if (inv.status === 'confirmed') throw badRequest('This invoice has already been confirmed');
     if (!req.body.supplier_id && !req.body.new_supplier) throw badRequest('Choose the supplier (or add them as a new supplier)');
@@ -357,7 +357,7 @@ export function registerInvoiceRoutes(router, db, reader, { xero = null } = {}) 
     res.json({ ...summary, invoice: withLines(load(req)) });
   });
 
-  router.delete('/invoices/:id', requirePerm('orders.manage'), (req, res) => {
+  router.delete('/invoices/:id', requirePerm('invoices.manage'), (req, res) => {
     const inv = load(req);
     if (inv.status === 'confirmed' && req.user.role !== 'admin') throw forbidden('Only admins can delete a confirmed invoice');
     db.prepare('DELETE FROM invoices WHERE id = ?').run(inv.id);

@@ -41,12 +41,12 @@ export function registerDocumentRoutes(router, db) {
 
   router.get('/documents', (req, res) => res.json(list().filter((d) => reaches(d, req.user))));
 
-  router.get('/documents/manage', requirePerm('news.manage'), (req, res) => res.json(list().map((d) => ({ ...d, can_edit: canManage(req, d) }))));
+  router.get('/documents/manage', requirePerm('documents.manage'), (req, res) => res.json(list().map((d) => ({ ...d, can_edit: canManage(req, d) }))));
 
   // The file: opened in the browser (PDFs, pictures, text) or downloaded (?download=1, and Office files).
   router.get('/documents/:id/file', (req, res) => {
     const d = load(req);
-    if (!reaches(d, req.user) && !can(req.user, 'news.manage')) throw notFound('Document');
+    if (!reaches(d, req.user) && !can(req.user, 'documents.manage')) throw notFound('Document');
     const data = db.prepare('SELECT data FROM documents WHERE id = ?').get(d.id).data;
     const inline = !req.query.download && /^(application\/pdf|image\/|text\/plain)/.test(d.file_type);
     const safe = String(d.file_name).replace(/[^\w.\- ()]/g, '_');
@@ -92,7 +92,7 @@ export function registerDocumentRoutes(router, db) {
     for (const s of doc.site_ids) db.prepare('INSERT INTO document_sites (document_id, location_id) VALUES (?, ?)').run(docId, s);
   };
 
-  router.post('/documents', requirePerm('news.manage'), (req, res) => {
+  router.post('/documents', requirePerm('documents.manage'), (req, res) => {
     const doc = body(req, null);
     const newId = tx(db, () => {
       const r = db.prepare(`INSERT INTO documents (title, description, category, file_name, file_type, size, data, all_sites, created_by)
@@ -103,7 +103,7 @@ export function registerDocumentRoutes(router, db) {
     res.status(201).json(load({ params: { id: newId } }));
   });
 
-  router.put('/documents/:id', requirePerm('news.manage'), (req, res) => {
+  router.put('/documents/:id', requirePerm('documents.manage'), (req, res) => {
     const existing = load(req);
     if (!canManage(req, existing)) throw forbidden('This document is shared with sites you don’t work with');
     const doc = body(req, existing);
@@ -119,7 +119,7 @@ export function registerDocumentRoutes(router, db) {
     res.json(load(req));
   });
 
-  router.delete('/documents/:id', requirePerm('news.manage'), (req, res) => {
+  router.delete('/documents/:id', requirePerm('documents.manage'), (req, res) => {
     const d = load(req);
     if (!canManage(req, d)) throw forbidden('This document is shared with sites you don’t work with');
     db.prepare('DELETE FROM documents WHERE id = ?').run(d.id);

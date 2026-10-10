@@ -168,7 +168,7 @@ export function reviewSummary(db, locations, { reviewsPerSite = 50, now = new Da
 }
 
 export function registerReviewRoutes(router, db, places) {
-  router.get('/reviews', requirePerm('sales.view'), (req, res) => {
+  router.get('/reviews', requirePerm('reviews.view'), (req, res) => {
     const locations = reportLocations(req, req.query.location_id);
     res.json({
       configured: !!places,
@@ -178,7 +178,7 @@ export function registerReviewRoutes(router, db, places) {
     });
   });
 
-  router.post('/reviews/sync', requirePerm('sales.view'), async (req, res) => {
+  router.post('/reviews/sync', requirePerm('reviews.view'), async (req, res) => {
     if (!places) throw badRequest('Google reviews aren’t switched on yet – add GOOGLE_PLACES_API_KEY in your hosting settings.');
     const last = Date.parse(getSetting(db, KEY.lastSync) ?? '') || 0;
     if (Date.now() - last < MIN_MANUAL_GAP_MS) return res.json({ sites: 0, new_reviews: 0, errors: [], recent: true });

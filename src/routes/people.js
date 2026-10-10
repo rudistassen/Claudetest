@@ -19,7 +19,11 @@ const CANDIDATE_LIST = `c.id, c.vacancy_id, c.location_id, c.name, c.email, c.ph
 
 /** careers: the careers inbox (see mailbox.js), for drafting replies to candidates who emailed; or null. */
 export function registerPeopleRoutes(router, db, { careers = null } = {}) {
-  const perm = requirePerm('people.manage');
+  // Each part of People has its own permission.
+  const recruit = requirePerm('people.recruitment');
+  const training = requirePerm('people.training');
+  const reviews = requirePerm('people.performance');
+  const areas = requirePerm('people.areas');
 
   // Active staff (not admins) at the sites this person can work with, or at one of them.
   const people = (req, locationId) => {
@@ -46,7 +50,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     return v;
   };
 
-  router.get('/vacancies', perm, (req, res) => {
+  router.get('/vacancies', recruit, (req, res) => {
     const locationId = site(req);
     if (locationId) assertLocation(req, locationId);
     const sites = locationId ? [locationId] : req.user.site_ids;
@@ -64,7 +68,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     notes: str(b.notes, 'Notes', { max: 2000 }),
   });
 
-  router.post('/vacancies', perm, (req, res) => {
+  router.post('/vacancies', recruit, (req, res) => {
     const b = req.body ?? {};
     const locationId = id(b.location_id, 'location_id', { required: true });
     assertLocation(req, locationId);
@@ -74,7 +78,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
-  router.put('/vacancies/:id', perm, (req, res) => {
+  router.put('/vacancies/:id', recruit, (req, res) => {
     const v = vacancy(req, Number(req.params.id));
     const b = req.body ?? {};
     const f = vacancyFields({ ...v, ...b });
@@ -84,7 +88,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // The job goes; its candidates stay (at the job's site), no longer for a particular job.
-  router.delete('/vacancies/:id', perm, (req, res) => {
+  router.delete('/vacancies/:id', recruit, (req, res) => {
     const v = vacancy(req, Number(req.params.id));
     const kept = tx(db, () => {
       const r = db.prepare(`UPDATE candidates SET vacancy_id = NULL, location_id = COALESCE(location_id, ?), updated_at = datetime('now') WHERE vacancy_id = ?`).run(v.location_id, v.id);
@@ -104,7 +108,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // Someone not for a particular job (e.g. a CV handed in), at a site; with to_review they go on the To review list.
-  router.post('/candidates', perm, (req, res) => {
+  router.post('/candidates', recruit, (req, res) => {
     const b = req.body ?? {};
     const f = candidateFields(b);
     const site = id(b.location_id, 'location_id');
@@ -115,7 +119,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
-  router.post('/vacancies/:id/candidates', perm, (req, res) => {
+  router.post('/vacancies/:id/candidates', recruit, (req, res) => {
     const v = vacancy(req, Number(req.params.id));
     const f = candidateFields(req.body ?? {});
     const r = db.prepare('INSERT INTO candidates (vacancy_id, name, email, phone, stage, next_step_on, notes) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -140,7 +144,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
 
   // The careers inbox's new applications (not yet moved on or turned down), everyone being interviewed, on a trial
   // shift or offered a job (whatever it's for), and the rest of those who aren't for a job.
-  router.get('/applications', perm, (req, res) => {
+  router.get('/applications', recruit, (req, res) => {
     const rows = db.prepare(`SELECT ${CANDIDATE_LIST}, v.title AS job_title, COALESCE(v.location_id, c.location_id) AS site_id, l.name AS site_name
       FROM candidates c LEFT JOIN vacancies v ON v.id = c.vacancy_id LEFT JOIN locations l ON l.id = COALESCE(v.location_id, c.location_id)
       WHERE (c.source = 'email' AND c.stage = 'applied') OR c.vacancy_id IS NULL OR c.stage IN ('interview', 'trial', 'offer') OR c.to_review_at IS NOT NULL
@@ -159,7 +163,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // A candidate's profile: their details, the email they sent, and their files.
-  router.get('/candidates/:id', perm, (req, res) => {
+  router.get('/candidates/:id', recruit, (req, res) => {
     const c = candidate(req, Number(req.params.id));
     const v = c.vacancy_id ? db.prepare('SELECT v.title, v.location_id, l.name AS site FROM vacancies v JOIN locations l ON l.id = v.location_id WHERE v.id = ?').get(c.vacancy_id) : null;
     res.json({
@@ -177,7 +181,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     });
   });
 
-  router.put('/candidates/:id', perm, (req, res) => {
+  router.put('/candidates/:id', recruit, (req, res) => {
     const c = candidate(req, Number(req.params.id));
     const b = req.body ?? {};
     const f = candidateFields({ ...c, ...b });
@@ -197,7 +201,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // On or off the To review list: { to_review: true | false }.
-  router.post('/candidates/:id/review', perm, (req, res) => {
+  router.post('/candidates/:id/review', recruit, (req, res) => {
     const c = candidate(req, Number(req.params.id));
     const on = !!req.body?.to_review;
     db.prepare(`UPDATE candidates SET to_review_at = CASE WHEN ? THEN COALESCE(to_review_at, datetime('now')) END, updated_at = datetime('now') WHERE id = ?`).run(on ? 1 : 0, c.id);
@@ -206,7 +210,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
 
   // Not taking them further. With draft: true (and the careers inbox connected), a reply is saved in the careers
   // inbox's Drafts to check and send from there; either way the wording comes back for copying or sending by hand.
-  router.post('/candidates/:id/decline', perm, async (req, res) => {
+  router.post('/candidates/:id/decline', recruit, async (req, res) => {
     const c = candidate(req, Number(req.params.id));
     const subject = str(req.body?.subject, 'Subject', { required: true, max: 200 });
     const body = str(req.body?.body, 'Message', { required: true, max: 5000 });
@@ -225,7 +229,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // Their CV and anything else they sent (or that was added).
-  router.get('/candidates/:id/files/:fileId', perm, (req, res) => {
+  router.get('/candidates/:id/files/:fileId', recruit, (req, res) => {
     const c = candidate(req, Number(req.params.id));
     const f = db.prepare('SELECT file_name, file_type, file FROM candidate_files WHERE id = ? AND candidate_id = ?').get(Number(req.params.fileId), c.id);
     if (!f) throw notFound('File');
@@ -236,7 +240,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // { file_name, data (base64) } – e.g. a CV handed in on paper and photographed.
-  router.post('/candidates/:id/files', perm, (req, res) => {
+  router.post('/candidates/:id/files', recruit, (req, res) => {
     const c = candidate(req, Number(req.params.id));
     const name = str(req.body?.file_name, 'File name', { required: true, max: 200 });
     const type = cvType(name, req.body?.media_type);
@@ -248,7 +252,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
-  router.delete('/candidates/:id/files/:fileId', perm, (req, res) => {
+  router.delete('/candidates/:id/files/:fileId', recruit, (req, res) => {
     const c = candidate(req, Number(req.params.id));
     db.prepare('DELETE FROM candidate_files WHERE id = ? AND candidate_id = ?').run(Number(req.params.fileId), c.id);
     res.json({ ok: true });
@@ -256,7 +260,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
 
   // Gone for good – e.g. junk from the careers inbox. The inbox keeps its note of the email (without the candidate),
   // so it isn't added again on the next check.
-  router.delete('/candidates/:id', perm, (req, res) => {
+  router.delete('/candidates/:id', recruit, (req, res) => {
     const c = candidate(req, Number(req.params.id));
     tx(db, () => {
       if (c.email_message_id) db.prepare(`UPDATE careers_emails SET detail = 'Deleted in Atlas' WHERE message_id = ?`).run(c.email_message_id);
@@ -284,7 +288,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   const activeCourses = () => db.prepare('SELECT * FROM training_courses WHERE active = 1 ORDER BY name').all();
 
   // Each person's latest record of each course.
-  router.get('/training', perm, (req, res) => {
+  router.get('/training', training, (req, res) => {
     const staff = people(req, site(req));
     res.json({ courses: activeCourses(), people: staff, records: latestFor(staff.map((p) => p.id)) });
   });
@@ -303,7 +307,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // Everything someone has done (newest first).
-  router.get('/training/people/:userId', perm, (req, res) => {
+  router.get('/training/people/:userId', training, (req, res) => {
     const u = person(req, Number(req.params.userId));
     res.json({
       person: u,
@@ -319,13 +323,13 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     renew_months: num(b.renew_months, 'Renew every (months)', { int: true, min: 1, max: 120 }),
   });
 
-  router.post('/training/courses', perm, (req, res) => {
+  router.post('/training/courses', training, (req, res) => {
     const f = courseFields(req.body ?? {});
     const r = db.prepare('INSERT INTO training_courses (name, description, renew_months) VALUES (?, ?, ?)').run(f.name, f.description, f.renew_months);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
-  router.put('/training/courses/:id', perm, (req, res) => {
+  router.put('/training/courses/:id', training, (req, res) => {
     const c = db.prepare('SELECT * FROM training_courses WHERE id = ? AND active = 1').get(Number(req.params.id));
     if (!c) throw notFound('Course');
     const f = courseFields({ ...c, ...(req.body ?? {}) });
@@ -334,13 +338,13 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // Courses are hidden rather than deleted, so nobody's training records are lost.
-  router.delete('/training/courses/:id', perm, (req, res) => {
+  router.delete('/training/courses/:id', training, (req, res) => {
     db.prepare('UPDATE training_courses SET active = 0 WHERE id = ?').run(Number(req.params.id));
     res.json({ ok: true });
   });
 
   // { course_id, user_ids: [...], completed_on, notes } – several people can be signed off at once.
-  router.post('/training/records', perm, (req, res) => {
+  router.post('/training/records', training, (req, res) => {
     const b = req.body ?? {};
     const course = db.prepare('SELECT id FROM training_courses WHERE id = ? AND active = 1').get(id(b.course_id, 'course_id', { required: true }));
     if (!course) throw notFound('Course');
@@ -355,7 +359,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     res.status(201).json({ ok: true, added: userIds.length });
   });
 
-  router.delete('/training/records/:id', perm, (req, res) => {
+  router.delete('/training/records/:id', training, (req, res) => {
     const r = db.prepare('SELECT id, user_id FROM training_records WHERE id = ?').get(Number(req.params.id));
     if (!r) throw notFound('Training record');
     person(req, r.user_id);
@@ -366,7 +370,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   // ---- Performance ----
 
   // Everyone with their last review and when the next is due.
-  router.get('/performance', perm, (req, res) => {
+  router.get('/performance', reviews, (req, res) => {
     const last = db.prepare(`SELECT review_date, kind, rating, next_review_on FROM performance_reviews WHERE user_id = ?
       ORDER BY review_date DESC, id DESC LIMIT 1`);
     const count = db.prepare('SELECT COUNT(*) AS n FROM performance_reviews WHERE user_id = ?');
@@ -377,7 +381,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     }));
   });
 
-  router.get('/performance/people/:userId', perm, (req, res) => {
+  router.get('/performance/people/:userId', reviews, (req, res) => {
     const u = person(req, Number(req.params.userId));
     res.json({
       person: u,
@@ -400,7 +404,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     return f;
   };
 
-  router.post('/performance/reviews', perm, (req, res) => {
+  router.post('/performance/reviews', reviews, (req, res) => {
     const b = req.body ?? {};
     const u = person(req, id(b.user_id, 'user_id', { required: true }));
     const f = reviewFields(b);
@@ -416,7 +420,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     return r;
   };
 
-  router.put('/performance/reviews/:id', perm, (req, res) => {
+  router.put('/performance/reviews/:id', reviews, (req, res) => {
     const r = review(req, Number(req.params.id));
     const f = reviewFields({ ...r, ...(req.body ?? {}) });
     db.prepare(`UPDATE performance_reviews SET review_date = ?, kind = ?, rating = ?, went_well = ?, to_improve = ?, goals = ?, next_review_on = ? WHERE id = ?`)
@@ -424,14 +428,14 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     res.json({ ok: true });
   });
 
-  router.delete('/performance/reviews/:id', perm, (req, res) => {
+  router.delete('/performance/reviews/:id', reviews, (req, res) => {
     db.prepare('DELETE FROM performance_reviews WHERE id = ?').run(review(req, Number(req.params.id)).id);
     res.json({ ok: true });
   });
 
   // ---- Areas ----
 
-  router.get('/areas', perm, (req, res) => {
+  router.get('/areas', areas, (req, res) => {
     const staff = people(req, site(req));
     const ids = new Set(staff.map((p) => p.id));
     res.json({
@@ -442,7 +446,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     });
   });
 
-  router.post('/areas', perm, (req, res) => {
+  router.post('/areas', areas, (req, res) => {
     const name = str(req.body?.name, 'Area name', { required: true, max: 60 });
     const old = db.prepare('SELECT id, active FROM work_areas WHERE name = ?').get(name);
     if (old?.active) throw badRequest(`There’s already an area called ${name}`);
@@ -453,7 +457,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     res.status(201).json({ id: Number(db.prepare('INSERT INTO work_areas (name) VALUES (?)').run(name).lastInsertRowid) });
   });
 
-  router.put('/areas/:id', perm, (req, res) => {
+  router.put('/areas/:id', areas, (req, res) => {
     const a = db.prepare('SELECT id FROM work_areas WHERE id = ? AND active = 1').get(Number(req.params.id));
     if (!a) throw notFound('Area');
     const name = str(req.body?.name, 'Area name', { required: true, max: 60 });
@@ -463,13 +467,13 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // Hidden rather than deleted, so adding it back keeps who could work there.
-  router.delete('/areas/:id', perm, (req, res) => {
+  router.delete('/areas/:id', areas, (req, res) => {
     db.prepare('UPDATE work_areas SET active = 0 WHERE id = ?').run(Number(req.params.id));
     res.json({ ok: true });
   });
 
   // { level: 'learning' | 'trained' | null }
-  router.put('/areas/:id/people/:userId', perm, (req, res) => {
+  router.put('/areas/:id/people/:userId', areas, (req, res) => {
     const a = db.prepare('SELECT id FROM work_areas WHERE id = ? AND active = 1').get(Number(req.params.id));
     if (!a) throw notFound('Area');
     const u = person(req, Number(req.params.userId));
