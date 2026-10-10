@@ -1,4 +1,5 @@
-import { addDays, api, isDemo, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, qs, qty, select, showError, statusBadge, textarea, toast, todayISO } from '../lib.js';
+import { addDays, api, isDemo, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, packUnit, qs, qty, select, showError, statusBadge, textarea, toast, todayISO, sitePicker } from '../lib.js';
+import { nextDelivery, scheduleSummary } from '../delivery.js';
 
 const STATUSES = [['', 'All'], ['draft', 'Draft'], ['sent', 'Sent'], ['received', 'Received'], ['cancelled', 'Cancelled']];
 
@@ -10,8 +11,8 @@ export async function renderList(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Supplier orders · ${esc(state.location?.name ?? '')}</h1>
-      <div class="actions"><a class="btn btn-primary" href="#/orders/new">+ New order</a></div>
+      <h1>Supplier orders${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
+      <div class="actions">${sitePicker(state)}<a class="btn btn-primary" href="#/orders/new">+ New order</a></div>
     </div>
     <div class="tabs">${STATUSES.map(([v, l]) => `<a href="#/orders${v ? `?status=${v}` : ''}" class="${status === v ? 'active' : ''}">${l}</a>`).join('')}</div>
     <section class="card">
@@ -32,7 +33,7 @@ function linesTable(rows, { showSuggest }) {
       <th class="num">Unit cost</th><th class="num">Order qty</th><th class="num">Line total</th></tr></thead>
     <tbody>${rows.map((r) => `
       <tr data-product="${r.product_id}" data-cost="${r.unit_cost}">
-        <td>${esc(r.name)}</td><td>${esc(r.unit)}</td>
+        <td>${esc(r.name)}</td><td>${esc(packUnit(r.unit, r.pack_quantity))}</td>
         ${showSuggest ? `<td class="num">${qty(r.par_level)}</td><td class="num">${qty(r.on_hand)}</td><td class="num">${qty(r.suggested)}</td>` : ''}
         <td class="num">${money(r.unit_cost)}</td>
         <td class="num"><input class="qty-input" type="number" min="0" step="any" inputmode="decimal" value="${r.quantity || ''}"></td>
@@ -64,21 +65,23 @@ function bindLines(root, minOrder) {
 
 export async function renderNew(ctx) {
   const { el, state, query, stale } = ctx;
-  const suppliers = (await api('/suppliers')).filter((s) => s.active);
+  const suppliers = (await api('/suppliers')).filter((s) => s.active && s.orders_enabled);
   if (stale()) return;
   const supplierId = Number(query.supplier) || null;
   const supplier = suppliers.find((s) => s.id === supplierId);
+  // The next delivery that can still be ordered for, from the supplier's delivery days and cut-offs.
+  const next = supplier ? nextDelivery(supplier.delivery_schedule) : null;
   const suggestion = supplier ? await api(`/orders/suggest${qs({ location_id: state.locationId, supplier_id: supplier.id })}`) : null;
   if (stale()) return;
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>New order · ${esc(state.location?.name ?? '')}</h1>
-      <div class="actions"><a class="btn" href="#/orders">‹ Orders</a></div>
+      <h1>New order${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
+      <div class="actions">${sitePicker(state)}<a class="btn" href="#/orders">‹ Orders</a></div>
     </div>
     <section class="card">
       ${field('Supplier', select('supplier', [['', 'Choose a supplier…'], ...suppliers.map((s) => [s.id, s.name])], supplierId ?? '', 'id="supplier"'))}
-      ${supplier ? `<p class="muted">Order days: ${esc(supplier.order_days ?? '–')} · Lead time: ${supplier.lead_time_days} day(s) · Minimum order: ${money(supplier.min_order)}</p>` : ''}
+      ${supplier ? `<p class="muted">Deliveries: ${esc(scheduleSummary(supplier.delivery_schedule))}${next ? ` · next: <strong>${fmtDate(next.date)}</strong> if ordered by ${esc(next.cutoff.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}` : ''} · Minimum order: ${money(supplier.min_order)}</p>` : ''}
     </section>
     ${suggestion ? `
     <form class="card" id="order-form">
@@ -90,7 +93,7 @@ export async function renderNew(ctx) {
         : '<p class="empty">This supplier has no products yet. Add them under Setup → Products.</p>'}
       <p class="alert-text min-warning" hidden>Below this supplier’s minimum order of ${money(supplier.min_order)}.</p>
       <div class="row">
-        ${field('Delivery date', input('delivery_date', addDays(todayISO(), supplier.lead_time_days || 1), 'type="date"'))}
+        ${field('Delivery date', input('delivery_date', next?.date ?? addDays(todayISO(), supplier.lead_time_days || 1), 'type="date"'))}
         ${field('Notes for supplier', textarea('notes', ''))}
       </div>
       <div class="actions"><button class="btn btn-primary" type="submit">Save draft order</button></div>
@@ -114,7 +117,7 @@ export async function renderNew(ctx) {
 }
 
 function orderText(o) {
-  const lines = o.lines.map((l) => `- ${qty(l.quantity)} x ${l.product_name} (${l.unit})${l.sku ? ` [${l.sku}]` : ''}`).join('\n');
+  const lines = o.lines.map((l) => `- ${qty(l.quantity)} x ${l.product_name} (${packUnit(l.unit, l.pack_quantity)})${l.sku ? ` [${l.sku}]` : ''}`).join('\n');
   return `Hello ${o.supplier_name},
 
 Please could we order the following for delivery to ${o.location_name}${o.delivery_date ? ` on ${fmtDate(o.delivery_date, { weekday: 'long', day: 'numeric', month: 'long' })}` : ''}:
@@ -165,7 +168,7 @@ export async function renderOrder(ctx) {
       <div class="table-wrap"><table>
         <thead><tr><th>Product</th><th>Unit</th><th class="num">Ordered</th>${o.status === 'received' ? '<th class="num">Received</th>' : ''}<th class="num">Unit cost</th><th class="num">Total</th></tr></thead>
         <tbody>${o.lines.map((l) => `<tr class="${l.received_quantity !== null && l.received_quantity !== l.quantity ? 'row-warn' : ''}">
-          <td>${esc(l.product_name)}</td><td>${esc(l.unit)}</td><td class="num">${qty(l.quantity)}</td>
+          <td>${esc(l.product_name)}</td><td>${esc(packUnit(l.unit, l.pack_quantity))}</td><td class="num">${qty(l.quantity)}</td>
           ${o.status === 'received' ? `<td class="num">${qty(l.received_quantity)}</td>` : ''}
           <td class="num">${money(l.unit_cost)}</td><td class="num">${money(l.quantity * l.unit_cost)}</td></tr>`).join('')}</tbody>
       </table></div>
@@ -178,13 +181,14 @@ export async function renderOrder(ctx) {
       openModal({
         title: `Email to ${o.supplier_name}`,
         wide: true,
-        body: `<p>To: <strong>${esc(o.supplier_email ?? 'no email saved')}</strong> · Subject: Order PO-${o.id} – ${esc(o.location_name)}</p>
+        body: `<p>To: <strong>${esc(o.supplier_email ?? 'no email saved')}</strong>${o.supplier_cc ? ` · Cc: ${esc(o.supplier_cc)}` : ''} · Subject: Order PO-${o.id} – ${esc(o.location_name)}</p>
           <p class="muted">In the installed app this opens a ready-written email. Here is the text:</p>
           <textarea rows="14" readonly>${esc(orderText(o))}</textarea>`,
       });
       return;
     }
-    const url = `mailto:${encodeURIComponent(o.supplier_email ?? '')}?subject=${encodeURIComponent(`Order PO-${o.id} – ${o.location_name}`)}&body=${encodeURIComponent(orderText(o))}`;
+    const cc = o.supplier_cc ? `&cc=${encodeURIComponent(o.supplier_cc.replace(/\s+/g, ''))}` : '';
+    const url = `mailto:${encodeURIComponent((o.supplier_email ?? '').replace(/\s+/g, ''))}?subject=${encodeURIComponent(`Order PO-${o.id} – ${o.location_name}`)}${cc}&body=${encodeURIComponent(orderText(o))}`;
     window.location.href = url;
   };
 
@@ -239,7 +243,7 @@ export async function renderOrder(ctx) {
     wide: true,
     body: `<p class="muted">Adjust any quantities that were short, damaged or substituted.</p>
       <table><thead><tr><th>Product</th><th class="num">Ordered</th><th class="num">Received</th></tr></thead>
-      <tbody>${o.lines.map((l) => `<tr><td>${esc(l.product_name)}</td><td class="num">${qty(l.quantity)} ${esc(l.unit)}</td>
+      <tbody>${o.lines.map((l) => `<tr><td>${esc(l.product_name)}</td><td class="num">${qty(l.quantity)} × ${esc(packUnit(l.unit, l.pack_quantity))}</td>
         <td class="num"><input type="number" min="0" step="any" name="line_${l.id}" value="${l.quantity}" class="qty-input"></td></tr>`).join('')}</tbody></table>`,
     submitLabel: 'Confirm delivery',
     onSubmit: async (v) => {

@@ -1,4 +1,4 @@
-import { assertLocation, isManager, requireManager, resolveLocation } from '../auth.js';
+import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { loadRecipes } from '../recipes.js';
 import { addDays, badRequest, csv, date, forbidden, id, notFound, num, oneOf, round2, str, today } from '../util.js';
@@ -20,9 +20,12 @@ export function registerStockRoutes(router, db) {
 
   const takeSelect = `
     SELECT t.*, l.name AS location_name, su.name AS started_by_name, cu.name AS completed_by_name,
-      (SELECT COALESCE(SUM(COALESCE(counted_quantity, 0) * unit_cost), 0) FROM stock_take_lines WHERE stock_take_id = t.id) AS total_value,
-      (SELECT COUNT(*) FROM stock_take_lines WHERE stock_take_id = t.id) AS line_count,
-      (SELECT COUNT(*) FROM stock_take_lines WHERE stock_take_id = t.id AND counted_quantity IS NOT NULL) AS counted_count
+      (SELECT COALESCE(SUM(COALESCE(counted_quantity, 0) * unit_cost), 0) FROM stock_take_lines WHERE stock_take_id = t.id)
+        + (SELECT COALESCE(SUM(COALESCE(counted_quantity, 0) * unit_cost), 0) FROM stock_take_prep_lines WHERE stock_take_id = t.id) AS total_value,
+      (SELECT COUNT(*) FROM stock_take_lines WHERE stock_take_id = t.id)
+        + (SELECT COUNT(*) FROM stock_take_prep_lines WHERE stock_take_id = t.id) AS line_count,
+      (SELECT COUNT(*) FROM stock_take_lines WHERE stock_take_id = t.id AND counted_quantity IS NOT NULL)
+        + (SELECT COUNT(*) FROM stock_take_prep_lines WHERE stock_take_id = t.id AND counted_quantity IS NOT NULL) AS counted_count
     FROM stock_takes t
     JOIN locations l ON l.id = t.location_id
     LEFT JOIN users su ON su.id = t.started_by
@@ -36,7 +39,15 @@ export function registerStockRoutes(router, db) {
     return take;
   }
 
-  router.get('/stocktakes', (req, res) => {
+  // Adds the prepped recipes counted in stock takes to a count in progress (new ones are picked up too, and
+  // their costs kept up to date until the count is completed).
+  function addPrepLines(takeId) {
+    const ins = db.prepare(`INSERT INTO stock_take_prep_lines (stock_take_id, recipe_id, unit_cost) VALUES (?, ?, ?)
+      ON CONFLICT (stock_take_id, recipe_id) DO UPDATE SET unit_cost = excluded.unit_cost`);
+    for (const r of loadRecipes(db)) if (r.kind === 'prep' && r.active && r.in_stock_takes) ins.run(takeId, r.id, r.cost_per_unit);
+  }
+
+  router.get('/stocktakes', requirePerm('stock.count', 'stock.complete'), (req, res) => {
     const locationId = resolveLocation(req, req.query.location_id);
     const rows = db.prepare(`${takeSelect} WHERE t.location_id = ? ORDER BY t.started_at DESC, t.id DESC LIMIT 100`).all(locationId);
     for (const r of rows) r.total_value = round2(r.total_value);
@@ -44,7 +55,7 @@ export function registerStockRoutes(router, db) {
   });
 
   // Starts a count for a location, or returns the one already in progress.
-  router.post('/stocktakes', (req, res) => {
+  router.post('/stocktakes', requirePerm('stock.count'), (req, res) => {
     const locationId = resolveLocation(req, req.body.location_id);
     const existing = db.prepare(`SELECT id FROM stock_takes WHERE location_id = ? AND status = 'in_progress'`).get(locationId);
     if (existing) {
@@ -56,43 +67,61 @@ export function registerStockRoutes(router, db) {
         .run(locationId, str(req.body.notes, 'notes'), req.user.id);
       db.prepare(`INSERT INTO stock_take_lines (stock_take_id, product_id, unit_cost)
         SELECT ?, id, unit_cost FROM products WHERE active = 1`).run(r.lastInsertRowid);
+      addPrepLines(r.lastInsertRowid);
       return r.lastInsertRowid;
     });
     req.params.id = String(takeId);
     res.status(201).json(loadTake(req));
   });
 
-  router.get('/stocktakes/:id', (req, res) => {
-    const take = loadTake(req);
+  router.get('/stocktakes/:id', requirePerm('stock.count', 'stock.complete'), (req, res) => {
+    let take = loadTake(req);
+    if (take.status === 'in_progress') {
+      tx(db, () => addPrepLines(take.id));
+      take = loadTake(req);
+    }
     const previous = db.prepare(`SELECT id, completed_at FROM stock_takes WHERE location_id = ? AND status = 'completed' AND id != ?
       AND (completed_at < COALESCE(?, datetime('now', '+1 day'))) ORDER BY completed_at DESC, id DESC LIMIT 1`)
       .get(take.location_id, take.id, take.completed_at);
     take.previous = previous ?? null;
     take.lines = db.prepare(`
-      SELECT stl.product_id, stl.counted_quantity, stl.unit_cost, p.name, p.category, p.unit, p.sku,
+      SELECT stl.product_id, stl.counted_quantity, stl.unit_cost, p.name, p.category, p.unit, p.pack_quantity, p.sku,
         prev.counted_quantity AS previous_quantity
       FROM stock_take_lines stl
       JOIN products p ON p.id = stl.product_id
       LEFT JOIN stock_take_lines prev ON prev.product_id = stl.product_id AND prev.stock_take_id = ?
       WHERE stl.stock_take_id = ?
-      ORDER BY p.category, p.name`).all(previous?.id ?? 0, take.id);
+      ORDER BY p.category, p.name`).all(previous?.id ?? 0, take.id).map((l) => ({ ...l, key: `p:${l.product_id}` }));
+    // Prepped recipes come after the products, in their own group, measured in their yield unit.
+    take.lines.push(...db.prepare(`
+      SELECT spl.recipe_id, spl.counted_quantity, spl.unit_cost, r.name, 'Prepped recipes' AS category, COALESCE(r.yield_unit, 'portion') AS unit,
+        prev.counted_quantity AS previous_quantity
+      FROM stock_take_prep_lines spl
+      JOIN recipes r ON r.id = spl.recipe_id
+      LEFT JOIN stock_take_prep_lines prev ON prev.recipe_id = spl.recipe_id AND prev.stock_take_id = ?
+      WHERE spl.stock_take_id = ?
+      ORDER BY r.category, r.name`).all(previous?.id ?? 0, take.id).map((l) => ({ ...l, key: `r:${l.recipe_id}`, prepped: true })));
     res.json(take);
   });
 
-  router.put('/stocktakes/:id/lines', (req, res) => {
+  router.put('/stocktakes/:id/lines', requirePerm('stock.count'), (req, res) => {
     const take = loadTake(req);
     if (take.status !== 'in_progress') throw badRequest('This stock take has been completed');
     const lines = Array.isArray(req.body.lines) ? req.body.lines : [];
     tx(db, () => {
       const update = db.prepare('UPDATE stock_take_lines SET counted_quantity = ? WHERE stock_take_id = ? AND product_id = ?');
+      const updatePrep = db.prepare('UPDATE stock_take_prep_lines SET counted_quantity = ? WHERE stock_take_id = ? AND recipe_id = ?');
       for (const l of lines) {
-        update.run(num(l.counted_quantity, 'counted_quantity', { min: 0 }), take.id, id(l.product_id, 'product_id', { required: true }));
+        const count = num(l.counted_quantity, 'counted_quantity', { min: 0 });
+        // A line is a product, or a prepped recipe (recipe_id).
+        if (l.recipe_id !== undefined && l.recipe_id !== null) updatePrep.run(count, take.id, id(l.recipe_id, 'recipe_id', { required: true }));
+        else update.run(count, take.id, id(l.product_id, 'product_id', { required: true }));
       }
     });
     res.json(loadTake(req));
   });
 
-  router.post('/stocktakes/:id/complete', requireManager, (req, res) => {
+  router.post('/stocktakes/:id/complete', requirePerm('stock.complete'), (req, res) => {
     const take = loadTake(req);
     if (take.status !== 'in_progress') throw badRequest('This stock take is already completed');
     const uncounted = take.line_count - take.counted_count;
@@ -101,13 +130,14 @@ export function registerStockRoutes(router, db) {
     }
     tx(db, () => {
       db.prepare('UPDATE stock_take_lines SET counted_quantity = 0 WHERE stock_take_id = ? AND counted_quantity IS NULL').run(take.id);
+      db.prepare('UPDATE stock_take_prep_lines SET counted_quantity = 0 WHERE stock_take_id = ? AND counted_quantity IS NULL').run(take.id);
       db.prepare(`UPDATE stock_takes SET status = 'completed', completed_by = ?, completed_at = datetime('now') WHERE id = ?`)
         .run(req.user.id, take.id);
     });
     res.json(loadTake(req));
   });
 
-  router.delete('/stocktakes/:id', requireManager, (req, res) => {
+  router.delete('/stocktakes/:id', requirePerm('stock.complete'), (req, res) => {
     const take = loadTake(req);
     if (take.status !== 'in_progress') throw badRequest('Completed stock takes cannot be deleted');
     db.prepare('DELETE FROM stock_takes WHERE id = ?').run(take.id);
@@ -125,29 +155,23 @@ export function registerStockRoutes(router, db) {
     return { from, to };
   }
 
-  // Admins may omit location_id to see every site.
-  function wastageLocations(req) {
-    if (req.user.role === 'admin' && !req.query.location_id) return null;
-    return resolveLocation(req, req.query.location_id);
-  }
-
+  // One site, or with no location_id every site the user can access.
   function wastageRows(req) {
     const { from, to } = wastageRange(req.query);
-    const locationId = wastageLocations(req);
+    const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
     const sql = `SELECT w.*, l.name AS location_name, u.name AS recorded_by_name FROM wastage w
       JOIN locations l ON l.id = w.location_id LEFT JOIN users u ON u.id = w.recorded_by
-      WHERE w.date BETWEEN ? AND ? ${locationId ? 'AND w.location_id = ?' : ''}
+      WHERE w.date BETWEEN ? AND ? AND w.location_id IN (${ids.map(() => '?').join(', ')})
       ORDER BY w.date DESC, w.id DESC`;
-    const rows = locationId ? db.prepare(sql).all(from, to, locationId) : db.prepare(sql).all(from, to);
-    return { from, to, locationId, rows };
+    return { from, to, ids, rows: db.prepare(sql).all(from, to, ...ids) };
   }
 
-  router.get('/wastage', (req, res) => {
+  router.get('/wastage', requirePerm('wastage.record', 'wastage.reports', 'wastage.manage'), (req, res) => {
     const { rows } = wastageRows(req);
     res.json(rows.slice(0, 500));
   });
 
-  router.post('/wastage', (req, res) => {
+  router.post('/wastage', requirePerm('wastage.record'), (req, res) => {
     const b = req.body;
     const locationId = resolveLocation(req, b.location_id);
     const productId = id(b.product_id, 'product_id');
@@ -159,30 +183,30 @@ export function registerStockRoutes(router, db) {
     if (recipeId && !recipe) throw notFound('Recipe');
     const itemName = product?.name ?? recipe?.name ?? str(b.item_name, 'item_name', { required: true, max: 150 });
     const quantity = num(b.quantity, 'quantity', { required: true, min: 0.001 });
-    const unitCost = recipe ? recipe.cost_per_portion : num(b.unit_cost, 'unit_cost', { min: 0 }) ?? product?.unit_cost ?? 0;
+    const unitCost = recipe ? (recipe.kind === 'prep' ? recipe.cost_per_unit : recipe.cost_per_portion) : num(b.unit_cost, 'unit_cost', { min: 0 }) ?? product?.unit_cost ?? 0;
     const entryDate = date(b.date, 'date') ?? today();
     if (entryDate > today()) throw badRequest('Wastage cannot be recorded for a future date');
     const r = db.prepare(`INSERT INTO wastage (location_id, product_id, recipe_id, item_name, quantity, unit, unit_cost, total_cost, reason, notes, date, recorded_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(locationId, product?.id ?? null, recipe?.id ?? null, itemName, quantity,
-        product?.unit ?? (recipe ? 'portion' : null) ?? str(b.unit, 'unit', { max: 30 }) ?? 'each',
+        product?.unit ?? (recipe ? (recipe.kind === 'prep' ? recipe.yield_unit : 'portion') : null) ?? str(b.unit, 'unit', { max: 30 }) ?? 'each',
         unitCost, round2(quantity * unitCost), oneOf(b.reason, 'reason', WASTAGE_REASONS, { required: true }),
         str(b.notes, 'notes'), entryDate, req.user.id);
     res.status(201).json(db.prepare('SELECT * FROM wastage WHERE id = ?').get(r.lastInsertRowid));
   });
 
-  router.delete('/wastage/:id', (req, res) => {
+  router.delete('/wastage/:id', requirePerm('wastage.record', 'wastage.manage'), (req, res) => {
     const entry = db.prepare('SELECT * FROM wastage WHERE id = ?').get(Number(req.params.id));
     if (!entry) throw notFound('Wastage entry');
     assertLocation(req, entry.location_id);
     const ownToday = entry.recorded_by === req.user.id && entry.date === today();
-    if (!isManager(req.user) && !ownToday) throw forbidden('Only managers can remove older entries or other people’s entries');
+    if (!can(req.user, 'wastage.manage') && !ownToday) throw forbidden('You can only remove your own entries from today');
     db.prepare('DELETE FROM wastage WHERE id = ?').run(entry.id);
     res.json({ ok: true });
   });
 
-  router.get('/wastage/report', (req, res) => {
-    const { from, to, locationId, rows } = wastageRows(req);
+  router.get('/wastage/report', requirePerm('wastage.reports'), (req, res) => {
+    const { from, to, ids, rows } = wastageRows(req);
     const group = (keyFn) => {
       const m = new Map();
       for (const r of rows) {
@@ -198,9 +222,9 @@ export function registerStockRoutes(router, db) {
     };
     const totalCost = round2(rows.reduce((s, r) => s + r.total_cost, 0));
     let sales = null;
-    if (isManager(req.user)) {
-      const sql = `SELECT COALESCE(SUM(net_sales), 0) AS net, COUNT(*) AS n FROM sales_daily WHERE date BETWEEN ? AND ?${locationId ? ' AND location_id = ?' : ''}`;
-      const r = locationId ? db.prepare(sql).get(from, to, locationId) : db.prepare(sql).get(from, to);
+    if (can(req.user, 'sales.view')) {
+      const r = db.prepare(`SELECT COALESCE(SUM(net_sales), 0) AS net, COUNT(*) AS n FROM sales_daily
+        WHERE date BETWEEN ? AND ? AND location_id IN (${ids.map(() => '?').join(', ')})`).get(from, to, ...ids);
       if (r.n) sales = { net_sales: round2(r.net), wastage_pct: r.net > 0 ? round2((totalCost / r.net) * 100) : null };
     }
     res.json({
@@ -216,7 +240,7 @@ export function registerStockRoutes(router, db) {
     });
   });
 
-  router.get('/wastage/export.csv', (req, res) => {
+  router.get('/wastage/export.csv', requirePerm('wastage.reports'), (req, res) => {
     const { from, to, rows } = wastageRows(req);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="wastage_${from}_${to}.csv"`);

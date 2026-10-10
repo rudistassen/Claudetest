@@ -119,6 +119,13 @@ function tzOffsetMs(utcMs, tz) {
   return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second) - utcMs;
 }
 
+/** UTC instant (ms) of a local date and "HH:MM" time in time zone tz. */
+export function zonedTimeUTC(iso, hhmm, tz = TZ) {
+  const guess = Date.parse(`${iso}T${hhmm}:00Z`);
+  const first = guess - tzOffsetMs(guess, tz);
+  return guess - tzOffsetMs(first, tz);
+}
+
 // UTC instant (RFC 3339) of local midnight at the start of iso in time zone tz.
 export function zonedMidnightUTC(iso, tz = TZ) {
   const guess = Date.parse(`${iso}T00:00:00Z`);
@@ -132,6 +139,14 @@ const dateFormats = new Map();
 export function localDate(timestamp, tz = TZ) {
   if (!dateFormats.has(tz)) dateFormats.set(tz, new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }));
   return dateFormats.get(tz).format(new Date(timestamp));
+}
+
+const hourFormats = new Map();
+
+// Local hour of the day (0–23) in tz of a UTC timestamp.
+export function localHour(timestamp, tz = TZ) {
+  if (!hourFormats.has(tz)) hourFormats.set(tz, new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }));
+  return Number(hourFormats.get(tz).format(new Date(timestamp)));
 }
 
 export const BUSINESS_TZ = TZ;

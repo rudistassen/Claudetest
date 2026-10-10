@@ -1,4 +1,4 @@
-# Cafe Ops
+# Atlas
 
 One web app for running a multi-site cafe business. It works on desktops, tablets and phones, so staff can use it on a tablet behind the counter and managers can use it from anywhere.
 
@@ -6,23 +6,42 @@ One web app for running a multi-site cafe business. It works on desktops, tablet
 
 | Module | What it does |
 | --- | --- |
-| **Dashboard** | A card for each site showing today's food-safety progress, failed checks, 7-day wastage cost, open orders, last stock take and who is on shift. Admins see all sites at once. |
-| **Food safety** | Daily and weekly checklists based on the FSA *Safer Food, Better Business* diary: fridge/freezer/hot-hold/cooking/dishwasher temperatures, opening and closing checks, cleaning, pest control, allergens and probe calibration. A reading outside the safe range is marked as failed, and a corrective action must be recorded. There is a compliance report across all sites with a printable log of failures and actions. Checks can be set up for every site or for a single site (for example "Walk-in fridge 2"). |
-| **Rota** | A weekly grid for each site. Click a cell to add a shift. You can copy last week's rota and print it. Hours and labour cost are totalled for each person and each day. Nobody can be double-booked at the same time, even across different sites, and staff can cover shifts at other sites. Staff see the rota and their own upcoming shifts, but not pay rates. |
+| **Dashboards → HQ Dashboard** | For people who can see sales, a **Sales & labour by site** panel: net sales, orders and labour % (clocked from Square where available, otherwise rostered) for every site – today, the last 7 days, week to date (from Monday), month to date or year to date – with bars, the labour target and a group total. Then a card for each site: gross sales, net sales and labour cost today so far, each against the same weekday last week up to the same time; who has clocked in (from Square) and for how long; 7-day wastage, open orders and the last stock take; and the daily and weekly Trail checks at the bottom. People who can't see sales see who is rostered on instead. Admins see all sites at once, and open Atlas here. Buttons along the top switch the whole dashboard between **Today**, **Last 7 days**, **Week to date** (from Monday), **Month to date** and **Year to date**: the sales and labour tiles, the chart (by hour for today, by day, or by month for the year), the by-site panel, checks, and each site's sales, labour, checks and wastage. Week-type periods are compared with the same time last week, month and year to date with the same dates last month and last year. Who's in, clock-ins and rotas always show the day. |
+| **Dashboards → Manager Dashboard** | One site's day for the person running it – where managers open Atlas. | Today's sales against this time last week, labour today, this week's rota labour % against the forecast, and checks done; a **Needs you** list of everything waiting on them (failed or outstanding Trail checks, people not clocked in, holiday requests, shift drops and pick-ups, unpublished rota changes, next week's rota not started, draft orders, stock takes, training sign-offs and overdue training, overdue reviews, unread event enquiries), each linking to where it's done; who's on today; and the week's rota labour % day by day. Opens on the person's home site; managers with more than one site can switch site. Each dashboard has its own permission (Setup → Permissions: See the HQ Dashboard, See the Manager Dashboard). |
+| **Trail** | Food-safety checks: daily and weekly checklists based on the FSA *Safer Food, Better Business* diary: fridge/freezer/hot-hold/cooking/dishwasher temperatures, opening and closing checks, cleaning, pest control, allergens and probe calibration. A reading outside the safe range is marked as failed, and a corrective action must be recorded. There is a compliance report across all sites with a printable log of failures and actions. Under **Trail → Set up**, each site’s checks can be managed one site at a time: add a check for that site (admins can add one for every site), change a shared check for just that site (with **Use the shared version** to undo), turn a shared check off at one site, and edit, turn off or delete a site’s own checks. A check with past records is turned off rather than deleted, so the history is kept. |
+| **My Atlas** | Each person's own page (first under **Team**): their details (role, access, sites, pay rate), their next shifts, holiday booked and waiting, and the **news feed** – announcements, policy updates, events and reminders posted under **Setup → News**. Posts can include **photos and short videos** (up to 10 per post; photos are resized automatically, videos up to 25 MB), go to every site or chosen sites, can be pinned, and policy updates can ask people to tap **I've read this**; Setup → News shows who has and hasn't. The menu shows a red count of updates waiting to be read. **Company documents** (handbooks, policies, guides and forms – PDF, Word, Excel, PowerPoint, text or pictures up to 20 MB) are listed on My Atlas too, shared with every site or chosen sites from **Setup → Documents**. Posting needs the "My Atlas news" permission (given to managers). |
+| **Rota** | Opens on **today**: a timeline of the day's shifts, site by site, with a Day/Week toggle. For managers, each site shows **forecast sales** (that weekday's average over the last 8 weeks, leaving out bank holidays and closed days) and the rota's **labour %** against it, updating as shifts are added. Publish the whole week, one site, one day, or **just one shift**. The week view is a weekly grid for each site. Click a cell to add a shift. You can copy last week's rota and print it. Hours and labour cost are totalled for each person and each day. Nobody can be double-booked at the same time, even across different sites, and staff can cover shifts at other sites. Admins can switch to **All sites** to see every site's rota at once, grouped by the site people are rostered at (each site's own staff plus anyone covering there that week), and each shift has a **Site** so anyone can be put on at another café (shifts at another site show greyed out on their home site's rota). Changes are a **draft** until someone with the *Publish the rota* permission clicks **Publish**: editors see new, changed and removed shifts marked (with what staff currently see), can discard them, and everyone else keeps seeing the last published rota, including on the dashboard and in their upcoming shifts. Labour figures on the Trading and Sales pages use the published rota. Staff see the rota and their own upcoming shifts, but not pay rates. A **My shifts** button shows just your own published shifts for the week, at every site, with hours and who else is on. |
+| **Time off** | Everyone can **request holiday** (whole days, with a note) and cancel it, and set their **usual availability** for each day of the week (any time, only between two times, or not available) with a note. People with *Approve holiday requests* approve or decline requests from staff at their sites (never their own), see who's on the rota during a requested holiday, and see the team's availability. Approved holiday shows on the rota and blocks shifts on those days; requested holiday and availability show as hints, and adding a shift outside someone's availability gives a warning. The dashboard shows how many requests are waiting. |
 | **Supplier orders** | Suppliers have order days, lead times and minimum orders. When you build an order, quantities are suggested as *par level minus the last stock count*, and par levels can be set per site. Orders go draft → sent (opens a ready-written email to the supplier) → received (record short or missing items) or cancelled. |
 | **Stock takes** | Count stock by category on a phone or tablet. Counts save automatically, and you can search or show only uncounted items. The previous count is shown next to each item, with a running stock value. A manager completes the count. |
 | **Wastage** | Staff record waste from the product list (costed automatically) or as a free-text item, with a reason. Reports break wastage down by reason, item and site over any date range, and export to CSV. |
 | **Sales (Square)** | Pulls completed orders from your Square account for each linked site. Shows net sales (after discounts, excluding VAT and tips), transactions, average spend and top items, next to **labour %** (rostered wages ÷ net sales) and **wastage %** by day and by site. Sales also appear on the dashboard, in the rota footer and on the wastage page. Managers only. |
+| **Trading (Square)** | A dashboard of Square sales next to **actual labour from Square clock-ins** (Timecards). Charts show net sales by day, labour % of sales (clocked vs rostered, against the target), and sales and staff on the clock by hour of the day. Tables show sales per labour hour, hours clocked vs rostered by site, who is clocked in now, and each person's rota vs clock-ins (late starts, missed shifts, clock-ins with no shift). A **Labour heatmap** tab shows labour % for every day of the week × hour of the day (clocked or rostered, blue under target through red over), with the hours where labour runs highest and the labour cost in hours with no sales. Managers only. |
 | **Recipes** | Recipe cards with ingredients, method, shelf life and portions. Each recipe is **costed automatically** from product prices and pack sizes (e.g. a 4L bottle of milk = 4000 ml), with cost per portion and **GP after VAT** (target 70%). **Allergens** come from the ingredients across the UK's 14 allergens, plus any you add by hand and "may contain" warnings. There is an **allergen matrix** with a "free from" filter for the counter. Link a recipe to its Square item to get **menu performance** (units sold, food cost and GP per item) and **theoretical ingredient usage**, and to cost wasted made items (e.g. a toastie) from the recipe. Staff can see recipes and allergens but not costs. Only admins edit recipes, so all sites stay the same. |
-| **Setup** | Manage staff (role, home site, position, hourly rate), locations, suppliers, products and food-safety checks. |
+| **Rota → ✨ Read a rota** | Admins only: upload a photo or PDF of a rota (printed, handwritten or a spreadsheet) and Claude reads it. | Claude matches names to the team and sites, then every shift it found is listed for checking – ✓ ready, ⚠ to check (a name it couldn't match, unclear times, or anything it's unsure of), ✕ double-booked or on holiday, = already on the rota. Fix and tick what to add; the shifts go in as drafts (highlighted, with one Undo for the lot) until you publish. Uses the same ANTHROPIC_API_KEY as the invoice reader (ROTA_MODEL overrides the model). |
+| **Rota → 📊 Analyse this week's rota** | Admins only: Claude compares the week's rota – published shifts and draft changes – with forecast sales (or the sales budget) and the usual trade hour by hour, and suggests where labour could be saved. | Shows each site's labour % against the 30% target, a list of suggestions (finish someone earlier, start later, drop a shift on a quiet day…) with the saving worked out from each person's hourly cost, and places that look too thin. **Show on rota** highlights the shifts. Each analysis is saved: **📋 Suggestions** on the rota reopens the latest one for that week. Nothing is changed. Sends the week's shifts, names, roles and hourly costs to Claude; uses the same ANTHROPIC_API_KEY (ROTA_MODEL overrides the model). |
+| **Time off → Team holiday** | Managers (with permission to approve holiday) look after their team's holiday. | Approve or decline requests; **+ Add holiday** for someone (approved straight away – past dates are fine, to record holiday already taken); **Change dates** to shorten, extend or move booked holiday; **Take off** to remove it. The person is notified and each change is recorded in Rota changes. Managers can't change their own holiday. |
+| **Open shifts** | Anyone, from any site, can ask to pick up an open shift. | It's held for them (nobody else is offered it) until a manager who publishes that site's rota approves it under **Rota → Requests** (or by tapping it on the rota) – then it goes onto their published rota – or declines it, when it's open for anyone again. They're notified either way and can cancel while they wait. Managers who publish that site's rota get a shift they pick up straight away. |
+| **People → Learning & development** | Build online training courses and see who has done what. | Three tiles: **Training matrix** (who has done what), **E-Learning** (the online courses) and **Assign courses** (each member of staff with the courses they’ve been given – give or take off courses, filter to overdue). **+ Course** opens the course designer: add pages (text, a picture or video, or a YouTube link) and multiple-choice questions with a pass mark. Publish it, then **Give to people** (tick names, a site or a role, with an optional due date) and/or tick **Open to everyone**. Staff take courses on their phone from My Atlas (**Training**, and **My tasks** for ones given to them); passing records the training automatically. Tick **Needs signing off in person** and a manager signs it off (under **Waiting for your sign-off**) before it counts. **📚 Ready-made courses** adds a ready-written course (e.g. a health & safety induction for new staff) as a draft to check and publish. |
+| **Setup** | Manage permission sets, locations, suppliers, products and food-safety checks. Staff (access, home site, hourly rate) is under **People → Admin → Staff**. | **Products → Import** adds or updates products in bulk from an Excel or CSV file (or rows pasted from Excel), with a preview of every change first: products are matched by SKU then name, blank cells leave values as they are, and new suppliers are added. **Export** downloads every product in the same layout, to edit in Excel and import back. **Staff** has a search box and tick boxes: tick people (or tick the header box to select everyone shown) and **Edit selected** to change their role, home site, access, hourly rate or active status in one go – only the fields you change are updated, and if anyone can't be changed, nobody is. Each person's **Role** (e.g. Kitchen, Front of house) groups the rota: **View: site, then role** or **View: role, then site**.
+| **Setup → Staff log** | Admins only: every sign-in (including failed ones, with the device and IP address), sign-out and password change, and every change people make in Atlas, in plain English. | Filter by person, sign-ins or changes, area and dates, and **Export to Excel**. The same change made again within 10 minutes (such as counting stock) shows once with a count. Passwords are never logged. Entries are kept for a year. |
+| **View Atlas as someone** | Admins only: open a person on **People → Staff** and tap **View Atlas as …** to see the app exactly as they would – their menus, access, shifts and tasks. | It's look only: nothing can be changed while viewing (a bar across the top says who you're viewing as, with **Stop viewing**). Only that sign-in is affected – the person themselves isn't signed out or changed – and starting and stopping are recorded in the Staff log. You can view as anyone active, including other admins. |
 
-## Roles
+## Roles and permissions
 
-- **Admin** (owner/ops): all 7 sites, can change settings, and can switch site from the top bar.
-- **Manager**: their own site. Can manage the rota, orders, stock takes, staff and site-specific safety checks.
-- **Staff**: their own site. Can complete safety checks, record wastage, enter stock counts and view the rota.
+- **Admin** (owner/ops): everything at every site. Admins aren't limited by a permission set, so you can't lock yourself out.
+- **Sites:** everyone can work with **every site** by default. On the Staff page you can limit someone to **only the sites you tick** (their home site is always included). Anyone with more than one site gets the site picker in the top bar and the "All sites" views (dashboard, rota, sales, trading, wastage, compliance report). People who manage staff can only give others sites they have themselves.
+- **Everyone else** (not admins) can do what their **permission set** allows, at the sites they can work with. Sets are managed by admins under **Setup → Permissions**: tick what each set allows, area by area: dashboards, Trail, rota (including approving shift drops, sales budgets and the Claude rota tools), holiday & availability (approving, changing people's holiday, and seeing availability are separate), wastage, stock takes, orders & invoices, recipes, sales & trading (including Google reviews), staff (pay rates and the Staff log are separate), People (recruitment, training, performance and areas each separate), events (enquiries and calendar), news & documents, and suppliers & products. When permissions were made finer, every set and person kept everything they could already do. Give each person a set with the **Access** box on the Staff page.
+- Two sets are built in and match the old roles: **Manager** (runs their site: rota, orders, stock, staff and sales) and **Staff** (food-safety checks, wastage, stock counts, the rota and recipes). People without a set get the one for their role. Built-in sets can be changed but not deleted, and a set can't be deleted while anyone uses it.
+- People who can manage staff can only give others access they have themselves, and only admins can give someone access to manage staff.
 
 ## Running it
+
+**On Windows, the easy way:** install [Node.js](https://nodejs.org) (the LTS version), then double-click `start-windows.bat` in this folder. The first time, it sets the app up and asks for your Square access token (it's saved in `square-token.txt` next to it, which is never committed; delete that file to change the token). It then opens the app in your browser. Keep the black window open while you use the app.
+
+To update to the latest version, close the app and double-click `update-windows.bat`. It backs up `data/cafe.db` to `data/cafe-backup.db`, downloads the latest code and installs it, keeping your data and Square token.
+
+**From a terminal:**
 
 Requires **Node.js 22.13 or newer**. It uses the SQLite built into Node, so no database server is needed.
 
@@ -57,23 +76,87 @@ Then sign in and add your locations, staff, suppliers and products under **Setup
 | `SEED_DEMO` | `true` | Set to `false` to skip demo data |
 | `SQUARE_ACCESS_TOKEN` | – | Square access token; turns on the Square integration |
 | `SQUARE_ENVIRONMENT` | `production` | `sandbox` to use a Square sandbox token and test data |
-| `SQUARE_SYNC_MINUTES` | `30` | How often today's and yesterday's sales are refreshed |
+| `SQUARE_SYNC_MINUTES` | `5` | How often today's and yesterday's sales are refreshed |
 | `SQUARE_API_VERSION` | `2025-01-23` | Square API version header |
 
 `npm run seed` **deletes** the database and recreates it.
 
 ## Connecting Square
 
-1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "Cafe Ops").
-2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders and locations. Treat it like a password.
-3. Start Cafe Ops with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
-4. In Cafe Ops go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
-5. Click **Import sales** to backfill history (up to 92 days per run). After that, sales refresh automatically every 30 minutes. The first automatic run backfills the last 28 days.
+1. Sign in at [developer.squareup.com](https://developer.squareup.com) with the Square account that owns your locations, and create an application (e.g. "Atlas").
+2. Open the app, switch to **Production** and copy the **access token**. It gives read access to your orders, locations, team members and timecards (the token needs `ORDERS_READ`, `MERCHANT_PROFILE_READ`, `EMPLOYEES_READ`, `TIMECARDS_READ` and `ITEMS_READ` – the last one gives each item's category, for **Reporting → Par levels**). Treat it like a password.
+3. Start Atlas with it set, e.g. `SQUARE_ACCESS_TOKEN=EAAA... npm start`. The token is only read from the environment and is never stored in the database or shown in the app.
+4. In Atlas go to **Setup → Square**. Link each site to its Square location, or use **Add as new site** to create sites straight from Square.
+5. Click **Import sales** to backfill history (up to 92 days per run). After that, sales and clock-ins refresh automatically every 30 minutes. The first automatic run backfills the last 6 weeks.
+6. To use your Square team as your staff list, go to **People → Staff → Import from Square**. It shows what will change before anything is saved. Everyone in Square Team is added, or updated if already here (matched by email, then name). Their hourly rate comes from their pay in Square. New people's home site comes from their assigned Square locations (or where they usually clock in); after that the home site is yours to change on the Staff page, and importing again keeps it. Tick **Deactivate staff who aren't in Square** to switch off everyone else, such as the demo staff; they keep their history, and the admin running the import stays active. New people get a random password, so set one (click their name) if they need to sign in. Run it again any time to pick up changes.
+7. Once your sites are linked and your staff imported, **Setup → Square → Remove what isn't in Square** deletes the sites not linked to Square and the staff not in your Square team (for example the demo data), with their rotas and records. It lists what will go first, never removes you, moves anyone in Square whose home site is removed to a site you keep, and saves a copy of the database as `data/cafe-before-cleanup-<date>.db` before deleting.
+8. Staff clock in and out on Square (Square Team / Timecards). Each Square team member is matched to a Atlas user by **email address**, then by name, so use the same email in both. If the token can't read timecards, sales still sync and the reason is shown on the Trading page and in the sync history.
 
 How the numbers are worked out:
 - **Net sales** = line-item totals after discounts, minus VAT (UK Square prices include VAT), minus itemised returns. Tips and service charges are excluded. Only `COMPLETED` orders are counted, and each is assigned to a business day by its close time in UK time.
 - **Labour %** = rostered hours × each person's hourly rate ÷ net sales. For today it only counts hours worked up to now, and days with no Square sales are left out. The colours are green at 30% or below and amber up to 35%. Change `LABOUR_TARGET` in `public/js/views/sales.js` if your target differs.
+- **Clocked labour** = paid hours on each Square timecard (unpaid breaks removed; still-open timecards count up to now) × the wage set on the job in Square, or the person's hourly rate in Atlas if Square has none. Each timecard counts on the day it started.
+- **Sales per labour hour** = net sales ÷ clocked hours, on days that have both. **Staff on the clock** by hour is paid clocked hours in that hour, averaged over the days with sales.
 - Re-importing a period replaces what was stored for it, so it is safe to run again after refunds or late edits.
+
+## Installing the app
+
+Atlas can be installed as an app (a Progressive Web App) – an icon on the home screen or in the computer's apps, opening full screen. It's the same website underneath, so it updates itself whenever the site does.
+
+- **iPhone / iPad:** open the site in Safari → **Share** → **Add to Home Screen**.
+- **Android:** in Chrome, tap **Install app** (or ⋮ → **Install app**).
+- **Windows / Mac:** in Chrome or Edge, click the install icon in the address bar, or **Install app** at the bottom of the menu in Atlas.
+
+**Your account** shows the right steps for the device you're on. Installing needs the site on https (Railway provides it); the app needs a connection to work and says so when it's offline.
+
+## Supplier invoices
+
+**Stock and Ordering → Invoices** reads supplier invoices for you. Upload a PDF (or a photo of a paper invoice) – several at once, or drag them onto the page – and Atlas reads the supplier, invoice number, dates, every line (description, code, quantity, price, total) and the totals, whatever the supplier's layout. It then:
+
+- recognises the **supplier** (by name, or their email address's domain), or offers to add them;
+- matches each **line to your products** – by what you matched it to last time for that supplier, then the supplier's product code, then the name, then the closest similar name – and says how sure it is;
+- shows **price changes** against your current cost (e.g. £3.20 → £3.40 ▲6%), ticked to update the cost unless the change is so big the units probably differ;
+- warns about **duplicates** (the same invoice number from the same supplier) and **totals that don't add up**.
+
+You check it next to the original, correct anything, then **Confirm**: new suppliers and products are added, ticked costs are updated, and lines you matched by hand are remembered for that supplier's future invoices. **Save for later** keeps it under *To check*.
+
+Invoices are read by Claude (Anthropic's AI model, `claude-opus-5-5`), which costs roughly 5–10p per invoice. To switch it on:
+
+1. Sign up at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, and create a key under **API keys**.
+2. Set `ANTHROPIC_API_KEY` to the key in the app's environment (Railway → Variables) and deploy. Create the key **inside a workspace** (Console → Workspaces → your workspace → API keys); a key made at organisation level also needs `ANTHROPIC_WORKSPACE_ID` set to the workspace's ID. Optional: `INVOICE_MODEL` to use a different Claude model.
+
+The events inbox doesn't use Claude unless `EVENTS_USE_CLAUDE=on` is set in Railway → Variables. Without it, enquiries still arrive from the inbox, but Claude doesn't read their details, offer **Fill in from emails** or clear out marketing emails.
+
+The uploaded file is sent to Anthropic to be read and stored in Atlas's database with the invoice.
+
+## Email reports
+
+Admins can email the dashboard to chosen people at a set time (**Setup → Email reports**): pick the time, the days, whether it covers **yesterday's full day** (good for a morning email) or **today so far**, and who gets it. Each person gets the sites they can access, with sales and labour figures only if their permissions include sales. Just before sending, the app fetches the latest figures from Square. **Preview** shows exactly what each person will get; **Send me a test** emails just you.
+
+Email goes through [Brevo](https://www.brevo.com) (free for up to 300 emails a day), because hosts such as Railway block ordinary email on their cheaper plans. To switch it on:
+
+1. Sign up at brevo.com.
+2. Under **Senders, domains & dedicated IPs → Senders**, add the address emails should come from and confirm it from the email Brevo sends.
+3. Under **SMTP & API → API keys**, generate a key.
+4. Set `BREVO_API_KEY` (the key) and `EMAIL_FROM` (the sender address) in the app's environment (Railway → Variables), and deploy. Optional: `EMAIL_FROM_NAME` (default "Atlas") and `APP_URL` (your Atlas address, for an "Open Atlas" button; on Railway it's found automatically).
+
+## Par levels
+
+**Reporting → Par levels** has two tiles. **Create a new par level report**: pick a Square category, then a site. Pick the sales dates the averages come from (the last 6 full weeks to start with, or quick picks for the last 4, 6, 8 or 12 weeks). Each item in that category shows its average sold on each day of the week (Monday to Sunday) over those dates – days the site didn't trade are left out – with a row under it to budget the par level for each day. **Fill budget with average sold** puts in each day's average rounded up, to adjust from. **Export to Excel** downloads the page as it is (sorted, with the budget so far). **Save par levels** asks for a name and saves just the budgeted levels. **View saved par levels** lists the saved reports; each opens to its par levels, to print, export to Excel, change (saving the changes or as a new report) or delete. Categories come from Square's Items library, read with each Square sync (at most hourly).
+
+## Sales budget
+
+**Rota → Sales budget**: pick a week; each site shows its forecast **gross** sales for each day (the average for that weekday over the last 8 weeks – a guide) and a row to set a gross budget for any day you know will be different, such as a Saturday with an event. **Copy forecast into budget** starts from the forecast. **Publish** a site's budget on its own, or **Publish budget** for every site with changes; a site with changes not yet published is marked. Once published, the weekly rota and **Reporting → Rota costs** use it instead of the forecast; days left blank use the forecast.
+
+Forecasts and budgets are in gross sales (what the business talks in), as are the dashboard, the rota's actual sales and Rota costs. Labour % and the 30% labour budget are always worked out on **net** sales (after discounts, excluding VAT): the forecast's own net average, or a gross budget turned into net at the site's own net-to-gross rate over the last 8 weeks (20% VAT if it has no sales yet). Trading, Sales and Menu performance are in net sales. Every sales figure says whether it's gross or net.
+
+## Phone notifications
+
+Staff turn notifications on themselves on **My Atlas → Phone notifications** (on an iPhone, Atlas must be added to the Home Screen and opened from there), and choose which they get: the rota published, their shifts changing, open shifts, shift drop, pick-up and holiday decisions, news and training; and for managers, holiday, shift drop and shift pick-up requests, training sign-offs, someone not clocked in 15 minutes after their shift starts (sites with Square clock-ins), new events enquiries and new job applications.
+
+Everything someone is notified about is also kept on their **Notifications** page (the 🔔 button on My Atlas, or the menu under their name) for 60 days. Tapping a notification on the phone opens that page, with a button to the page it's about.
+
+They're on as soon as Atlas starts: it makes its own notification keys the first time and keeps them in its database. (To use your own instead, set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` – `npm run push-keys` makes a pair – and don't change them afterwards, or phones would need turning on again.)
 
 ## Standalone demo
 
@@ -81,7 +164,7 @@ How the numbers are worked out:
 npm run build:demo   # writes dist/cafe-ops-demo.html
 ```
 
-This produces one self-contained HTML file (about 1.4 MB) that runs the whole app in the browser. The real server routes run against an in-page SQLite database (sql.js), with demo data for 7 sites and a pretend Square account. Open it straight from disk, or host it anywhere as a static file, to show people the app. Nothing is saved, and it resets when reloaded.
+This produces one self-contained HTML file (about 1.4 MB) that runs the whole app in the browser. The real server routes run against an in-page SQLite database (sql.js), with demo data for 7 sites and a pretend Square account (sales, plus clock-ins that follow the demo rota). Open it straight from disk, or host it anywhere as a static file, to show people the app. Nothing is saved, and it resets when reloaded.
 
 ## Tests
 
@@ -89,11 +172,18 @@ This produces one self-contained HTML file (about 1.4 MB) that runs the whole ap
 npm test
 ```
 
-The Square tests run against a local mock of Square's Locations and Orders APIs: pagination, request format, VAT, returns, UK time zone day boundaries and idempotent re-syncs. The API tests cover login, site and role permissions, rota clash detection and week copying, suggested order quantities, the order lifecycle, stock-take completion, wastage costing and reports, and food-safety range checks and compliance.
+The Square tests run against a local mock of Square's Locations, Orders, Team and Labor APIs: pagination, request format, VAT, returns, UK time zone day boundaries, idempotent re-syncs, timecard breaks and wages, team member matching, the trading dashboard figures, and sales still syncing when the token can't read timecards. The API tests cover login, site and role permissions, rota clash detection and week copying, suggested order quantities, the order lifecycle, stock-take completion, wastage costing and reports, and food-safety range checks and compliance.
 
 ## Deploying
 
-The app is one Node process plus one SQLite file, so it runs on any small VPS or platform with a persistent disk (Render, Railway, Fly.io, a DigitalOcean droplet, etc.). Put it behind HTTPS (the session cookie is marked `Secure` when served over HTTPS) and back up `data/cafe.db` regularly.
+The app is one Node process plus one SQLite file, so it runs on any platform with a persistent disk (Railway, Render, Fly.io, a small VPS). For example on **Railway**:
+
+1. New project → **Deploy from GitHub repo** → pick this repository (and the branch to run, under the service's Settings → Source).
+2. Add a **Volume** to the service, mounted at `/data`.
+3. Add these **Variables**: `DB_PATH=/data/cafe.db`, `SEED_DEMO=false`, `ADMIN_EMAIL=you@yourcafe.co.uk`, `ADMIN_PASSWORD=<a strong password>`, `SQUARE_ACCESS_TOKEN=<your token>`.
+4. Under **Settings → Networking**, click **Generate Domain** to get a web address (HTTPS is included).
+
+On start-up the app creates your admin account from `ADMIN_EMAIL`/`ADMIN_PASSWORD` if it doesn't exist yet (also when the platform started the app once before these were set; an existing account is left alone). With `SEED_DEMO=false`, any account still using the demo password is switched off on start-up. `PORT` is set by the platform. On Railway, Render and Fly.io the app trusts the platform's proxy automatically, so the session cookie is marked `Secure`; elsewhere set `TRUST_PROXY=1` when running behind a reverse proxy. Failed sign-ins are limited to 10 per account and 20 per address every 15 minutes. Back up the database file regularly.
 
 ## Project layout
 
@@ -102,13 +192,16 @@ src/
   index.js          start-up, first-run seeding
   server.js         Express app and error handling
   db.js             schema
-  auth.js           passwords, sessions, role/location checks
+  auth.js           passwords, sessions, permission and location checks
+  permissions.js    the permission catalogue and built-in Manager/Staff sets
   seed.js           demo data and default food-safety checks
-  square.js         Square API client, order summarising and sales sync
-  metrics.js        sales / labour / wastage per site per day
-  routes/           admin, rota, ordering, stock (stock takes + wastage), safety (+ dashboard), sales (+ Square setup)
+  square.js         Square API client, order and timecard summarising, sales + clock-in sync
+  team.js           importing Square Team members as staff
+  cleanup.js        removing sites and staff that aren't in Square
+  metrics.js        sales / rostered and clocked labour / wastage per site per day and hour
+  routes/           admin, rota, ordering, stock (stock takes + wastage), safety (+ dashboard), sales (+ Square setup), trading
 public/
-  index.html, css/, js/app.js (router), js/views/*   no build step
+  index.html, css/, js/app.js (router), js/charts.js (SVG charts), js/views/*   no build step
 test/api.test.js, test/square.test.js
 ```
 
@@ -117,7 +210,6 @@ test/api.test.js, test/square.test.js
 - Holiday/leave requests and staff availability on the rota; export hours to payroll
 - Emailing orders straight from the server (SMTP), plus supplier price updates
 - Recipes that link Square menu items to stock products, giving theoretical stock (deliveries − sales − wastage), variance against counts, and smarter order suggestions
-- Importing staff from Square Team and comparing actual clock-in hours from Square with the rota
 - Photo uploads for wastage and failed safety checks
 - Reminders or push notifications for overdue checks
 - Allergen and recipe management, and a temperature-probe (Bluetooth) integration

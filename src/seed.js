@@ -1,5 +1,5 @@
-import { hashPassword } from './auth.js';
-import { tx } from './db.js';
+import { hashPassword, verifyPassword } from './auth.js';
+import { publishAllShifts, syncProductCategories, tx } from './db.js';
 import { addDays, today, weekStart } from './util.js';
 
 export const DEMO_PASSWORD = 'changeme123';
@@ -116,8 +116,10 @@ const PRODUCT_RECIPE_INFO = {
   'Napkins (5000)': ['each', 5000, null],
 };
 
-// Demo menu. Ingredient quantities are per batch in recipe units; names match the demo Square items.
+// Demo menu. Ingredient quantities are per batch in recipe units; names match the demo Square items. A prepped
+// recipe (prep: [yield, unit]) is made in a batch and used in others by name with '@' (e.g. ['@Egg mayo filling', 480]).
 const RECIPES = [
+  { name: 'Egg mayo filling', category: 'Fillings', prep: [480, 'g'], method: 'Hard boil 6 eggs (10 min), cool in iced water, peel.\nMash with softened butter, season. Label with the date and keep below 5°C.', ing: [['Free-range eggs (180)', 6], ['Salted butter 2kg', 40]], shelf: 'Use within 2 days, keep below 5°C' },
   { name: 'Flat white', category: 'Hot drinks', price: 3.6, method: 'Double ristretto (18g in, 36g out, 25–30s).\nSteam 150ml whole milk to 60–65°C with a thin, glossy microfoam.\nPour into 8oz cup, finish with a small heart.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 150], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
   { name: 'Latte', category: 'Hot drinks', price: 3.7, method: 'Double espresso (18g in, 36g out).\nSteam 220ml whole milk to 60–65°C, pour into 12oz cup with a thicker foam top.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 220], ['12oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
   { name: 'Cappuccino', category: 'Hot drinks', price: 3.6, method: 'Double espresso. Steam 160ml whole milk with plenty of foam (about 1.5cm). Dust with chocolate if requested.', ing: [['Espresso blend 1kg', 18], ['Whole milk 4L', 160], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
@@ -130,7 +132,7 @@ const RECIPES = [
   { name: 'Bacon roll', category: 'Hot food', price: 5.5, method: 'Grill 3 rashers (90g) until core temperature reaches 75°C.\nButter 2 slices of bloomer, fill and serve hot.', ing: [['Smoked back bacon 2kg', 90], ['Sandwich bloomer', 2], ['Salted butter 2kg', 10]] },
   { name: 'Avocado sourdough', category: 'Hot food', price: 8.95, method: 'Toast 2 slices of sourdough. Smash 1 avocado with lemon juice and salt.\nSpread, top with salad leaves.', ing: [['Sourdough loaf', 2], ['Avocado', 1], ['Lemons', 0.25], ['Mixed salad leaves 1kg', 15], ['Salted butter 2kg', 10]] },
   { name: 'Ham & cheese toastie', category: 'Hot food', price: 6.75, method: 'Butter the outside of 2 bloomer slices. Fill with 60g ham and 50g grated cheddar.\nPress in the grill for 4 minutes until core reaches 75°C.', ing: [['Sandwich bloomer', 2], ['Cooked ham 1kg', 60], ['Mature cheddar 5kg', 50], ['Salted butter 2kg', 10]] },
-  { name: 'Egg & cress sandwich', category: 'Sandwiches', price: 4.95, vat: false, portions: 4, method: 'Hard boil 6 eggs (10 min), cool in iced water, peel and mash with butter and seasoning.\nMakes 4 rounds: fill 8 slices of bloomer, top with leaves, cut into triangles, label with date and allergens.', ing: [['Free-range eggs (180)', 6], ['Sandwich bloomer', 8], ['Salted butter 2kg', 40], ['Mixed salad leaves 1kg', 40]], mayContain: 'mustard', shelf: 'Use by end of next day, keep below 5°C' },
+  { name: 'Egg & cress sandwich', category: 'Sandwiches', price: 4.95, vat: false, portions: 4, method: 'Makes 4 rounds: fill 8 slices of bloomer with the egg mayo filling, top with leaves, cut into triangles, label with date and allergens.', ing: [['@Egg mayo filling', 480], ['Sandwich bloomer', 8], ['Mixed salad leaves 1kg', 40]], mayContain: 'mustard', shelf: 'Use by end of next day, keep below 5°C' },
   { name: 'Orange juice', category: 'Cold drinks', price: 2.8, method: 'Pour 250ml chilled juice into an 8oz cup.', ing: [['Orange juice 1L', 250], ['8oz compostable cups (1000)', 1], ['Cup lids (1000)', 1]] },
 ];
 
@@ -154,6 +156,47 @@ export function seedAdmin(db, { email, password, name = 'Owner' }) {
   db.prepare(`INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')`).run(name, email, hashPassword(password));
 }
 
+// Environment values pasted with surrounding quotes or spaces (easy to do in a hosting dashboard) are cleaned up.
+export const cleanEnv = (v) => (v ?? '').trim().replace(/^(["'])(.*)\1$/, '$2').trim() || null;
+
+/**
+ * Makes sure the ADMIN_EMAIL account exists and can sign in, even if the database was first created before
+ * ADMIN_EMAIL was set (e.g. a hosting platform started the app before its settings were added). An existing
+ * active account is left alone; a missing one is created and a deactivated one is switched back on.
+ */
+export function ensureAdmin(db, { email, password }) {
+  if (!email || !password) return null;
+  const existing = db.prepare('SELECT id, active FROM users WHERE email = ?').get(email);
+  if (existing?.active) return null;
+  if (existing) {
+    db.prepare(`UPDATE users SET active = 1, role = 'admin', location_id = NULL, password_hash = ? WHERE id = ?`).run(hashPassword(password), existing.id);
+    return 'reactivated';
+  }
+  seedAdmin(db, { email, password });
+  return 'created';
+}
+
+/** Active accounts still signing in with the published demo password: [{ id, name, email }]. */
+export function demoPasswordAccounts(db) {
+  return db.prepare('SELECT id, name, email, password_hash FROM users WHERE active = 1').all()
+    .filter((u) => verifyPassword(DEMO_PASSWORD, u.password_hash))
+    .map(({ password_hash: _, ...u }) => u);
+}
+
+/** Switches off every account still using the demo password, apart from keepEmail. Returns how many. */
+export function lockDemoAccounts(db, { keepEmail } = {}) {
+  const users = db.prepare('SELECT id, email, password_hash FROM users WHERE active = 1').all();
+  let n = 0;
+  for (const u of users) {
+    if (keepEmail && u.email.toLowerCase() === keepEmail.toLowerCase()) continue;
+    if (!verifyPassword(DEMO_PASSWORD, u.password_hash)) continue;
+    db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(u.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+    n++;
+  }
+  return n;
+}
+
 // Seven sites with staff, suppliers, products and this week's rota so every screen has something in it.
 export function seedDemo(db, { locationCount = 7 } = {}) {
   const streets = ['High Street', 'Market Square', 'Station Road', 'Riverside', 'Old Town', 'University Quarter', 'Harbour'];
@@ -161,7 +204,9 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
   tx(db, () => {
     const locIds = [];
     for (let i = 0; i < locationCount; i++) {
-      const r = db.prepare('INSERT INTO locations (name, address) VALUES (?, ?)').run(`${streets[i % streets.length]}`, `${10 + i} ${streets[i % streets.length]}`);
+      // Open 7–5 on weekdays and 8–4 at weekends.
+      const hours = JSON.stringify([...Array(5).fill({ open: '07:00', close: '17:00' }), { open: '08:00', close: '16:00' }, { open: '08:00', close: '16:00' }]);
+      const r = db.prepare('INSERT INTO locations (name, address, opening_hours) VALUES (?, ?, ?)').run(`${streets[i % streets.length]}`, `${10 + i} ${streets[i % streets.length]}`, hours);
       locIds.push(Number(r.lastInsertRowid));
     }
 
@@ -173,12 +218,20 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
       productIds[name] = Number(db.prepare(`INSERT INTO products (name, category, unit, supplier_id, unit_cost, par_level, recipe_unit, units_per_pack, allergens)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name, category, unit, supplierIds[sup], cost, par, recipeUnit, perPack, allergens).lastInsertRowid);
     }
+    syncProductCategories(db);
+    // VAT codes as Xero names them: packaging, drinks and cleaning at 20%, food zero-rated.
+    db.exec(`UPDATE products SET vat_code = CASE WHEN category IN ('Packaging', 'Drinks', 'Cleaning') THEN 'INPUT2' ELSE 'ZERORATEDINPUT' END WHERE vat_code IS NULL`);
+    const recipeIds = {};
     for (const r of RECIPES) {
-      const recipeId = db.prepare(`INSERT INTO recipes (name, category, method, portions, selling_price, vat_rated, may_contain, shelf_life, square_catalog_object_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(r.name, r.category, r.method, r.portions ?? 1, r.price, r.vat === false ? 0 : 1,
-        r.mayContain ?? null, r.shelf ?? null, `CAT_${r.name.replace(/\W/g, '').toUpperCase()}`).lastInsertRowid;
-      r.ing.forEach(([product, qty], i) => {
-        db.prepare('INSERT INTO recipe_ingredients (recipe_id, product_id, quantity, sort_order) VALUES (?, ?, ?, ?)').run(recipeId, productIds[product], qty, i);
+      const recipeId = db.prepare(`INSERT INTO recipes (kind, yield_quantity, yield_unit, name, category, method, portions, selling_price, vat_rated, may_contain, shelf_life, square_catalog_object_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(r.prep ? 'prep' : 'sold', r.prep?.[0] ?? null, r.prep?.[1] ?? null, r.name, r.category, r.method,
+        r.portions ?? 1, r.price ?? 0, r.vat === false ? 0 : 1, r.mayContain ?? null, r.shelf ?? null,
+        r.prep ? null : `CAT_${r.name.replace(/\W/g, '').toUpperCase()}`).lastInsertRowid;
+      recipeIds[r.name] = Number(recipeId);
+      r.ing.forEach(([item, qty], i) => {
+        const sub = item.startsWith('@') ? recipeIds[item.slice(1)] : null;
+        db.prepare('INSERT INTO recipe_ingredients (recipe_id, product_id, sub_recipe_id, quantity, sort_order) VALUES (?, ?, ?, ?, ?)')
+          .run(recipeId, sub ? null : productIds[item], sub, qty, i);
       });
     }
 
@@ -206,4 +259,13 @@ export function seedDemo(db, { locationCount = 7 } = {}) {
       }
     });
   });
+  publishAllShifts(db); // the demo rota is already published
+  // Each demo manager and member of staff works at one site (real staff get every site unless you limit them).
+  db.exec(`UPDATE users SET all_sites = 0 WHERE role != 'admin'`);
+  // A few posts for the My Atlas news feed.
+  const admin = db.prepare(`SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1`).get()?.id ?? null;
+  const post = db.prepare(`INSERT INTO news_posts (title, body, category, pinned, requires_ack, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`);
+  post.run('Updated allergen policy', 'We’ve updated how we label allergens on the counter.\n\n• Every cake and pastry label now lists all 14 allergens it contains.\n• If a customer asks about allergens, always check the recipe in Atlas – never guess.\n• Report any labelling mistakes to your manager straight away.\n\nPlease read the full policy and tap “I’ve read this” below.', 'policy', 1, 1, admin, '-2 days');
+  post.run('Christmas rota requests', 'Holiday requests for 20 December – 2 January need to be in by 31 October. Use Time off → Request holiday.', 'reminder', 0, 0, admin, '-5 days');
+  post.run('Welcome to Atlas', 'This is your My Atlas page: your shifts, your holiday and news from the team, all in one place.', 'announcement', 0, 0, admin, '-9 days');
 }
