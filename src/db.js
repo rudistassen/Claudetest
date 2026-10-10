@@ -1394,6 +1394,17 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 11');
   }
+  if (version < 12) {
+    // The dashboard split into the HQ Dashboard (dashboard.view) and the Manager Dashboard (dashboard.manager):
+    // everyone who could see the dashboard can see both, until an admin changes it on the Permissions page.
+    for (const ps of db.prepare('SELECT id, permissions FROM permission_sets').all()) {
+      const perms = JSON.parse(ps.permissions || '[]');
+      if (perms.includes('dashboard.view') && !perms.includes('dashboard.manager')) {
+        db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...perms, 'dashboard.manager']), ps.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 12');
+  }
   ensureDefaultSets(db);
   return db;
 }

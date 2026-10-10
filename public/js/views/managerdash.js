@@ -1,4 +1,4 @@
-import { addDays, api, esc, fmtDate, money, qs, siteFilter, siteScope, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, money, qs, siteScope, todayISO } from '../lib.js';
 import { ROSTER, shortName } from './dashboard.js';
 
 // Manager Dashboard: one site's day at a glance for the person running it – how today's trading and labour are
@@ -15,9 +15,13 @@ const labourTone = (p) => (p === null || p === undefined ? ['', ''] : p > TARGET
 
 export async function render(ctx) {
   const { el, state, query, stale, navigate } = ctx;
-  // Always one site: the one chosen, or their home site.
-  siteScope(state, query.scope, 'site');
-  const site = state.locationId;
+  // Always one site: the one picked at the top (?scope=), otherwise their home site – not whichever site they last
+  // looked at elsewhere in Atlas.
+  const home = state.locations.some((l) => l.id === state.user.location_id && l.active) ? state.user.location_id : state.locationId;
+  const picked = Number(query.scope);
+  const site = picked && state.locations.some((l) => l.id === picked && l.active) ? picked : home;
+  // Picking a site here also makes it the chosen site for the rest of Atlas, as the site pickers elsewhere do.
+  if (picked === site && site !== state.locationId) siteScope(state, String(site), 'site');
   const can = (...p) => p.some((x) => state.can(x));
   const today = todayISO();
   const week = mondayOf(today);
@@ -42,7 +46,7 @@ export async function render(ctx) {
   if (stale()) return;
   const got = Object.fromEntries(keys.map((k, i) => [k, settled[i].status === 'fulfilled' ? settled[i].value : null]));
   const card = got.day?.locations?.[0] ?? null;
-  const siteName = card?.name ?? state.location?.name ?? 'Your site';
+  const siteName = card?.name ?? state.locations.find((l) => l.id === site)?.name ?? 'Your site';
   const hour = new Date().getHours();
 
   // ---- Needs you ----
@@ -128,7 +132,7 @@ export async function render(ctx) {
 
   el.innerHTML = `<div class="hip md">
     <div class="page-head"><h1 class="hub-title">Manager Dashboard</h1>
-      ${state.multiSite ? `<form class="filters" id="md-site">${siteFilter(state, 'site', { all: false })}</form>` : ''}</div>
+      ${state.multiSite ? `<form class="filters" id="md-site"><select name="scope" aria-label="Site">${state.locations.filter((l) => l.active).map((l) => `<option value="${l.id}" ${l.id === site ? 'selected' : ''}>${esc(l.name)}${l.id === state.user.location_id ? ' (home)' : ''}</option>`).join('')}</select></form>` : ''}</div>
     <p class="md-hello">${esc(siteName)} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
     ${tiles.length ? `<div class="md-tiles">${tiles.join('')}</div>` : ''}
     <div class="md-grid">
@@ -141,7 +145,7 @@ export async function render(ctx) {
         ${card ? `<p class="muted small md-more">Wastage this week: ${money(card.wastage_7d)}${card.orders_sent ? ` · ${plural(card.orders_sent, 'order')} waiting for delivery` : ''}</p>` : ''}</section>
     </div>
     ${weekRow}
-    <p class="muted small">Want every site side by side? <a href="#/dashboard">Open the HQ Dashboard</a>.</p>
+    ${state.can('dashboard.view') ? '<p class="muted small">Want every site side by side? <a href="#/dashboard">Open the HQ Dashboard</a>.</p>' : ''}
   </div>`;
 
   const form = el.querySelector('#md-site');

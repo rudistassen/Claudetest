@@ -41,3 +41,27 @@ test('the manager dashboard can load one site’s day; the HQ dashboard still ge
   assert.equal((await m(`/dashboard?location_id=${home}`)).data.locations[0].id, home);
   assert.equal((await m(`/dashboard?location_id=${other}`)).status, 403);
 });
+
+test('the two dashboards have their own permissions; Manager Dashboard alone only ever loads one site', async () => {
+  const set = db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in = 'manager'`).get();
+  const perms = JSON.parse(set.permissions);
+  assert.ok(perms.includes('dashboard.view') && perms.includes('dashboard.manager'), 'managers get both by default');
+  const sites = db.prepare('SELECT id FROM locations WHERE active = 1').all();
+  const m = await login('manager1@cafe.local');
+  const me = db.prepare("SELECT id, location_id FROM users WHERE email = 'manager1@cafe.local'").get();
+  // Give this manager a second site so "all their sites" would mean more than one.
+  const other = sites.find((s) => s.id !== me.location_id).id;
+  db.prepare('INSERT OR IGNORE INTO user_sites (user_id, location_id) VALUES (?, ?)').run(me.id, other);
+  try {
+    // Only the Manager Dashboard: the dashboard data is their home site unless they pick another of theirs.
+    db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify(perms.filter((p) => p !== 'dashboard.view')), set.id);
+    const home = await m('/dashboard');
+    assert.equal(home.status, 200);
+    assert.deepEqual(home.data.locations.map((l) => l.id), [me.location_id]);
+    // Neither dashboard: no dashboard data at all.
+    db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify(perms.filter((p) => !p.startsWith('dashboard.'))), set.id);
+    assert.equal((await m('/dashboard')).status, 403);
+  } finally {
+    db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(set.permissions, set.id);
+  }
+});

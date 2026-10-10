@@ -236,14 +236,18 @@ export function registerSafetyRoutes(router, db) {
   // --- Dashboard: one card per site the user can see ---
 
   // ?date= shows a past day in full (default: today so far).
-  router.get('/dashboard', requirePerm('dashboard.view'), (req, res) => {
+  // The HQ Dashboard (dashboard.view) loads every site they can access; the Manager Dashboard (dashboard.manager)
+  // loads one site with ?location_id= – without the HQ permission, only ever one site (their home site by default).
+  router.get('/dashboard', requirePerm('dashboard.view', 'dashboard.manager'), (req, res) => {
+    const hq = can(req.user, 'dashboard.view');
+    const site = req.query.location_id ?? (hq ? undefined : req.user.location_id ?? req.user.site_ids[0]);
     const day = date(req.query.date, 'date') ?? today();
     if (day > today()) throw badRequest('Choose today or an earlier day');
     res.json(siteSummaries(db, {
       date: day,
       fullDay: day < today(),
       // ?location_id= for one site (the manager dashboard), otherwise every site they can see.
-      locations: reportLocations(req, req.query.location_id),
+      locations: reportLocations(req, site),
       seeSales: can(req.user, 'sales.view'),
       seeOrders: can(req.user, 'orders.manage'),
       seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage'),
