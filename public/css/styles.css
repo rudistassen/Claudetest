@@ -2805,3 +2805,8 @@ img.lesson-media { background: transparent; }
   .md-tile strong { font-size: 1.35rem; }
   .md-tile small { font-size: 0.75rem; }
 }
+
+/* HQ Dashboard: the by-site panel's five periods */
+.dash-sites .card-head { flex-wrap: wrap; gap: 0.5rem; }
+.dash-periods { flex-wrap: wrap; }
+@media (max-width: 640px) { .dash-periods { width: 100%; } .dash-periods button { flex: 1 1 auto; font-size: 0.8rem; padding-inline: 0.5rem; } }

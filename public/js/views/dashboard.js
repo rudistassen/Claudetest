@@ -253,6 +253,32 @@ function downloadPdf(state, date) {
 
 // Sales and labour % for each site, today or over the last 7 days (the same figures as the Trading page).
 const PERIOD_KEY = 'cafe-ops:dashboard-period';
+// The by-site panel's periods. Each runs up to the day shown (today, or a day picked), and is compared with the same
+// span before it: the same time last week (today, 7 days, week to date – with today up to this time), or the same
+// dates last month / last year (month and year to date – whole days).
+const PERIODS = ['today', 'week', 'wtd', 'mtd', 'ytd'];
+const PERIOD_LABEL = { today: 'Today', week: 'Last 7 days', wtd: 'Week to date', mtd: 'Month to date', ytd: 'Year to date' };
+const PRINT_LABEL = { week: '7 days', wtd: 'week to date', mtd: 'month to date', ytd: 'year to date' };
+const COMPARE_NOTE = { today: 'the same time last week', week: 'the same time last week', wtd: 'the same time last week', mtd: 'the same dates last month', ytd: 'the same dates last year' };
+const pad = (n) => String(n).padStart(2, '0');
+const lastDayOf = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate(); // m is 1–12
+/** The dates a period covers up to d (YYYY-MM-DD), and the span it's compared with (null when nothing to fetch). */
+export function periodRange(period, d) {
+  const [y, m, day] = d.split('-').map(Number);
+  if (period === 'week') return { from: addDays(d, -6), to: d, prevFrom: addDays(d, -13), prevTo: addDays(d, -8) };
+  if (period === 'wtd') {
+    const monday = addDays(d, -((new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7));
+    // Last week's Monday up to the day before last week's matching day (that day itself, to this time, comes from /dashboard).
+    return { from: monday, to: d, prevFrom: addDays(monday, -7), prevTo: monday === d ? null : addDays(d, -8) };
+  }
+  if (period === 'mtd') {
+    const py = m === 1 ? y - 1 : y;
+    const pm = m === 1 ? 12 : m - 1;
+    return { from: `${y}-${pad(m)}-01`, to: d, prevFrom: `${py}-${pad(pm)}-01`, prevTo: `${py}-${pad(pm)}-${pad(Math.min(day, lastDayOf(py, pm)))}` };
+  }
+  if (period === 'ytd') return { from: `${y}-01-01`, to: d, prevFrom: `${y - 1}-01-01`, prevTo: `${y - 1}-${pad(m)}-${pad(Math.min(day, lastDayOf(y - 1, m)))}` };
+  return { from: d, to: d, prevFrom: null, prevTo: null };
+}
 const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`;
 
 function bySite(t, period, prev) {
@@ -263,7 +289,7 @@ function bySite(t, period, prev) {
   // Gross sales (blue) over the same period last week (grey), with the change.
   const salesCell = (now, then, { bars = true } = {}) => `<td class="dash-sales">
     ${bars ? `<span class="dash-bars"><span class="dash-bar"><span class="fill" style="width:${(now / maxSales) * 100}%"></span></span>
-      ${then !== null && then !== undefined ? `<span class="dash-bar dash-bar-prev" title="Last week ${money(then)}"><span class="fill" style="width:${(then / maxSales) * 100}%"></span></span>` : ''}</span>` : ''}
+      ${then !== null && then !== undefined ? `<span class="dash-bar dash-bar-prev" title="${COMPARE_NOTE[period][0].toUpperCase()}${COMPARE_NOTE[period].slice(1)}: ${money(then)}"><span class="fill" style="width:${(then / maxSales) * 100}%"></span></span>` : ''}</span>` : ''}
     <strong>${money(now)}</strong> ${change(now, then)}</td>`;
   // Labour bars run to at least twice the target, so the target line sits in a sensible place.
   const scale = Math.max(LABOUR_TARGET * 2, ...rows.map((r) => Math.min(labour(r) ?? 0, 150)));
@@ -276,10 +302,9 @@ function bySite(t, period, prev) {
   return `
     <section class="card dash-sites">
       <header class="card-head">
-        <h2>Sales &amp; labour by site<span class="print-only"> · ${period === 'week' ? '7 days' : dayWord()}</span></h2>
-        <div class="seg" role="group" aria-label="Period">
-          <button class="${period === 'today' ? 'is-on' : ''}" data-period="today">${shown.isToday ? 'Today' : 'This day'}</button>
-          <button class="${period === 'week' ? 'is-on' : ''}" data-period="week">${shown.isToday ? 'Last 7 days' : '7 days to here'}</button>
+        <h2>Sales &amp; labour by site<span class="print-only"> · ${PRINT_LABEL[period] ?? dayWord()}</span></h2>
+        <div class="seg dash-periods" role="group" aria-label="Period">
+          ${PERIODS.map((p) => `<button class="${period === p ? 'is-on' : ''}" data-period="${p}">${p === 'today' && !shown.isToday ? 'This day' : p === 'week' && !shown.isToday ? '7 days to here' : PERIOD_LABEL[p]}</button>`).join('')}
         </div>
       </header>
       <div class="table-wrap"><table class="dash-table">
@@ -294,33 +319,34 @@ function bySite(t, period, prev) {
           <td><strong class="tone-${labourTone(labour(total))}">${icon(labour(total))}${fmtPct(labour(total))}</strong></td></tr></tfoot>` : ''}
       </table></div>
       <p class="muted small">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
-        Grey bars are the same time last week. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
+        Grey bars are ${COMPARE_NOTE[period]}. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
     </section>`;
 }
 
 export async function render({ el, state, navigate, stale, rerender, query = {} }) {
   const seeSales = state.can('sales.view');
   let period = 'today';
-  try { period = localStorage.getItem(PERIOD_KEY) === 'week' ? 'week' : 'today'; } catch { /* storage unavailable */ }
+  try { const saved = localStorage.getItem(PERIOD_KEY); if (PERIODS.includes(saved)) period = saved; } catch { /* storage unavailable */ }
   const today = todayISO();
   // Always today unless a day is picked (?date=), so coming back to the dashboard shows today again.
   const d0 = /^\d{4}-\d{2}-\d{2}$/.test(query.date ?? '') && query.date < today ? query.date : today;
   shown.isToday = d0 === today;
   shown.day = d0;
   shown.canSick = state.can('rota.edit');
-  const [data, myShifts, leave, security, fresh, tradeToday, tradeWeek, tradePrevWeek] = await Promise.all([
+  const range = periodRange(period, d0);
+  const [data, myShifts, leave, security, fresh, tradeToday, tradeRange, tradePrev] = await Promise.all([
     api(`/dashboard${shown.isToday ? '' : `?date=${d0}`}`),
     api('/my-shifts'),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
     state.isAdmin && !isDemo ? api('/admin/security').catch(() => null) : null,
     seeSales || state.can('staff.manage') ? api('/square/freshness').catch(() => null) : null,
     seeSales ? api(`/trading?from=${d0}&to=${d0}`) : null,
-    seeSales && period === 'week' ? api(`/trading?from=${addDays(d0, -6)}&to=${d0}`) : null,
-    // The week before, up to yesterday a week ago (last week's matching day to this time comes from /dashboard).
-    seeSales && period === 'week' ? api(`/trading?from=${addDays(d0, -13)}&to=${addDays(d0, -8)}`) : null,
+    seeSales && period !== 'today' ? api(`/trading?from=${range.from}&to=${range.to}`) : null,
+    // What it's compared with (see periodRange).
+    seeSales && range.prevTo ? api(`/trading?from=${range.prevFrom}&to=${range.prevTo}`) : null,
   ]);
   if (stale()) return;
-  const trade = period === 'week' ? tradeWeek : tradeToday;
+  const trade = period === 'today' ? tradeToday : tradeRange;
 
   const locs = data.locations;
   const totals = locs.reduce((t, l) => ({
@@ -349,7 +375,9 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const prevSales = new Map(locs.map((l) => {
     const sameTime = l.last_week?.gross ?? null;
     if (period === 'today') return [l.id, sameTime];
-    const before = tradePrevWeek?.locations.find((x) => x.id === l.id)?.gross_sales ?? 0;
+    const before = tradePrev?.locations.find((x) => x.id === l.id)?.gross_sales ?? 0;
+    // Month and year to date are compared with whole days last month / last year.
+    if (period === 'mtd' || period === 'ytd') return [l.id, before || null];
     return [l.id, sameTime === null && !before ? null : before + (sameTime ?? 0)];
   }));
   // Labour % by this time on the same day last week, worked out the same way (labour cost ÷ net sales, only
