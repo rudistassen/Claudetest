@@ -290,7 +290,7 @@ export function periodRange(period, d) {
 }
 const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`;
 
-function bySite(t, period, prev) {
+function bySite(t, period, prev, state) {
   const labour = (r) => (t.labour_synced && r.labour_pct !== null ? r.labour_pct : r.rostered_labour_pct);
   const rows = [...t.locations].sort((a, b) => b.gross_sales - a.gross_sales);
   const maxSales = Math.max(1, ...rows.map((r) => Math.max(r.gross_sales, prev.get(r.id) ?? 0)));
@@ -462,7 +462,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>${shown.isToday ? 'Clocked in now' : 'Clocked in'}</span><strong>${clockedInNow}</strong><small>${shown.isToday ? `of ${totals.staff} on today’s rota` : `${totals.staff} on the rota`} · <u>see who</u></small></button>`}
     </div>` : ''}
     <section class="card weather" id="weather" hidden></section>
-    ${trade?.square_connected ? bySite(trade, period, prevSales) : ''}
+    ${trade?.square_connected ? bySite(trade, period, prevSales, state) : ''}
     ${locs.some((l) => l.roster) ? whosIn(locs, data, fresh) : ''}
     ${security?.demo_password_accounts?.length ? `<p class="notice security-warning"><strong>⚠ Security: ${security.demo_password_accounts.length} account${security.demo_password_accounts.length === 1 ? '' : 's'} can still sign in with the demo password</strong> (${esc(security.demo_password_accounts.slice(0, 4).map((u) => u.email).join(', '))}${security.demo_password_accounts.length > 4 ? ', …' : ''}). Anyone who knows it could get in. Add <code>SEED_DEMO</code> = <code>false</code> in Railway → Variables to switch them all off, or give each a new password under People → Staff.</p>` : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
