@@ -1188,6 +1188,8 @@ const MIGRATIONS = [
   }],
   // Candidates put on the To review list, and when.
   ['candidates', 'to_review_at', 'ALTER TABLE candidates ADD COLUMN to_review_at TEXT'],
+  // An optional time for the next step (interview, trial shift…), for the recruitment calendar.
+  ['candidates', 'next_step_time', 'ALTER TABLE candidates ADD COLUMN next_step_time TEXT'],
   // A person's own permissions (a JSON list), used instead of their permission set's when set.
   ['users', 'custom_permissions', 'ALTER TABLE users ADD COLUMN custom_permissions TEXT'],
   // Two kinds of recipe: sold items (linked to Square sales) and prepped recipes (sauces, fillings, bakes) that are

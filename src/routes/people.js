@@ -4,7 +4,7 @@ import { assertLocation, requirePerm } from '../auth.js';
 import { cvType, declineTemplate, fillTemplate, MAX_CV_BYTES } from '../careers-inbox.js';
 import { tx } from '../db.js';
 import { fromBase64 } from './invoices.js';
-import { badRequest, date, id, notFound, num, oneOf, str, today } from '../util.js';
+import { badRequest, date, id, notFound, num, oneOf, str, time, today } from '../util.js';
 
 const STAGES = ['applied', 'interview', 'trial', 'offer', 'hired', 'rejected'];
 const KINDS = ['one_to_one', 'probation', 'appraisal'];
@@ -13,7 +13,9 @@ const LEVELS = ['learning', 'trained'];
 const DUE_SOON_DAYS = 30;
 
 // For lists: everything about a candidate but their message (which can be long), plus how many files they have.
-const CANDIDATE_LIST = `c.id, c.vacancy_id, c.location_id, c.name, c.email, c.phone, c.stage, c.next_step_on, c.notes, c.source, c.subject,
+const isBlankish = (v) => v === undefined || v === null || String(v).trim() === '';
+
+const CANDIDATE_LIST = `c.id, c.vacancy_id, c.location_id, c.name, c.email, c.phone, c.stage, c.next_step_on, c.next_step_time, c.notes, c.source, c.subject,
   substr(c.message, 1, 240) AS preview, c.received_at, c.declined_at, c.reply_drafted_at, c.to_review_at, c.created_at, c.updated_at,
   (SELECT COUNT(*) FROM candidate_files f WHERE f.candidate_id = c.id) AS files`;
 
@@ -104,6 +106,8 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     phone: str(b.phone, 'Phone', { max: 50 }),
     stage: oneOf(b.stage ?? 'applied', 'stage', STAGES, { required: true }),
     next_step_on: date(b.next_step_on, 'Next step date'),
+    // A time only goes with a date.
+    next_step_time: isBlankish(b.next_step_on) ? null : time(b.next_step_time, 'Next step time'),
     notes: str(b.notes, 'Notes', { max: 4000 }),
   });
 
@@ -113,17 +117,17 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     const f = candidateFields(b);
     const site = id(b.location_id, 'location_id');
     if (site) assertLocation(req, site);
-    const r = db.prepare(`INSERT INTO candidates (location_id, name, email, phone, stage, next_step_on, notes, to_review_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') END)`)
-      .run(site, f.name, f.email, f.phone, f.stage, f.next_step_on, f.notes, b.to_review ? 1 : 0);
+    const r = db.prepare(`INSERT INTO candidates (location_id, name, email, phone, stage, next_step_on, next_step_time, notes, to_review_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') END)`)
+      .run(site, f.name, f.email, f.phone, f.stage, f.next_step_on, f.next_step_time, f.notes, b.to_review ? 1 : 0);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
   router.post('/vacancies/:id/candidates', recruit, (req, res) => {
     const v = vacancy(req, Number(req.params.id));
     const f = candidateFields(req.body ?? {});
-    const r = db.prepare('INSERT INTO candidates (vacancy_id, name, email, phone, stage, next_step_on, notes) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(v.id, f.name, f.email, f.phone, f.stage, f.next_step_on, f.notes);
+    const r = db.prepare('INSERT INTO candidates (vacancy_id, name, email, phone, stage, next_step_on, next_step_time, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(v.id, f.name, f.email, f.phone, f.stage, f.next_step_on, f.next_step_time, f.notes);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
@@ -157,9 +161,21 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
       to_review: rows.filter(review).sort((a, b) => a.to_review_at.localeCompare(b.to_review_at) || a.id - b.id),
       new: rows.filter((c) => !review(c) && c.source === 'email' && c.stage === 'applied'),
       // Soonest next step first; those without one after.
-      in_progress: rows.filter(going).sort((a, b) => (a.next_step_on ?? '9999').localeCompare(b.next_step_on ?? '9999')),
+      in_progress: rows.filter(going).sort((a, b) => `${a.next_step_on ?? '9999'} ${a.next_step_time ?? '99:99'}`.localeCompare(`${b.next_step_on ?? '9999'} ${b.next_step_time ?? '99:99'}`)),
       no_job: rows.filter((c) => !review(c) && !c.vacancy_id && !going(c) && !(c.source === 'email' && c.stage === 'applied')),
     });
+  });
+
+  // The recruitment calendar: everyone with a next step (interview, trial shift, start…) between from and to,
+  // except people turned down.
+  router.get('/recruitment/calendar', recruit, (req, res) => {
+    const from = date(req.query.from, 'from', { required: true });
+    const to = date(req.query.to, 'to', { required: true });
+    if (from > to || (Date.parse(to) - Date.parse(from)) / 86400000 > 62) throw badRequest('Choose up to two months');
+    res.json(db.prepare(`SELECT ${CANDIDATE_LIST}, v.title AS job_title, COALESCE(v.location_id, c.location_id) AS site_id, l.name AS site_name
+      FROM candidates c LEFT JOIN vacancies v ON v.id = c.vacancy_id LEFT JOIN locations l ON l.id = COALESCE(v.location_id, c.location_id)
+      WHERE c.next_step_on BETWEEN ? AND ? AND c.stage != 'rejected'
+      ORDER BY c.next_step_on, COALESCE(c.next_step_time, '99:99'), c.name`).all(from, to).filter((c) => canSee(req, c)));
   });
 
   // A candidate's profile: their details, the email they sent, and their files.
@@ -193,10 +209,10 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
       if (vacancyId) locationId = vacancy(req, vacancyId).location_id;
     }
     // Moving them on (or turning them down) takes them off the To review list.
-    db.prepare(`UPDATE candidates SET name = ?, email = ?, phone = ?, stage = ?, next_step_on = ?, notes = ?, vacancy_id = ?, location_id = ?,
+    db.prepare(`UPDATE candidates SET name = ?, email = ?, phone = ?, stage = ?, next_step_on = ?, next_step_time = ?, notes = ?, vacancy_id = ?, location_id = ?,
       declined_at = CASE WHEN ? = 'rejected' THEN declined_at ELSE NULL END,
       to_review_at = CASE WHEN ? = stage THEN to_review_at END, updated_at = datetime('now') WHERE id = ?`)
-      .run(f.name, f.email, f.phone, f.stage, f.next_step_on, f.notes, vacancyId, locationId, f.stage, f.stage, c.id);
+      .run(f.name, f.email, f.phone, f.stage, f.next_step_on, f.next_step_time, f.notes, vacancyId, locationId, f.stage, f.stage, c.id);
     res.json({ ok: true });
   });
 

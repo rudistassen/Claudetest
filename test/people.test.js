@@ -184,3 +184,27 @@ test('staff see their own training (and only theirs) for My Atlas', async () => 
   // They still can't see anyone else's.
   assert.equal((await s(`/training/people/${u.id}`)).status, 403);
 });
+
+test('recruitment calendar: next steps with an optional time, in date and time order, not people turned down', async () => {
+  const a = await login('admin@cafe.local');
+  const loc = staff().location_id;
+  const job = (await a('/vacancies', { method: 'POST', body: { location_id: loc, title: 'Chef' } })).data;
+  const day = '2031-05-14';
+  const add = async (name, stage, t) => (await a(`/vacancies/${job.id}/candidates`, { method: 'POST', body: { name, stage, next_step_on: day, next_step_time: t } })).data.id;
+  const late = await add('Late Interview', 'interview', '15:00');
+  const early = await add('Early Trial', 'trial', '08:30');
+  const noTime = await add('All Day Offer', 'offer', '');
+  await add('Turned Down', 'rejected', '09:00');
+  const cal = await a(`/recruitment/calendar?from=2031-05-01&to=2031-05-31`);
+  assert.equal(cal.status, 200);
+  assert.deepEqual(cal.data.map((c) => c.id), [early, late, noTime]);
+  assert.equal(cal.data[0].next_step_time, '08:30');
+  assert.equal(cal.data[2].next_step_time, null);
+  // A time without a date isn't kept; a bad time is refused; and the window is up to two months.
+  await a(`/candidates/${late}`, { method: 'PUT', body: { next_step_on: '', next_step_time: '10:00' } });
+  assert.equal((await a(`/candidates/${late}`)).data.next_step_time, null);
+  assert.equal((await a(`/candidates/${late}`, { method: 'PUT', body: { next_step_on: day, next_step_time: '25:00' } })).status, 400);
+  assert.equal((await a('/recruitment/calendar?from=2031-01-01&to=2031-06-01')).status, 400);
+  const s = await login('staff1@cafe.local');
+  assert.equal((await s('/recruitment/calendar?from=2031-05-01&to=2031-05-31')).status, 403);
+});

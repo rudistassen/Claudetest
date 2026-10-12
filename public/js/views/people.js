@@ -1,5 +1,5 @@
 import { ldTiles } from './courses.js';
-import { api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, siteColour, siteFilter, siteScope, textarea, toast, todayISO } from '../lib.js';
+import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, siteColour, siteFilter, siteScope, textarea, toast, todayISO } from '../lib.js';
 
 // People: Recruitment (jobs and their candidates), Learning and development (training and who has done it),
 // Performance (one-to-ones, probation reviews and appraisals) and Areas (where each person can work).
@@ -20,6 +20,9 @@ function wireFilters(el, page, navigate, extra = {}) {
   const form = el.querySelector('#pp-filters');
   form?.addEventListener('submit', (e) => { e.preventDefault(); navigate(`${page}${qs({ scope: form.scope?.value, ...extra })}`); });
 }
+// "Tue 14 Oct, 10:30" – a candidate's next step, late ones in red.
+const nextStep = (c, none = '<span class="muted">–</span>') => (c.next_step_on
+  ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}${c.next_step_time ? `, ${c.next_step_time}` : ''}</span>` : none);
 const siteQuery = (state, scope) => qs({ location_id: scope === 'all' ? undefined : state.locationId });
 
 // ---- Recruitment ----
@@ -33,11 +36,11 @@ export function interviewDialog(c, jobs, done) {
   openModal({
     title: `Invite ${c.name} to interview`,
     body: `${field('For the job', select('vacancy_id', [['', '— Not for a particular job —'], ...open.map((j) => [j.id, `${j.title}${j.location_name ? ` – ${j.location_name}` : ''}`])], c.vacancy_id ?? ''))}
-      ${field('Interview on (optional)', input('next_step_on', c.next_step_on, 'type="date"'), { hint: 'Leave blank if it isn’t booked yet' })}
+      <div class="row">${field('Interview on (optional)', input('next_step_on', c.next_step_on, 'type="date"'), { hint: 'Leave blank if it isn’t booked yet' })}${field('Time (optional)', input('next_step_time', c.next_step_time, 'type="time"'))}</div>
       ${c.email ? `<p class="muted small">Get in touch with them to arrange it – <a href="mailto:${esc(c.email)}">${esc(c.email)}</a>${c.phone ? ` or ${esc(c.phone)}` : ''}.</p>` : ''}`,
     submitLabel: '✓ Move to interview',
     onSubmit: async (v) => {
-      await api(`/candidates/${c.id}`, { method: 'PUT', body: { stage: 'interview', vacancy_id: v.vacancy_id || null, next_step_on: v.next_step_on } });
+      await api(`/candidates/${c.id}`, { method: 'PUT', body: { stage: 'interview', vacancy_id: v.vacancy_id || null, next_step_on: v.next_step_on, next_step_time: v.next_step_time } });
       toast(`${c.name} moved to interview – they’re under In progress on Recruitment`);
       done();
     },
@@ -155,6 +158,65 @@ const applicationCard = (c, onList = false) => `<li class="pp-app">
     <button type="button" class="btn btn-small btn-ghost pp-junk" data-delete-app="${c.id}" title="Delete – e.g. junk or spam" aria-label="Delete ${esc(c.name)}">🗑 Delete</button>
   </div></li>`;
 
+// ---- Recruitment: its five tiles, and the calendar ----
+
+const REC_TILES = [
+  ['jobs', 'people/recruitment', 'Open jobs', '✎', (n) => `${n} open`],
+  ['new', 'people/recruitment/new', 'New applicants', '✉', (n) => (n ? `${n} new` : 'Nothing new')],
+  ['review', 'people/recruitment/review', 'Candidates for review', '☆', (n) => (n ? `${n} to look at` : 'Nobody waiting')],
+  ['progress', 'people/recruitment/progress', 'In progress', '☺', (n) => `${n} candidate${n === 1 ? '' : 's'}`],
+  ['calendar', 'people/recruitment/calendar', 'Recruitment calendar', '▦', (n) => (n ? `${n} in the next 7 days` : 'Nothing booked this week')],
+];
+const recTiles = (active, counts) => `<nav class="ld-tiles rec-tiles" aria-label="Recruitment">${REC_TILES.map(([key, path, label, icon, note]) => `
+  <a class="hub-tile ${key === active ? 'is-active' : ''}" href="#/${path}" ${key === active ? 'aria-current="page"' : ''}>
+    <span class="hub-icon" aria-hidden="true">${icon}</span>
+    <span class="hub-text"><strong>${esc(label)}</strong><small>${esc(note(counts[key] ?? 0))}</small></span>
+    <span class="hub-go" aria-hidden="true">›</span></a>`).join('')}</nav>`;
+
+const STAGE_TONE = { applied: 'rc-applied', interview: 'rc-interview', trial: 'rc-trial', offer: 'rc-offer', hired: 'rc-hired' };
+const monthStart = (iso) => `${iso.slice(0, 7)}-01`;
+const monthEnd = (iso) => { const [y, m] = iso.split('-').map(Number); return `${iso.slice(0, 7)}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`; };
+const mondayBefore = (iso) => addDays(iso, -((new Date(`${iso}T12:00:00Z`).getUTCDay() + 6) % 7));
+
+// A month of interviews, trial shifts and other next steps, each linking to the candidate.
+async function renderRecCalendar(box, { state, scope, query, navigate, stale }) {
+  const today = todayISO();
+  const month = /^\d{4}-\d{2}$/.test(query.month ?? '') ? `${query.month}-01` : monthStart(today);
+  const first = mondayBefore(month);
+  const last = addDays(mondayBefore(monthEnd(month)), 6);
+  const rows = await api(`/recruitment/calendar${qs({ from: first, to: last })}`);
+  if (stale() || !box.isConnected) return;
+  const site = scope === 'all' ? null : state.locationId;
+  const shown = rows.filter((c) => !site || c.site_id === site);
+  const byDay = new Map();
+  for (const c of shown) byDay.set(c.next_step_on, [...(byDay.get(c.next_step_on) ?? []), c]);
+  const days = [];
+  for (let d = first; d <= last; d = addDays(d, 1)) days.push(d);
+  const shift = (n) => { const [y, m] = month.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + n, 1)); return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}`; };
+  const go = (m) => `#/people/recruitment/calendar${qs({ scope: query.scope, month: m })}`;
+  const stageName = (c) => STAGE[c.stage] ?? c.stage;
+  const entry = (c) => `<a class="rc-entry ${STAGE_TONE[c.stage] ?? ''}" href="#/people/recruitment/candidates/${c.id}" title="${esc(`${stageName(c)}: ${c.name}${c.job_title ? ` – ${c.job_title}` : ''}${c.site_name ? ` at ${c.site_name}` : ''}`)}">
+    ${c.next_step_time ? `<b>${c.next_step_time}</b> ` : ''}${esc(c.name)}<small>${esc(stageName(c))}${c.job_title ? ` · ${esc(c.job_title)}` : ''}</small></a>`;
+  const upcoming = shown.filter((c) => c.next_step_on >= today).slice(0, 12);
+  box.innerHTML = `<section class="card rc">
+    <div class="rc-head"><a class="btn btn-small" href="${go(shift(-1))}" aria-label="Previous month">‹</a>
+      <h2>${new Date(`${month}T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</h2>
+      <a class="btn btn-small" href="${go(shift(1))}" aria-label="Next month">›</a>
+      ${month.slice(0, 7) !== today.slice(0, 7) ? `<a class="btn btn-small btn-ghost" href="${go(today.slice(0, 7))}">This month</a>` : ''}
+      <span class="rc-key">${['interview', 'trial', 'offer', 'hired'].map((k) => `<span class="rc-entry ${STAGE_TONE[k]}">${esc(STAGE[k])}</span>`).join('')}</span></div>
+    <div class="rc-grid" role="grid">
+      ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="rc-dow">${d}</div>`).join('')}
+      ${days.map((d) => `<div class="rc-day ${d.slice(0, 7) !== month.slice(0, 7) ? 'is-other' : ''} ${d === today ? 'is-today' : ''}">
+        <span class="rc-date">${Number(d.slice(8))}</span>${(byDay.get(d) ?? []).map(entry).join('')}</div>`).join('')}
+    </div>
+    <p class="muted small">Each candidate’s next step – interviews, trial shifts, offers and start dates – from their profile. Add a time to it to show it here.</p>
+  </section>
+  <section class="card rc-upcoming"><h2>Coming up</h2>
+    ${upcoming.length ? `<ul class="rc-list">${upcoming.map((c) => `<li><span class="rc-when">${fmtDate(c.next_step_on, { weekday: 'short', day: 'numeric', month: 'short' })}${c.next_step_time ? `, ${c.next_step_time}` : ''}</span>${entry(c)}</li>`).join('')}</ul>`
+      : '<p class="muted">Nothing booked from today in this view.</p>'}
+  </section>`;
+}
+
 export async function renderRecruitment(ctx) {
   const { el, state, query, stale, navigate, rerender } = ctx;
   const scope = siteScope(state, query.scope);
@@ -166,25 +228,34 @@ export async function renderRecruitment(ctx) {
   const open = jobs.filter((j) => j.status === 'open');
   const multi = state.multiSite && scope === 'all';
 
-  el.innerHTML = `
-    <div class="page-head"><h1>Recruitment</h1><div class="actions"><button class="btn" id="pp-add-review">+ Add someone to review</button><button class="btn btn-primary" id="pp-new-job">+ New job</button></div></div>
-    ${filters(state, scope)}
-    <div class="kpis">
-      <div class="kpi" data-icon="✎"><span>Open jobs</span><strong>${open.length}</strong></div>
-      <div class="kpi" data-icon="☆"><span>To review</span><strong>${apps.to_review.length}</strong></div>
-      <div class="kpi" data-icon="☺"><span>Candidates in progress</span><strong>${apps.in_progress.length}</strong>
-        <small>${apps.in_progress.filter((c) => c.stage === 'interview').length} to interview · ${apps.in_progress.filter((c) => c.stage === 'trial').length} on trial · ${apps.in_progress.filter((c) => c.stage === 'offer').length} offered</small></div>
-    </div>
-    ${apps.to_review.length ? `<section class="card pp-apps" id="pp-to-review">
-      <div class="pp-job-head"><div><h2>☆ To review <span class="badge badge-sent">${apps.to_review.length}</span></h2>
-        <p class="muted small">People to look at properly – invite them to interview, turn them down, or tap “Done reviewing” to take them off the list.</p></div></div>
-      <ul class="pp-app-list">${apps.to_review.map((c) => applicationCard(c, true)).join('')}</ul>
-    </section>` : ''}
+  // Five tiles: Open jobs, New applicants, Candidates for review, In progress and the Recruitment calendar.
+  const section = ctx.section ?? 'jobs';
+  const soon = addDays(todayISO(), 6);
+  const counts = {
+    jobs: open.length,
+    new: apps.new.length,
+    review: apps.to_review.length,
+    progress: apps.in_progress.length,
+    calendar: apps.in_progress.filter((c) => c.next_step_on && c.next_step_on >= todayISO() && c.next_step_on <= soon).length,
+  };
+  const empty = (text) => `<div class="card empty">${text}</div>`;
+  let body = '';
+  if (section === 'new') {
+    body = `${apps.new.length || inbox?.configured ? '' : empty('No new applications. Applications emailed to the careers inbox appear here once it’s set up.')}
     ${apps.new.length || inbox?.configured ? `<section class="card pp-apps">
       <div class="pp-job-head"><h2>✉ New applications <span class="badge ${apps.new.length ? 'badge-sent' : ''}">${apps.new.length}</span></h2></div>
       ${apps.new.length ? `<ul class="pp-app-list">${apps.new.map((c) => applicationCard(c)).join('')}</ul>` : '<p class="muted small">Nothing new – applications emailed to the careers inbox appear here.</p>'}
     </section>` : ''}
-    ${apps.in_progress.length ? `<section class="card pp-job" id="pp-in-progress">
+    ${careersCard(inbox)}`;
+  } else if (section === 'review') {
+    body = `    ${apps.to_review.length ? `<section class="card pp-apps" id="pp-to-review">
+      <div class="pp-job-head"><div><h2>☆ To review <span class="badge badge-sent">${apps.to_review.length}</span></h2>
+        <p class="muted small">People to look at properly – invite them to interview, turn them down, or tap “Done reviewing” to take them off the list.</p></div></div>
+      <ul class="pp-app-list">${apps.to_review.map((c) => applicationCard(c, true)).join('')}</ul>
+    </section>` : ''}
+    ${apps.to_review.length ? '' : empty('Nobody to review. Tap “☆ Review” on a candidate, or “+ Add someone to review”, to put them here.')}`;
+  } else if (section === 'progress') {
+    body = `    ${apps.in_progress.length ? `<section class="card pp-job" id="pp-in-progress">
       <div class="pp-job-head"><div><h2>In progress <span class="badge badge-sent">${apps.in_progress.length}</span></h2>
         <p class="muted small">Everyone being interviewed, on a trial shift or offered a job – soonest first.</p></div></div>
       <div class="table-wrap"><table class="pp-cands">
@@ -193,10 +264,14 @@ export async function renderRecruitment(ctx) {
           <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.files ? ' <span title="Has a CV">📎</span>' : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
           <td>${c.job_title ? `${esc(c.job_title)}${c.site_name ? `<small class="muted">${esc(c.site_name)}</small>` : ''}` : '<span class="muted">No job picked</span>'}</td>
           <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
-          <td>${c.next_step_on ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</span>` : '<span class="muted">Not booked</span>'}</td>
+          <td>${nextStep(c, '<span class="muted">Not booked</span>')}</td>
         </tr>`).join('')}</tbody></table></div>
     </section>` : ''}
-    <p class="small"><a href="#/people/recruitment${qs({ scope: query.scope, show: showAll ? undefined : 'all' })}">${showAll ? 'Only show open jobs' : 'Show filled and closed jobs too'}</a></p>
+    ${apps.in_progress.length ? '' : empty('Nobody in progress. Candidates appear here once they’re invited to interview, on a trial shift or offered a job.')}`;
+  } else if (section === 'calendar') {
+    body = '<div id="rec-calendar"><div class="loading">Loading…</div></div>';
+  } else {
+    body = `    <p class="small"><a href="#/people/recruitment${qs({ scope: query.scope, show: showAll ? undefined : 'all' })}">${showAll ? 'Only show open jobs' : 'Show filled and closed jobs too'}</a></p>
     ${shown.length ? shown.map((j) => `<section class="card pp-job" data-job="${j.id}">
       <div class="pp-job-head">
         <div><h2>${esc(j.title)} ${j.status !== 'open' ? `<span class="badge">${j.status === 'filled' ? 'Filled' : 'Closed'}</span>` : ''}</h2>
@@ -210,7 +285,7 @@ export async function renderRecruitment(ctx) {
         <tbody>${j.candidates.map((c) => `<tr class="${c.stage === 'rejected' ? 'is-out' : ''}">
           <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.source === 'email' ? ' <span title="Applied by email">✉</span>' : ''}${c.files ? ` <span title="${c.files} file${c.files === 1 ? '' : 's'}">📎</span>` : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
           <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
-          <td>${c.next_step_on ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</span>` : '<span class="muted">–</span>'}</td>
+          <td>${nextStep(c)}</td>
           <td class="num pp-row-actions">${c.stage === 'rejected' || c.stage === 'hired' ? '' : reviewButton(c)}<button class="btn btn-small btn-ghost" data-edit-cand="${c.id}" data-job-of="${j.id}">Edit</button></td>
         </tr>`).join('')}</tbody></table></div>` : '<p class="muted small">No candidates yet.</p>'}
     </section>`).join('') : `<div class="empty">${jobs.length ? 'No open jobs right now.' : 'No jobs yet – add one when you’re hiring.'}</div>`}
@@ -221,11 +296,19 @@ export async function renderRecruitment(ctx) {
         <tbody>${noJob.map((c) => `<tr class="${c.stage === 'rejected' ? 'is-out' : ''}">
           <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.files ? ' <span title="Has files">📎</span>' : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
           <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
-          <td>${c.next_step_on ? `<span class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</span>` : '<span class="muted">–</span>'}</td>
+          <td>${nextStep(c)}</td>
           <td class="num">${c.stage === 'rejected' || c.stage === 'hired' ? '' : reviewButton(c)}</td>
         </tr>`).join('')}</tbody></table></div>
     </section>` : ''}
-    ${careersCard(inbox)}`;
+`;
+  }
+
+  el.innerHTML = `
+    <div class="page-head"><h1>Recruitment</h1><div class="actions"><button class="btn" id="pp-add-review">+ Add someone to review</button><button class="btn btn-primary" id="pp-new-job">+ New job</button></div></div>
+    ${recTiles(section, counts)}
+    ${section === 'jobs' || section === 'calendar' ? filters(state, scope) : ''}
+    ${body}`;
+  if (section === 'calendar') renderRecCalendar(el.querySelector('#rec-calendar'), { state, scope, query, navigate, stale });
 
   el.querySelectorAll('[data-interview]').forEach((b) => b.addEventListener('click', () => interviewDialog([...apps.to_review, ...apps.new].find((c) => c.id === Number(b.dataset.interview)), jobs, rerender)));
   // Junk that came into the careers inbox: gone from Atlas (the email itself stays in the inbox, and isn't picked up again).
@@ -258,7 +341,7 @@ export async function renderRecruitment(ctx) {
     } catch (err) { showError(err); e.target.disabled = false; }
   });
 
-  wireFilters(el, 'people/recruitment', navigate, { show: showAll ? 'all' : undefined });
+  wireFilters(el, section === 'calendar' ? 'people/recruitment/calendar' : 'people/recruitment', navigate, { show: showAll ? 'all' : undefined, month: query.month });
   const job = (jid) => jobs.find((j) => j.id === Number(jid));
   const sites = state.locations.filter((l) => l.active);
 
@@ -290,7 +373,7 @@ export async function renderRecruitment(ctx) {
     title: c ? c.name : `New candidate – ${j.title}`,
     body: `${field('Name', input('name', c?.name, 'required maxlength="100"'))}
       <div class="row">${field('Phone', input('phone', c?.phone, 'type="tel" maxlength="50"'))}${field('Email', input('email', c?.email, 'type="email" maxlength="200"'))}</div>
-      <div class="row">${field('Stage', select('stage', STAGES, c?.stage ?? 'applied'))}${field('Next step on', input('next_step_on', c?.next_step_on, 'type="date"'), { hint: 'e.g. their interview or trial shift' })}</div>
+      <div class="row">${field('Stage', select('stage', STAGES, c?.stage ?? 'applied'))}${field('Next step on', input('next_step_on', c?.next_step_on, 'type="date"'), { hint: 'e.g. their interview or trial shift' })}${field('Time', input('next_step_time', c?.next_step_time, 'type="time"'))}</div>
       ${field('Notes', textarea('notes', c?.notes, 'rows="5" maxlength="4000" placeholder="Interview notes, availability, references…"'))}`,
     submitLabel: c ? 'Save' : 'Add candidate',
     onSubmit: async (v) => {
@@ -370,7 +453,7 @@ export async function renderCandidate(ctx) {
         <section class="card">
           <h2>Contact</h2>
           <p>${c.email ? `✉ <a href="mailto:${esc(c.email)}">${esc(c.email)}</a><br>` : ''}${c.phone ? `☎ <a href="tel:${esc(c.phone.replace(/\s/g, ''))}">${esc(c.phone)}</a>` : ''}${!c.email && !c.phone ? '<span class="muted">No contact details</span>' : ''}</p>
-          ${c.next_step_on ? `<p class="small">Next step: <strong class="${c.next_step_on < todayISO() ? 'tone-bad' : ''}">${fmtDate(c.next_step_on)}</strong></p>` : ''}
+          ${c.next_step_on ? `<p class="small">Next step: <strong>${nextStep(c)}</strong></p>` : ''}
         </section>
         ${c.message ? `<section class="card"><h2>Their email</h2>${c.subject ? `<p class="small muted">Subject: ${esc(c.subject)}</p>` : ''}<div class="pp-text pp-message">${esc(c.message)}</div></section>` : ''}
         <section class="card">
@@ -462,7 +545,7 @@ export async function renderCandidate(ctx) {
     body: `${field('Name', input('name', c.name, 'required maxlength="100"'))}
       <div class="row">${field('Phone', input('phone', c.phone, 'type="tel" maxlength="50"'))}${field('Email', input('email', c.email, 'type="email" maxlength="200"'))}</div>
       ${field('For the job', select('vacancy_id', [['', '— Not for a particular job —'], ...jobs.filter((j) => j.status === 'open' || j.id === c.vacancy_id).map((j) => [j.id, `${j.title} – ${j.location_name}`])], c.vacancy_id ?? ''))}
-      <div class="row">${field('Stage', select('stage', STAGES, c.stage))}${field('Next step on', input('next_step_on', c.next_step_on, 'type="date"'))}</div>`,
+      <div class="row">${field('Stage', select('stage', STAGES, c.stage))}${field('Next step on', input('next_step_on', c.next_step_on, 'type="date"'))}${field('Time', input('next_step_time', c.next_step_time, 'type="time"'))}</div>`,
     onSubmit: async (v) => {
       await api(`/candidates/${c.id}`, { method: 'PUT', body: { ...v, vacancy_id: v.vacancy_id || null } });
       toast('Saved');

@@ -2816,3 +2816,36 @@ img.lesson-media { background: transparent; }
 .md .seg { background: none; border: 0; gap: 0.4rem; padding: 0 4px 4px 0; overflow: visible; }
 .md .seg button { border: 1.5px solid var(--mb-ink, #2b2118); border-radius: 999px; background: var(--mb-card, #fffaf2); color: var(--mb-ink, #2b2118); font-weight: 700; box-shadow: 2px 2px 0 var(--mb-ink, #2b2118); }
 .md .seg button.is-on { background: #e8b24a; color: #2b2118; }
+
+/* Recruitment: five tiles and the calendar */
+.rec-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .rec-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .rec-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rec-tiles .hub-text small { display: block; font-size: 0.72rem; } }
+.rc-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
+.rc-head h2 { margin: 0 0.3rem; min-width: 9rem; text-align: center; }
+.rc-key { margin-left: auto; display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.rc-key .rc-entry { font-size: 0.72rem; padding: 0.1rem 0.45rem; }
+.rc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.rc-dow { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 0.2rem; }
+.rc-day { min-height: 92px; border: 1px solid var(--border); border-radius: 10px; padding: 0.3rem; background: var(--surface); display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
+.rc-day.is-other { opacity: 0.45; }
+.rc-day.is-today { border: 2px solid #e0a83a; }
+.rc-date { font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.rc-entry { display: block; font-size: 0.78rem; line-height: 1.25; padding: 0.2rem 0.35rem; border-radius: 6px; text-decoration: none; color: #2b2118; background: var(--surface-2); border-left: 3px solid var(--muted); }
+.rc-entry small { display: block; font-size: 0.7rem; color: #6e5d4b; }
+.rc-interview { background: #fdf0d3; border-left-color: #e0a83a; }
+.rc-trial { background: #e3eef8; border-left-color: #3b82c4; }
+.rc-offer { background: #efe6f7; border-left-color: #8e5bb8; }
+.rc-hired { background: var(--good-soft); border-left-color: #2e7d4f; }
+.rc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.rc-list li { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.6rem; align-items: center; }
+.rc-when { font-weight: 700; font-size: 0.9rem; }
+@media (max-width: 640px) {
+  .rc-day { min-height: 54px; padding: 0.2rem; }
+  .rc-day .rc-entry { font-size: 0; padding: 0; height: 6px; border-left-width: 0; }
+  .rc-list li { grid-template-columns: 1fr; gap: 0.15rem; }
+}
+.rec-tiles .hub-tile { gap: 0.6rem; padding: 0.75rem; }
+.rec-tiles .hub-icon { width: 38px; height: 38px; font-size: 1rem; flex: none; }
+.rec-tiles .hub-text strong { font-size: 1.02rem; line-height: 1.2; }
+.rec-tiles .hub-go { display: none; }
