@@ -125,3 +125,31 @@ export function seedCourse(db) {
   const who = db.prepare(`SELECT id FROM users WHERE email = 'staff1@cafe.local'`).get();
   if (who) db.prepare(`INSERT INTO training_assignments (course_id, user_id, due_on) VALUES (?, ?, date('now', '+5 days'))`).run(course, who.id);
 }
+
+// Sample checklists for every site, a few tasks and a couple of to-dos for Checklists & Tasks.
+export function seedChecklists(db) {
+  const list = db.prepare('INSERT INTO checklists (name, description, location_id, days, position) VALUES (?, ?, NULL, ?, ?)');
+  const item = db.prepare('INSERT INTO checklist_items (checklist_id, position, text) VALUES (?, ?, ?)');
+  [
+    ['Opening checklist', 'Before the doors open', ['Coffee machine on; flush the group heads', 'Dial in the espresso and taste a shot', 'Tills open and float counted', 'Cake display filled and labelled', 'Tables and outside seating out', 'Toilets checked and stocked']],
+    ['Closing checklist', 'After the last customer leaves', ['Back-flush and clean the coffee machine', 'Food covered, labelled or thrown away', 'Surfaces cleaned and sanitised', 'Floors swept and mopped', 'Tills cashed up and safe locked', 'Doors locked and alarm set']],
+  ].forEach(([name, description, items], i) => {
+    const id = Number(list.run(name, description, '1234567', i).lastInsertRowid);
+    items.forEach((t, p) => item.run(id, p, t));
+  });
+  const site = db.prepare('SELECT id FROM locations ORDER BY id LIMIT 1').get();
+  const staff = db.prepare(`SELECT id FROM users WHERE email = 'staff1@cafe.local'`).get();
+  const admin = db.prepare(`SELECT id FROM users WHERE email = 'admin@cafe.local'`).get();
+  if (!site) return;
+  const firstItems = db.prepare('SELECT id FROM checklist_items WHERE checklist_id = (SELECT MIN(id) FROM checklists) ORDER BY position LIMIT 3').all();
+  for (const it of firstItems) db.prepare(`INSERT INTO checklist_ticks (item_id, location_id, date, done_by) VALUES (?, ?, date('now'), ?)`).run(it.id, site.id, staff?.id ?? null);
+  const task = db.prepare(`INSERT INTO tasks (title, notes, location_id, assign_to, user_id, role, due_on, repeat, created_by) VALUES (?, ?, ?, ?, ?, ?, date('now', ?), ?, ?)`);
+  if (staff) task.run('Clean the coffee grinder burrs', 'Use the grinder brush and tablets in the stockroom.', site.id, 'person', staff.id, null, '+2 days', 'weekly', admin?.id ?? null);
+  task.run('Check fire extinguishers are in date', null, site.id, 'site', null, null, '-1 days', 'monthly', admin?.id ?? null);
+  task.run('Order new loyalty cards', 'We’re down to the last box.', site.id, 'site', null, null, '+5 days', 'none', admin?.id ?? null);
+  if (admin) {
+    const todo = db.prepare(`INSERT INTO todos (user_id, text, due_on) VALUES (?, ?, date('now', ?))`);
+    todo.run(admin.id, 'Ring the landlord about the boiler service', '+1 days');
+    todo.run(admin.id, 'Sign off the new summer menu', '+7 days');
+  }
+}

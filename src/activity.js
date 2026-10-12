@@ -111,6 +111,16 @@ const ACTIONS = [
   ['POST', '/availability/patterns', 'Time off', 'Added repeating availability'],
   ['PUT', '/availability/patterns/:id', 'Time off', 'Changed repeating availability'],
   ['DELETE', '/availability/patterns/:id', 'Time off', 'Deleted repeating availability'],
+  // Checklists & tasks
+  ['POST', '/checklists/items/:itemId/tick', 'Checklists & tasks', 'Ticked off a checklist item', (db, p, b) => join(nameOf(db, 'checklist_items', 'text', p.itemId), b.done === false ? 'unticked' : null)],
+  ['POST', '/checklists', 'Checklists & tasks', 'Added a checklist', (db, p, b) => b.name],
+  ['PUT', '/checklists/:id', 'Checklists & tasks', 'Changed a checklist', (db, p) => nameOf(db, 'checklists', 'name', p.id)],
+  ['DELETE', '/checklists/:id', 'Checklists & tasks', 'Deleted a checklist', (db, p) => nameOf(db, 'checklists', 'name', p.id)],
+  ['POST', '/tasks', 'Checklists & tasks', 'Gave someone a task', (db, p, b) => b.title],
+  ['PUT', '/tasks/:id', 'Checklists & tasks', 'Changed a task', (db, p) => nameOf(db, 'tasks', 'title', p.id)],
+  ['DELETE', '/tasks/:id', 'Checklists & tasks', 'Deleted a task', (db, p) => nameOf(db, 'tasks', 'title', p.id)],
+  ['POST', '/tasks/:id/done', 'Checklists & tasks', 'Marked a task done', (db, p) => nameOf(db, 'tasks', 'title', p.id)],
+  ['POST', '/tasks/:id/reopen', 'Checklists & tasks', 'Reopened a task', (db, p) => nameOf(db, 'tasks', 'title', p.id)],
   // Compliance
   ['POST', '/safety/checks', 'Compliance', 'Completed a check', (db, p, b) => join(nameOf(db, 'safety_tasks', 'title', b.task_id), site(db, b.location_id))],
   ['DELETE', '/safety/checks/:id', 'Compliance', 'Removed a completed check'],

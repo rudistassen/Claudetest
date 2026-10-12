@@ -12,13 +12,14 @@ export const PUSH_KINDS = [
   { key: 'holiday_decision', label: 'Your holiday request is approved or declined', group: 'Holiday' },
   { key: 'news', label: 'New news or a policy to read', group: 'News' },
   { key: 'training', label: 'You’re given a training course, or it’s signed off', group: 'Training' },
+  { key: 'task', label: 'You’re given a task', group: 'Tasks' },
   { key: 'holiday_request', label: 'Someone asks for holiday', group: 'For managers', perms: ['leave.manage'] },
-  { key: 'drop_request', label: 'Someone asks to drop a shift', group: 'For managers', perms: ['rota.publish'] },
-  { key: 'pickup_request', label: 'Someone asks to pick up an open shift', group: 'For managers', perms: ['rota.publish'] },
+  { key: 'drop_request', label: 'Someone asks to drop a shift', group: 'For managers', perms: ['rota.approve'] },
+  { key: 'pickup_request', label: 'Someone asks to pick up an open shift', group: 'For managers', perms: ['rota.approve'] },
   { key: 'late', label: 'Someone is late or hasn’t clocked in for their shift', group: 'For managers', perms: ['rota.edit', 'staff.manage'] },
   { key: 'enquiry', label: 'A new events enquiry comes in', group: 'For managers', perms: ['events.manage'] },
-  { key: 'application', label: 'A new job application comes in', group: 'For managers', perms: ['people.manage'] },
-  { key: 'training_signoff', label: 'Someone passes a course that needs your sign-off', group: 'For managers', perms: ['people.manage'] },
+  { key: 'application', label: 'A new job application comes in', group: 'For managers', perms: ['people.recruitment'] },
+  { key: 'training_signoff', label: 'Someone passes a course that needs your sign-off', group: 'For managers', perms: ['people.training'] },
 ];
 const KIND_KEYS = new Set(PUSH_KINDS.map((k) => k.key));
 export const kindsFor = (user) => PUSH_KINDS.filter((k) => !k.perms || k.perms.some((p) => can(user, p)));

@@ -49,6 +49,8 @@ export async function render(ctx) {
     assigned: can('people.training') ? api(`/training/assignments${qs(loc)}`) : null,
     reviews: can('people.performance') ? api(`/performance${qs(loc)}`) : null,
     events: can('events.manage') ? api('/events/unread') : null,
+    tasks: can('tasks.manage') ? api(`/tasks${qs(loc)}`) : null,
+    lists: can('checklists.complete', 'checklists.manage') ? api(`/checklists${qs(loc)}`) : null,
   };
   // Each part loads on its own: one that fails just leaves its bit out.
   const keys = Object.keys(want);
@@ -95,6 +97,10 @@ export async function render(ctx) {
   if (lateTraining) add('bad', '🎓', `${plural(lateTraining, 'person', 'people')} overdue on training`, '#/people/training/assign?show=late');
   const lateReviews = (got.reviews ?? []).filter((p) => p.overdue).length;
   if (lateReviews) add('warn', '★', `${plural(lateReviews, 'review')} overdue`, '#/people/performance');
+  const lateTasks = (got.tasks ?? []).filter((t) => t.status === 'overdue').length;
+  if (lateTasks) add('bad', '✔', `${plural(lateTasks, 'task')} overdue`, '#/tasks?tab=all');
+  const listLeft = (got.lists?.checklists ?? []).reduce((n, c) => n + c.total - c.done, 0);
+  if (listLeft) add(hour >= 17 ? 'bad' : 'warn', '☑', `${plural(listLeft, 'checklist item')} still to tick off today`, '#/checklists');
   if (got.events?.count) add('warn', '✉', `${plural(got.events.count, 'event enquiry', 'event enquiries')} to read`, '#/events/enquiries');
   needs.sort((a, b) => (a.tone === 'bad' ? 0 : 1) - (b.tone === 'bad' ? 0 : 1));
 

@@ -23,6 +23,7 @@ import * as events from './views/events.js';
 import * as paymentlinks from './views/paymentlinks.js';
 import * as dashboard from './views/dashboard.js';
 import * as managerdash from './views/managerdash.js';
+import * as checklists from './views/checklists.js';
 import * as login from './views/login.js';
 import { renderSetPassword } from './views/password.js';
 import * as orders from './views/orders.js';
@@ -65,6 +66,10 @@ const ROUTES = [
   [/^$/, dashboard.render],
   [/^dashboard$/, dashboard.render, ['dashboard.view']],
   [/^manager$/, managerdash.render, ['dashboard.manager']],
+  [/^checklists$/, checklists.renderChecklists, ['checklists.complete', 'checklists.manage']],
+  [/^checklists\/setup$/, checklists.renderChecklistSetup, ['checklists.manage']],
+  [/^tasks$/, checklists.renderTasks],
+  [/^todo$/, checklists.renderTodo, ['todo.use']],
   [/^safety$/, safety.renderChecklist, SAFETY],
   [/^safety\/report$/, safety.renderReport, ['safety.report']],
   [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
@@ -169,6 +174,12 @@ function navGroups() {
       ['rota/requests', 'Requests', '✉', ['rota.approve', 'leave.manage']],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
     ]],
+    ['Checklists & Tasks', [
+      ['checklists', 'Checklists', '☑', ['checklists.complete', 'checklists.manage']],
+      ['tasks', 'Tasks', '✔'],
+      ['todo', 'My to-do', '✎', ['todo.use']],
+      ['checklists/setup', 'Set up checklists', '⚙', ['checklists.manage']],
+    ]],
     ['Compliance', [
       ['safety', 'Checklist', '✓', SAFETY],
       ['safety/report', 'Compliance report', '▤', ['safety.report']],
@@ -227,7 +238,7 @@ function navGroups() {
 }
 
 // Each menu section's colour.
-const NAV_TONES = { Rota: 'team', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
+const NAV_TONES = { Rota: 'team', 'Checklists & Tasks': 'menu', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
 
 // A little red bell beside Rota in the menus while requests are waiting.
 const BELL = '<span class="req-bell" data-req-bell hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-1.7 1.7A1 1 0 0 0 4 19.4h16a1 1 0 0 0 .7-1.7Z"/></svg></span>';
@@ -296,7 +307,7 @@ function foldedGroups() {
 const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 
 // Menu sections that open a page of tiles (one per page in the section) instead of a drop-down list.
-const HUBS = { Rota: 'rota-menu', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock-ordering' };
+const HUBS = { Rota: 'rota-menu', 'Checklists & Tasks': 'checklists-tasks', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
   safety: 'Today’s checks – tick them off as you go',
@@ -306,6 +317,10 @@ const TILE_NOTES = {
   'rota/requests': 'Holiday and shift drops waiting for you, and team availability',
   availability: 'When you can and can’t work, day by day or repeating',
   'rota/log': 'Every change to the rota, and who made it',
+  checklists: 'Opening, closing and cleaning lists to tick off today',
+  tasks: 'Jobs given to you – and, for managers, to your team',
+  todo: 'Your own private to-do list',
+  'checklists/setup': 'Add and change the checklists for each site',
   dashboard: 'Every site’s day side by side – sales, labour, who’s in and checks',
   manager: 'Your site today – numbers, who’s on, and everything waiting on you',
   'rota/budget': 'Each site’s forecast gross sales for the week, and the budget to plan the rota against',
@@ -349,7 +364,7 @@ function hubOf(path) {
 
 // Tiles shown under a "Set up" heading at the end of their section's tiles.
 // Tiles shown under an "Admin" heading after the rest of their section's tiles (for managers).
-const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories']);
+const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories', 'checklists/setup']);
 const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log', 'admin/staff']);
 const hubTiles = (items, active) => {
   const main = items.filter(([p]) => !SETUP_TILES.has(p) && !ADMIN_TILES.has(p));

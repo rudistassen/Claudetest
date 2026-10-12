@@ -135,9 +135,13 @@ export async function renderMyBrew(ctx) {
   // and requests waiting for managers.
   const todayShift = shifts.find((s) => s.date === todayISO());
   const checkSite = state.can('safety.complete') ? (todayShift?.location_id ?? (state.can('safety.manage') ? state.locationId : null)) : null;
-  const [checklist, leaveCount] = await Promise.all([
+  // Checklists (opening, closing…) where they're working today, and tasks given to them.
+  const listSite = state.can('checklists.complete') ? (todayShift?.location_id ?? (state.can('checklists.manage') ? state.locationId : null)) : null;
+  const [checklist, leaveCount, myTasks, lists] = await Promise.all([
     checkSite ? api(`/safety/checklist?location_id=${checkSite}`).catch(() => null) : null,
     state.can('leave.manage') ? api('/leave/pending-count').catch(() => ({ count: 0 })) : { count: 0 },
+    api('/tasks/mine').catch(() => []),
+    listSite ? api(`/checklists?location_id=${listSite}`).catch(() => null) : null,
   ]);
   if (stale()) return;
   const u = state.user;
@@ -194,6 +198,11 @@ export async function renderMyBrew(ctx) {
   const tasks = [
     toRead ? { icon: '📌', title: `Confirm you’ve read ${toRead} update${toRead === 1 ? '' : 's'}`, detail: 'In the newsfeed below', action: 'Read', go: 'news', primary: true } : null,
     checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} compliance check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety', primary: true } : null,
+    ...myTasks.filter((t) => t.status !== 'done').slice(0, 5).map((t) => ({ icon: '✔', title: t.title, detail: `${t.due_on ? `${t.status === 'overdue' ? 'Overdue – was due' : 'Due'} ${fmtDate(t.due_on, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Task'}${t.created_by_name ? ` · from ${t.created_by_name}` : ''}`, action: 'Open', href: '#/tasks', primary: t.status === 'overdue' })),
+    lists && lists.checklists.some((c) => c.done < c.total) ? (() => {
+      const left = lists.checklists.reduce((n, c) => n + c.total - c.done, 0);
+      return { icon: '☑', title: `${left} checklist item${left === 1 ? '' : 's'} left today`, detail: lists.checklists.filter((c) => c.done < c.total).map((c) => c.name).join(' · '), action: 'Checklists', href: '#/checklists' };
+    })() : null,
     toReview ? { icon: '✉', title: `${toReview} request${toReview === 1 ? '' : 's'} to review`, detail: [leaveCount.count ? `${leaveCount.count} holiday` : '', drops.to_approve.length ? `${drops.to_approve.length} shift request${drops.to_approve.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), action: 'Review', href: '#/rota/requests', primary: true } : null,
     ...(training?.records ?? []).filter((r) => r.status !== 'done').map((r) => ({ icon: '🎓', title: r.status === 'expired' ? `Your ${r.course_name} has run out` : `Your ${r.course_name} runs out soon`, detail: `${r.status === 'expired' ? 'Ran out' : 'Runs out'} ${fmtDate(r.expires_on, { day: 'numeric', month: 'short', year: 'numeric' })} – speak to your manager about redoing it`, action: 'See training', go: 'training' })),
     ...coursesToDo.map((c) => ({ icon: '🎓', title: `Do your ${c.name} training`, detail: c.due_on ? `${c.due_on < today ? 'Overdue – was due' : 'Due'} ${fmtDate(c.due_on, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Your manager has given you this course', action: 'Start', href: `#/learn/${c.id}`, primary: true })),

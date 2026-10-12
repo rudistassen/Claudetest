@@ -21,6 +21,7 @@ import { registerPeopleRoutes } from './routes/people.js';
 import { Xero } from './xero.js';
 import { registerNewsRoutes } from './routes/news.js';
 import { registerCourseRoutes } from './routes/courses.js';
+import { registerChecklistRoutes } from './routes/checklists.js';
 import { registerDocumentRoutes } from './routes/documents.js';
 import { registerBreakRoutes } from './routes/breaks.js';
 import { registerTimecardRoutes } from './routes/timecards.js';
@@ -122,6 +123,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerEventRoutes(api, db, { mailbox: events, reader: enquiryReader });
   registerNewsRoutes(api, db);
   registerCourseRoutes(api, db);
+  registerChecklistRoutes(api, db);
   registerActivityRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);

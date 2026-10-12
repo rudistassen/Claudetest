@@ -27,6 +27,7 @@ import { registerCareersRoutes } from '../src/careers-inbox.js';
 import { registerEventRoutes } from '../src/events.js';
 import { registerNewsRoutes } from '../src/routes/news.js';
 import { registerCourseRoutes } from '../src/routes/courses.js';
+import { registerChecklistRoutes } from '../src/routes/checklists.js';
 import { registerDocumentRoutes } from '../src/routes/documents.js';
 import { registerBreakRoutes } from '../src/routes/breaks.js';
 import { registerTimecardRoutes } from '../src/routes/timecards.js';
@@ -38,7 +39,7 @@ import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
 import { demoPlaces } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from '../src/invites.js';
 import { HttpError, addDays, today } from '../src/util.js';
-import { seedActivity, seedCourse } from './activity.js';
+import { seedActivity, seedCourse, seedChecklists } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
 import { registerPushRoutes } from '../src/push.js';
 import { activityLogger, registerActivityRoutes } from '../src/activity.js';
@@ -105,6 +106,7 @@ async function boot() {
   seedDemo(db);
   seedActivity(db);
   seedCourse(db);
+  seedChecklists(db);
   publishAllShifts(db);
 
   const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 5 };
@@ -221,6 +223,7 @@ async function boot() {
   ], 'invoices@brewandbarrel.example') });
   registerNewsRoutes(api, db);
   registerCourseRoutes(api, db);
+  registerChecklistRoutes(api, db);
   registerActivityRoutes(api, db);
   registerDocumentRoutes(api, db);
   registerBreakRoutes(api, db);

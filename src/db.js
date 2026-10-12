@@ -1014,6 +1014,71 @@ CREATE TABLE IF NOT EXISTS rota_analyses (
 );
 CREATE INDEX IF NOT EXISTS idx_rota_analyses_week ON rota_analyses(week, scope, id);
 
+-- Checklists & Tasks → Checklists: operational lists (opening, closing, cleaning…) ticked off each day at a site.
+-- location_id NULL means every site; days is the weekdays it's due (1 = Monday … 7 = Sunday).
+CREATE TABLE IF NOT EXISTS checklists (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  location_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
+  days TEXT NOT NULL DEFAULT '1234567',
+  position INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS checklist_items (
+  id INTEGER PRIMARY KEY,
+  checklist_id INTEGER NOT NULL REFERENCES checklists(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  text TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS checklist_ticks (
+  id INTEGER PRIMARY KEY,
+  item_id INTEGER NOT NULL REFERENCES checklist_items(id) ON DELETE CASCADE,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  done_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  done_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (item_id, location_id, date)
+);
+-- Checklists & Tasks → Tasks: jobs given to a person, everyone in a role at a site, or a whole site, with a due date.
+-- A repeating task moves on to its next due date when it's done (each time is kept in task_done).
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  notes TEXT,
+  location_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
+  assign_to TEXT NOT NULL CHECK (assign_to IN ('person', 'role', 'site')),
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT,
+  due_on TEXT,
+  repeat TEXT NOT NULL DEFAULT 'none' CHECK (repeat IN ('none', 'daily', 'weekly', 'monthly')),
+  done_at TEXT,
+  done_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_site ON tasks(location_id, active);
+CREATE TABLE IF NOT EXISTS task_done (
+  id INTEGER PRIMARY KEY,
+  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  due_on TEXT,
+  done_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  note TEXT,
+  done_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Checklists & Tasks → My to-do: each person's own private list.
+CREATE TABLE IF NOT EXISTS todos (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  due_on TEXT,
+  done_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_todos_user ON todos(user_id, done_at);
+
 -- People → Performance: one-to-ones, probation reviews and appraisals.
 CREATE TABLE IF NOT EXISTS performance_reviews (
   id INTEGER PRIMARY KEY,
@@ -1446,6 +1511,22 @@ export function openDb(file = ':memory:') {
     // Trail was renamed Compliance: the Staff log's area for past entries follows.
     db.prepare(`UPDATE activity_log SET area = 'Compliance' WHERE area = 'Trail'`).run();
     db.exec('PRAGMA user_version = 15');
+  }
+  if (version < 16) {
+    // Checklists & Tasks was added: whoever did compliance checks can tick off checklists, and whoever set up
+    // compliance checks (managers) can set up checklists, give tasks to people and keep a to-do list.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        const add = [];
+        if (perms.includes('safety.complete') || perms.includes('safety.manage')) add.push('checklists.complete');
+        if (perms.includes('safety.manage')) add.push('checklists.manage', 'tasks.manage', 'todo.use');
+        const next = [...new Set([...perms, ...add])];
+        if (next.length !== perms.length) db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify(next), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 16');
   }
   ensureDefaultSets(db);
   return db;

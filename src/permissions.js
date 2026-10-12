@@ -13,6 +13,12 @@ export const PERMISSION_AREAS = [
     ['safety.manage', 'Set up their site’s checks and clear completed ones'],
     ['safety.report', 'See the compliance report'],
   ]],
+  ['Checklists & tasks', [
+    ['checklists.complete', 'Tick off their site’s checklists (opening, closing, cleaning…)'],
+    ['checklists.manage', 'Set up checklists for their sites'],
+    ['tasks.manage', 'Give tasks to people, roles or sites, and see everyone’s tasks at their sites'],
+    ['todo.use', 'Keep a private to-do list'],
+  ]],
   ['Rota', [
     ['rota.view', 'See the rota'],
     ['rota.edit', 'Add, change and copy shifts, and mark people as sick'],
@@ -105,7 +111,7 @@ export const DEFAULT_SETS = [
     built_in: 'staff',
     name: 'Staff',
     description: 'Works in a site: food-safety checks, wastage, stock counts, the rota and recipes.',
-    permissions: ['safety.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
+    permissions: ['safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
   },
 ];
 
