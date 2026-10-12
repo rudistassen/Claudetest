@@ -2891,3 +2891,17 @@ img.lesson-media { background: transparent; }
 .td-add { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 .td-add input[name=text] { flex: 1 1 220px; }
 .td-done-head { font-size: 1rem; margin: 1rem 0 0.4rem; }
+
+/* Manager Dashboard: this week so far – sales vs budget and labour % */
+.md-tracking { margin-bottom: 1rem; }
+.md-tracking h2 { margin: 0 0 0.2rem; }
+.md-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-top: 0.6rem; }
+.md-gauge { display: flex; flex-direction: column; gap: 0.25rem; }
+.md-gauge-label { font-weight: 700; }
+.md-gauge strong { font-size: 1.9rem; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; line-height: 1.1; }
+.md-track { position: relative; height: 10px; border-radius: 999px; background: var(--border, #e6dccd); margin: 0.35rem 0 0.15rem; }
+.md-track-fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: #6e5d4b; }
+.md-track-fill.md-good { background: #2f8a4c; }
+.md-track-fill.md-warn { background: #d08a1a; }
+.md-track-fill.md-bad { background: #c8443b; }
+.md-track-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text, #2b2118); }
