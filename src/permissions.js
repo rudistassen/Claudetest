@@ -6,6 +6,7 @@ export const PERMISSION_AREAS = [
   ['Dashboards', [
     ['dashboard.view', 'See the HQ Dashboard (every site they can access, side by side; sales and labour figures also need “See sales”)'],
     ['dashboard.manager', 'See the Manager Dashboard (their site’s day and everything waiting on them; opens on their home site)'],
+    ['dashboard.sales', 'See sales and labour figures on the Manager Dashboard (their own site only – without the Sales and Trading pages)'],
   ]],
   ['Trail', [
     ['safety.complete', 'Complete Trail checks'],

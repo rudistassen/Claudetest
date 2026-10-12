@@ -83,3 +83,23 @@ test('the HQ Dashboard data can cover a period: checks done and wastage from the
   assert.equal((await a(`/dashboard?from=${addDays(today(), 1)}`)).status, 400);
   assert.equal((await a(`/dashboard?from=${addDays(today(), -400)}`)).status, 400);
 });
+
+test('sales figures on the Manager Dashboard have their own permission, for one site only', async () => {
+  const me = db.prepare(`SELECT * FROM users WHERE email = 'staff1@cafe.local'`).get();
+  const login1 = async (perms) => {
+    db.prepare('UPDATE users SET custom_permissions = ? WHERE id = ?').run(JSON.stringify(perms), me.id);
+    return login('staff1@cafe.local');
+  };
+  // The Manager Dashboard without sales: no money on it.
+  let s = await login1(['dashboard.manager']);
+  assert.equal((await s(`/dashboard?location_id=${me.location_id}`)).data.locations[0].gross_today, undefined);
+  assert.equal((await s(`/reports/rota-costs?location_id=${me.location_id}`)).status, 403);
+  // With "See sales on the Manager Dashboard": their site's figures, but not every site's or the Sales pages.
+  s = await login1(['dashboard.manager', 'dashboard.sales']);
+  assert.notEqual((await s(`/dashboard?location_id=${me.location_id}`)).data.locations[0].gross_today, undefined);
+  assert.equal((await s(`/reports/rota-costs?location_id=${me.location_id}`)).status, 200);
+  assert.equal((await s('/reports/rota-costs')).status, 403);
+  assert.equal((await s('/sales')).status, 403);
+  assert.equal((await s('/trading')).status, 403);
+  db.prepare('UPDATE users SET custom_permissions = NULL WHERE id = ?').run(me.id);
+});

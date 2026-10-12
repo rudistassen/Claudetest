@@ -7,7 +7,7 @@ import { dayKey, labourByDay, pct, rotaByDay, salesBudgets, salesByDay } from '.
 import { bankHoliday } from '../bank-holidays.js';
 import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
 import { notStarted, registerShiftDropRoutes, rotaDrops } from './shift-drops.js';
-import { addDays, badRequest, date, id, notFound, num, oneOf, round2, shiftHours, str, time, today, weekStart, zonedMidnightUTC } from '../util.js';
+import { addDays, badRequest, date, forbidden, id, notFound, num, oneOf, round2, shiftHours, str, time, today, weekStart, zonedMidnightUTC } from '../util.js';
 
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 
@@ -79,7 +79,9 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
    * net-to-gross ratio. Uses the rota as it stands, including changes not yet published; ?published=1 uses what
    * staff can see.
    */
-  router.get('/reports/rota-costs', requirePerm('sales.view'), (req, res) => {
+  router.get('/reports/rota-costs', requirePerm('sales.view', 'dashboard.sales'), (req, res) => {
+    // Without "See sales", only one site at a time (the Manager Dashboard's week on the rota).
+    if (!can(req.user, 'sales.view') && !req.query.location_id) throw forbidden('Choose a site');
     const ws = weekStart(date(req.query.week, 'week') ?? today());
     const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     const locations = reportLocations(req, req.query.location_id);

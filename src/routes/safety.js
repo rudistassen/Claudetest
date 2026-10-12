@@ -251,7 +251,8 @@ export function registerSafetyRoutes(router, db) {
       fullDay: day < today(),
       // ?location_id= for one site (the manager dashboard), otherwise every site they can see.
       locations: reportLocations(req, site),
-      seeSales: can(req.user, 'sales.view'),
+      // Sales figures: "See sales", or for one site on the Manager Dashboard, "See sales on the Manager Dashboard".
+      seeSales: can(req.user, 'sales.view') || (can(req.user, 'dashboard.sales') && !!req.query.location_id),
       seeOrders: can(req.user, 'orders.manage'),
       seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage'),
       periodFrom: from,

@@ -30,7 +30,7 @@ export async function render(ctx) {
 
   const want = {
     day: api(`/dashboard${qs(loc)}`),
-    costs: can('sales.view') ? api(`/reports/rota-costs${qs({ ...loc, week })}`) : null,
+    costs: can('sales.view', 'dashboard.sales') ? api(`/reports/rota-costs${qs({ ...loc, week })}`) : null,
     rota: can('rota.edit') ? api(`/rota${qs({ ...loc, week })}`) : null,
     rotaNext: can('rota.edit') ? api(`/rota${qs({ ...loc, week: nextWeek })}`) : null,
     leave: can('leave.manage') ? api('/leave/pending-count') : null,

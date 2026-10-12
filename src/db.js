@@ -1426,6 +1426,20 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 13');
   }
+  if (version < 14) {
+    // Sales figures on the Manager Dashboard became their own permission: whoever already saw them (with "See
+    // sales") keeps them.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        if (perms.includes('sales.view') && perms.includes('dashboard.manager') && !perms.includes('dashboard.sales')) {
+          db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify([...perms, 'dashboard.sales']), row.id);
+        }
+      }
+    }
+    db.exec('PRAGMA user_version = 14');
+  }
   ensureDefaultSets(db);
   return db;
 }
