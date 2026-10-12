@@ -111,6 +111,7 @@ const ROUTES = [
   [/^people\/recruitment\/new$/, (ctx) => people.renderRecruitment({ ...ctx, section: 'new' }), ['people.recruitment']],
   [/^people\/recruitment\/review$/, (ctx) => people.renderRecruitment({ ...ctx, section: 'review' }), ['people.recruitment']],
   [/^people\/recruitment\/progress$/, (ctx) => people.renderRecruitment({ ...ctx, section: 'progress' }), ['people.recruitment']],
+  [/^people\/recruitment\/declined$/, (ctx) => people.renderRecruitment({ ...ctx, section: 'declined' }), ['people.recruitment']],
   [/^people\/recruitment\/calendar$/, (ctx) => people.renderRecruitment({ ...ctx, section: 'calendar' }), ['people.recruitment']],
   [/^people\/recruitment\/candidates\/(\d+)$/, people.renderCandidate, ['people.recruitment']],
   [/^people\/training$/, people.renderTraining, ['people.training']],

@@ -166,6 +166,7 @@ const REC_TILES = [
   ['review', 'people/recruitment/review', 'Candidates for review', '☆', (n) => (n ? `${n} to look at` : 'Nobody waiting')],
   ['progress', 'people/recruitment/progress', 'In progress', '☺', (n) => `${n} candidate${n === 1 ? '' : 's'}`],
   ['calendar', 'people/recruitment/calendar', 'Recruitment calendar', '▦', (n) => (n ? `${n} in the next 7 days` : 'Nothing booked this week')],
+  ['declined', 'people/recruitment/declined', 'Not taken on', '✕', (n) => `${n} candidate${n === 1 ? '' : 's'}`],
 ];
 const recTiles = (active, counts) => `<nav class="ld-tiles rec-tiles" aria-label="Recruitment">${REC_TILES.map(([key, path, label, icon, note]) => `
   <a class="hub-tile ${key === active ? 'is-active' : ''}" href="#/${path}" ${key === active ? 'aria-current="page"' : ''}>
@@ -228,7 +229,7 @@ export async function renderRecruitment(ctx) {
   const open = jobs.filter((j) => j.status === 'open');
   const multi = state.multiSite && scope === 'all';
 
-  // Five tiles: Open jobs, New applicants, Candidates for review, In progress and the Recruitment calendar.
+  // Six tiles: Open jobs, New applicants, Candidates for review, In progress, the Recruitment calendar and Not taken on.
   const section = ctx.section ?? 'jobs';
   const soon = addDays(todayISO(), 6);
   const counts = {
@@ -237,6 +238,7 @@ export async function renderRecruitment(ctx) {
     review: apps.to_review.length,
     progress: apps.in_progress.length,
     calendar: apps.in_progress.filter((c) => c.next_step_on && c.next_step_on >= todayISO() && c.next_step_on <= soon).length,
+    declined: apps.not_taken?.length ?? 0,
   };
   const empty = (text) => `<div class="card empty">${text}</div>`;
   let body = '';
@@ -270,6 +272,20 @@ export async function renderRecruitment(ctx) {
     ${apps.in_progress.length ? '' : empty('Nobody in progress. Candidates appear here once they’re invited to interview, on a trial shift or offered a job.')}`;
   } else if (section === 'calendar') {
     body = '<div id="rec-calendar"><div class="loading">Loading…</div></div>';
+  } else if (section === 'declined') {
+    const list = apps.not_taken ?? [];
+    body = list.length ? `<section class="card pp-job" id="pp-not-taken">
+      <div class="pp-job-head"><div><h2>Not taken on <span class="badge">${list.length}</span></h2>
+        <p class="muted small">Everyone turned down, most recent first. Change their stage to bring someone back.</p></div></div>
+      <div class="table-wrap"><table class="pp-cands">
+        <thead><tr><th>Candidate</th><th>Job</th><th>Turned down</th><th>Stage</th></tr></thead>
+        <tbody>${list.map((c) => `<tr>
+          <td><a href="#/people/recruitment/candidates/${c.id}"><strong>${esc(c.name)}</strong></a>${c.files ? ' <span title="Has a CV">📎</span>' : ''}<small class="muted">${[c.phone, c.email].filter(Boolean).map(esc).join(' · ')}</small></td>
+          <td>${c.job_title ? `${esc(c.job_title)}${c.site_name ? `<small class="muted">${esc(c.site_name)}</small>` : ''}` : '<span class="muted">No job picked</span>'}</td>
+          <td>${day(String(c.declined_at ?? c.updated_at).slice(0, 10))}${c.reply_drafted_at ? '<small class="muted">Reply drafted</small>' : ''}</td>
+          <td><select data-stage="${c.id}" aria-label="Stage for ${esc(c.name)}">${STAGES.map(([v, l]) => `<option value="${v}" ${v === c.stage ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+        </tr>`).join('')}</tbody></table></div>
+    </section>` : empty('Nobody turned down yet. People you decline, or mark as “Not taken on”, appear here.');
   } else {
     body = `    <p class="small"><a href="#/people/recruitment${qs({ scope: query.scope, show: showAll ? undefined : 'all' })}">${showAll ? 'Only show open jobs' : 'Show filled and closed jobs too'}</a></p>
     ${shown.length ? shown.map((j) => `<section class="card pp-job" data-job="${j.id}">

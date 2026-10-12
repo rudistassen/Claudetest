@@ -2818,7 +2818,7 @@ img.lesson-media { background: transparent; }
 .md .seg button.is-on { background: #e8b24a; color: #2b2118; }
 
 /* Recruitment: five tiles and the calendar */
-.rec-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.rec-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .rec-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .rec-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rec-tiles .hub-text small { display: block; font-size: 0.72rem; } }
 .rc-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.7rem; }

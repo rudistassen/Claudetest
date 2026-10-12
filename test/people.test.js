@@ -61,6 +61,25 @@ test('recruitment: a job with candidates moving through the stages', async () =>
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vacancies WHERE id = ?').get(job.data.id).n, 0);
 });
 
+test('recruitment: people not taken on are listed, newest first, and can be brought back', async () => {
+  const a = await login('admin@cafe.local');
+  const loc = staff().location_id;
+  const job = await a('/vacancies', { method: 'POST', body: { location_id: loc, title: 'Chef' } });
+  const one = (await a(`/vacancies/${job.data.id}/candidates`, { method: 'POST', body: { name: 'Kim Crumb' } })).data.id;
+  const two = (await a(`/vacancies/${job.data.id}/candidates`, { method: 'POST', body: { name: 'Lee Scone' } })).data.id;
+  await a(`/candidates/${one}`, { method: 'PUT', body: { stage: 'rejected' } });
+  db.prepare(`UPDATE candidates SET declined_at = datetime('now', '-1 day') WHERE id = ?`).run(one);
+  await a(`/candidates/${two}`, { method: 'PUT', body: { stage: 'rejected' } });
+  db.prepare(`UPDATE candidates SET declined_at = datetime('now') WHERE id = ?`).run(two);
+  const ids = (await a('/applications')).data.not_taken.map((c) => c.id);
+  assert.ok(ids.indexOf(two) < ids.indexOf(one) && ids.indexOf(one) >= 0, 'newest first');
+  assert.equal((await a('/applications')).data.not_taken.find((c) => c.id === one).job_title, 'Chef');
+  await a(`/candidates/${one}`, { method: 'PUT', body: { stage: 'interview' } });
+  const after = (await a('/applications')).data;
+  assert.ok(!after.not_taken.some((c) => c.id === one));
+  assert.ok(after.in_progress.some((c) => c.id === one));
+});
+
 test('recruitment: the To review list', async () => {
   const a = await login('admin@cafe.local');
   const loc = staff().location_id;

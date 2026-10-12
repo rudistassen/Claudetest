@@ -163,6 +163,10 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
       // Soonest next step first; those without one after.
       in_progress: rows.filter(going).sort((a, b) => `${a.next_step_on ?? '9999'} ${a.next_step_time ?? '99:99'}`.localeCompare(`${b.next_step_on ?? '9999'} ${b.next_step_time ?? '99:99'}`)),
       no_job: rows.filter((c) => !review(c) && !c.vacancy_id && !going(c) && !(c.source === 'email' && c.stage === 'applied')),
+      // Everyone turned down, most recently first.
+      not_taken: db.prepare(`SELECT ${CANDIDATE_LIST}, v.title AS job_title, COALESCE(v.location_id, c.location_id) AS site_id, l.name AS site_name
+        FROM candidates c LEFT JOIN vacancies v ON v.id = c.vacancy_id LEFT JOIN locations l ON l.id = COALESCE(v.location_id, c.location_id)
+        WHERE c.stage = 'rejected' ORDER BY COALESCE(c.declined_at, c.updated_at) DESC, c.id DESC`).all().filter((c) => canSee(req, c)),
     });
   });
 
