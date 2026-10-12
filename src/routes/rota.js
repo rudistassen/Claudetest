@@ -655,6 +655,17 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     }
     for (const s of away) s.hours = round2(shiftHours(s.start_time, s.end_time, s.break_minutes));
     if (!manager) for (const u of staff) delete u.hourly_rate;
+    // Each person's hours that week at every site (not just the ones shown), so nobody is rota'd for too many hours
+    // across sites. Sickness doesn't count.
+    const weekHours = {};
+    const sitesWorked = {};
+    if (staffIds.length) {
+      for (const s of db.prepare(`SELECT user_id, location_id, start_time, end_time, break_minutes FROM ${editor ? 'draft_shifts' : 'published_shifts'}
+        WHERE user_id IN (${staffIds.map(() => '?').join(', ')}) AND date BETWEEN ? AND ? AND sick = 0`).all(...staffIds, ws, we)) {
+        weekHours[s.user_id] = round2((weekHours[s.user_id] ?? 0) + shiftHours(s.start_time, s.end_time, s.break_minutes));
+        (sitesWorked[s.user_id] ??= new Set()).add(s.location_id);
+      }
+    }
 
     const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     const drops = rotaDrops(db, ids, ws, we);
@@ -705,6 +716,8 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
       shifts,
       away_shifts: away,
       hours_by_user: byUser,
+      // { userId: { hours, sites } }: hours at every site that week, and at how many sites.
+      week_hours_all_sites: Object.fromEntries(Object.entries(weekHours).map(([id, h]) => [id, { hours: h, sites: sitesWorked[id].size }])),
       total_hours: round2(totalHours),
       labour_cost: manager ? round2(totalCost) : undefined,
       // For people who plan the rota: holiday (approved and requested) and usual availability for the people shown.

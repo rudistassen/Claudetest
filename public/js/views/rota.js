@@ -212,6 +212,17 @@ export async function render(ctx) {
     return ` · ${budgeted([id]) ? 'budget' : 'forecast'} ${whole(grossWeek([id]))} gross · labour <span class="tone-${labourTone(p)}">${fmtPct(p)}</span>`;
   };
   const rowHours = (u, site) => Math.round(counted.filter((x) => x.user_id === u.id && (!all || x.location_id === site)).reduce((t, x) => t + x.hours, 0) * 100) / 100;
+  // The Hours column: hours here, and – for people who work at more than one site that week – their total at every
+  // site, so nobody is rota'd for too many hours across sites. Over 48 hours is flagged (the usual legal weekly limit).
+  const MAX_WEEK = 48;
+  const hoursCell = (u, site) => {
+    const here = rowHours(u, site);
+    const every = data.week_hours_all_sites?.[u.id];
+    const over = every && every.hours > MAX_WEEK;
+    if (!every || (every.sites < 2 && Math.abs(every.hours - here) < 0.01)) return `<td class="num ${over ? 'hours-over' : ''}">${here}</td>`;
+    return `<td class="num hours-split ${over ? 'hours-over' : ''}" title="${esc(u.name)}: ${here} hours here, ${every.hours} hours across ${every.sites} sites this week${over ? ` – over ${MAX_WEEK}` : ''}">${here}
+      <small>${every.hours}${over ? ' ⚠' : ''}<br>all sites</small></td>`;
+  };
   // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
   const TAGS = { new: 'New', changed: 'Changed', removed: 'Removed' };
   const shiftLabel = (s, u, site) => {
@@ -628,7 +639,7 @@ export async function render(ctx) {
                   ${canEdit && shifts.length && !off ? `<span class="add-more" title="Add another shift for ${esc(u.name)} on ${fmtDate(d)}">+ shift</span>` : ''}
                 </td>`;
               }).join('')}
-              <td class="num">${rowHours(u, site)}</td>
+              ${hoursCell(u, site)}
             </tr>`)).join('')}
         </tbody>
         <tfoot>${timeline ? `<tr class="gt-cover-row"><th>People on<small>by the hour</small></th>${shownDays.map((d) => `<td>${tlCover(d)}</td>`).join('')}<td></td></tr>` : ''}<tr><th>Total hours</th>${shownDays.map((d) => dayHours[data.days.indexOf(d)]).map((h) => `<td class="num">${Math.round(h * 100) / 100}</td>`).join('')}<td class="num"><strong>${data.total_hours}</strong></td></tr>

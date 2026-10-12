@@ -2905,3 +2905,10 @@ img.lesson-media { background: transparent; }
 .md-track-fill.md-warn { background: #d08a1a; }
 .md-track-fill.md-bad { background: #c8443b; }
 .md-track-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text, #2b2118); }
+
+/* Rota: a person's hours at every site that week, under their hours here */
+.rota td.hours-split small { display: block; font-size: 0.72rem; font-weight: 600; line-height: 1.2; color: var(--muted, #6e5d4b); }
+.rota td.hours-over, .rota td.hours-over small { color: #c0392b; font-weight: 700; }
+/* The Hours column stays in view on the right while the week scrolls sideways */
+.rota-scroll .rota:not(.rota-gantt) tr > :last-child { position: sticky; right: 0; z-index: 2; background: var(--surface); box-shadow: -1px 0 0 var(--border); }
+.rota-scroll .rota:not(.rota-gantt) thead tr > :last-child { z-index: 4; background: var(--surface-2); }
