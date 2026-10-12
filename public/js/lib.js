@@ -210,7 +210,9 @@ export function homeSite(state) {
 /** 'all' or 'site' from a page's ?scope= (either 'all', 'site' or a site's id, which becomes the chosen site). */
 export function siteScope(state, raw, fallback = 'all') {
   if (!state.multiSite) return 'site';
-  const v = raw ?? fallback;
+  // With nothing picked, people with a home site see one site (their home site, unless they picked another in this
+  // section); people without one (admins) see the page's default.
+  const v = raw ?? (homeSite(state) ? String(state.locationId) : fallback);
   if (v === 'all') return 'all';
   const id = Number(v);
   if (id && state.locations.some((l) => l.id === id && l.active)) chooseSite(state, id);

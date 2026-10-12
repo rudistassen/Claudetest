@@ -1,4 +1,4 @@
-import { api, chooseSite, esc, isDemo, qs, showError } from './lib.js';
+import { api, chooseSite, esc, homeSite, isDemo, qs, showError } from './lib.js';
 import { logo } from './logo.js';
 import { maybeStartTour, startTour } from './tour.js';
 import { install, installState, setUpInstall } from './install.js';
@@ -659,6 +659,10 @@ function rememberScroll() {
   };
 }
 
+// The section of the app last opened (the first part of the page's address), so moving to another section can
+// go back to their home site.
+let lastSection = null;
+
 export async function route({ keepScroll = false } = {}) {
   const restoreScroll = keepScroll ? rememberScroll() : null;
   const { path, query } = parseHash();
@@ -681,6 +685,13 @@ export async function route({ keepScroll = false } = {}) {
   if (!allowed(match.role)) {
     el.innerHTML = '<div class="empty">You do not have access to this page.</div>';
     return;
+  }
+  // Each section opens on their home site; a site picked on a page sticks while they stay in that section.
+  const section = path.split('/')[0];
+  if (section !== lastSection) {
+    lastSection = section;
+    const home = homeSite(state);
+    if (home && query.scope === undefined && query.site === undefined) state.locationId = home;
   }
   // On a computer, a tiles-section opens on its first page, with the tiles down the side.
   if (match.view === renderHub && railScreen.matches) {
