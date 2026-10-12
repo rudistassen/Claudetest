@@ -1,5 +1,5 @@
 import { attachTip, pairedBarChart } from '../charts.js';
-import { addDays, api, esc, fmtDate, isDemo, money, openModal, qs, siteColour, toast, todayISO } from '../lib.js';
+import { addDays, api, chooseSite, esc, fmtDate, homeSite, isDemo, money, openModal, qs, siteColour, toast, todayISO } from '../lib.js';
 import { clockInActions, wireClockInActions } from './breaks.js';
 import { sickAttrs, wireSickButtons } from './sickness.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
@@ -511,11 +511,14 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const chartBox = el.querySelector('#hourly-chart');
   // A site can be picked for the chart (remembered in this browser); otherwise it's every site shown.
   const siteBox = el.querySelector('#hourly-site');
-  const SITE_KEY = 'atlas:dash-hourly-site';
+  const SITE_KEY = `atlas:dash-hourly-site:${state.user.id}`;
   if (siteBox) {
-    let saved = '';
-    try { saved = localStorage.getItem(SITE_KEY) ?? ''; } catch { /* storage unavailable */ }
-    if (locs.some((l) => String(l.id) === saved)) siteBox.value = saved;
+    // Their own pick on this device, else their home site, else every site.
+    let saved = null;
+    try { saved = localStorage.getItem(SITE_KEY); } catch { /* storage unavailable */ }
+    const home = homeSite(state);
+    if (saved === '' || locs.some((l) => String(l.id) === saved)) siteBox.value = saved;
+    else if (home && locs.some((l) => l.id === home)) siteBox.value = String(home);
     siteBox.addEventListener('change', () => {
       try { localStorage.setItem(SITE_KEY, siteBox.value); } catch { /* storage unavailable */ }
       loadChart();
@@ -633,8 +636,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   el.querySelectorAll('[data-open], [data-site]').forEach((b) => b.addEventListener('click', (e) => {
     const id = Number(b.dataset.open ?? b.dataset.site);
     if (state.multiSite) {
-      state.locationId = id;
-      try { localStorage.setItem('cafe-ops:location', String(id)); } catch { /* storage unavailable */ }
+      chooseSite(state, id);
     }
     if (b.dataset.open) {
       e.preventDefault();

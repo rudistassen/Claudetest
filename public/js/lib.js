@@ -199,7 +199,12 @@ const SITE_KEY = 'cafe-ops:location';
 
 export function chooseSite(state, id) {
   state.locationId = id;
-  try { localStorage.setItem(SITE_KEY, String(id)); } catch { /* storage unavailable */ }
+  try { localStorage.setItem(`${SITE_KEY}:${state.user?.id}`, String(id)); } catch { /* storage unavailable */ }
+}
+
+/** Their home site's id when it's an active site they can see, else null. */
+export function homeSite(state) {
+  return state.locations.some((l) => l.id === state.user?.location_id && l.active) ? state.user.location_id : null;
 }
 
 /** 'all' or 'site' from a page's ?scope= (either 'all', 'site' or a site's id, which becomes the chosen site). */

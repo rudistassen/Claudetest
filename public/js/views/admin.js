@@ -587,7 +587,7 @@ export async function renderLocations(ctx) {
       v.opening_hours = readOpeningHours(form);
       if (row) await api(`/locations/${row.id}`, { method: 'PUT', body: v });
       else await api('/locations', { method: 'POST', body: v });
-      await loadLocations();
+      await loadLocations({ keep: true });
     },
   });
 }
@@ -797,7 +797,7 @@ function wireCleanup(ctx, c) {
     btn.disabled = true;
     try {
       const r = await api('/square/cleanup', { method: 'POST', body: { remove_locations: !!sites?.checked, remove_staff: !!staff?.checked } });
-      await loadLocations();
+      await loadLocations({ keep: true });
       toast(`Removed ${plural(r.locations_removed, 'site')} and ${plural(r.staff_removed, 'staff member')}${r.backup && !isDemo ? `. Backup saved as data\\${r.backup}` : ''}`);
       ctx.rerender();
     } catch (err) {
@@ -875,7 +875,7 @@ export async function renderSquare(ctx) {
   el.querySelectorAll('[data-link]').forEach((sel) => sel.addEventListener('change', async () => {
     try {
       await api(`/locations/${sel.dataset.link}/square`, { method: 'PUT', body: { square_location_id: sel.value || null } });
-      await loadLocations();
+      await loadLocations({ keep: true });
       toast('Link saved');
       ctx.rerender();
     } catch (err) { toast(err.message, 'error'); ctx.rerender(); }
@@ -883,7 +883,7 @@ export async function renderSquare(ctx) {
   el.querySelectorAll('[data-import]').forEach((b) => b.addEventListener('click', async () => {
     try {
       await api('/square/import-location', { method: 'POST', body: { square_location_id: b.dataset.import } });
-      await loadLocations();
+      await loadLocations({ keep: true });
       toast('Site added and linked');
       ctx.rerender();
     } catch (err) { toast(err.message, 'error'); }

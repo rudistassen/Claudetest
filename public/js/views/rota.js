@@ -1,5 +1,5 @@
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
-import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite, siteColour } from '../lib.js';
+import { addDays, api, confirmDialog, esc, field, fmtDate, input, money, openModal, qs, select, showError, textarea, toast, todayISO, weekStart, chooseSite, homeSite, siteColour } from '../lib.js';
 import { shiftHistory } from './rotalog.js';
 import { openStaffEditor } from './admin.js';
 import { askToDrop, claimRequest, claimShift, dropsPanel, wireDrops } from './shiftdrops.js';
@@ -42,9 +42,11 @@ export async function render(ctx) {
   const day = view === 'day' ? (/^\d{4}-\d{2}-\d{2}$/.test(query.day ?? '') ? query.day : todayISO()) : null;
   const week = weekStart(day ?? query.week ?? todayISO());
   // People with more than one site can see every site's rota at once.
-  // Which site: ?site=all or a site id. People with several sites start on All sites; the old ?scope= links still work.
+  // Which site: ?site=all or a site id. Everyone starts on their home site (people without one, such as the owner,
+  // on All sites); the old ?scope= links still work.
   const active = state.locations.filter((l) => l.active);
-  const asked = query.site ?? (query.scope === 'site' ? String(state.locationId) : query.scope === 'all' ? 'all' : null);
+  const home = homeSite(state);
+  const asked = query.site ?? (query.scope === 'site' ? String(state.locationId) : query.scope === 'all' ? 'all' : home ? String(home) : null);
   const all = state.multiSite && (asked ?? 'all') === 'all';
   const siteId = all ? null : (active.find((l) => String(l.id) === asked)?.id ?? state.locationId);
   // Remember the site picked here, so other pages open on it too.

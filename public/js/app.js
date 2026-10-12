@@ -724,14 +724,16 @@ export async function route({ keepScroll = false } = {}) {
   }
 }
 
-export async function loadLocations() {
+export async function loadLocations({ keep = false } = {}) {
   state.locations = await api('/locations');
   let saved = null;
-  try { saved = Number(localStorage.getItem(LOCATION_KEY)); } catch { /* storage unavailable */ }
+  try { saved = Number(localStorage.getItem(`${LOCATION_KEY}:${state.user.id}`)); } catch { /* storage unavailable */ }
   const active = state.locations.filter((l) => l.active);
-  // The site picked last time, else their home site, else the first site they can access.
+  // Everyone starts on their home site; people without one start on the site they picked last time on this
+  // device, else the first site they can access.
   const pick = (id) => active.some((l) => l.id === id);
-  state.locationId = (pick(saved) ? saved : null) ?? (pick(state.user.location_id) ? state.user.location_id : active[0]?.id ?? null);
+  if (keep && pick(state.locationId)) return; // sites were just changed: stay on the one they're looking at
+  state.locationId = pick(state.user.location_id) ? state.user.location_id : (pick(saved) ? saved : active[0]?.id ?? null);
 }
 
 async function start() {
