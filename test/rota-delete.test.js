@@ -42,11 +42,11 @@ test('deleting a published (or changed) shift takes it off staff’s rota straig
   assert.ok(!db.prepare('SELECT 1 FROM shifts WHERE id = ?').get(s.id), 'gone, not waiting to be published');
   assert.equal((await m(`/rota?week=${week}&location_id=${staff.location_id}`)).data.unpublished, 0, 'nothing left to publish');
   const st = await login('staff1@cafe.local');
-  assert.ok(!(await st('/my-shifts')).data.some((x) => x.date === day), 'off their rota');
+  assert.ok(!(await st(`/my-shifts?week=${week}`)).data.some((x) => x.date === day), 'off their rota');
   assert.ok(db.prepare(`SELECT 1 FROM notifications WHERE user_id = ? AND title = 'Shift removed'`).get(staff.id));
   // Undo puts back exactly what staff saw.
   assert.equal((await m('/rota/undo', { method: 'POST' })).status, 200);
-  const mine = (await st('/my-shifts')).data.find((x) => x.date === day);
+  const mine = (await st(`/my-shifts?week=${week}`)).data.find((x) => x.date === day);
   assert.equal(mine.start_time, '09:00', 'the published version is back');
 });
 
