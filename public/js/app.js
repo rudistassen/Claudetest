@@ -62,6 +62,8 @@ const WASTAGE = ['wastage.record', 'wastage.reports', 'wastage.manage'];
 const STOCK = ['stock.count', 'stock.complete'];
 const RECIPES = ['recipes.view', 'recipes.costs', 'recipes.edit'];
 const SUPPLIERS = ['orders.manage', 'setup.products'];
+// Pages on the Reporting menu: the Reporting permission as well as the report's own.
+const report = (any) => ({ all: 'reports.view', any });
 const ROUTES = [
   [/^$/, dashboard.render],
   [/^dashboard$/, dashboard.render, ['dashboard.view']],
@@ -92,18 +94,18 @@ const ROUTES = [
   [/^recipes\/prep\/(\d+)\/edit$/, recipes.renderEdit, ['recipes.edit']],
   [/^recipes\/(\d+)$/, recipes.renderRecipe, RECIPES],
   [/^recipes\/prep\/(\d+)$/, recipes.renderRecipe, RECIPES],
-  [/^sales$/, sales.render, ['sales.view']],
-  [/^trading$/, trading.render, ['sales.view']],
-  [/^trading\/heatmap$/, trading.renderHeatmap, ['sales.view']],
-  [/^breaks$/, breaks.render, ['sales.view', 'staff.manage']],
-  [/^rota-costs$/, rotacosts.render, ['sales.view']],
-  [/^par-levels$/, parlevels.render, ['sales.view']],
-  [/^par-levels\/new$/, parlevels.renderNew, ['sales.view']],
-  [/^par-levels\/saved$/, parlevels.renderSaved, ['sales.view']],
-  [/^par-levels\/saved\/(\d+)$/, parlevels.renderReport, ['sales.view']],
-  [/^reviews$/, reviews.render, ['reviews.view']],
-  [/^open-orders$/, openorders.render, ['sales.view']],
-  [/^sickness$/, sickness.renderReport, ['rota.edit', 'staff.manage']],
+  [/^sales$/, sales.render, report(['sales.view'])],
+  [/^trading$/, trading.render, report(['sales.view'])],
+  [/^trading\/heatmap$/, trading.renderHeatmap, report(['sales.view'])],
+  [/^breaks$/, breaks.render, report(['sales.view', 'staff.manage'])],
+  [/^rota-costs$/, rotacosts.render, report(['sales.view'])],
+  [/^par-levels$/, parlevels.render, report(['sales.view'])],
+  [/^par-levels\/new$/, parlevels.renderNew, report(['sales.view'])],
+  [/^par-levels\/saved$/, parlevels.renderSaved, report(['sales.view'])],
+  [/^par-levels\/saved\/(\d+)$/, parlevels.renderReport, report(['sales.view'])],
+  [/^reviews$/, reviews.render, report(['reviews.view'])],
+  [/^open-orders$/, openorders.render, report(['sales.view'])],
+  [/^sickness$/, sickness.renderReport, report(['rota.edit', 'staff.manage'])],
   [/^rota\/requests$/, requests.render, ['rota.approve', 'leave.manage']],
   [/^people\/recruitment$/, people.renderRecruitment, ['people.recruitment']],
   [/^people\/recruitment\/new$/, (ctx) => people.renderRecruitment({ ...ctx, section: 'new' }), ['people.recruitment']],
@@ -159,7 +161,7 @@ const home = () => {
   return manager ? 'manager' : 'mybrew';
 };
 
-const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : state.can(...who));
+const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : who.all ? state.can(who.all) && allowed(who.any) : state.can(...who));
 
 // The side menu: Dashboard, then headed groups. Items someone can't use are hidden, and so is a group left empty.
 function navGroups() {
@@ -213,14 +215,14 @@ function navGroups() {
       ['admin/product-categories', 'Product categories', '◧', SUPPLIERS],
     ]],
     ['Reporting', [
-      ['trading', 'Trading', '◔', ['sales.view']],
-      ['sales', 'Sales', '£', ['sales.view']],
-      ['open-orders', 'Open orders', '◌', ['sales.view']],
-      ['rota-costs', 'Rota costs', '⚖', ['sales.view']],
-      ['par-levels', 'Par levels', '▥', ['sales.view']],
-      ['breaks', 'Breaks', '☕', ['sales.view', 'staff.manage']],
-      ['sickness', 'Sickness', '✚', ['rota.edit', 'staff.manage']],
-      ['reviews', 'Reviews', '★', ['reviews.view']],
+      ['trading', 'Trading', '◔', report(['sales.view'])],
+      ['sales', 'Sales', '£', report(['sales.view'])],
+      ['open-orders', 'Open orders', '◌', report(['sales.view'])],
+      ['rota-costs', 'Rota costs', '⚖', report(['sales.view'])],
+      ['par-levels', 'Par levels', '▥', report(['sales.view'])],
+      ['breaks', 'Breaks', '☕', report(['sales.view', 'staff.manage'])],
+      ['sickness', 'Sickness', '✚', report(['rota.edit', 'staff.manage'])],
+      ['reviews', 'Reviews', '★', report(['reviews.view'])],
     ]],
     ['Setup', [
       ['admin/permissions', 'Permissions', '⚿', 'admin'],

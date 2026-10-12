@@ -1528,6 +1528,19 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 16');
   }
+  if (version < 17) {
+    // The Reporting menu got its own permission: everyone who could see a report there keeps it.
+    const REPORT_PERMS = ['sales.view', 'reviews.view', 'rota.edit', 'staff.manage'];
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        if (perms.includes('reports.view') || !perms.some((p) => REPORT_PERMS.includes(p))) continue;
+        db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify([...perms, 'reports.view']), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 17');
+  }
   ensureDefaultSets(db);
   return db;
 }

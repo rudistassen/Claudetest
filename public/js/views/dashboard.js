@@ -326,7 +326,7 @@ function bySite(t, period, prev) {
           <td><strong class="tone-${labourTone(labour(total))}">${icon(labour(total))}${fmtPct(labour(total))}</strong></td></tr></tfoot>` : ''}
       </table></div>
       <p class="muted small">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
-        Grey bars are ${COMPARE_NOTE[period]}. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour. <a href="#/trading">More on the Trading page →</a></p>
+        Grey bars are ${COMPARE_NOTE[period]}. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour.${state.can('reports.view') ? ' <a href="#/trading">More on the Trading page →</a>' : ''}</p>
     </section>`;
 }
 

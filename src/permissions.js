@@ -50,6 +50,9 @@ export const PERMISSION_AREAS = [
     ['recipes.costs', 'See recipe costs, GP and menu performance'],
     ['recipes.edit', 'Create and edit recipes'],
   ]],
+  ['Reporting', [
+    ['reports.view', 'See the Reporting menu (each report also needs its own permission – e.g. “See sales” for Trading, Sales and Rota costs)'],
+  ]],
   ['Sales & trading', [
     ['sales.view', 'See sales, labour costs and the Sales, Trading and Rota costs pages'],
     ['sales.sync', 'Sync sales from Square (up to a week at a time)'],
