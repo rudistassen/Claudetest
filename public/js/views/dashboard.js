@@ -265,10 +265,10 @@ const PERIOD_KEY = 'cafe-ops:dashboard-period';
 // The by-site panel's periods. Each runs up to the day shown (today, or a day picked), and is compared with the same
 // span before it: the same time last week (today, 7 days, week to date – with today up to this time), or the same
 // dates last month / last year (month and year to date – whole days).
-const PERIODS = ['today', 'week', 'wtd', 'mtd', 'ytd'];
-const PERIOD_LABEL = { today: 'Today', week: 'Last 7 days', wtd: 'Week to date', mtd: 'Month to date', ytd: 'Year to date' };
+export const PERIODS = ['today', 'week', 'wtd', 'mtd', 'ytd'];
+export const PERIOD_LABEL = { today: 'Today', week: 'Last 7 days', wtd: 'Week to date', mtd: 'Month to date', ytd: 'Year to date' };
 const PRINT_LABEL = { week: '7 days', wtd: 'week to date', mtd: 'month to date', ytd: 'year to date' };
-const COMPARE_NOTE = { today: 'the same time last week', week: 'the same time last week', wtd: 'the same time last week', mtd: 'the same dates last month', ytd: 'the same dates last year' };
+export const COMPARE_NOTE = { today: 'the same time last week', week: 'the same time last week', wtd: 'the same time last week', mtd: 'the same dates last month', ytd: 'the same dates last year' };
 const pad = (n) => String(n).padStart(2, '0');
 const lastDayOf = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate(); // m is 1–12
 /** The dates a period covers up to d (YYYY-MM-DD), and the span it's compared with (null when nothing to fetch). */
@@ -343,9 +343,8 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   shown.period = period;
   const ranged = period !== 'today';
   const range = periodRange(period, d0);
-  const [data, myShifts, leave, security, fresh, tradeToday, tradeRange, tradePrev] = await Promise.all([
+  const [data, leave, security, fresh, tradeToday, tradeRange, tradePrev] = await Promise.all([
     api(`/dashboard${qs({ date: shown.isToday ? undefined : d0, from: ranged ? range.from : undefined })}`),
-    api('/my-shifts'),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
     state.isAdmin && !isDemo ? api('/admin/security').catch(() => null) : null,
     seeSales || state.can('staff.manage') ? api('/square/freshness').catch(() => null) : null,
@@ -467,11 +466,6 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     ${locs.some((l) => l.roster) ? whosIn(locs, data, fresh) : ''}
     ${security?.demo_password_accounts?.length ? `<p class="notice security-warning"><strong>⚠ Security: ${security.demo_password_accounts.length} account${security.demo_password_accounts.length === 1 ? '' : 's'} can still sign in with the demo password</strong> (${esc(security.demo_password_accounts.slice(0, 4).map((u) => u.email).join(', '))}${security.demo_password_accounts.length > 4 ? ', …' : ''}). Anyone who knows it could get in. Add <code>SEED_DEMO</code> = <code>false</code> in Railway → Variables to switch them all off, or give each a new password under People → Staff.</p>` : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
-    ${myShifts.length ? `
-    <section class="card">
-      <h2>Your upcoming shifts</h2>
-      <ul class="shift-list">${myShifts.slice(0, 7).map((s) => `<li><strong>${fmtDate(s.date)}</strong> ${s.start_time}–${s.end_time} · ${esc(s.location_name)}</li>`).join('')}</ul>
-    </section>` : ''}
     <div class="site-cards">${locs.map((l) => card(l, state, data, siteSlice(l))).join('')}</div></div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));

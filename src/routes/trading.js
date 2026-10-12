@@ -1,6 +1,6 @@
-import { reportLocations, requirePerm } from '../auth.js';
+import { can, reportLocations, requirePerm } from '../auth.js';
 import { clockedByDay, clockedByHour, clockedByWeekHour, dayKey, dayOfWeek, hoursWorkedBy, nowMinutes, pct, rotaByDay, rotaByWeekHour, salesByDay, timecardsFor } from '../metrics.js';
-import { addDays, badRequest, BUSINESS_TZ, date, oneOf, round2, shiftHours, today } from '../util.js';
+import { addDays, badRequest, BUSINESS_TZ, date, forbidden, oneOf, round2, shiftHours, today } from '../util.js';
 
 const MAX_REPORT_DAYS = 366;
 // A clock-in more than this many minutes after the rostered start counts as late.
@@ -135,7 +135,9 @@ export function registerTradingRoutes(router, db, square) {
     });
   });
 
-  router.get('/trading', requirePerm('sales.view'), (req, res) => {
+  router.get('/trading', requirePerm('sales.view', 'dashboard.sales'), (req, res) => {
+    // Without "See sales", only one site at a time (the Manager Dashboard's figures over a period).
+    if (!can(req.user, 'sales.view') && !req.query.location_id) throw forbidden('Choose a site');
     const { from, to, locations, ids } = reportScope(db, req, 7);
     const days = [];
     for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);

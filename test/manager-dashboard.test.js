@@ -100,6 +100,7 @@ test('sales figures on the Manager Dashboard have their own permission, for one 
   assert.equal((await s(`/reports/rota-costs?location_id=${me.location_id}`)).status, 200);
   assert.equal((await s('/reports/rota-costs')).status, 403);
   assert.equal((await s('/sales')).status, 403);
-  assert.equal((await s('/trading')).status, 403);
+  assert.equal((await s('/trading')).status, 403, 'not every site');
+  assert.equal((await s(`/trading?location_id=${me.location_id}`)).status, 200, 'their site over a period');
   db.prepare('UPDATE users SET custom_permissions = NULL WHERE id = ?').run(me.id);
 });

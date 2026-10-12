@@ -2812,3 +2812,7 @@ img.lesson-media { background: transparent; }
 @media (max-width: 640px) { .dash-periods { width: 100%; } .dash-periods button { flex: 1 1 auto; font-size: 0.8rem; padding-inline: 0.5rem; } }
 .dash-periods-top { margin: 0 0 0.4rem; }
 .dash-period-note { margin: 0 0 0.9rem; }
+/* The Manager Dashboard's period buttons, styled like the HQ Dashboard's */
+.md .seg { background: none; border: 0; gap: 0.4rem; padding: 0 4px 4px 0; overflow: visible; }
+.md .seg button { border: 1.5px solid var(--mb-ink, #2b2118); border-radius: 999px; background: var(--mb-card, #fffaf2); color: var(--mb-ink, #2b2118); font-weight: 700; box-shadow: 2px 2px 0 var(--mb-ink, #2b2118); }
+.md .seg button.is-on { background: #e8b24a; color: #2b2118; }
