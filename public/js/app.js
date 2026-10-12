@@ -169,9 +169,9 @@ function navGroups() {
       ['rota/requests', 'Requests', '✉', ['rota.approve', 'leave.manage']],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
     ]],
-    ['Trail', [
+    ['Compliance', [
       ['safety', 'Checklist', '✓', SAFETY],
-      ['safety/report', 'Compliance', '▤', ['safety.report']],
+      ['safety/report', 'Compliance report', '▤', ['safety.report']],
       ['safety/setup', 'Set up checks', '☑', ['safety.manage']],
     ]],
     ['Events', [
@@ -221,13 +221,13 @@ function navGroups() {
       ['admin/email-reports', 'Email reports', '✉', 'admin'],
       ['admin/news', 'News', '✎', ['news.manage']],
       ['admin/documents', 'Documents', '❐', ['documents.manage']],
-      ['safety/setup', 'Trail checks', '☑', ['safety.manage']],
+      ['safety/setup', 'Compliance checks', '☑', ['safety.manage']],
     ]],
   ].map(([heading, items]) => [heading, items.filter(([, , , who]) => allowed(who))]).filter(([, items]) => items.length);
 }
 
 // Each menu section's colour.
-const NAV_TONES = { Rota: 'team', Trail: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
+const NAV_TONES = { Rota: 'team', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
 
 // A little red bell beside Rota in the menus while requests are waiting.
 const BELL = '<span class="req-bell" data-req-bell hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-1.7 1.7A1 1 0 0 0 4 19.4h16a1 1 0 0 0 .7-1.7Z"/></svg></span>';
@@ -296,7 +296,7 @@ function foldedGroups() {
 const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 
 // Menu sections that open a page of tiles (one per page in the section) instead of a drop-down list.
-const HUBS = { Rota: 'rota-menu', Trail: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock-ordering' };
+const HUBS = { Rota: 'rota-menu', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
   safety: 'Today’s checks – tick them off as you go',

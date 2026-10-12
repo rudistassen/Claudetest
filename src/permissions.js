@@ -8,8 +8,8 @@ export const PERMISSION_AREAS = [
     ['dashboard.manager', 'See the Manager Dashboard (their site’s day and everything waiting on them; opens on their home site)'],
     ['dashboard.sales', 'See sales and labour figures on the Manager Dashboard (their own site only – without the Sales and Trading pages)'],
   ]],
-  ['Trail', [
-    ['safety.complete', 'Complete Trail checks'],
+  ['Compliance', [
+    ['safety.complete', 'Complete compliance checks'],
     ['safety.manage', 'Set up their site’s checks and clear completed ones'],
     ['safety.report', 'See the compliance report'],
   ]],

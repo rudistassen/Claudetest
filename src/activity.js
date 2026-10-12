@@ -111,13 +111,13 @@ const ACTIONS = [
   ['POST', '/availability/patterns', 'Time off', 'Added repeating availability'],
   ['PUT', '/availability/patterns/:id', 'Time off', 'Changed repeating availability'],
   ['DELETE', '/availability/patterns/:id', 'Time off', 'Deleted repeating availability'],
-  // Trail
-  ['POST', '/safety/checks', 'Trail', 'Completed a check', (db, p, b) => join(nameOf(db, 'safety_tasks', 'title', b.task_id), site(db, b.location_id))],
-  ['DELETE', '/safety/checks/:id', 'Trail', 'Removed a completed check'],
-  ['POST', '/safety/tasks', 'Trail', 'Added a check to Trail', (db, p, b) => b.title],
-  ['PUT', '/safety/tasks/:id', 'Trail', 'Changed a Trail check', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
-  ['DELETE', '/safety/tasks/:id', 'Trail', 'Deleted a Trail check', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
-  ['POST', '/safety/tasks/:id/:what', 'Trail', 'Changed a Trail check for a site', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
+  // Compliance
+  ['POST', '/safety/checks', 'Compliance', 'Completed a check', (db, p, b) => join(nameOf(db, 'safety_tasks', 'title', b.task_id), site(db, b.location_id))],
+  ['DELETE', '/safety/checks/:id', 'Compliance', 'Removed a completed check'],
+  ['POST', '/safety/tasks', 'Compliance', 'Added a compliance check', (db, p, b) => b.title],
+  ['PUT', '/safety/tasks/:id', 'Compliance', 'Changed a compliance check', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
+  ['DELETE', '/safety/tasks/:id', 'Compliance', 'Deleted a compliance check', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
+  ['POST', '/safety/tasks/:id/:what', 'Compliance', 'Changed a compliance check for a site', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
   // Stock and ordering
   ['POST', '/wastage', 'Stock', 'Recorded wastage'],
   ['DELETE', '/wastage/:id', 'Stock', 'Deleted a wastage entry'],

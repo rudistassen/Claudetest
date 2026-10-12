@@ -1,6 +1,6 @@
 import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, statusBadge, textarea, toast, todayISO, siteScope, siteFilter, sitePicker } from '../lib.js';
 
-// Trail: food-safety checklists, the compliance report and setting up checks for each site.
+// Compliance (once called Trail): food-safety checklists, the compliance report and setting up checks for each site.
 function trailTabs(state, active) {
   const items = [['safety', 'Checklist', true], ['safety/report', 'Compliance report', state.can('safety.report')], ['safety/setup', 'Set up', state.can('safety.manage')]]
     .filter(([, , ok]) => ok);
@@ -75,7 +75,7 @@ export async function renderChecklist(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Trail${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
+      <h1>Compliance${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
       <div class="actions">
         ${sitePicker(state)}
         <button class="btn" data-day="-1">‹</button>
@@ -164,7 +164,7 @@ export async function renderReport(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Trail compliance</h1>
+      <h1>Compliance report</h1>
       <form class="actions" id="range">
         ${siteFilter(state, scope)}
         <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
@@ -244,7 +244,7 @@ export async function renderSetup(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Trail · Set up</h1>
+      <h1>Compliance · Set up</h1>
       <div class="actions">
         ${active.length > 1 ? `<select id="setup-site" aria-label="Site">${active.map((l) => `<option value="${l.id}" ${l.id === siteId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>` : ''}
         <button class="btn btn-primary" id="add">+ Add check</button>

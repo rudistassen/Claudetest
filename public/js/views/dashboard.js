@@ -233,7 +233,7 @@ function card(loc, state, data, slice = null) {
             : '<p class="muted">Nobody rostered</p>'}
         </div>`}
         <div class="site-checks span-2">
-          <h3>Daily Trail checks${per ? ` · ${PERIOD_LABEL[shown.period].toLowerCase()}` : ''}</h3>
+          <h3>Daily compliance checks${per ? ` · ${PERIOD_LABEL[shown.period].toLowerCase()}` : ''}</h3>
           ${per ? progress(per.daily.done, per.daily.due) : progress(loc.daily.done, loc.daily.due)}
           ${(per ? per.daily.fails : loc.daily.fails) ? `<p class="alert-text">⚠ ${per ? per.daily.fails : loc.daily.fails} failed check(s) ${per ? PERIOD_LABEL[shown.period].toLowerCase() : dayWord()}</p>` : ''}
           ${per ? `<p class="small muted">Wastage ${PERIOD_LABEL[shown.period].toLowerCase()}: ${money(per.wastage)}</p>` : ''}
@@ -410,7 +410,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     const prevCost = costOf(pt, synced) + (sameTimeToo ? locs.reduce((n, l) => n + (l.last_week?.labour_cost ?? 0), 0) : 0);
     labourThen = prevNet > 0 && prevCost > 0 ? Math.round((prevCost / prevNet) * 1000) / 10 : null;
   }
-  // Daily Trail checks over the period (or the day).
+  // Daily compliance checks over the period (or the day).
   const checks = ranged
     ? locs.reduce((t, l) => ({ done: t.done + (l.period?.daily.done ?? 0), due: t.due + (l.period?.daily.due ?? 0), fails: t.fails + (l.period?.daily.fails ?? 0) }), { done: 0, due: 0, fails: 0 })
     : { done: totals.dailyDone, due: totals.dailyDue, fails: totals.fails };

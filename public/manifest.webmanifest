@@ -1,7 +1,7 @@
 {
   "name": "Atlas",
   "short_name": "Atlas",
-  "description": "Rota, Trail checks, stock, ordering, invoices and trading for Brew & Barrel, Common, Buddy’s and Omnibus Theatre.",
+  "description": "Rota, compliance checks, stock, ordering, invoices and trading for Brew & Barrel, Common, Buddy’s and Omnibus Theatre.",
   "id": "/",
   "start_url": "/#/dashboard",
   "scope": "/",
@@ -17,7 +17,7 @@
   ],
   "shortcuts": [
     { "name": "Rota", "url": "/#/rota", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Trail checklist", "url": "/#/safety", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Compliance checklist", "url": "/#/safety", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Invoices", "url": "/#/invoices", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

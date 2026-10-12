@@ -1442,6 +1442,11 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 14');
   }
+  if (version < 15) {
+    // Trail was renamed Compliance: the Staff log's area for past entries follows.
+    db.prepare(`UPDATE activity_log SET area = 'Compliance' WHERE area = 'Trail'`).run();
+    db.exec('PRAGMA user_version = 15');
+  }
   ensureDefaultSets(db);
   return db;
 }

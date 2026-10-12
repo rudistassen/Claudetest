@@ -139,7 +139,7 @@ export function siteSummaries(db, { locations, seeSales = false, seeOrders = fal
     if (periodFrom) {
       const dailyIds = tasks.filter((t) => t.frequency === 'daily').map((t) => t.id);
       const inIds = dailyIds.map(() => '?').join(', ');
-      // Checks only count as due from the first day the site recorded any (so a site that started using Trail
+      // Checks only count as due from the first day the site recorded any (so a site that started using compliance checks
       // part-way through the year isn't marked down for the months before).
       const first = dailyIds.length ? db.prepare(`SELECT MIN(period) AS p FROM safety_checks WHERE location_id = ? AND period BETWEEN ? AND ? AND task_id IN (${inIds})`)
         .get(loc.id, periodFrom, d, ...dailyIds).p : null;

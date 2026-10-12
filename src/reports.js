@@ -126,7 +126,7 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
       <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-top:6px">On the rota (${s.shifts_today.length})</div>
       <p style="margin:4px 0 8px;font-size:14px">${s.shifts_today.length ? s.shifts_today.map((x) => `${esc(x.name)} ${x.start_time}–${x.end_time}`).join(' · ') : '<span style="color:#777">Nobody rostered</span>'}</p>`}
       <p style="margin:8px 0 0;font-size:14px;color:#333">Wastage (7 days) <strong>${money(s.wastage_7d)}</strong>
-        &nbsp;·&nbsp; Daily Trail checks <strong>${s.daily.done} / ${s.daily.due}</strong>${s.daily.fails ? ` <span style="color:#b3261e">⚠ ${s.daily.fails} failed</span>` : ''}
+        &nbsp;·&nbsp; Daily compliance checks <strong>${s.daily.done} / ${s.daily.due}</strong>${s.daily.fails ? ` <span style="color:#b3261e">⚠ ${s.daily.fails} failed</span>` : ''}
         &nbsp;·&nbsp; Weekly <strong>${s.weekly.done} / ${s.weekly.due}</strong>${s.weekly.fails ? ` <span style="color:#b3261e">⚠ ${s.weekly.fails} failed</span>` : ''}</p>
     </div>`;
   };
@@ -161,7 +161,7 @@ export function buildReport(db, person, { period = 'today', name = 'Daily report
       ...(s.clock_ins && flagged(s.clock_ins).length ? [`Over 6 hours without a 20-minute break: ${flagged(s.clock_ins).map((c) => c.name).join(', ')}`] : []),
       ...(s.clock_ins ?? []).filter((c) => attendanceNotes(c).length).map((c) => `${c.name}: ${attendanceNotes(c).join(', ')}${c.rota ? ` (rota ${c.rota})` : ''}`),
       ...(s.not_clocked_in ?? []).map((m) => `${m.name} (rota ${m.rota}) ${m.shift_over ? 'didn’t clock in' : `hasn’t clocked in – ${mins(m.late_minutes)} late`}`),
-      `Daily Trail checks ${s.daily.done}/${s.daily.due}, weekly ${s.weekly.done}/${s.weekly.due}. Wastage (7 days) ${money(s.wastage_7d)}`, '',
+      `Daily compliance checks ${s.daily.done}/${s.daily.due}, weekly ${s.weekly.done}/${s.weekly.due}. Wastage (7 days) ${money(s.wastage_7d)}`, '',
     ]),
     ...(url ? [url] : []),
   ].join('\n');
