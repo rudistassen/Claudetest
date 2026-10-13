@@ -56,10 +56,11 @@ export async function renderReceive(ctx) {
   el.querySelectorAll('[data-receive]').forEach((b) => b.addEventListener('click', () => navigate(`orders/${b.dataset.receive}?receive=1`)));
 }
 
-function linesTable(rows, { showSuggest }) {
+// only: start with just the products being ordered showing (an open cart); searching still looks through them all.
+function linesTable(rows, { showSuggest, only = false }) {
   return `<div class="line-filter">
-      <input type="search" class="line-search" placeholder="Search products – name, code or category" aria-label="Search products" autocomplete="off">
-      <label class="line-only"><input type="checkbox" class="line-only-box"> Only what I’m ordering</label>
+      <input type="search" class="line-search" placeholder="${only ? 'Search to add another product – name, code or category' : 'Search products – name, code or category'}" aria-label="Search products" autocomplete="off">
+      <label class="line-only"><input type="checkbox" class="line-only-box" ${only ? 'checked' : ''}> Only what I’m ordering</label>
       <span class="muted small line-count"></span>
     </div>
     <div class="table-wrap"><table class="order-lines">
@@ -98,7 +99,7 @@ function bindLines(root, minOrder) {
     const box = b.parentElement.querySelector('.qty-input');
     const next = Math.max(0, (Number(box.value) || 0) + Number(b.dataset.step));
     box.value = next ? String(Math.round(next * 100) / 100) : '';
-    box.dispatchEvent(new Event('input'));
+    box.dispatchEvent(new Event('input', { bubbles: true }));
   }));
   update();
   // Searching only hides rows: quantities already typed stay in the order.
@@ -112,7 +113,8 @@ function bindLines(root, minOrder) {
     const rows = [...root.querySelectorAll('tr[data-product]')];
     for (const tr of rows) {
       const ordering = (Number(tr.querySelector('.qty-input').value) || 0) > 0;
-      const hit = words.every((w) => tr.dataset.search.includes(w)) && (!only?.checked || ordering);
+      // A search looks through every product; with nothing searched for, the tickbox can narrow to what's being ordered.
+      const hit = words.every((w) => tr.dataset.search.includes(w)) && (words.length > 0 || !only?.checked || ordering);
       tr.hidden = !hit;
       if (hit) shown++;
       else if (ordering) hiddenOrdering++;
@@ -121,6 +123,7 @@ function bindLines(root, minOrder) {
     if (count) count.textContent = words.length || only?.checked ? `${shown} of ${rows.length} products${hiddenOrdering ? ` · ${hiddenOrdering} more in the order, hidden by the search` : ''}` : '';
   };
   search?.addEventListener('input', filter);
+  if (only?.checked) filter();
   root.querySelectorAll('.qty-input').forEach((i) => i.addEventListener('input', () => { if (search?.value) filter(); }));
   search?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
   only?.addEventListener('change', filter);
@@ -242,7 +245,7 @@ export async function renderNew(ctx) {
   if (query.find) {
     const box = form.querySelector('.line-search');
     box.value = query.find;
-    box.dispatchEvent(new Event('input'));
+    box.dispatchEvent(new Event('input', { bubbles: true }));
     if (matchMedia('(pointer: fine)').matches) form.querySelector('tr[data-product]:not([hidden]) .qty-input')?.focus();
   }
   form.addEventListener('submit', async (e) => {
@@ -297,7 +300,11 @@ function conversation(o, mail) {
 }
 
 function wireEmail(el, o, mail, ctx) {
-  el.querySelector('#email')?.addEventListener('click', () => {
+  el.querySelector('#email')?.addEventListener('click', async () => {
+    if (el.flushCart) {
+      await el.flushCart();
+      try { mail = await api(`/orders/${o.id}/emails`); } catch (err) { showError(err); return; }
+    }
     const p = mail.preview;
     openModal({
       title: `Send PO-${o.id} to ${o.supplier_name}`,
@@ -339,8 +346,17 @@ function wireEmail(el, o, mail, ctx) {
 
 export async function renderOrder(ctx) {
   const { el, params, stale } = ctx;
+  el.flushCart = null;
   const [o, mail] = await Promise.all([api(`/orders/${params[0]}`), api(`/orders/${params[0]}/emails`).catch(() => null)]);
   if (stale()) return;
+  // An open cart lists every product from the supplier (so others can be searched for and added), with what's in it.
+  const all = o.status === 'draft' ? await api(`/orders/suggest${qs({ location_id: o.location_id, supplier_id: o.supplier_id })}`).catch(() => null) : null;
+  if (stale()) return;
+  const inCart = new Map(o.lines.map((l) => [l.product_id, l]));
+  const cartRows = all ? [...all.products.map((p) => ({ ...p, quantity: inCart.get(p.product_id)?.quantity ?? 0, unit_cost: inCart.get(p.product_id)?.unit_cost ?? p.unit_cost })),
+    // Anything in the cart that's no longer on the supplier's list stays in it.
+    ...o.lines.filter((l) => !all.products.some((p) => p.product_id === l.product_id)).map((l) => ({ ...l, name: l.product_name }))]
+    : o.lines.map((l) => ({ ...l, name: l.product_name }));
   // Emailing from the orders mailbox (Microsoft 365), when it's connected; otherwise the person's own email app.
   const inbox = mail?.connected && mail?.enabled;
   const draft = o.status === 'draft';
@@ -361,18 +377,18 @@ export async function renderOrder(ctx) {
       <div class="kpi"><span>Status</span><strong>${statusBadge(o.status)}</strong></div>
       <div class="kpi"><span>Site</span><strong>${esc(o.location_name)}</strong></div>
       <div class="kpi"><span>Delivery</span><strong>${fmtDate(o.delivery_date)}</strong></div>
-      <div class="kpi"><span>Order total</span><strong>${money(o.total)}</strong></div>
+      <div class="kpi"><span>Order total</span><strong id="po-total">${money(o.total)}</strong></div>
     </div>
     <p class="muted">Created ${fmtDateTime(o.created_at)} by ${esc(o.created_by_name ?? '–')}
       ${o.sent_at ? ` · sent ${fmtDateTime(o.sent_at)}` : ''}${o.received_at ? ` · received ${fmtDateTime(o.received_at)}` : ''}</p>
     ${draft ? `
     <form class="card" id="edit-form">
-      ${linesTable(o.lines.map((l) => ({ ...l, name: l.product_name })), { showSuggest: false })}
+      ${linesTable(cartRows, { showSuggest: !!all, only: true })}
       <div class="row">
         ${field('Delivery date', input('delivery_date', o.delivery_date, 'type="date"'))}
         ${field('Notes for supplier', textarea('notes', o.notes))}
       </div>
-      <div class="actions"><button class="btn" type="submit">Save changes</button></div>
+      <div class="actions"><button class="btn" type="submit">Save changes</button><span class="muted small cart-saved" aria-live="polite">Changes save as you go</span></div>
     </form>` : `
     <section class="card">
       <div class="table-wrap"><table>
@@ -416,6 +432,26 @@ export async function renderOrder(ctx) {
   const form = el.querySelector('#edit-form');
   if (form) {
     const getLines = bindLines(form, 0);
+    // An open cart saves itself a moment after each change (quantities, delivery date, notes).
+    const saved = form.querySelector('.cart-saved');
+    let timer = null;
+    let saving = Promise.resolve();
+    const saveNow = () => {
+      clearTimeout(timer);
+      timer = null;
+      saving = saving.then(() => api(`/orders/${o.id}`, { method: 'PUT', body: { delivery_date: form.delivery_date.value || null, notes: form.notes.value, lines: getLines() } }))
+        .then((r) => { el.querySelector('#po-total').textContent = money(r.total); if (saved) saved.textContent = '✓ Saved'; })
+        .catch((err) => { if (saved) saved.textContent = ''; showError(err); });
+      return saving;
+    };
+    form.addEventListener('input', (e) => {
+      if (!e.target.matches('.qty-input, [name=delivery_date], [name=notes]')) return;
+      if (saved) saved.textContent = 'Saving…';
+      clearTimeout(timer);
+      timer = setTimeout(saveNow, 700);
+    });
+    // Sending (or anything else) waits for the last change to be saved first.
+    el.flushCart = () => (timer ? saveNow() : saving);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -428,6 +464,9 @@ export async function renderOrder(ctx) {
       const ask = inbox ? `Mark PO-${o.id} as sent without emailing it (e.g. you ordered by phone or on the supplier’s website)?` : `Mark PO-${o.id} as sent and open an email to ${o.supplier_name}? Save any changes first.`;
       if (!(await confirmDialog(ask, { confirmLabel: inbox ? 'Mark as sent' : 'Send', title: 'Send order' }))) return;
       try {
+        // The last change saved, and the email written from what's now in the cart.
+        await el.flushCart();
+        Object.assign(o, await api(`/orders/${o.id}`));
         await api(`/orders/${o.id}/send`, { method: 'POST' });
         if (!inbox) mailto();
         ctx.rerender();
