@@ -2958,3 +2958,26 @@ img.lesson-media { background: transparent; }
 .line-filter { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin: 0.4rem 0 0.7rem; }
 .line-filter .line-search { flex: 1 1 260px; max-width: 420px; }
 .line-only { display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
+
+/* Ordering: − / + beside each quantity, and a compact row per product on phones */
+.qty-step { display: inline-flex; align-items: center; gap: 0.25rem; }
+.qty-step button { width: 2rem; height: 2rem; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 1.15rem; line-height: 1; cursor: pointer; color: inherit; flex: none; }
+.qty-step button:active { transform: scale(0.94); }
+.qty-step .qty-input { width: 4.2rem; text-align: center; }
+.order-lines .ol-meta { display: none; }
+.order-lines tr.is-ordering td.ol-name { font-weight: 600; }
+@media (max-width: 640px) {
+  .order-lines thead, .order-lines .ol-col { display: none; }
+  .order-lines, .order-lines tbody { display: block; }
+  .order-lines tbody tr { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.1rem; border-bottom: 1px solid var(--border); }
+  .order-lines tbody tr[hidden] { display: none; }
+  .order-lines tbody td { border: 0; padding: 0; }
+  .order-lines td.ol-name { flex: 1; min-width: 0; font-size: 0.95rem; line-height: 1.25; }
+  .order-lines .ol-meta { display: block; font-size: 0.74rem; font-weight: 400; color: var(--muted); margin-top: 0.1rem; }
+  .order-lines td.ol-qty { flex: none; }
+  .order-lines tr.is-ordering { background: color-mix(in srgb, var(--brand) 7%, transparent); }
+  .order-lines tfoot { display: block; }
+  .order-lines tfoot tr { display: flex; justify-content: space-between; padding: 0.6rem 0.1rem; }
+  .order-lines tfoot td:empty { display: none; }
+}
+.order-lines td { vertical-align: middle; }

@@ -67,11 +67,12 @@ function linesTable(rows, { showSuggest }) {
       <th class="num">Unit cost</th><th class="num">Order qty</th><th class="num">Line total</th></tr></thead>
     <tbody>${rows.map((r) => `
       <tr data-product="${r.product_id}" data-cost="${r.unit_cost}" data-search="${esc(`${r.name} ${r.sku ?? ''} ${r.category ?? ''}`.toLowerCase())}">
-        <td>${esc(r.name)}</td><td>${esc(packUnit(r.unit, r.pack_quantity))}</td>
-        ${showSuggest ? `<td class="num">${qty(r.par_level)}</td><td class="num">${qty(r.on_hand)}</td><td class="num">${qty(r.suggested)}</td>` : ''}
-        <td class="num">${money(r.unit_cost)}</td>
-        <td class="num"><input class="qty-input" type="number" min="0" step="any" inputmode="decimal" value="${r.quantity || ''}"></td>
-        <td class="num line-total">${money((r.quantity || 0) * r.unit_cost)}</td>
+        <td class="ol-name">${esc(r.name)}<small class="ol-meta">${esc(packUnit(r.unit, r.pack_quantity))}${showSuggest ? ` · par ${qty(r.par_level)} · on hand ${qty(r.on_hand)} · <strong>suggested ${qty(r.suggested)}</strong>` : ''} · ${money(r.unit_cost)} · <span class="line-total">${money((r.quantity || 0) * r.unit_cost)}</span></small></td>
+        <td class="ol-col">${esc(packUnit(r.unit, r.pack_quantity))}</td>
+        ${showSuggest ? `<td class="num ol-col">${qty(r.par_level)}</td><td class="num ol-col">${qty(r.on_hand)}</td><td class="num ol-col">${qty(r.suggested)}</td>` : ''}
+        <td class="num ol-col">${money(r.unit_cost)}</td>
+        <td class="num ol-qty"><div class="qty-step"><button type="button" data-step="-1" aria-label="One less ${esc(r.name)}">−</button><input class="qty-input" type="number" min="0" step="any" inputmode="decimal" value="${r.quantity || ''}" aria-label="Order quantity for ${esc(r.name)}"><button type="button" data-step="1" aria-label="One more ${esc(r.name)}">+</button></div></td>
+        <td class="num line-total ol-col">${money((r.quantity || 0) * r.unit_cost)}</td>
       </tr>`).join('')}</tbody>
     <tfoot><tr><th colspan="${showSuggest ? 6 : 3}">Order total</th><td></td><td class="num"><strong class="order-total"></strong></td></tr></tfoot>
   </table></div>`;
@@ -84,13 +85,21 @@ function bindLines(root, minOrder) {
       const q = Number(tr.querySelector('.qty-input').value) || 0;
       const line = q * Number(tr.dataset.cost);
       total += line;
-      tr.querySelector('.line-total').textContent = money(line);
+      tr.querySelectorAll('.line-total').forEach((c) => { c.textContent = money(line); });
+      tr.classList.toggle('is-ordering', q > 0);
     });
     root.querySelector('.order-total').textContent = money(total);
     const warn = root.querySelector('.min-warning');
     if (warn) warn.hidden = !(minOrder && total > 0 && total < minOrder);
   };
   root.querySelectorAll('.qty-input').forEach((i) => i.addEventListener('input', update));
+  // − and +: one at a time, never below nothing.
+  root.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
+    const box = b.parentElement.querySelector('.qty-input');
+    const next = Math.max(0, (Number(box.value) || 0) + Number(b.dataset.step));
+    box.value = next ? String(Math.round(next * 100) / 100) : '';
+    update();
+  }));
   update();
   // Searching only hides rows: quantities already typed stay in the order.
   const search = root.querySelector('.line-search');
