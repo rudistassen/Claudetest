@@ -14,7 +14,7 @@ export function registerSalesRoutes(router, db, square) {
 
   // --- Connection & location mapping (admin) ---
 
-  router.get('/square/status', requirePerm('sales.view', 'sales.sync', 'staff.manage'), (_req, res) => {
+  router.get('/square/status', requirePerm('sales.view', 'reports.sales', 'reports.trading', 'sales.sync', 'staff.manage'), (_req, res) => {
     res.json({
       configured: !!square,
       environment: square?.config.environment ?? null,
@@ -125,7 +125,7 @@ export function registerSalesRoutes(router, db, square) {
 
   // --- Sales report: daily sales alongside labour and wastage (managers and admins) ---
 
-  router.get('/sales', requirePerm('sales.view'), (req, res) => {
+  router.get('/sales', requirePerm('sales.view', 'reports.sales'), (req, res) => {
     const to = date(req.query.to, 'to') ?? today();
     const from = date(req.query.from, 'from') ?? addDays(to, -6);
     if (from > to) throw badRequest('from must be before to');

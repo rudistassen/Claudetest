@@ -499,8 +499,8 @@ export async function render(ctx) {
           <span class="pd-stat-icon is-leave">${pdIcon('plane')}</span>
           <span><strong>${leaveToday.length} on leave</strong><small>${data.leave ? `${onHol}/${leaveToday.length} on holiday` : 'Holiday'}</small></span></a>
       </div>
-      ${data.labour_cost !== undefined ? `<${state.can('sales.view') && state.can('reports.view') ? 'a href="#/rota-costs"' : 'div'} class="card pd-cost">
-        <span><small>Cost summary</small><strong>${money(totalCost)}</strong></span>${state.can('sales.view') && state.can('reports.view') ? '<span class="pd-chev" aria-hidden="true">›</span></a>' : '</div>'}` : ''}
+      ${data.labour_cost !== undefined ? `<${state.can('reports.rota_costs') ? 'a href="#/rota-costs"' : 'div'} class="card pd-cost">
+        <span><small>Cost summary</small><strong>${money(totalCost)}</strong></span>${state.can('reports.rota_costs') ? '<span class="pd-chev" aria-hidden="true">›</span></a>' : '</div>'}` : ''}
       ${canEdit && pendingDay ? `<div class="publish-bar">
         <span><strong>${pendingDay} unpublished change${pendingDay === 1 ? '' : 's'}</strong> – staff can’t see ${pendingDay === 1 ? 'it' : 'them'} yet.</span>
         ${data.can_publish ? `<span class="publish-actions"><button class="btn btn-primary" id="publish">Publish this day</button></span>` : ''}</div>` : ''}

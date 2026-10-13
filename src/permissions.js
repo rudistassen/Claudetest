@@ -51,7 +51,14 @@ export const PERMISSION_AREAS = [
     ['recipes.edit', 'Create and edit recipes'],
   ]],
   ['Reporting', [
-    ['reports.view', 'See the Reporting menu (each report also needs its own permission – e.g. “See sales” for Trading, Sales and Rota costs)'],
+    ['reports.trading', 'Trading report – sales, labour and the trading heatmap for their sites'],
+    ['reports.sales', 'Sales report – sales by day and item from Square'],
+    ['reports.open_orders', 'Open orders report – Square orders not yet paid'],
+    ['reports.rota_costs', 'Rota costs report – rota cost against the labour budget'],
+    ['reports.par_levels', 'Par levels report – suggested pars from sales'],
+    ['reports.breaks', 'Breaks report – missed and short breaks'],
+    ['reports.sickness', 'Sickness report – who was off sick and when'],
+    ['reports.reviews', 'Reviews report – Google reviews for each site'],
   ]],
   ['Sales & trading', [
     ['sales.view', 'See sales, labour costs and the Sales, Trading and Rota costs pages'],

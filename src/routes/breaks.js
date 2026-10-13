@@ -8,7 +8,7 @@ const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: BUSINESS_TZ, hou
 
 export function registerBreakRoutes(router, db) {
   /** Reporting → Breaks: every clock-in in the dates with its breaks, and the ones that missed a proper break. */
-  router.get('/breaks', requirePerm('sales.view', 'staff.manage'), (req, res) => {
+  router.get('/breaks', requirePerm('sales.view', 'staff.manage', 'reports.breaks'), (req, res) => {
     const { from, to, locations, ids } = reportScope(db, req, 7);
     const siteName = new Map(locations.map((l) => [l.id, l.name]));
     const now = Date.now();

@@ -1564,6 +1564,26 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 17');
   }
+  if (version < 18) {
+    // Each report got its own permission (in place of one for the whole Reporting menu): whoever could see the
+    // menu gets every report they could open, by the permission each report used to need.
+    const REPORTS = [
+      ['reports.trading', ['sales.view']], ['reports.sales', ['sales.view']], ['reports.open_orders', ['sales.view']],
+      ['reports.rota_costs', ['sales.view']], ['reports.par_levels', ['sales.view']], ['reports.breaks', ['sales.view', 'staff.manage']],
+      ['reports.sickness', ['rota.edit', 'staff.manage']], ['reports.reviews', ['reviews.view']],
+    ];
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        if (!perms.includes('reports.view')) continue;
+        const next = new Set(perms.filter((p) => p !== 'reports.view'));
+        for (const [report, needs] of REPORTS) if (needs.some((p) => perms.includes(p))) next.add(report);
+        db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify([...next]), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 18');
+  }
   ensureDefaultSets(db);
   return db;
 }

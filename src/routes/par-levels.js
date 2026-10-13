@@ -10,7 +10,7 @@ const UNCATEGORISED = 'Uncategorised';
 const weekdayOf = (iso) => (new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7;
 
 export function registerParLevelRoutes(router, db) {
-  const perm = requirePerm('sales.view');
+  const perm = requirePerm('sales.view', 'reports.par_levels');
   // The sales the averages come from: ?from=&to=, or the last 6 full weeks (Monday to Sunday).
   const window = (q = {}) => {
     const lastSunday = addDays(weekStart(today()), -1);

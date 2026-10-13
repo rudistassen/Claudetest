@@ -14,7 +14,7 @@ export function registerOpenOrderRoutes(router, db, square) {
   const linkOrders = () => new Set(db.prepare('SELECT square_order_id FROM payment_links WHERE square_order_id IS NOT NULL').all().map((r) => r.square_order_id));
 
   // Open orders started in the last `days` days (1 = today), newest first.
-  router.get('/open-orders', requirePerm('sales.view'), async (req, res) => {
+  router.get('/open-orders', requirePerm('sales.view', 'reports.open_orders'), async (req, res) => {
     if (!square) return res.json({ square_ready: false, orders: [] });
     const days = num(req.query.days, 'days', { int: true, min: 1, max: 90 }) ?? 30;
     const sites = reportLocations(req, req.query.location_id).filter((l) => l.square_location_id);
@@ -52,7 +52,7 @@ export function registerOpenOrderRoutes(router, db, square) {
   });
 
   // One order's details: items (with options and notes), discounts, service charges, tax and any part payments.
-  router.get('/open-orders/:id', requirePerm('sales.view'), async (req, res) => {
+  router.get('/open-orders/:id', requirePerm('sales.view', 'reports.open_orders'), async (req, res) => {
     needSquare();
     const orderId = String(req.params.id);
     if (!/^[\w-]{1,192}$/.test(orderId)) throw notFound('Order');

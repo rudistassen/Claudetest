@@ -81,9 +81,9 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
    * net-to-gross ratio. Uses the rota as it stands, including changes not yet published; ?published=1 uses what
    * staff can see.
    */
-  router.get('/reports/rota-costs', requirePerm('sales.view', 'dashboard.sales'), (req, res) => {
+  router.get('/reports/rota-costs', requirePerm('sales.view', 'reports.rota_costs', 'dashboard.sales'), (req, res) => {
     // Without "See sales", only one site at a time (the Manager Dashboard's week on the rota).
-    if (!can(req.user, 'sales.view') && !req.query.location_id) throw forbidden('Choose a site');
+    if (!can(req.user, 'sales.view') && !can(req.user, 'reports.rota_costs') && !req.query.location_id) throw forbidden('Choose a site');
     const ws = weekStart(date(req.query.week, 'week') ?? today());
     const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     const locations = reportLocations(req, req.query.location_id);
@@ -973,7 +973,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
    * Reporting → Sickness: every shift marked as sickness in the dates (default the last 90 days), newest first,
    * with each person's total days and hours off sick.
    */
-  router.get('/reports/sickness', requirePerm('rota.edit', 'staff.manage'), (req, res) => {
+  router.get('/reports/sickness', requirePerm('rota.edit', 'staff.manage', 'reports.sickness'), (req, res) => {
     const to = date(req.query.to, 'to') ?? today();
     const from = date(req.query.from, 'from') ?? addDays(to, -89);
     if (from > to) throw badRequest('from must be before to');

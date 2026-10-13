@@ -31,7 +31,7 @@ export function registerTradingRoutes(router, db, square) {
    * dashboard's chart. Hours synced before gross was kept per hour are estimated from net, using that day's
    * gross-to-net ratio. `open` is the part of today's figure still in open (unpaid) orders.
    */
-  router.get('/trading/hourly-compare', requirePerm('sales.view'), (req, res) => {
+  router.get('/trading/hourly-compare', requirePerm('sales.view', 'reports.trading'), (req, res) => {
     const day = date(req.query.date, 'date') ?? today();
     const before = addDays(day, -7);
     const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
@@ -64,7 +64,7 @@ export function registerTradingRoutes(router, db, square) {
    * Labour % by day of the week and hour of the day: labour cost ÷ net sales in each slot, added up over the
    * period. Only site-days with Square sales count, so closed or unsynced days don't skew it.
    */
-  router.get('/trading/heatmap', requirePerm('sales.view'), (req, res) => {
+  router.get('/trading/heatmap', requirePerm('sales.view', 'reports.trading'), (req, res) => {
     const { from, to, locations, ids } = reportScope(db, req, 28);
     const labourSynced = !!db.prepare('SELECT 1 FROM timecards LIMIT 1').get();
     const basis = oneOf(req.query.basis, 'basis', ['clocked', 'rostered']) ?? (labourSynced ? 'clocked' : 'rostered');
@@ -136,9 +136,9 @@ export function registerTradingRoutes(router, db, square) {
     });
   });
 
-  router.get('/trading', requirePerm('sales.view', 'dashboard.sales'), (req, res) => {
+  router.get('/trading', requirePerm('sales.view', 'reports.trading', 'dashboard.sales'), (req, res) => {
     // Without "See sales", only one site at a time (the Manager Dashboard's figures over a period).
-    if (!can(req.user, 'sales.view') && !req.query.location_id) throw forbidden('Choose a site');
+    if (!can(req.user, 'sales.view') && !can(req.user, 'reports.trading') && !req.query.location_id) throw forbidden('Choose a site');
     const { from, to, locations, ids } = reportScope(db, req, 7);
     const days = [];
     for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
