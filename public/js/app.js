@@ -33,6 +33,7 @@ import * as availability from './views/availability.js';
 import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
 import * as reports from './views/reports.js';
+import * as emailsettings from './views/emailsettings.js';
 import * as invoices from './views/invoices.js';
 import * as mybrew from './views/mybrew.js';
 import * as sales from './views/sales.js';
@@ -148,6 +149,7 @@ const ROUTES = [
   [/^invoices$/, invoices.renderList, ['invoices.manage']],
   [/^invoices\/(\d+)$/, invoices.renderInvoice, ['invoices.manage']],
   [/^admin\/email-reports$/, reports.renderEmailReports, 'admin'],
+  [/^admin\/email$/, emailsettings.render, 'admin'],
   [/^account$/, admin.renderAccount],
   [/^hub\/([\w-]+)$/, renderHub],
   [/^documents$/, mybrew.renderDocuments],
@@ -232,6 +234,7 @@ function navGroups() {
       ['admin/square', 'Square', '▢', 'admin'],
       ['admin/xero', 'Xero', '⇄', 'admin'],
       ['admin/payment-links', 'Payment links', '£', ['payments.send']],
+      ['admin/email', 'Email', '@', 'admin'],
       ['admin/email-reports', 'Email reports', '✉', 'admin'],
       ['admin/news', 'News', '✎', ['news.manage']],
       ['admin/documents', 'Documents', '❐', ['documents.manage']],

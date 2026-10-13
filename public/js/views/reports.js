@@ -16,7 +16,7 @@ const periodText = (p) => (p === 'yesterday' ? 'yesterday’s full day' : 'today
 
 function setupHelp(data) {
   if (data.demo) return '<p class="notice">Demo: emails aren’t really sent here. Use <strong>Preview</strong> to see exactly what people will get.</p>';
-  if (data.ready) return `<p class="small muted">Emails are sent from <strong>${esc(data.sender)}</strong>.${data.app_url ? '' : ' Add <code>APP_URL</code> (your Atlas web address) to put an “Open Atlas” button in the email.'}</p>`;
+  if (data.ready) return `<p class="small muted">Emails are sent from <strong>${esc(data.sender)}</strong> (change it in <a href="#/admin/email">Setup → Email</a>).${data.app_url ? '' : ' Add <code>APP_URL</code> (your Atlas web address) to put an “Open Atlas” button in the email.'}</p>`;
   return `
     <section class="card email-setup">
       <h2>First, switch on email (one-off, about 10 minutes)</h2>

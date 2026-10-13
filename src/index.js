@@ -5,7 +5,7 @@ import { cleanEnv, DEMO_PASSWORD, ensureAdmin, isEmpty, lockDemoAccounts, seedAd
 import { createApp, publicDir } from './server.js';
 import { xeroConfig } from './xero.js';
 import { appVersion } from './app-version.js';
-import { brevoMailer, emailConfig } from './email.js';
+import { brevoMailer, emailConfig, withSenders } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
 import { careersMailboxConfig, eventsMailboxConfig, graphMailbox, mailboxConfig, mailboxSetup } from './mailbox.js';
 import { startEventsInbox } from './events.js';
@@ -69,7 +69,7 @@ if (square) {
 
 // Emailed reports: fetch the latest from Square just before sending, so the figures are fresh.
 const emailSettings = emailConfig();
-const mailer = emailSettings ? brevoMailer(emailSettings) : null;
+const mailer = emailSettings ? withSenders(db, brevoMailer(emailSettings)) : null;
 if (mailer) {
   console.log(`Email reports switched on (sending from ${emailSettings.from}).`);
   startReportScheduler(db, mailer, {

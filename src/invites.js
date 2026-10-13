@@ -94,7 +94,7 @@ export function registerPasswordRoutes(router, db, mailer) {
     if (!base) return res.json(reply);
     const link = linkFor(base, createToken(db, user.id, 'reset'));
     try {
-      await mailer.send({ to: user.email, name: user.name, ...resetEmail({ name: user.name, link }) });
+      await mailer.send({ kind: 'invites', to: user.email, name: user.name, ...resetEmail({ name: user.name, link }) });
     } catch (err) {
       console.error('Password reset email:', err.message);
     }
@@ -164,13 +164,13 @@ export function registerInviteRoutes(router, db, mailer, { demo = false, square 
       }
       const link = linkFor(base, createToken(db, u.id, 'invite', req.user.id));
       try {
-        await mailer.send({ to: u.email, name: u.name, ...inviteEmail({ name: u.name, inviter: req.user.name, site: site(u.location_id), link }) });
+        await mailer.send({ kind: 'invites', to: u.email, name: u.name, ...inviteEmail({ name: u.name, inviter: req.user.name, site: site(u.location_id), link }) });
         db.prepare(`UPDATE users SET invited_at = datetime('now') WHERE id = ?`).run(u.id);
         result.sent.push({ id: u.id, name: u.name });
       } catch (err) {
         result.failed.push({ id: u.id, name: u.name, reason: err.message });
         // Email refused outright (a wrong key or sender): stop rather than fail for everyone.
-        if (err.status === 502 && /check (BREVO_API_KEY|EMAIL_FROM)/.test(err.message)) break;
+        if (err.status === 502 && /check (BREVO_API_KEY|.* is a verified sender)/.test(err.message)) break;
       }
     }
     res.json(result);

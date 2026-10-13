@@ -189,7 +189,7 @@ export async function sendSchedule(db, mailer, schedule, { onlyTo = null } = {})
     try {
       const report = buildReport(db, person, { period: schedule.period, name: schedule.name });
       if (!report) continue;
-      await mailer.send({ to: person.email, name: person.name, ...report });
+      await mailer.send({ kind: 'reports', to: person.email, name: person.name, ...report });
       sent++;
     } catch (err) {
       failed.push({ name: person.name, error: err.message });
@@ -278,7 +278,7 @@ export function registerReportRoutes(router, db, mailer, { demo = false } = {}) 
     res.json({
       ready: !!mailer,
       demo,
-      sender: mailer?.from ?? null,
+      sender: mailer?.senderFor ? mailer.senderFor('reports').from : mailer?.from ?? null,
       app_url: appUrl(),
       weekdays: WEEKDAYS,
       now: hhmm(nowMinutes()),

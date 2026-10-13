@@ -132,6 +132,10 @@ The events inbox doesn't use Claude unless `EVENTS_USE_CLAUDE=on` is set in Rail
 
 The uploaded file is sent to Anthropic to be read and stored in Atlas's database with the invoice.
 
+## Email addresses
+
+**Setup → Email** (admins) sets who each kind of email comes from: a default, then **Invites and password resets**, **Email reports** and **Payment links**. For each there's the *Send from* address, the *Name people see* and, optionally, where *Replies go to*. Blank boxes use the default, and a blank default uses `EMAIL_FROM` / `EMAIL_FROM_NAME` from the server's settings. Every *Send from* address must be a verified sender in Brevo (or on a domain authenticated there); **Send me a test** checks it. The page also lists the Microsoft 365 inboxes Atlas reads (events, careers, invoices), which are set in Railway.
+
 ## Email reports
 
 Admins can email the dashboard to chosen people at a set time (**Setup → Email reports**): pick the time, the days, whether it covers **yesterday's full day** (good for a morning email) or **today so far**, and who gets it. Each person gets the sites they can access, with sales and labour figures only if their permissions include sales. Just before sending, the app fetches the latest figures from Square. **Preview** shows exactly what each person will get; **Send me a test** emails just you.

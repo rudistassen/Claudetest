@@ -17,7 +17,8 @@ import { registerTradingRoutes } from '../src/routes/trading.js';
 import { registerOpenOrderRoutes } from '../src/routes/open-orders.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { SquareClient, syncSales } from '../src/square.js';
-import { memoryMailer } from '../src/email.js';
+import { memoryMailer, withSenders } from '../src/email.js';
+import { registerEmailSettingsRoutes } from '../src/routes/email-settings.js';
 import { registerReportRoutes } from '../src/reports.js';
 import { demoInvoiceReader } from '../src/invoice-demo.js';
 import { registerInvoiceRoutes } from '../src/routes/invoices.js';
@@ -111,7 +112,7 @@ async function boot() {
 
   const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 5 };
   const square = { config, client: new SquareClient(config, fakeSquareFetch) };
-  const demoMailer = memoryMailer();
+  const demoMailer = withSenders(db, memoryMailer());
   for (const l of SQUARE_LOCATIONS.slice(0, 7)) {
     db.prepare('UPDATE locations SET square_location_id = ? WHERE name = ?').run(l.id, l.name);
   }
@@ -146,6 +147,7 @@ async function boot() {
   registerOpenOrderRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, demoMailer, { demo: true });
+  registerEmailSettingsRoutes(api, db, demoMailer, {});
   const invoiceReader = demoInvoiceReader(db);
   registerInvoiceRoutes(api, db, invoiceReader);
   // Xero isn't connected in the demo: Setup → Xero shows how to set it up.

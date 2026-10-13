@@ -33,6 +33,8 @@ import { registerEventRoutes } from './events.js';
 import { registerReviewRoutes } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from './invites.js';
 import { HttpError } from './util.js';
+import { withSenders } from './email.js';
+import { registerEmailSettingsRoutes } from './routes/email-settings.js';
 import { registerPushRoutes } from './push.js';
 import { activityLogger, registerActivityRoutes } from './activity.js';
 
@@ -54,6 +56,8 @@ export function trustProxy(env) {
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
 // xero: { config, fetch? } when Xero is set up (see xero.js), otherwise null.
 export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, events = null, enquiryReader = null, rotaReader = null, rotaAnalyst = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
+  // Each kind of email comes from the address set up for it in Setup → Email.
+  mailer = withSenders(db, mailer);
   const xeroClient = xero ? new Xero(db, xero.config, xero.fetch) : null;
   const app = express();
   app.disable('x-powered-by');
@@ -116,6 +120,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerOpenOrderRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, mailer);
+  registerEmailSettingsRoutes(api, db, mailer, { events, careers, invoices: mailbox });
   registerInvoiceRoutes(api, db, invoiceReader, { xero: xeroClient });
   registerXeroRoutes(api, db, xeroClient);
   registerPeopleRoutes(api, db, { careers });

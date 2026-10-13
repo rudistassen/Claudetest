@@ -57,7 +57,7 @@ export function registerPaymentLinkRoutes(router, db, square, mailer) {
   async function sendEmail(req, p) {
     if (!mailer) throw badRequest('Email isn’t set up, so use “Copy link” and send it yourself.');
     if (!p.customer_email) throw badRequest('Add the customer’s email first');
-    await mailer.send({ to: p.customer_email, name: p.customer_name, ...linkEmail({ name: p.customer_name, site: p.location_name ?? siteName(p.location_id), description: p.description, amount: p.amount, url: p.url, sender: req.user.name }) });
+    await mailer.send({ kind: 'payments', to: p.customer_email, name: p.customer_name, ...linkEmail({ name: p.customer_name, site: p.location_name ?? siteName(p.location_id), description: p.description, amount: p.amount, url: p.url, sender: req.user.name }) });
     db.prepare(`UPDATE payment_links SET emailed_at = datetime('now') WHERE id = ?`).run(p.id);
   }
 
