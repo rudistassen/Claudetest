@@ -154,7 +154,7 @@ export function registerInviteRoutes(router, db, mailer, { demo = false, square 
       return res.json({ link });
     }
 
-    if (!mailer) throw badRequest('Email isn’t set up yet, so invites can’t be emailed. Use “Copy invite link” on a person instead, or set up email (BREVO_API_KEY and EMAIL_FROM).');
+    if (!mailer) throw badRequest('Email isn’t set up yet, so invites can’t be emailed. Use “Copy invite link” on a person instead, or set up email (see Setup → Email).');
     const result = { sent: [], skipped: [], failed: [] };
     for (const u of people) {
       if (!u.active) { result.skipped.push({ id: u.id, name: u.name, reason: 'deactivated' }); continue; }
@@ -170,7 +170,7 @@ export function registerInviteRoutes(router, db, mailer, { demo = false, square 
       } catch (err) {
         result.failed.push({ id: u.id, name: u.name, reason: err.message });
         // Email refused outright (a wrong key or sender): stop rather than fail for everyone.
-        if (err.status === 502 && /check (BREVO_API_KEY|.* is a verified sender)/.test(err.message)) break;
+        if (err.senderProblem) break;
       }
     }
     res.json(result);

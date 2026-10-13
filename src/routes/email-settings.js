@@ -2,7 +2,7 @@
 // reads. Sending goes through Brevo, which only sends from addresses verified there.
 
 import { requireAdmin } from '../auth.js';
-import { EMAIL_KINDS, saveSenders, savedSenders, senderFor } from '../email.js';
+import { EMAIL_KINDS, PROVIDERS, saveProvider, saveSenders, savedSenders, senderFor } from '../email.js';
 import { badRequest, str } from '../util.js';
 
 const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
@@ -18,6 +18,9 @@ export function registerEmailSettingsRoutes(router, db, mailer, inboxes = {}) {
     const saved = savedSenders(db);
     return {
       ready: !!mailer,
+      // Brevo and/or Microsoft 365: which are set up on the server, and which is used.
+      providers: Object.entries(PROVIDERS).map(([key, label]) => ({ key, label, ready: !!mailer?.available?.includes(key) })),
+      provider: mailer?.provider?.() ?? null,
       server_from: mailer?.from ?? null,
       server_name: mailer?.fromName ?? null,
       kinds: EMAIL_KINDS.map(([key, label, note]) => ({
@@ -50,12 +53,16 @@ export function registerEmailSettingsRoutes(router, db, mailer, inboxes = {}) {
       if (Object.keys(kept).length) out[key] = kept;
     }
     saveSenders(db, out);
+    if (req.body?.provider !== undefined) {
+      if (!mailer?.available?.includes(req.body.provider)) throw badRequest(`${PROVIDERS[req.body.provider] ?? 'That email service'} isn’t set up on the server yet`);
+      saveProvider(db, req.body.provider);
+    }
     res.json(view());
   });
 
   // Sends a test of one kind to the person signed in, so they can check the address works in Brevo.
   router.post('/admin/email-settings/test', requireAdmin, async (req, res) => {
-    if (!mailer) throw badRequest('Email isn’t set up yet: add BREVO_API_KEY and EMAIL_FROM to the server’s settings in Railway.');
+    if (!mailer) throw badRequest('Email isn’t set up yet: connect Microsoft 365 (MS_TENANT_ID, MS_CLIENT_ID and MS_CLIENT_SECRET) or Brevo (BREVO_API_KEY and EMAIL_FROM) in Railway → Variables.');
     const kind = EMAIL_KINDS.some(([k]) => k === req.body?.kind) ? req.body.kind : 'default';
     if (!req.user.email) throw badRequest('Your account has no email address to send the test to');
     const s = senderFor(db, mailer, kind);
@@ -63,9 +70,9 @@ export function registerEmailSettingsRoutes(router, db, mailer, inboxes = {}) {
     await mailer.send({
       kind, to: req.user.email, name: req.user.name,
       subject: `Atlas test email – ${label}`,
-      text: `This is a test from Atlas (Setup → Email).\n\n${label} emails come from ${s.name} <${s.from}>${s.reply_to ? `, and replies go to ${s.reply_to}` : ''}.\n`,
-      html: `<p>This is a test from Atlas (Setup → Email).</p><p><strong>${label}</strong> emails come from ${s.name} &lt;${s.from}&gt;${s.reply_to ? `, and replies go to ${s.reply_to}` : ''}.</p>`,
+      text: `This is a test from Atlas (Setup → Email), sent through ${PROVIDERS[mailer.provider()]}.\n\n${label} emails come from ${s.name} <${s.from}>${s.reply_to ? `, and replies go to ${s.reply_to}` : ''}.\n`,
+      html: `<p>This is a test from Atlas (Setup → Email), sent through ${PROVIDERS[mailer.provider()]}.</p><p><strong>${label}</strong> emails come from ${s.name} &lt;${s.from}&gt;${s.reply_to ? `, and replies go to ${s.reply_to}` : ''}.</p>`,
     });
-    res.json({ ok: true, to: req.user.email, from: s.from });
+    res.json({ ok: true, to: req.user.email, from: s.from, provider: PROVIDERS[mailer.provider()] });
   });
 }

@@ -3,6 +3,7 @@
 // careers inbox by the same app and CAREERS_MAILBOX. Atlas only reads, except for drafting replies to job
 // applicants in the careers inbox (which needs Mail.ReadWrite).
 import { cleanEnv } from './seed.js';
+import { HttpError } from './util.js';
 
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
@@ -63,10 +64,11 @@ export function eventsMailboxConfig(env = process.env) {
  * (Sending needs the app's Mail.Send permission.)
  * withAttachmentsOnly: only list emails with something attached (the invoice inbox); label names it in errors.
  */
-export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = fetch, withAttachmentsOnly = true, label = 'invoice mailbox', variable = 'INVOICE_MAILBOX' } = {}) {
+/** Signs in to Microsoft Graph as the app (client credentials) and keeps the token until shortly before it runs out. */
+export function graphToken({ tenant, clientId, secret }, fetchFn = fetch) {
   let token = null;
   let expires = 0;
-  const getToken = async () => {
+  return async () => {
     if (token && Date.now() < expires - 60000) return token;
     const res = await fetchFn(`https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`, {
       method: 'POST',
@@ -81,6 +83,10 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
     expires = Date.now() + (Number(body.expires_in) || 3600) * 1000;
     return token;
   };
+}
+
+export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = fetch, withAttachmentsOnly = true, label = 'invoice mailbox', variable = 'INVOICE_MAILBOX' } = {}) {
+  const getToken = graphToken({ tenant, clientId, secret }, fetchFn);
   const call = async (url, { method = 'GET', body: payload, headers = {}, writing = false } = {}) => {
     const res = await fetchFn(url, {
       method,
@@ -208,5 +214,54 @@ export function memoryMailbox(messages = [], address = 'invoices@example.com') {
     sent: [],
     async reply(id, text) { this.sent.push({ reply_to: id, text }); },
     async send(email) { this.sent.push(email); },
+  };
+}
+
+/** The Microsoft app's sign-in details, for sending email through Microsoft 365 (null unless all three are set). */
+export function microsoftMailConfig(env = process.env) {
+  const tenant = cleanEnv(env.MS_TENANT_ID);
+  const clientId = cleanEnv(env.MS_CLIENT_ID);
+  const secret = cleanEnv(env.MS_CLIENT_SECRET);
+  return tenant && clientId && secret ? { tenant, clientId, secret, from: cleanEnv(env.EMAIL_FROM) || null } : null;
+}
+
+/**
+ * Sends email as a Microsoft 365 mailbox (users/{from}/sendMail), saved to that mailbox's Sent Items. Needs the
+ * Mail.Send application permission; the name people see is the mailbox's own display name in Microsoft 365.
+ */
+export function graphMailer(config, fetchFn = fetch) {
+  const getToken = graphToken(config, fetchFn);
+  return {
+    from: config.from ?? null,
+    fromName: null,
+    async send({ to, name, subject, html, text, from, replyTo }) {
+      const sender = from || config.from;
+      if (!sender) throw new HttpError(400, 'Choose a “Send from” mailbox in Setup → Email first');
+      let token;
+      try { token = await getToken(); } catch (err) { throw Object.assign(new HttpError(502, err.message), { senderProblem: true }); }
+      const res = await fetchFn(`${GRAPH}/users/${encodeURIComponent(sender)}/sendMail`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: {
+            subject,
+            body: html ? { contentType: 'HTML', content: html } : { contentType: 'Text', content: text ?? '' },
+            toRecipients: [{ emailAddress: { address: to, ...(name ? { name } : {}) } }],
+            ...(replyTo ? { replyTo: [{ emailAddress: { address: replyTo } }] } : {}),
+          },
+          saveToSentItems: true,
+        }),
+      });
+      if (res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      const detail = body.error?.message ?? '';
+      if (res.status === 401 || res.status === 403) {
+        throw Object.assign(new HttpError(502, `Microsoft 365 won’t let Atlas send as ${sender}. Give the Atlas app the Mail.Send application permission (with admin consent) and, if you’ve limited which mailboxes Atlas can use, add ${sender} to that group.`), { senderProblem: true });
+      }
+      if (res.status === 404 || /not found|invalid user/i.test(detail)) {
+        throw Object.assign(new HttpError(502, `There’s no mailbox ${sender} in your Microsoft 365. Use the address of an existing mailbox or shared mailbox.`), { senderProblem: true });
+      }
+      throw new HttpError(502, `Microsoft 365 refused the email (${res.status}${detail ? `: ${detail}` : ''})`);
+    },
   };
 }

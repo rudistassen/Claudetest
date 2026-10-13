@@ -61,6 +61,9 @@ test('Setup → Email: each kind of email comes from its own address, falling ba
   assert.equal(sent.from, 'hello@brewandbarrel.co.uk');
   assert.equal(sent.fromName, 'Brew & Barrel');
 
+  // A service that isn't set up can't be chosen.
+  assert.equal((await admin('/admin/email-settings', { method: 'PUT', body: { provider: 'microsoft', kinds: {} } })).status, 400);
+
   // Only admins.
   const manager = await login('manager1@cafe.local');
   assert.equal((await manager('/admin/email-settings')).status, 403);
@@ -75,4 +78,63 @@ test('Brevo is sent the chosen sender and reply-to', async () => {
   assert.equal(calls[0].replyTo, undefined);
   assert.deepEqual(calls[1].sender, { email: 'people@x.test', name: 'People' });
   assert.deepEqual(calls[1].replyTo, { email: 'hr@x.test' });
+});
+
+test('Microsoft 365: sends as the chosen mailbox through Graph, with reply-to, saved to Sent Items', async () => {
+  const { graphMailer } = await import('../src/mailbox.js');
+  const calls = [];
+  const fetchFn = async (url, init) => {
+    calls.push({ url, init });
+    if (url.includes('login.microsoftonline.com')) return { ok: true, json: async () => ({ access_token: 'tok', expires_in: 3600 }) };
+    if (url.includes('nobody%40')) return { ok: false, status: 404, json: async () => ({ error: { message: 'Resource not found' } }) };
+    if (url.includes('blocked%40')) return { ok: false, status: 403, json: async () => ({ error: { message: 'Access is denied' } }) };
+    return { ok: true, status: 202, json: async () => ({}) };
+  };
+  const m = graphMailer({ tenant: 't', clientId: 'c', secret: 's', from: null }, fetchFn);
+  await m.send({ to: 'a@b.test', name: 'Ann', subject: 'Hi', html: '<p>Hi</p>', text: 'Hi', from: 'people@x.test', replyTo: 'hr@x.test' });
+  const send = calls.find((c) => c.url.endsWith('/sendMail'));
+  assert.equal(send.url, 'https://graph.microsoft.com/v1.0/users/people%40x.test/sendMail');
+  assert.equal(send.init.headers.Authorization, 'Bearer tok');
+  const body = JSON.parse(send.init.body);
+  assert.equal(body.saveToSentItems, true);
+  assert.deepEqual(body.message.body, { contentType: 'HTML', content: '<p>Hi</p>' });
+  assert.deepEqual(body.message.toRecipients, [{ emailAddress: { address: 'a@b.test', name: 'Ann' } }]);
+  assert.deepEqual(body.message.replyTo, [{ emailAddress: { address: 'hr@x.test' } }]);
+  // One sign-in is reused.
+  await m.send({ to: 'a@b.test', subject: 'Again', text: 'x', from: 'people@x.test' });
+  assert.equal(calls.filter((c) => c.url.includes('login.microsoftonline.com')).length, 1);
+
+  await assert.rejects(m.send({ to: 'a@b.test', subject: 's', text: 't' }), /Choose a “Send from” mailbox/);
+  await assert.rejects(m.send({ to: 'a@b.test', subject: 's', text: 't', from: 'nobody@x.test' }), (e) => e.senderProblem && /no mailbox nobody@x.test/.test(e.message));
+  await assert.rejects(m.send({ to: 'a@b.test', subject: 's', text: 't', from: 'blocked@x.test' }), (e) => e.senderProblem && /Mail.Send/.test(e.message));
+});
+
+test('Setup → Email switches between Brevo and Microsoft 365 when both are set up', async () => {
+  const { withSenders } = await import('../src/email.js');
+  const d = openDb(':memory:');
+  seedAdmin(d, { email: 'boss@atlas.test', password: DEMO_PASSWORD });
+  const brevo = memoryMailer();
+  const microsoft = { ...memoryMailer(), sent: [], from: null };
+  microsoft.send = async (e) => { microsoft.sent.push(e); };
+  const app = createApp(d, { mailer: withSenders(d, { brevo, microsoft }) }).listen(0);
+  await new Promise((r) => app.once('listening', r));
+  const url = `http://127.0.0.1:${app.address().port}/api`;
+  try {
+    const res = await fetch(`${url}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'boss@atlas.test', password: DEMO_PASSWORD }) });
+    const cookie = res.headers.get('set-cookie').split(';')[0];
+    const call = async (path, method = 'GET', body) => { const r = await fetch(`${url}${path}`, { method, headers: { cookie, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, data: await r.json() }; };
+    const first = (await call('/admin/email-settings')).data;
+    assert.equal(first.provider, 'brevo');
+    assert.deepEqual(first.providers.map((p) => [p.key, p.ready]), [['brevo', true], ['microsoft', true]]);
+    const sw = await call('/admin/email-settings', 'PUT', { provider: 'microsoft', kinds: { default: { from: 'hello@x.test' } } });
+    assert.equal(sw.data.provider, 'microsoft');
+    const t = await call('/admin/email-settings/test', 'POST', { kind: 'invites' });
+    assert.equal(t.data.provider, 'Microsoft 365');
+    assert.equal(microsoft.sent.at(-1).from, 'hello@x.test');
+    assert.equal(brevo.sent.length, 0);
+  } finally { app.close(); }
+
+  // Only what's set up can be chosen.
+  const only = withSenders(openDb(':memory:'), { brevo: memoryMailer(), microsoft: null });
+  assert.deepEqual(only.available, ['brevo']);
 });

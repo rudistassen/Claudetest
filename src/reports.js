@@ -267,7 +267,7 @@ export function registerReportRoutes(router, db, mailer, { demo = false } = {}) 
     return withRecipients(db, load(id));
   };
   const needMailer = () => {
-    if (!mailer) throw badRequest('Email isn’t set up yet. Add BREVO_API_KEY and EMAIL_FROM to the app’s settings (see Setup → Email reports).');
+    if (!mailer) throw badRequest('Email isn’t set up yet – see Setup → Email.');
   };
 
   router.get('/reports/email', requireAdmin, (req, res) => {

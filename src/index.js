@@ -7,7 +7,7 @@ import { xeroConfig } from './xero.js';
 import { appVersion } from './app-version.js';
 import { brevoMailer, emailConfig, withSenders } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
-import { careersMailboxConfig, eventsMailboxConfig, graphMailbox, mailboxConfig, mailboxSetup } from './mailbox.js';
+import { careersMailboxConfig, eventsMailboxConfig, graphMailbox, graphMailer, mailboxConfig, mailboxSetup, microsoftMailConfig } from './mailbox.js';
 import { startEventsInbox } from './events.js';
 import { enquiryReaderFromEnv } from './enquiry-reader.js';
 import { startCareersInbox } from './careers-inbox.js';
@@ -68,10 +68,12 @@ if (square) {
 }
 
 // Emailed reports: fetch the latest from Square just before sending, so the figures are fresh.
+// Sending email: through Brevo (BREVO_API_KEY + EMAIL_FROM) and/or Microsoft 365 (the MS_* app); Setup → Email picks.
 const emailSettings = emailConfig();
-const mailer = emailSettings ? withSenders(db, brevoMailer(emailSettings)) : null;
+const microsoftMail = microsoftMailConfig();
+const mailer = withSenders(db, { brevo: emailSettings ? brevoMailer(emailSettings) : null, microsoft: microsoftMail ? graphMailer(microsoftMail) : null });
 if (mailer) {
-  console.log(`Email reports switched on (sending from ${emailSettings.from}).`);
+  console.log(`Email switched on (${mailer.available.join(' and ')}; using ${mailer.provider()}).`);
   startReportScheduler(db, mailer, {
     beforeSend: square ? () => syncSales(db, square.client, { from: addDays(today(), -1), to: today(), triggeredBy: 'email report' }) : null,
   });

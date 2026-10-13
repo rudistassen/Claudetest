@@ -112,7 +112,8 @@ async function boot() {
 
   const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 5 };
   const square = { config, client: new SquareClient(config, fakeSquareFetch) };
-  const demoMailer = withSenders(db, memoryMailer());
+  // Both services pretend to be set up, so Setup → Email can show the choice.
+  const demoMailer = withSenders(db, { brevo: memoryMailer(), microsoft: { ...memoryMailer(), from: null, fromName: null } });
   for (const l of SQUARE_LOCATIONS.slice(0, 7)) {
     db.prepare('UPDATE locations SET square_location_id = ? WHERE name = ?').run(l.id, l.name);
   }

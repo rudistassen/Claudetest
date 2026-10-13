@@ -38,7 +38,7 @@ export function brevoMailer(config, fetchImpl = fetch) {
         let detail = '';
         try { detail = (await res.json()).message ?? ''; } catch { /* not JSON */ }
         const hint = res.status === 401 ? ' – check BREVO_API_KEY' : /sender/i.test(detail) ? ` – check ${from || config.from} is a verified sender in Brevo (Setup → Email)` : '';
-        throw new HttpError(502, `The email service refused the email (${res.status}${detail ? `: ${detail}` : ''})${hint}`);
+        throw Object.assign(new HttpError(502, `The email service refused the email (${res.status}${detail ? `: ${detail}` : ''})${hint}`), { senderProblem: !!hint });
       }
     },
   };
@@ -81,16 +81,42 @@ export function senderFor(db, mailer, kind = 'default') {
   };
 }
 
-/** Wraps a mailer so send({ kind, … }) uses the sender set up for that kind in Setup → Email. */
-export function withSenders(db, mailer) {
-  if (!mailer || mailer.senders) return mailer;
+// What sends the email: Brevo, or Microsoft 365 (your own mailboxes, through Microsoft Graph). Chosen in Setup → Email.
+export const PROVIDERS = { brevo: 'Brevo', microsoft: 'Microsoft 365' };
+
+/** The service picked in Setup → Email, if it's set up; otherwise the first one that is. */
+export function chosenProvider(db, available) {
+  const saved = db.prepare('SELECT value FROM settings WHERE key = ?').get('email_provider')?.value;
+  return available.includes(saved) ? saved : available[0] ?? null;
+}
+
+export function saveProvider(db, provider) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run('email_provider', provider);
+}
+
+/**
+ * One mailer for the whole app: send({ kind, … }) uses the sender set up for that kind in Setup → Email, through the
+ * service chosen there. mailers: a mailer (Brevo, or a pretend one) or { brevo, microsoft } (either can be null).
+ * Null when no service is set up.
+ */
+export function withSenders(db, mailers) {
+  if (!mailers || mailers.senders) return mailers;
+  const services = typeof mailers.send === 'function' ? { brevo: mailers } : mailers;
+  const available = Object.keys(PROVIDERS).filter((k) => services[k]);
+  if (!available.length) return null;
+  const base = services.brevo ?? services[available[0]];
   return {
-    ...mailer,
+    from: base.from ?? null,
+    fromName: base.fromName ?? 'Atlas',
+    sent: base.sent,
     senders: true,
-    senderFor: (kind) => senderFor(db, mailer, kind),
+    available,
+    provider: () => chosenProvider(db, available),
+    senderFor: (kind) => senderFor(db, base, kind),
     async send({ kind = 'default', ...email }) {
-      const s = senderFor(db, mailer, kind);
-      return mailer.send({ ...email, from: s.from, fromName: s.name, replyTo: s.reply_to ?? undefined });
+      const s = senderFor(db, base, kind);
+      const service = services[chosenProvider(db, available)];
+      return service.send({ ...email, from: s.from, fromName: s.name, replyTo: s.reply_to ?? undefined });
     },
   };
 }

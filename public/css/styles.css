@@ -2922,3 +2922,15 @@ img.lesson-media { background: transparent; }
 .em-uses { margin: 0.5rem 0 0; color: var(--muted); }
 .em-save { margin: 0 0 1.5rem; }
 .em-inboxes th small { display: block; font-weight: 400; }
+.em-provider { margin-bottom: 1rem; }
+.em-provider h2 { margin: 0 0 0.6rem; }
+.em-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.6rem; margin-bottom: 0.8rem; }
+.em-choice { display: flex; gap: 0.6rem; align-items: flex-start; border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 0.8rem; cursor: pointer; background: var(--surface); }
+.em-choice:has(input:checked) { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 25%, transparent); }
+.em-choice.is-off { opacity: 0.55; cursor: not-allowed; }
+.em-choice input { margin-top: 0.25rem; }
+.em-choice small { display: block; color: var(--muted); }
+.em-help summary { cursor: pointer; font-weight: 600; }
+.em-help ol { padding-left: 1.2rem; }
+.em-help li { margin-bottom: 0.35rem; }
+.em-code { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.78rem; }
