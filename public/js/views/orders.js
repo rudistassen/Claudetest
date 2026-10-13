@@ -149,9 +149,11 @@ export async function renderNew(ctx) {
       ${field('Supplier', select('supplier', [['', 'Choose a supplier…'], ...suppliers.map((s) => [s.id, s.name])], supplierId ?? '', 'id="supplier"'))}
       ${supplier ? '' : `<div class="field product-find"><label for="product-find">…or search by product</label>
         <input type="search" id="product-find" placeholder="e.g. oat milk, coffee beans, napkins" autocomplete="off">
+        <p class="muted small">Tap + to add straight to that supplier’s open cart, then search again for the next thing.</p>
         <ul class="product-hits" id="product-hits" hidden></ul></div>`}
       ${supplier ? `<p class="muted">Deliveries: ${esc(scheduleSummary(supplier.delivery_schedule))}${next ? ` · next: <strong>${fmtDate(next.date)}</strong> if ordered by ${esc(next.cutoff.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}` : ''} · Minimum order: ${money(supplier.min_order)}</p>` : ''}
     </section>
+    ${supplier ? '' : '<section class="card" id="open-carts" hidden></section>'}
     ${suggestion ? `
     <form class="card" id="order-form">
       <p class="muted">${suggestion.last_stock_take
@@ -169,27 +171,67 @@ export async function renderNew(ctx) {
     </form>` : ''}`;
 
   el.querySelector('#supplier').addEventListener('change', (e) => ctx.navigate(`orders/new${e.target.value ? `?supplier=${e.target.value}` : ''}`));
-  // Search every supplier's products; picking one opens its supplier's order with that product found.
+  // Search every supplier's products and add them straight to each supplier's open cart at this site.
   const find = el.querySelector('#product-find');
   if (find) {
     const hits = el.querySelector('#product-hits');
+    const cartsBox = el.querySelector('#open-carts');
     const ordering = new Set(suppliers.map((s) => s.id));
     let products = null;
-    find.addEventListener('input', async () => {
+    let carts = [];
+    const inCart = () => new Map(carts.flatMap((c) => c.lines.map((l) => [l.product_id, l.quantity])));
+    const showCarts = () => {
+      cartsBox.hidden = !carts.length;
+      cartsBox.innerHTML = `<h2>Your open carts</h2>
+        <ul class="cart-list">${carts.map((c) => {
+          const min = suppliers.find((s) => s.id === c.supplier_id)?.min_order ?? 0;
+          return `<li><a href="#/orders/${c.id}"><span><strong>${esc(c.supplier_name)}</strong>
+            <small>${c.lines.length} item${c.lines.length === 1 ? '' : 's'} · ${money(c.total)}${min && c.total < min ? ` · <span class="alert-text">below the ${money(min)} minimum</span>` : ''}</small></span>
+            <span class="btn btn-small">Review &amp; send ›</span></a></li>`;
+        }).join('')}</ul>`;
+    };
+    const search = async () => {
       const words = find.value.toLowerCase().split(/\s+/).filter(Boolean);
       if (!words.length) { hits.hidden = true; return; }
       try { products ??= (await api('/products')).filter((p) => p.active && ordering.has(p.supplier_id)); } catch (err) { showError(err); return; }
+      const have = inCart();
       const found = products.filter((p) => words.every((w) => `${p.name} ${p.sku ?? ''} ${p.category ?? ''}`.toLowerCase().includes(w))).slice(0, 30);
-      hits.innerHTML = found.length ? found.map((p) => `<li><button type="button" data-supplier="${p.supplier_id}" data-name="${esc(p.name)}">
-          <strong>${esc(p.name)}</strong><small>${esc(p.supplier_name ?? '')}${p.category ? ` · ${esc(p.category)}` : ''} · ${esc(packUnit(p.unit, p.pack_quantity))} · ${money(p.unit_cost)}</small></button></li>`).join('')
+      hits.innerHTML = found.length ? found.map((p) => `<li class="${have.get(p.id) ? 'is-ordering' : ''}" data-hit="${p.id}"><span class="hit-text">
+          <strong>${esc(p.name)}</strong><small>${esc(p.supplier_name ?? '')}${p.category ? ` · ${esc(p.category)}` : ''} · ${esc(packUnit(p.unit, p.pack_quantity))} · ${money(p.unit_cost)}</small></span>
+          <span class="qty-step"><button type="button" data-step="-1" aria-label="One less ${esc(p.name)}">−</button><input class="qty-input" type="number" min="0" step="any" inputmode="decimal" value="${have.get(p.id) ?? ''}" aria-label="How many ${esc(p.name)}"><button type="button" data-step="1" aria-label="One more ${esc(p.name)}">+</button></span></li>`).join('')
         : '<li class="muted small">No products match – try another word, or choose the supplier above.</li>';
       hits.hidden = false;
-    });
-    find.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); hits.querySelector('button')?.click(); } });
+    };
+    // Each change is saved straight away; only the latest answer for a product counts.
+    const sent = new Map();
+    const save = async (li, quantity) => {
+      const pid = Number(li.dataset.hit);
+      const seq = (sent.get(pid) ?? 0) + 1;
+      sent.set(pid, seq);
+      li.classList.toggle('is-ordering', quantity > 0);
+      try {
+        const next = await api('/orders/cart-item', { method: 'POST', body: { location_id: state.locationId, product_id: pid, quantity } });
+        if (sent.get(pid) !== seq) return;
+        carts = next;
+        showCarts();
+      } catch (err) { showError(err); }
+    };
+    find.addEventListener('input', search);
+    find.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
     hits.addEventListener('click', (e) => {
-      const b = e.target.closest('button[data-supplier]');
-      if (b) ctx.navigate(`orders/new${qs({ supplier: b.dataset.supplier, find: b.dataset.name })}`);
+      const b = e.target.closest('[data-step]');
+      if (!b) return;
+      const li = b.closest('[data-hit]');
+      const box = li.querySelector('.qty-input');
+      const q = Math.max(0, (Number(box.value) || 0) + Number(b.dataset.step));
+      box.value = q ? String(Math.round(q * 100) / 100) : '';
+      save(li, q);
     });
+    hits.addEventListener('change', (e) => {
+      const box = e.target.closest('.qty-input');
+      if (box) save(box.closest('[data-hit]'), Math.max(0, Number(box.value) || 0));
+    });
+    api(`/orders/carts${qs({ location_id: state.locationId })}`).then((c) => { if (!stale()) { carts = c; showCarts(); } }).catch(() => {});
     // Straight into the box on a computer (on a phone that would pop the keyboard up).
     if (matchMedia('(pointer: fine)').matches) setTimeout(() => find.focus(), 0);
   }

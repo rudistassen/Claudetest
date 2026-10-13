@@ -2,7 +2,7 @@ import { cleanAllergens } from '../recipes.js';
 import { assertLocation, requirePerm, resolveLocation } from '../auth.js';
 import { tx } from '../db.js';
 import { applyImport, planImport } from '../product-import.js';
-import { badRequest, bool, date, id, notFound, num, round2, str } from '../util.js';
+import { addDays, badRequest, bool, date, id, notFound, num, round2, str, today } from '../util.js';
 import { cleanVatCode } from '../vat-codes.js';
 
 const DAYS = [1, 2, 3, 4, 5, 6, 7];
@@ -321,6 +321,48 @@ export function registerOrderingRoutes(router, db) {
       r.suggested = r.on_hand === null ? 0 : Math.max(0, Math.ceil(r.par_level - r.on_hand));
     }
     res.json({ last_stock_take: lastTake ?? null, products: rows });
+  });
+
+  // The open carts at a site (orders not sent yet), with what's in them – for adding to them from a product search.
+  const cartsAt = (locationId) => db.prepare(`SELECT o.id, o.supplier_id, s.name AS supplier_name,
+      (SELECT COALESCE(SUM(quantity * unit_cost), 0) FROM purchase_order_lines WHERE order_id = o.id) AS total
+    FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
+    WHERE o.location_id = ? AND o.status = 'draft' ORDER BY s.name, o.id`).all(locationId)
+    .map((c) => ({ ...c, total: round2(c.total), lines: db.prepare('SELECT product_id, quantity FROM purchase_order_lines WHERE order_id = ?').all(c.id) }));
+
+  router.get('/orders/carts', requirePerm('orders.manage'), (req, res) => {
+    res.json(cartsAt(resolveLocation(req, req.query.location_id)));
+  });
+
+  // Sets how many of a product are in its supplier's open cart at the site ({ location_id, product_id, quantity }):
+  // the cart is started if there isn't one, and a cart left empty is removed. Returns the site's open carts.
+  router.post('/orders/cart-item', requirePerm('orders.manage'), (req, res) => {
+    const locationId = resolveLocation(req, req.body.location_id);
+    const product = db.prepare('SELECT id, supplier_id, unit_cost, active FROM products WHERE id = ?').get(id(req.body.product_id, 'product_id', { required: true }));
+    if (!product || !product.active) throw notFound('Product');
+    if (!product.supplier_id) throw badRequest('This product has no supplier to order it from');
+    const quantity = num(req.body.quantity, 'Quantity', { min: 0, max: 100000 }) ?? 0;
+    tx(db, () => {
+      // The newest open cart for the supplier at the site.
+      let cart = db.prepare(`SELECT id FROM purchase_orders WHERE location_id = ? AND supplier_id = ? AND status = 'draft' ORDER BY id DESC LIMIT 1`).get(locationId, product.supplier_id);
+      if (!cart && quantity <= 0) return;
+      if (!cart) {
+        const lead = db.prepare('SELECT lead_time_days FROM suppliers WHERE id = ?').get(product.supplier_id)?.lead_time_days;
+        const r = db.prepare(`INSERT INTO purchase_orders (location_id, supplier_id, delivery_date, created_by) VALUES (?, ?, ?, ?)`)
+          .run(locationId, product.supplier_id, addDays(today(), lead || 1), req.user.id);
+        cart = { id: Number(r.lastInsertRowid) };
+      }
+      const line = db.prepare('SELECT id FROM purchase_order_lines WHERE order_id = ? AND product_id = ?').get(cart.id, product.id);
+      if (quantity <= 0) {
+        if (line) db.prepare('DELETE FROM purchase_order_lines WHERE id = ?').run(line.id);
+        if (!db.prepare('SELECT 1 FROM purchase_order_lines WHERE order_id = ?').get(cart.id)) db.prepare(`DELETE FROM purchase_orders WHERE id = ? AND (notes IS NULL OR notes = '')`).run(cart.id);
+      } else if (line) {
+        db.prepare('UPDATE purchase_order_lines SET quantity = ? WHERE id = ?').run(quantity, line.id);
+      } else {
+        db.prepare('INSERT INTO purchase_order_lines (order_id, product_id, quantity, unit_cost) VALUES (?, ?, ?, ?)').run(cart.id, product.id, quantity, product.unit_cost);
+      }
+    });
+    res.json(cartsAt(locationId));
   });
 
   router.get('/orders/:id', requirePerm('orders.manage'), (req, res) => res.json(loadOrder(req)));
