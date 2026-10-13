@@ -85,6 +85,7 @@ const ROUTES = [
   [/^stock$/, stock.renderList, STOCK],
   [/^stock\/(\d+)$/, stock.renderTake, STOCK],
   [/^prep-orders$/, prepOrders.render, ['orders.manage']],
+  [/^prep-orders\/list$/, (ctx) => prepOrders.render({ ...ctx, query: { ...ctx.query, tab: 'list' } }), ['orders.manage']],
   [/^recipes$/, recipes.renderList, RECIPES],
   [/^recipes\/prep$/, recipes.renderPrepList, RECIPES],
   [/^recipes\/allergens$/, recipes.renderAllergens, RECIPES],
@@ -212,7 +213,8 @@ function navGroups() {
       ['orders/new', 'New order', '+', ['orders.manage']],
       ['orders/receive', 'Receive order', '⤓', ['orders.manage']],
       ['orders', 'Order history', '⇄', ['orders.manage']],
-      ['prep-orders', 'Prep kitchen ordering', '⚗', ['orders.manage']],
+      ['prep-orders', 'Prep kitchen order', '⚗', ['orders.manage']],
+      ['prep-orders/list', 'Prep list', '☷', ['orders.manage']],
       ['stock', 'Stock takes', '☰', STOCK],
       ['wastage', 'Wastage', '⌫', WASTAGE],
       ['invoices', 'Invoices', '⎘', ['invoices.manage']],
@@ -340,7 +342,8 @@ const TILE_NOTES = {
   'orders/receive': 'Check in a delivery against what was ordered',
   orders: 'Every order – open carts, sent, received and cancelled',
   invoices: 'Upload and check supplier invoices',
-  'prep-orders': 'Order prepped recipes from the prep kitchen, and its prep list',
+  'prep-orders': 'Order prepped recipes from the prep kitchen for a day',
+  'prep-orders/list': 'What the prep kitchen needs to make, day by day',
   'admin/suppliers': 'Who you buy from, and how to order',
   'admin/products': 'Everything you buy, with costs and pars',
   'admin/product-categories': 'Group products, and their Xero account codes',
@@ -379,7 +382,7 @@ const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product
 const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log', 'admin/staff']);
 // Headed groups of tiles within a section (shown first, in this order), e.g. Stock & Ordering's Purchasing.
 const TILE_GROUPS = {
-  'orders/new': 'Purchasing', 'orders/receive': 'Purchasing', orders: 'Purchasing', 'prep-orders': 'Purchasing',
+  'orders/new': 'Purchasing', 'orders/receive': 'Purchasing', orders: 'Purchasing', 'prep-orders': 'Purchasing', 'prep-orders/list': 'Purchasing',
   stock: 'Stock and waste', wastage: 'Stock and waste',
 };
 const hubTiles = (items, active) => {

@@ -13,12 +13,12 @@ export async function render(ctx) {
   const sites = state.locations.filter((l) => l.active);
   const site = Number(query.site) || state.locationId || sites[0]?.id;
   const day = /^\d{4}-\d{2}-\d{2}$/.test(query.date ?? '') ? query.date : tab === 'list' ? todayISO() : addDays(todayISO(), 1);
-  const go = (extra) => navigate(`prep-orders${qs({ tab: tab === 'list' ? 'list' : undefined, site, date: day, ...extra })}`);
+  const go = (extra) => navigate(`${tab === 'list' ? 'prep-orders/list' : 'prep-orders'}${qs({ site, date: day, ...extra })}`);
 
-  const head = `<div class="page-head"><h1>Prep kitchen ordering</h1>
-      <div class="seg" role="group" aria-label="Order or prep list">
-        <button data-tab="order" class="${tab === 'order' ? 'is-on' : ''}">Order</button><button data-tab="list" class="${tab === 'list' ? 'is-on' : ''}">Prep list</button></div></div>`;
-  const wireTabs = () => el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => navigate(`prep-orders${qs({ tab: b.dataset.tab === 'list' ? 'list' : undefined, site })}`)));
+  // Two pages, each with its own tile: the order, and the prep list.
+  const head = `<div class="page-head"><h1>${tab === 'list' ? 'Prep list' : 'Prep kitchen order'}</h1>
+      <div class="actions"><a class="btn" href="#/${tab === 'list' ? 'prep-orders' : 'prep-orders/list'}">${tab === 'list' ? 'Order from the prep kitchen ›' : 'Prep list ›'}</a></div></div>`;
+  const wireTabs = () => {};
 
   if (tab === 'list') {
     // Every day with orders, one after another: today and the next 7 days (or the week picked).
@@ -50,7 +50,7 @@ export async function render(ctx) {
     wireTabs();
     el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
       const n = Number(b.dataset.week);
-      navigate(`prep-orders${qs({ tab: 'list', site, date: n ? addDays(from, n) : undefined })}`);
+      navigate(`prep-orders/list${qs({ site, date: n ? addDays(from, n) : undefined })}`);
     }));
     el.querySelector('#pl-print').addEventListener('click', () => { el.querySelectorAll('details.prep-orders-day').forEach((d) => { d.open = true; }); window.print(); });
     el.querySelectorAll('[data-sent]').forEach((b) => b.addEventListener('click', async () => {
