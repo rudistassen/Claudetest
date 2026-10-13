@@ -7,6 +7,7 @@ import { appUrl } from './reports.js';
 import { logActivity } from './activity.js';
 import { squareTeamUrl } from './square-staff.js';
 import { badRequest, forbidden, HttpError, id, str } from './util.js';
+import { emailOn } from './email.js';
 
 const LIFETIME = { invite: '+14 days', reset: '+2 hours' };
 const hashToken = (token) => createHash('sha256').update(token).digest('hex');
@@ -86,10 +87,11 @@ function forgotAllowed(keys, now) {
 export function registerPasswordRoutes(router, db, mailer) {
   router.post('/auth/forgot', async (req, res) => {
     const email = str(req.body?.email, 'Email', { required: true, max: 200 });
-    const reply = { ok: true, email_ready: !!mailer };
+    const on = !!mailer && emailOn(db, 'invites');
+    const reply = { ok: true, email_ready: on };
     const user = db.prepare('SELECT id, name, email FROM users WHERE email = ? AND active = 1').get(email);
     // The answer is the same whether or not the email has an account, so it can't be used to find out who works here.
-    if (!mailer || !user || !forgotAllowed([[`ip:${req.ip}`, FORGOT_MAX.ip], [`email:${email.toLowerCase()}`, FORGOT_MAX.email]], Date.now())) return res.json(reply);
+    if (!on || !user || !forgotAllowed([[`ip:${req.ip}`, FORGOT_MAX.ip], [`email:${email.toLowerCase()}`, FORGOT_MAX.email]], Date.now())) return res.json(reply);
     const base = baseUrl(req, { trusted: false });
     if (!base) return res.json(reply);
     const link = linkFor(base, createToken(db, user.id, 'reset'));
@@ -155,6 +157,7 @@ export function registerInviteRoutes(router, db, mailer, { demo = false, square 
     }
 
     if (!mailer) throw badRequest('Email isn’t set up yet, so invites can’t be emailed. Use “Copy invite link” on a person instead, or set up email (see Setup → Email).');
+    if (!emailOn(db, 'invites')) throw badRequest('Invite emails are switched off in Setup → Email. Use “Copy invite link” on a person instead, or switch them on.');
     const result = { sent: [], skipped: [], failed: [] };
     for (const u of people) {
       if (!u.active) { result.skipped.push({ id: u.id, name: u.name, reason: 'deactivated' }); continue; }

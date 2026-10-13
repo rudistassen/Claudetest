@@ -3,6 +3,7 @@ import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { availabilityOn } from '../availability.js';
 import { leaveFor, onHoliday } from './leave.js';
 import { notify, notifyOnce } from '../push.js';
+import { emailRotaChanges } from '../rota-email.js';
 import { dayKey, labourByDay, pct, rotaByDay, salesBudgets, salesByDay } from '../metrics.js';
 import { bankHoliday } from '../bank-holidays.js';
 import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
@@ -70,7 +71,8 @@ export function salesForecast(db, locationIds, weekStartDate) {
 // The labour cost we aim for, as a share of net sales.
 export const LABOUR_TARGET_PCT = 30;
 
-export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst = null } = {}) {
+// mailer: emails people their week when the rota is published (if switched on in Setup → Email).
+export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst = null, mailer = null, demo = false } = {}) {
   /**
    * Reporting → Rota costs: for a week, each site's rota cost against a labour budget of 30% of its planned net
    * sales. Sales are shown gross (what the business talks in): the sales budget for the day (Rota → Sales budget)
@@ -786,6 +788,8 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
         for (const u of changed) db.prepare('INSERT OR IGNORE INTO push_sent (key) VALUES (?)').run(`rota|${id}|${ws}|${u}`);
       }
     }
+    // And by email: their shifts for the week, in the background.
+    emailRotaChanges(db, mailer, [...changed], ws ?? weekStart(day), { demo }).catch((err) => console.error(`Rota emails: ${err.message}`));
     res.json({ published });
   });
 
@@ -806,6 +810,8 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
       body: `${fmtDay(s.date)} ${s.start_time}–${s.end_time}${s.removed ? ' is no longer on your rota' : ' – tap to see your shifts'}`,
       url: `/#/rota?view=mine&week=${weekStart(s.date)}`,
     });
+    emailRotaChanges(db, mailer, [...new Set([s.user_id, s.pub_user_id].filter(Boolean))], weekStart(s.date), { demo })
+      .catch((err) => console.error(`Rota emails: ${err.message}`));
     res.json({ published: 1, removed: !!s.removed });
   });
 

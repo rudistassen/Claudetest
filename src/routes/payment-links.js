@@ -1,6 +1,7 @@
 // Setup → Payment links: ask a customer to pay a set amount (a deposit, a catering order, private hire) through a
 // Square Checkout link. Atlas creates the link in Square for the chosen site, can email it to the customer, and
 // keeps a list showing whether each has been paid. Card details only ever go to Square.
+import { emailOn } from '../email.js';
 import { randomBytes } from 'node:crypto';
 import { requirePerm, resolveLocation } from '../auth.js';
 import { appUrl } from '../reports.js';
@@ -56,6 +57,7 @@ export function registerPaymentLinkRoutes(router, db, square, mailer) {
 
   async function sendEmail(req, p) {
     if (!mailer) throw badRequest('Email isn’t set up, so use “Copy link” and send it yourself.');
+    if (!emailOn(db, 'payments')) throw badRequest('Payment link emails are switched off in Setup → Email, so use “Copy link” and send it yourself.');
     if (!p.customer_email) throw badRequest('Add the customer’s email first');
     await mailer.send({ kind: 'payments', to: p.customer_email, name: p.customer_name, ...linkEmail({ name: p.customer_name, site: p.location_name ?? siteName(p.location_id), description: p.description, amount: p.amount, url: p.url, sender: req.user.name }) });
     db.prepare(`UPDATE payment_links SET emailed_at = datetime('now') WHERE id = ?`).run(p.id);

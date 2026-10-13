@@ -136,7 +136,7 @@ async function boot() {
   api.use(activityLogger(db));
   registerInviteRoutes(api, db, demoMailer, { demo: true, square });
   registerAdminRoutes(api, db, square);
-  registerRotaRoutes(api, db, { rotaReader: demoRotaReader(), rotaAnalyst: demoRotaAnalyst() });
+  registerRotaRoutes(api, db, { rotaReader: demoRotaReader(), rotaAnalyst: demoRotaAnalyst(), mailer: demoMailer, demo: true });
   registerOrderingRoutes(api, db);
   // The orders mailbox: a pretend supplier answers each emailed order a few seconds later.
   const ordersBox = memoryMailbox([], 'orders@brewandbarrel.co.uk');

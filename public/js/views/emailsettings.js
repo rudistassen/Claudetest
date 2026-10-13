@@ -6,16 +6,19 @@ import { api, esc, showError, toast } from '../lib.js';
 const MS = (data) => data.provider === 'microsoft';
 
 const row = (k, data) => `
-  <section class="card em-kind" data-kind="${k.key}">
+  <section class="card em-kind ${k.switchable && !k.on ? 'is-off' : ''}" data-kind="${k.key}">
     <div class="em-head"><div><h2>${esc(k.label)}</h2><p class="muted small">${esc(k.note)}</p></div>
-      ${data.ready ? `<button type="button" class="btn btn-small" data-test="${k.key}">Send me a test</button>` : ''}</div>
+      ${data.ready && k.own_mailbox === undefined ? `<button type="button" class="btn btn-small" data-test="${k.key}">Send me a test</button>` : ''}</div>
+    ${k.switchable ? `<label class="em-on"><input type="checkbox" name="on" ${k.on ? 'checked' : ''}> <strong>Send these emails</strong>
+      <span class="muted small">${k.on ? '' : '– switched off: none are sent until you tick this and save'}</span></label>` : ''}
+    ${k.own_mailbox !== undefined ? `<p class="small em-uses">Sent from ${k.own_mailbox ? `<strong>${esc(k.own_mailbox)}</strong>` : 'the orders mailbox (not connected – set <code>ORDERS_MAILBOX</code> in Railway)'}.</p></section>` : `
     <div class="em-fields">
       <label class="field"><span>Send from</span><input type="email" name="from" value="${esc(k.saved.from)}" placeholder="${esc(k.key === 'default' ? data.server_from ?? 'e.g. hello@yourcafe.co.uk' : `Default – ${k.uses.from ?? 'not set'}`)}" autocomplete="off"></label>
       <label class="field"><span>Name people see</span><input name="name" value="${esc(k.saved.name)}" maxlength="100" ${MS(data) ? 'disabled title="Microsoft 365 uses the mailbox’s own name"' : ''} placeholder="${esc(MS(data) ? 'The mailbox’s own name' : k.key === 'default' ? data.server_name ?? 'Atlas' : `Default – ${k.uses.name}`)}" autocomplete="off"></label>
       <label class="field"><span>Replies go to</span><input type="email" name="reply_to" value="${esc(k.saved.reply_to)}" placeholder="${k.key === 'default' ? 'Optional – same as “Send from”' : 'Optional – default'}" autocomplete="off"></label>
     </div>
     <p class="small em-uses">Sends as ${MS(data) ? '' : `<strong>${esc(k.uses.name)}</strong> `}&lt;${esc(k.uses.from ?? 'not set')}&gt;${k.uses.reply_to ? ` · replies to ${esc(k.uses.reply_to)}` : ''}</p>
-  </section>`;
+  </section>`}`;
 
 export async function render({ el, stale, rerender }) {
   const data = await api('/admin/email-settings');
@@ -57,8 +60,10 @@ Test-ApplicationAccessPolicy -Identity hello@yourdomain -AppId &lt;Application I
     </section>`;
 
   const form = el.querySelector('#em-form');
+  const val = (s, n) => s.querySelector(`[name=${n}]`)?.value.trim() ?? '';
   const values = () => Object.fromEntries([...form.querySelectorAll('[data-kind]')].map((s) => [s.dataset.kind, {
-    from: s.querySelector('[name=from]').value.trim(), name: s.querySelector('[name=name]').value.trim(), reply_to: s.querySelector('[name=reply_to]').value.trim(),
+    from: val(s, 'from'), name: val(s, 'name'), reply_to: val(s, 'reply_to'),
+    ...(s.querySelector('[name=on]') ? { on: s.querySelector('[name=on]').checked } : {}),
   }]));
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

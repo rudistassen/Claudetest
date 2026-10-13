@@ -2,8 +2,9 @@
 // reads. Sending goes through Brevo, which only sends from addresses verified there.
 
 import { requireAdmin } from '../auth.js';
-import { EMAIL_KINDS, PROVIDERS, saveProvider, saveSenders, savedSenders, senderFor } from '../email.js';
-import { badRequest, str } from '../util.js';
+import { EMAIL_KINDS, emailOn, OWN_MAILBOX, PROVIDERS, saveEmailOn, saveProvider, saveSenders, savedSenders, senderFor } from '../email.js';
+import { badRequest, str, today, weekStart } from '../util.js';
+import { rotaEmail } from '../rota-email.js';
 
 const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 const address = (v, label) => {
@@ -25,6 +26,9 @@ export function registerEmailSettingsRoutes(router, db, mailer, inboxes = {}) {
       server_name: mailer?.fromName ?? null,
       kinds: EMAIL_KINDS.map(([key, label, note]) => ({
         key, label, note,
+        on: emailOn(db, key),
+        switchable: key !== 'default',
+        own_mailbox: OWN_MAILBOX.has(key) ? (inboxes[key]?.address ?? null) : undefined,
         saved: { from: saved[key]?.from ?? '', name: saved[key]?.name ?? '', reply_to: saved[key]?.reply_to ?? '' },
         uses: senderFor(db, mailer, key),
       })),
@@ -43,8 +47,11 @@ export function registerEmailSettingsRoutes(router, db, mailer, inboxes = {}) {
   router.put('/admin/email-settings', requireAdmin, (req, res) => {
     const body = req.body?.kinds ?? {};
     const out = {};
+    const on = {};
     for (const [key, label] of EMAIL_KINDS) {
       const k = body[key] ?? {};
+      if (key !== 'default') on[key] = k.on === undefined ? emailOn(db, key) : k.on === true || k.on === 'true';
+      if (OWN_MAILBOX.has(key)) continue;
       const entry = {
         from: address(k.from, `${label}: send from`),
         name: str(k.name, `${label}: name`, { max: 100 }) || null,
@@ -54,6 +61,7 @@ export function registerEmailSettingsRoutes(router, db, mailer, inboxes = {}) {
       if (Object.keys(kept).length) out[key] = kept;
     }
     saveSenders(db, out);
+    saveEmailOn(db, on);
     if (req.body?.provider !== undefined) {
       if (!mailer?.available?.includes(req.body.provider)) throw badRequest(`${PROVIDERS[req.body.provider] ?? 'That email service'} isn’t set up on the server yet`);
       saveProvider(db, req.body.provider);
@@ -65,11 +73,17 @@ export function registerEmailSettingsRoutes(router, db, mailer, inboxes = {}) {
   router.post('/admin/email-settings/test', requireAdmin, async (req, res) => {
     if (!mailer) throw badRequest('Email isn’t set up yet: connect Microsoft 365 (MS_TENANT_ID, MS_CLIENT_ID and MS_CLIENT_SECRET) or Brevo (BREVO_API_KEY and EMAIL_FROM) in Railway → Variables.');
     const kind = EMAIL_KINDS.some(([k]) => k === req.body?.kind) ? req.body.kind : 'default';
+    if (OWN_MAILBOX.has(kind)) throw badRequest('These are sent from their own mailbox – email an order to try it');
     if (!req.user.email) throw badRequest('Your account has no email address to send the test to');
     const s = senderFor(db, mailer, kind);
     const label = EMAIL_KINDS.find(([k]) => k === kind)[1];
+    // Rota changes: what they'd get – their own week.
+    if (kind === 'rota') {
+      await mailer.send({ kind, force: true, to: req.user.email, name: req.user.name, ...rotaEmail(db, req.user, weekStart(today())) });
+      return res.json({ ok: true, to: req.user.email, from: s.from, provider: PROVIDERS[mailer.provider()] });
+    }
     await mailer.send({
-      kind, to: req.user.email, name: req.user.name,
+      kind, force: true, to: req.user.email, name: req.user.name,
       subject: `Atlas test email – ${label}`,
       text: `This is a test from Atlas (Setup → Email), sent through ${PROVIDERS[mailer.provider()]}.\n\n${label} emails come from ${s.name} <${s.from}>${s.reply_to ? `, and replies go to ${s.reply_to}` : ''}.\n`,
       html: `<p>This is a test from Atlas (Setup → Email), sent through ${PROVIDERS[mailer.provider()]}.</p><p><strong>${label}</strong> emails come from ${s.name} &lt;${s.from}&gt;${s.reply_to ? `, and replies go to ${s.reply_to}` : ''}.</p>`,

@@ -200,7 +200,7 @@ export async function renderOrder(ctx) {
   const [o, mail] = await Promise.all([api(`/orders/${params[0]}`), api(`/orders/${params[0]}/emails`).catch(() => null)]);
   if (stale()) return;
   // Emailing from the orders mailbox (Microsoft 365), when it's connected; otherwise the person's own email app.
-  const inbox = mail?.connected;
+  const inbox = mail?.connected && mail?.enabled;
   const draft = o.status === 'draft';
   const receivedTotal = o.lines.reduce((s, l) => s + (l.received_quantity ?? 0) * l.unit_cost, 0);
 

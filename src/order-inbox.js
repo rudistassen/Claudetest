@@ -7,6 +7,7 @@ import { tx } from './db.js';
 import { getSetting, setSetting } from './invoice-inbox.js';
 import { notify, peopleWith } from './push.js';
 import { badRequest, notFound, str } from './util.js';
+import { emailOn } from './email.js';
 
 const KEY = { since: 'orders_inbox_since', lastCheck: 'orders_inbox_last_check', lastError: 'orders_inbox_last_error' };
 const FIRST_DAYS = 7;
@@ -155,6 +156,7 @@ export function registerOrderEmailRoutes(router, db, mailbox = null) {
   };
   const status = () => ({
     connected: !!mailbox,
+    enabled: emailOn(db, 'orders'),
     address: mailbox?.address ?? null,
     last_check: sqlTime(getSetting(db, KEY.lastCheck)),
     last_error: getSetting(db, KEY.lastError),
@@ -181,6 +183,7 @@ export function registerOrderEmailRoutes(router, db, mailbox = null) {
   // draft as sent. Sending again starts a new email with the order in it.
   router.post('/orders/:id/email', perm, async (req, res) => {
     if (!mailbox) throw badRequest('The orders mailbox isn’t connected yet – see Setup → Email.');
+    if (!emailOn(db, 'orders')) throw badRequest('Emailing supplier orders is switched off in Setup → Email.');
     const o = order(req);
     if (!['draft', 'sent'].includes(o.status)) throw badRequest('Only draft or sent orders can be emailed');
     const full = orderForEmail(db, o.id);
@@ -208,6 +211,7 @@ export function registerOrderEmailRoutes(router, db, mailbox = null) {
   // Answers the supplier's latest email in its thread ({ text }).
   router.post('/orders/:id/reply', perm, async (req, res) => {
     if (!mailbox) throw badRequest('The orders mailbox isn’t connected yet – see Setup → Email.');
+    if (!emailOn(db, 'orders')) throw badRequest('Emailing supplier orders is switched off in Setup → Email.');
     const o = order(req);
     const text = str(req.body?.text, 'Reply', { required: true, max: 5000 });
     const last = db.prepare(`SELECT * FROM order_messages WHERE order_id = ? AND direction = 'in' AND email_message_id IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 1`).get(o.id);

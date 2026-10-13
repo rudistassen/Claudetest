@@ -55,9 +55,35 @@ export function memoryMailer() {
 export const EMAIL_KINDS = [
   ['default', 'Default', 'Anything without its own address below.'],
   ['invites', 'Invites and password resets', 'Invites to join Atlas and “Forgot password?” links.'],
+  ['rota', 'Rota changes', 'When the rota is published, everyone whose shifts changed is emailed their shifts for that week.'],
   ['reports', 'Email reports', 'The scheduled reports (Setup → Email reports).'],
   ['payments', 'Payment links', 'Square payment links emailed to customers (e.g. deposits).'],
+  ['orders', 'Supplier orders', 'Orders emailed to suppliers, and replies to them – always from the orders mailbox.'],
 ];
+// Each kind of email has to be switched on in Setup → Email. Those Atlas sent before the switch existed start on;
+// new ones start off.
+const ON_AT_FIRST = { invites: true, reports: true, payments: true, orders: true, rota: false };
+// Kinds sent from a mailbox of their own rather than the address chosen here.
+export const OWN_MAILBOX = new Set(['orders']);
+const ON_KEY = 'email_on';
+
+/** Whether this kind of email is switched on in Setup → Email. */
+export function emailOn(db, kind) {
+  if (kind === 'default') return true;
+  let saved = {};
+  try { saved = JSON.parse(db.prepare('SELECT value FROM settings WHERE key = ?').get(ON_KEY)?.value ?? '{}'); } catch { /* use the defaults */ }
+  return saved[kind] ?? ON_AT_FIRST[kind] ?? false;
+}
+
+export function saveEmailOn(db, map) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(ON_KEY, JSON.stringify(map));
+}
+
+/** The error when a kind of email is switched off. */
+export const switchedOff = (kind) => {
+  const label = EMAIL_KINDS.find(([k]) => k === kind)?.[1] ?? 'These';
+  return Object.assign(new HttpError(400, `${label} emails are switched off – switch them on in Setup → Email`), { switchedOff: true });
+};
 const SETTINGS_KEY = 'email_senders';
 
 /** { kind: { from, name, reply_to } } as saved (blank fields left out). */
@@ -113,7 +139,9 @@ export function withSenders(db, mailers) {
     available,
     provider: () => chosenProvider(db, available),
     senderFor: (kind) => senderFor(db, base, kind),
-    async send({ kind = 'default', ...email }) {
+    // force: send even if this kind is switched off (the test button in Setup → Email).
+    async send({ kind = 'default', force = false, ...email }) {
+      if (!force && !emailOn(db, kind)) throw switchedOff(kind);
       const s = senderFor(db, base, kind);
       const service = services[chosenProvider(db, available)];
       return service.send({ ...email, from: s.from, fromName: s.name, replyTo: s.reply_to ?? undefined });

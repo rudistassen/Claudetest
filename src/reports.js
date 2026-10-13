@@ -4,6 +4,7 @@ import { ACCESS_FIELDS, ACCESS_JOIN, can, PUBLIC_USER_FIELDS, requireAdmin, site
 import { siteSummaries } from './dashboard.js';
 import { dayOfWeek, nowMinutes } from './metrics.js';
 import { addDays, badRequest, bool, notFound, oneOf, str, time, today } from './util.js';
+import { emailOn, switchedOff } from './email.js';
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const LABOUR_TARGET = 30;
@@ -179,7 +180,8 @@ function withRecipients(db, schedule) {
 }
 
 /** Sends one schedule's report to each of its people. Returns { sent, failed: [{ name, error }] }. */
-export async function sendSchedule(db, mailer, schedule, { onlyTo = null } = {}) {
+// force: send even with report emails switched off (someone sending one to themselves to see it).
+export async function sendSchedule(db, mailer, schedule, { onlyTo = null, force = false } = {}) {
   const ids = onlyTo ? [onlyTo] : db.prepare('SELECT user_id FROM report_recipients WHERE schedule_id = ?').all(schedule.id).map((r) => r.user_id);
   let sent = 0;
   const failed = [];
@@ -189,7 +191,7 @@ export async function sendSchedule(db, mailer, schedule, { onlyTo = null } = {})
     try {
       const report = buildReport(db, person, { period: schedule.period, name: schedule.name });
       if (!report) continue;
-      await mailer.send({ kind: 'reports', to: person.email, name: person.name, ...report });
+      await mailer.send({ kind: 'reports', force, to: person.email, name: person.name, ...report });
       sent++;
     } catch (err) {
       failed.push({ name: person.name, error: err.message });
@@ -203,6 +205,8 @@ export async function sendSchedule(db, mailer, schedule, { onlyTo = null } = {})
  * gone today. beforeSend runs first (e.g. a Square sync so the figures are fresh).
  */
 export async function runDueReports(db, mailer, { beforeSend, log = console, now = { date: today(), minutes: nowMinutes() } } = {}) {
+  // Switched off in Setup → Email: nothing goes out.
+  if (!emailOn(db, 'reports')) return;
   const dow = String(dayOfWeek(now.date));
   const due = db.prepare(`SELECT * FROM report_schedules WHERE active = 1 AND send_time <= ? AND (last_sent_date IS NULL OR last_sent_date < ?)`)
     .all(hhmm(now.minutes), now.date).filter((s) => s.days.includes(dow));
@@ -326,7 +330,8 @@ export function registerReportRoutes(router, db, mailer, { demo = false } = {}) 
     const s = load(req.params.id);
     const toMe = req.body.to !== 'all';
     if (toMe && !req.user.email) throw badRequest('Your account has no email address');
-    const r = await sendSchedule(db, mailer, s, { onlyTo: toMe ? req.user.id : null });
+    if (!toMe && !emailOn(db, 'reports')) throw switchedOff('reports');
+    const r = await sendSchedule(db, mailer, s, { onlyTo: toMe ? req.user.id : null, force: toMe });
     if (!toMe) db.prepare('UPDATE report_schedules SET last_result = ? WHERE id = ?')
       .run(`${today()} ${hhmm(nowMinutes())}: sent now by ${req.user.name} to ${r.sent} ${r.sent === 1 ? 'person' : 'people'}${r.failed.length ? `; failed for ${r.failed.map((f) => f.name).join(', ')}` : ''}`, s.id);
     if (!r.sent && r.failed.length) throw badRequest(r.failed[0].error);

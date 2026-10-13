@@ -108,7 +108,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   api.use(activityLogger(db));
   registerInviteRoutes(api, db, mailer, { square });
   registerAdminRoutes(api, db, square);
-  registerRotaRoutes(api, db, { rotaReader, rotaAnalyst });
+  registerRotaRoutes(api, db, { rotaReader, rotaAnalyst, mailer });
   registerOrderingRoutes(api, db);
   registerOrderEmailRoutes(api, db, orders);
   registerStockRoutes(api, db);
