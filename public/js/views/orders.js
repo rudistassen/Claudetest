@@ -247,7 +247,7 @@ function conversation(o, mail) {
       ${m.subject ? `<div class="small muted">${esc(m.subject)}</div>` : ''}
       <div class="po-body">${esc(m.body ?? '').replace(/\n/g, '<br>')}</div>
       ${m.has_attachments || m.web_link ? `<div class="small">${m.has_attachments ? '📎 Has attachments · ' : ''}${m.web_link ? `<a href="${esc(m.web_link)}" target="_blank" rel="noopener">Open in Outlook</a>` : ''}</div>` : ''}
-    </li>`).join('')}</ol>` : `<p class="muted">Not emailed yet. Use <strong>✉ Email to supplier</strong> to send it from ${esc(mail.address)}.</p>`}
+    </li>`).join('')}</ol>` : `<p class="muted">Not sent yet. Use <strong>Send order</strong> to email it from ${esc(mail.address)}.</p>`}
     ${mail.connected && lastIn ? `<form id="po-reply" class="po-reply">
       <label class="field"><span>Reply to ${esc(lastIn.from_name || lastIn.from_address)}</span><textarea name="text" rows="3" required maxlength="5000" placeholder="e.g. Thanks – the substitute is fine."></textarea></label>
       <div class="actions"><button class="btn btn-primary" type="submit">Send reply</button></div></form>` : ''}
@@ -258,7 +258,7 @@ function wireEmail(el, o, mail, ctx) {
   el.querySelector('#email')?.addEventListener('click', () => {
     const p = mail.preview;
     openModal({
-      title: `Email PO-${o.id} to ${o.supplier_name}`,
+      title: `Send PO-${o.id} to ${o.supplier_name}`,
       wide: true,
       body: `${mail.to.length ? '' : '<p class="notice small">There’s no order email address for this supplier yet – add one in Stock &amp; Ordering → Suppliers.</p>'}
         <dl class="po-envelope"><dt>From</dt><dd>${esc(mail.address)}</dd><dt>To</dt><dd>${esc(mail.to.join(', ') || '–')}</dd>
@@ -266,7 +266,7 @@ function wireEmail(el, o, mail, ctx) {
         ${field('Add a message (optional)', textarea('message', '', 'rows="2" maxlength="2000" placeholder="e.g. Please could you deliver before 10am?"'))}
         <details><summary class="small">See the email</summary><pre class="po-preview">${esc(p.text)}</pre></details>
         ${o.status === 'sent' ? '<p class="muted small">This sends the order again as a new email.</p>' : '<p class="muted small">Save any changes to the order first. Sending marks it as sent.</p>'}`,
-      submitLabel: 'Send email',
+      submitLabel: 'Send order',
       onSubmit: async (v) => {
         const r = await api(`/orders/${o.id}/email`, { method: 'POST', body: { message: v.message } });
         toast(`Order emailed to ${r.to.join(', ')}`);
@@ -309,8 +309,8 @@ export async function renderOrder(ctx) {
       <h1>PO-${o.id} · ${esc(o.supplier_name)}</h1>
       <div class="actions">
         <a class="btn" href="#/orders">‹ Orders</a>
-        ${draft ? `<button class="btn btn-primary" id="${inbox ? 'email' : 'send'}">${inbox ? '✉ Email to supplier' : 'Send to supplier'}</button>${inbox ? '<button class="btn" id="send">Mark as sent</button>' : ''}<button class="btn btn-ghost" id="delete">Delete</button>` : ''}
-        ${o.status === 'sent' ? `<button class="btn btn-primary" id="receive">Receive delivery</button><button class="btn" id="${inbox ? 'email' : 'resend'}">Email again</button><button class="btn btn-ghost" id="cancel">Cancel order</button>` : ''}
+        ${draft ? `<button class="btn btn-primary" id="${inbox ? 'email' : 'send'}">Send order</button>${inbox ? '<button class="btn" id="send">Mark as sent</button>' : ''}<button class="btn btn-ghost" id="delete">Delete</button>` : ''}
+        ${o.status === 'sent' ? `<button class="btn btn-primary" id="receive">Receive delivery</button><button class="btn" id="${inbox ? 'email' : 'resend'}">Send again</button><button class="btn btn-ghost" id="cancel">Cancel order</button>` : ''}
         <button class="btn" id="copy">Copy order text</button>
         <button class="btn" id="print">Print</button>
       </div>
