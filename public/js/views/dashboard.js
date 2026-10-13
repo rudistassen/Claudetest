@@ -570,7 +570,10 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     chartBox.innerHTML = '<div class="loading">Loading…</div>';
     el.querySelector('.dash-hourly .legend-open')?.remove();
     if (ranged) {
-      loadPeriodChart(seq, site).catch(() => { if (chartBox.isConnected) chartBox.innerHTML = '<p class="muted small">Couldn’t load the chart.</p>'; });
+      loadPeriodChart(seq, site).catch((err) => {
+        console.error('Period chart:', err);
+        if (chartBox.isConnected) chartBox.innerHTML = `<p class="muted small">Couldn’t load the chart${err?.message ? ` (${esc(err.message)})` : ''}.</p>`;
+      });
       return;
     }
     api(`/trading/hourly-compare?date=${d0}${site ? `&location_id=${site}` : ''}`).then((h) => {
@@ -595,7 +598,10 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         height: 190,
         ariaLabel: `Gross sales by hour${site ? ` at ${siteBox.selectedOptions[0].textContent}` : ''}, today and the same day last week`,
       });
-    }).catch(() => { if (chartBox.isConnected) chartBox.innerHTML = '<p class="muted small">Couldn’t load the hourly chart.</p>'; });
+    }).catch((err) => {
+      console.error('Hourly chart:', err);
+      if (chartBox.isConnected) chartBox.innerHTML = `<p class="muted small">Couldn’t load the hourly chart${err?.message ? ` (${esc(err.message)})` : ''}.</p>`;
+    });
   };
   if (chartBox) loadChart();
   wireClockInActions(el, { state, rerender });

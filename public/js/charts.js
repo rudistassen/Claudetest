@@ -168,7 +168,8 @@ export function pairedBarChart(container, opts) {
     const base = y(0);
     data.forEach((d, i) => {
       const bars = series.flatMap((s, k) => {
-        const v = s.value(d) ?? 0;
+        // Refunds can make an hour negative: drawn as nothing (the tip still shows the real figure).
+        const v = Math.max(0, Number(s.value(d)) || 0);
         const x = k === 0 ? xAt(i) - bw - 1 : xAt(i) + 1;
         const part = Math.min(v, Math.max(0, s.part?.value(d) ?? 0));
         if (!part) return [svgEl('path', { d: barPath(x, y(v), bw, base), class: 'chart-bar', fill: s.color })];

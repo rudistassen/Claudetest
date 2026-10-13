@@ -42,9 +42,10 @@ export function registerTradingRoutes(router, db, square) {
     const byHour = new Map();
     for (const r of db.prepare(`SELECT location_id, date, hour, net_sales, gross_sales, open_gross FROM sales_hourly
       WHERE date IN (?, ?) AND location_id IN (${inList})`).all(day, before, ...ids)) {
-      const gross = r.gross_sales ?? r.net_sales * (ratio.get(`${r.location_id}|${r.date}`) ?? 1);
+      // An hour Square sent no figure for counts as nothing (not "not a number").
+      const gross = Number(r.gross_sales ?? (r.net_sales ?? 0) * (ratio.get(`${r.location_id}|${r.date}`) ?? 1)) || 0;
       const h = byHour.get(r.hour) ?? { hour: r.hour, today: 0, open: 0, last_week: 0 };
-      if (r.date === day) { h.today += gross; h.open += r.open_gross ?? 0; } else h.last_week += gross;
+      if (r.date === day) { h.today += gross; h.open += Number(r.open_gross) || 0; } else h.last_week += gross;
       byHour.set(r.hour, h);
     }
     const hours = [...byHour.values()].filter((h) => h.today || h.last_week).sort((a, b) => a.hour - b.hour);
