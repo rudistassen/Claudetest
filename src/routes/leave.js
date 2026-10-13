@@ -47,7 +47,7 @@ export function registerLeaveRoutes(router, db) {
     res.json({ requests: rows, booked_this_year: booked, year });
   });
 
-  router.post('/leave', (req, res) => {
+  router.post('/leave', requirePerm('leave.request'), (req, res) => {
     const start = date(req.body.start_date, 'start_date', { required: true });
     const end = date(req.body.end_date, 'end_date') ?? start;
     if (end < start) throw badRequest('The last day must be on or after the first day');
@@ -201,6 +201,7 @@ export function registerLeaveRoutes(router, db) {
   const targetUser = (req, raw) => {
     const userId = raw === undefined || raw === null || raw === '' ? req.user.id : id(raw, 'user_id', { required: true });
     if (userId !== req.user.id && !(can(req.user, 'availability.view') && manageable(req).some((u) => u.id === userId))) throw forbidden('You can’t change this person’s availability');
+    if (userId === req.user.id && !can(req.user, 'availability.own') && !can(req.user, 'availability.view')) throw forbidden('You can’t set your availability in Atlas');
     return db.prepare('SELECT id, name FROM users WHERE id = ?').get(userId) ?? (() => { throw notFound('Staff member'); })();
   };
   // A time range: all day, or from–to (to after from).

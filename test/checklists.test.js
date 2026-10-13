@@ -145,7 +145,9 @@ test('people who could do or set up compliance checks get checklists & tasks aft
     d.exec('PRAGMA user_version = 15');
     d.close();
     d = openDb(file);
-    const set = (name) => JSON.parse(d.prepare('SELECT permissions FROM permission_sets WHERE name = ?').get(name).permissions);
+    // (Later upgrades give everyone My Atlas, Time off and My availability – left out here.)
+    const later = ['mybrew.view', 'leave.request', 'availability.own'];
+    const set = (name) => JSON.parse(d.prepare('SELECT permissions FROM permission_sets WHERE name = ?').get(name).permissions).filter((p) => !later.includes(p));
     assert.deepEqual(set('Checker'), ['safety.complete', 'checklists.complete']);
     assert.deepEqual(set('Lead'), ['safety.manage', 'checklists.complete', 'checklists.manage', 'tasks.manage', 'todo.use']);
     assert.deepEqual(set('Other'), ['rota.view']);

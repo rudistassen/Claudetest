@@ -3,6 +3,9 @@
 // permissions of their set. Users without a set get the built-in set for their role (Manager or Staff).
 
 export const PERMISSION_AREAS = [
+  ['My Atlas', [
+    ['mybrew.view', 'See My Atlas – their home page with their shifts, tasks, training and news'],
+  ]],
   ['Dashboards', [
     ['dashboard.view', 'See the HQ Dashboard (every site they can access, side by side; sales and labour figures also need “See sales”)'],
     ['dashboard.manager', 'See the Manager Dashboard (their site’s day and everything waiting on them; opens on their home site)'],
@@ -21,6 +24,8 @@ export const PERMISSION_AREAS = [
   ]],
   ['Rota', [
     ['rota.view', 'See the rota'],
+    ['leave.request', 'Time off – ask for holiday and see their own'],
+    ['availability.own', 'My availability – say when they can and can’t work'],
     ['rota.edit', 'Add, change and copy shifts, and mark people as sick'],
     ['rota.publish', 'Publish the rota so staff can see it, and open shifts up for anyone to pick up'],
     ['rota.approve', 'Approve or decline shift drops and pick-ups'],
@@ -121,7 +126,7 @@ export const DEFAULT_SETS = [
     built_in: 'staff',
     name: 'Staff',
     description: 'Works in a site: food-safety checks, wastage, stock counts, the rota and recipes.',
-    permissions: ['safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
+    permissions: ['mybrew.view', 'leave.request', 'availability.own', 'safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
   },
 ];
 

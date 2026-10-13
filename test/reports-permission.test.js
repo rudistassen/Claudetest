@@ -62,7 +62,7 @@ test('upgrading turns the old Reporting menu permission into each report people 
     const set = (name) => JSON.parse(d.prepare('SELECT permissions FROM permission_sets WHERE name = ?').get(name).permissions);
     assert.deepEqual(set('Sales').filter((p) => p.startsWith('reports.')).sort(), ['reports.breaks', 'reports.open_orders', 'reports.par_levels', 'reports.rota_costs', 'reports.sales', 'reports.trading']);
     assert.deepEqual(set('Sick').filter((p) => p.startsWith('reports.')).sort(), ['reports.sickness']);
-    assert.deepEqual(set('No menu'), ['sales.view'], 'no Reporting menu before, no reports now');
+    assert.ok(!set('No menu').some((p) => p.startsWith('reports.')), 'no Reporting menu before, no reports now');
     const custom = JSON.parse(d.prepare(`SELECT custom_permissions FROM users WHERE email = 'c@x'`).get().custom_permissions);
     assert.deepEqual(custom.filter((p) => p.startsWith('reports.')), ['reports.reviews']);
     for (const r of REPORTS) assert.ok(set('Manager').includes(r), `built-in Manager: ${r}`);
@@ -70,4 +70,36 @@ test('upgrading turns the old Reporting menu permission into each report people 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('My Atlas, Time off and My availability are permissions everyone keeps on upgrading', async () => {
+  for (const p of ['mybrew.view', 'leave.request', 'availability.own']) {
+    assert.ok(ALL_PERMISSIONS.includes(p), p);
+    assert.ok(DEFAULT_SETS.find((s) => s.built_in === 'staff').permissions.includes(p), `Staff: ${p}`);
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'atlas-menu-'));
+  try {
+    const file = join(dir, 'app.db');
+    let d = openDb(file);
+    d.prepare(`INSERT INTO permission_sets (name, description, permissions) VALUES ('Floor', '', '["rota.view"]')`).run();
+    d.exec('PRAGMA user_version = 18');
+    d.close();
+    d = openDb(file);
+    const floor = JSON.parse(d.prepare(`SELECT permissions FROM permission_sets WHERE name = 'Floor'`).get().permissions);
+    for (const p of ['mybrew.view', 'leave.request', 'availability.own']) assert.ok(floor.includes(p), p);
+    d.close();
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+
+  // Without them: no holiday requests or own availability.
+  const person = db.prepare(`SELECT id FROM users WHERE email = 'staff1-2@cafe.local'`).get().id;
+  db.prepare('UPDATE users SET custom_permissions = ? WHERE id = ?').run(JSON.stringify(['rota.view']), person);
+  const res = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'staff1-2@cafe.local', password: DEMO_PASSWORD }) });
+  const cookie = res.headers.get('set-cookie').split(';')[0];
+  const day = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const post = (path, body) => fetch(`${base}${path}`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await post('/leave', { start_date: day, end_date: day })).status, 403);
+  assert.equal((await post('/availability/days', { date: day, kind: 'unavailable', all_day: true })).status, 403);
+  db.prepare('UPDATE users SET custom_permissions = ? WHERE id = ?').run(JSON.stringify(['rota.view', 'leave.request', 'availability.own']), person);
+  assert.equal((await post('/leave', { start_date: day, end_date: day })).status, 201);
+  assert.notEqual((await post('/availability/days', { date: day, kind: 'unavailable', all_day: true })).status, 403);
 });

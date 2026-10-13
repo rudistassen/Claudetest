@@ -77,8 +77,8 @@ const ROUTES = [
   [/^rota$/, rota.render, ROTA],
   [/^rota\/log$/, rotalog.render, ['rota.edit', 'rota.publish']],
   [/^rota\/budget$/, salesbudget.render, ['rota.budget']],
-  [/^timeoff$/, timeoff.render],
-  [/^availability$/, (ctx) => availability.renderAvailability(ctx)],
+  [/^timeoff$/, timeoff.render, ['leave.request', 'leave.manage', 'leave.edit']],
+  [/^availability$/, (ctx) => availability.renderAvailability(ctx), ['availability.own', 'availability.view']],
   [/^wastage$/, wastage.render, WASTAGE],
   [/^stock$/, stock.renderList, STOCK],
   [/^stock\/(\d+)$/, stock.renderTake, STOCK],
@@ -142,7 +142,7 @@ const ROUTES = [
   [/^admin\/square$/, admin.renderSquare, 'admin'],
   [/^admin\/xero$/, xeroView.render, 'admin'],
   [/^admin\/payment-links$/, paymentlinks.render, ['payments.send']],
-  [/^mybrew$/, mybrew.renderMyBrew],
+  [/^mybrew$/, mybrew.renderMyBrew, ['mybrew.view']],
   [/^notifications$/, inbox.render],
   [/^admin\/news$/, mybrew.renderNewsSetup, ['news.manage']],
   [/^admin\/documents$/, mybrew.renderDocumentsSetup, ['documents.manage']],
@@ -161,7 +161,10 @@ const home = () => {
   const hq = state.can('dashboard.view');
   const manager = state.can('dashboard.manager');
   if (hq && (state.isAdmin || !manager)) return 'dashboard';
-  return manager ? 'manager' : 'mybrew';
+  if (manager) return 'manager';
+  if (state.can('mybrew.view')) return 'mybrew';
+  // Without My Atlas: the first page on their menu.
+  return navGroups().flatMap(([, items]) => items)[0]?.[0] ?? 'account';
 };
 
 const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : who.all ? state.can(who.all) && allowed(who.any) : state.can(...who));
@@ -170,11 +173,11 @@ const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : who.all ? st
 function navGroups() {
   return [
     ['Dashboards', [['dashboard', 'HQ Dashboard', '▦', ['dashboard.view']], ['manager', 'Manager Dashboard', '◧', ['dashboard.manager']]]],
-    [null, [['mybrew', 'My Atlas', '◉']]],
+    [null, [['mybrew', 'My Atlas', '◉', ['mybrew.view']]]],
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
-      ['timeoff', 'Time off', '☀'],
-      ['availability', 'My availability', '⏱'],
+      ['timeoff', 'Time off', '☀', ['leave.request', 'leave.manage', 'leave.edit']],
+      ['availability', 'My availability', '⏱', ['availability.own', 'availability.view']],
       ['rota/budget', 'Sales budget', '£', ['rota.budget']],
       ['rota/requests', 'Requests', '✉', ['rota.approve', 'leave.manage']],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
@@ -421,7 +424,7 @@ const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 // The phone icon bar: home, the everyday pages this person can use, then the full menu.
 function tabBar(items, active) {
   const has = (p) => items.some(([q]) => q === p);
-  const tabs = [home() !== 'mybrew' ? [home(), 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : ['timeoff', 'Time off', 'timeoff'], ['mybrew', 'My Atlas', 'mybrew']].filter(Boolean);
+  const tabs = [home() !== 'mybrew' && !['rota', 'safety', 'timeoff'].includes(home()) ? [home(), 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : has('timeoff') ? ['timeoff', 'Time off', 'timeoff'] : null, has('mybrew') ? ['mybrew', 'My Atlas', 'mybrew'] : null].filter(Boolean);
   return `<nav class="tabbar" aria-label="Quick links">
     ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'rota' ? BELL : ''}</a>`).join('')}
     <button type="button" class="tabbar-menu">${icon('menu')}<span>Menu</span></button>

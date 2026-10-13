@@ -1584,6 +1584,18 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 18');
   }
+  if (version < 19) {
+    // My Atlas, Time off and My availability became permissions: everyone keeps them.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        const next = [...new Set([...perms, 'mybrew.view', 'leave.request', 'availability.own'])];
+        if (next.length !== perms.length) db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify(next), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 19');
+  }
   ensureDefaultSets(db);
   return db;
 }
