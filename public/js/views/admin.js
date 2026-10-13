@@ -213,8 +213,7 @@ function staffEditor(state, rows, perms, settings = {}) {
     const all = u.role === 'admin' || (isNew ? canGiveAll : !!u.all_sites);
     const ticked = new Set([u.location_id, ...(u.site_ids ?? [])]);
     return `<div class="field"><span>Sites they can work with</span>
-      ${select('all_sites', [...(canGiveAll || all ? [['1', 'All sites']] : []), ['0', 'Only the sites ticked below']], all ? '1' : '0',
-        `onchange="this.closest('form').querySelector('.site-picks').hidden = this.value === '1'"`)}
+      ${select('all_sites', [...(canGiveAll || all ? [['1', 'All sites']] : []), ['0', 'Only the sites ticked below']], all ? '1' : '0')}
       <div class="site-picks" ${all ? 'hidden' : ''}>
         ${state.locations.filter((l) => l.active).map((l) => `<label class="check-row"><input type="checkbox" name="site_pick" value="${l.id}" ${ticked.has(l.id) ? 'checked' : ''}><span>${esc(l.name)}</span></label>`).join('')}
         <small>Their home site is always included.</small>
@@ -310,6 +309,12 @@ document.addEventListener('click', (e) => {
   const form = tab.closest('form');
   form.querySelectorAll('[data-staff-tab]').forEach((t) => { t.classList.toggle('is-on', t === tab); t.setAttribute('aria-selected', String(t === tab)); });
   form.querySelectorAll('[data-staff-panel]').forEach((p) => { p.hidden = p.dataset.staffPanel !== tab.dataset.staffTab; });
+});
+// “Only the sites ticked below” shows the sites to tick (inline handlers are blocked by the page's security rules).
+document.addEventListener('change', (e) => {
+  if (!e.target.matches?.('select[name=all_sites]')) return;
+  const picks = e.target.closest('form')?.querySelector('.site-picks');
+  if (picks) picks.hidden = e.target.value === '1';
 });
 document.addEventListener('change', (e) => {
   const form = e.target.closest('form');
