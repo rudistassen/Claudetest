@@ -11,7 +11,7 @@ export async function renderList(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Supplier orders${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
+      <h1>Order history${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
       <div class="actions">${sitePicker(state)}<a class="btn btn-primary" href="#/orders/new">+ New order</a></div>
     </div>
     <div class="tabs">${STATUSES.map(([v, l]) => `<a href="#/orders${v ? `?status=${v}` : ''}" class="${status === v ? 'active' : ''}">${l}</a>`).join('')}</div>

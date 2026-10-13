@@ -211,10 +211,10 @@ function navGroups() {
     ['Stock and Ordering', [
       ['orders/new', 'New order', '+', ['orders.manage']],
       ['orders/receive', 'Receive order', '⤓', ['orders.manage']],
+      ['orders', 'Order history', '⇄', ['orders.manage']],
+      ['prep-orders', 'Prep kitchen ordering', '⚗', ['orders.manage']],
       ['stock', 'Stock takes', '☰', STOCK],
       ['wastage', 'Wastage', '⌫', WASTAGE],
-      ['orders', 'Ordering', '⇄', ['orders.manage']],
-      ['prep-orders', 'Prep kitchen ordering', '⚗', ['orders.manage']],
       ['invoices', 'Invoices', '⎘', ['invoices.manage']],
       ['admin/suppliers', 'Suppliers', '⚑', SUPPLIERS],
       ['admin/products', 'Products', '▥', SUPPLIERS],
@@ -338,7 +338,7 @@ const TILE_NOTES = {
   wastage: 'Record what’s thrown away and see the cost',
   'orders/new': 'Start an order to a supplier, with suggested amounts',
   'orders/receive': 'Check in a delivery against what was ordered',
-  orders: 'Create, send and receive supplier orders',
+  orders: 'Every order – drafts, sent, received and cancelled',
   invoices: 'Upload and check supplier invoices',
   'prep-orders': 'Order prepped recipes from the prep kitchen, and its prep list',
   'admin/suppliers': 'Who you buy from, and how to order',
@@ -375,15 +375,22 @@ function hubOf(path) {
 
 // Tiles shown under a "Set up" heading at the end of their section's tiles.
 // Tiles shown under an "Admin" heading after the rest of their section's tiles (for managers).
-const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories', 'checklists/setup']);
+const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories', 'checklists/setup', 'invoices']);
 const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log', 'admin/staff']);
+// Headed groups of tiles within a section (shown first, in this order), e.g. Stock & Ordering's Purchasing.
+const TILE_GROUPS = {
+  'orders/new': 'Purchasing', 'orders/receive': 'Purchasing', orders: 'Purchasing', 'prep-orders': 'Purchasing',
+  stock: 'Stock and waste', wastage: 'Stock and waste',
+};
 const hubTiles = (items, active) => {
-  const main = items.filter(([p]) => !SETUP_TILES.has(p) && !ADMIN_TILES.has(p));
-  const group = (title, set) => {
-    const list = items.filter(([p]) => set.has(p));
+  const main = items.filter(([p]) => !SETUP_TILES.has(p) && !ADMIN_TILES.has(p) && !TILE_GROUPS[p]);
+  const group = (title, has) => {
+    const list = items.filter(([p]) => has(p));
     return list.length ? `<p class="hub-group-head">${title}</p>${list.map((i) => hubTile(i, active)).join('')}` : '';
   };
-  return `${main.map((i) => hubTile(i, active)).join('')}${group('Admin', ADMIN_TILES)}${group('Set up', SETUP_TILES)}`;
+  const named = [...new Set(items.map(([p]) => TILE_GROUPS[p]).filter(Boolean))];
+  return `${main.map((i) => hubTile(i, active)).join('')}${named.map((g) => group(g, (p) => TILE_GROUPS[p] === g)).join('')}`
+    + `${group('Admin', (p) => ADMIN_TILES.has(p))}${group('Set up', (p) => SETUP_TILES.has(p))}`;
 };
 
 // A section's page of tiles (see HUBS).
