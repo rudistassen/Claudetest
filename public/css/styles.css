@@ -2981,3 +2981,12 @@ img.lesson-media { background: transparent; }
   .order-lines tfoot td:empty { display: none; }
 }
 .order-lines td { vertical-align: middle; }
+
+/* New order: search every supplier's products */
+.product-find { margin-top: 0.9rem; }
+.product-hits { list-style: none; margin: 0.4rem 0 0; padding: 0; border: 1px solid var(--border); border-radius: 10px; max-height: 22rem; overflow: auto; background: var(--surface); }
+.product-hits li + li { border-top: 1px solid var(--border); }
+.product-hits li.muted { padding: 0.6rem 0.8rem; }
+.product-hits button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0.55rem 0.8rem; cursor: pointer; color: inherit; font: inherit; }
+.product-hits button:hover, .product-hits button:focus-visible { background: var(--surface-2); }
+.product-hits small { display: block; color: var(--muted); font-size: 0.78rem; }

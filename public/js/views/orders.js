@@ -98,7 +98,7 @@ function bindLines(root, minOrder) {
     const box = b.parentElement.querySelector('.qty-input');
     const next = Math.max(0, (Number(box.value) || 0) + Number(b.dataset.step));
     box.value = next ? String(Math.round(next * 100) / 100) : '';
-    update();
+    box.dispatchEvent(new Event('input'));
   }));
   update();
   // Searching only hides rows: quantities already typed stay in the order.
@@ -108,16 +108,20 @@ function bindLines(root, minOrder) {
   const filter = () => {
     const words = (search?.value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
     let shown = 0;
+    let hiddenOrdering = 0;
     const rows = [...root.querySelectorAll('tr[data-product]')];
     for (const tr of rows) {
       const ordering = (Number(tr.querySelector('.qty-input').value) || 0) > 0;
       const hit = words.every((w) => tr.dataset.search.includes(w)) && (!only?.checked || ordering);
       tr.hidden = !hit;
       if (hit) shown++;
+      else if (ordering) hiddenOrdering++;
     }
-    if (count) count.textContent = words.length || only?.checked ? `${shown} of ${rows.length} products` : '';
+    // Quantities on products the search hides still go in the order – say so.
+    if (count) count.textContent = words.length || only?.checked ? `${shown} of ${rows.length} products${hiddenOrdering ? ` · ${hiddenOrdering} more in the order, hidden by the search` : ''}` : '';
   };
   search?.addEventListener('input', filter);
+  root.querySelectorAll('.qty-input').forEach((i) => i.addEventListener('input', () => { if (search?.value) filter(); }));
   search?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
   only?.addEventListener('change', filter);
   return () => [...root.querySelectorAll('tr[data-product]')]
@@ -143,6 +147,9 @@ export async function renderNew(ctx) {
     </div>
     <section class="card">
       ${field('Supplier', select('supplier', [['', 'Choose a supplier…'], ...suppliers.map((s) => [s.id, s.name])], supplierId ?? '', 'id="supplier"'))}
+      ${supplier ? '' : `<div class="field product-find"><label for="product-find">…or search by product</label>
+        <input type="search" id="product-find" placeholder="e.g. oat milk, coffee beans, napkins" autocomplete="off">
+        <ul class="product-hits" id="product-hits" hidden></ul></div>`}
       ${supplier ? `<p class="muted">Deliveries: ${esc(scheduleSummary(supplier.delivery_schedule))}${next ? ` · next: <strong>${fmtDate(next.date)}</strong> if ordered by ${esc(next.cutoff.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}` : ''} · Minimum order: ${money(supplier.min_order)}</p>` : ''}
     </section>
     ${suggestion ? `
@@ -162,9 +169,40 @@ export async function renderNew(ctx) {
     </form>` : ''}`;
 
   el.querySelector('#supplier').addEventListener('change', (e) => ctx.navigate(`orders/new${e.target.value ? `?supplier=${e.target.value}` : ''}`));
+  // Search every supplier's products; picking one opens its supplier's order with that product found.
+  const find = el.querySelector('#product-find');
+  if (find) {
+    const hits = el.querySelector('#product-hits');
+    const ordering = new Set(suppliers.map((s) => s.id));
+    let products = null;
+    find.addEventListener('input', async () => {
+      const words = find.value.toLowerCase().split(/\s+/).filter(Boolean);
+      if (!words.length) { hits.hidden = true; return; }
+      try { products ??= (await api('/products')).filter((p) => p.active && ordering.has(p.supplier_id)); } catch (err) { showError(err); return; }
+      const found = products.filter((p) => words.every((w) => `${p.name} ${p.sku ?? ''} ${p.category ?? ''}`.toLowerCase().includes(w))).slice(0, 30);
+      hits.innerHTML = found.length ? found.map((p) => `<li><button type="button" data-supplier="${p.supplier_id}" data-name="${esc(p.name)}">
+          <strong>${esc(p.name)}</strong><small>${esc(p.supplier_name ?? '')}${p.category ? ` · ${esc(p.category)}` : ''} · ${esc(packUnit(p.unit, p.pack_quantity))} · ${money(p.unit_cost)}</small></button></li>`).join('')
+        : '<li class="muted small">No products match – try another word, or choose the supplier above.</li>';
+      hits.hidden = false;
+    });
+    find.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); hits.querySelector('button')?.click(); } });
+    hits.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-supplier]');
+      if (b) ctx.navigate(`orders/new${qs({ supplier: b.dataset.supplier, find: b.dataset.name })}`);
+    });
+    // Straight into the box on a computer (on a phone that would pop the keyboard up).
+    if (matchMedia('(pointer: fine)').matches) setTimeout(() => find.focus(), 0);
+  }
   const form = el.querySelector('#order-form');
   if (!form || !suggestion.products.length) return;
   const getLines = bindLines(form, supplier.min_order);
+  // Came from searching by product: show it, ready for a quantity.
+  if (query.find) {
+    const box = form.querySelector('.line-search');
+    box.value = query.find;
+    box.dispatchEvent(new Event('input'));
+    if (matchMedia('(pointer: fine)').matches) form.querySelector('tr[data-product]:not([hidden]) .qty-input')?.focus();
+  }
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
