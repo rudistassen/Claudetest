@@ -77,7 +77,7 @@ export async function render(ctx) {
       if (p.status === 'late') add('bad', '⏰', `${shortName(p.name)} hasn’t clocked in – shift started at ${p.rota.split('–')[0]}`, '#/dashboard');
       if (p.status === 'missed') add('bad', '⏰', `${shortName(p.name)} didn’t clock in for ${p.rota}`, '#/dashboard');
     }
-    if (card.orders_draft) add('warn', '🧾', `${plural(card.orders_draft, 'draft order')} not sent yet`, '#/orders');
+    if (card.orders_draft) add('warn', '🧾', `${plural(card.orders_draft, 'open cart')} not sent yet`, '#/orders');
     if (card.stock_take_in_progress) add('warn', '📦', 'A stock take is in progress – finish it off', '#/stock');
     else if (!card.last_stock_take) add('warn', '📦', 'No stock take done yet', '#/stock');
     else if (daysSince(card.last_stock_take) >= 7) add('warn', '📦', `Last stock take was ${daysSince(card.last_stock_take)} days ago`, '#/stock');

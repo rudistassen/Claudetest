@@ -338,7 +338,7 @@ const TILE_NOTES = {
   wastage: 'Record what’s thrown away and see the cost',
   'orders/new': 'Start an order to a supplier, with suggested amounts',
   'orders/receive': 'Check in a delivery against what was ordered',
-  orders: 'Every order – drafts, sent, received and cancelled',
+  orders: 'Every order – open carts, sent, received and cancelled',
   invoices: 'Upload and check supplier invoices',
   'prep-orders': 'Order prepped recipes from the prep kitchen, and its prep list',
   'admin/suppliers': 'Who you buy from, and how to order',

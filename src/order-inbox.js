@@ -185,7 +185,7 @@ export function registerOrderEmailRoutes(router, db, mailbox = null) {
     if (!mailbox) throw badRequest('The orders mailbox isn’t connected yet – see Setup → Email.');
     if (!emailOn(db, 'orders')) throw badRequest('Emailing supplier orders is switched off in Setup → Email.');
     const o = order(req);
-    if (!['draft', 'sent'].includes(o.status)) throw badRequest('Only draft or sent orders can be emailed');
+    if (!['draft', 'sent'].includes(o.status)) throw badRequest('Only open carts or sent orders can be emailed');
     const full = orderForEmail(db, o.id);
     if (!full.lines.length) throw badRequest('Add something to the order first');
     const to = listOf(full.supplier_email);

@@ -1,7 +1,10 @@
-import { addDays, api, isDemo, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, packUnit, qs, qty, select, showError, statusBadge, textarea, toast, todayISO, sitePicker } from '../lib.js';
+import { addDays, api, isDemo, confirmDialog, esc, field, fmtDate, fmtDateTime, input, money, openModal, packUnit, qs, qty, select, showError, statusBadge as badge, textarea, toast, todayISO, sitePicker } from '../lib.js';
+
+// An order not sent yet is an "open cart".
+const statusBadge = (status) => (status === 'draft' ? '<span class="badge badge-draft">Open cart</span>' : badge(status));
 import { nextDelivery, scheduleSummary } from '../delivery.js';
 
-const STATUSES = [['', 'All'], ['draft', 'Draft'], ['sent', 'Sent'], ['received', 'Received'], ['cancelled', 'Cancelled']];
+const STATUSES = [['', 'All'], ['draft', 'Open carts'], ['sent', 'Sent'], ['received', 'Received'], ['cancelled', 'Cancelled']];
 
 export async function renderList(ctx) {
   const { el, state, query, stale } = ctx;
@@ -146,7 +149,7 @@ export async function renderNew(ctx) {
         ${field('Delivery date', input('delivery_date', next?.date ?? addDays(todayISO(), supplier.lead_time_days || 1), 'type="date"'))}
         ${field('Notes for supplier', textarea('notes', ''))}
       </div>
-      <div class="actions"><button class="btn btn-primary" type="submit">Save draft order</button></div>
+      <div class="actions"><button class="btn btn-primary" type="submit">Save cart</button></div>
     </form>` : ''}`;
 
   el.querySelector('#supplier').addEventListener('change', (e) => ctx.navigate(`orders/new${e.target.value ? `?supplier=${e.target.value}` : ''}`));
@@ -160,7 +163,7 @@ export async function renderNew(ctx) {
         method: 'POST',
         body: { location_id: state.locationId, supplier_id: supplier.id, delivery_date: form.delivery_date.value || null, notes: form.notes.value, lines: getLines() },
       });
-      toast('Draft order saved');
+      toast('Saved in Open carts');
       ctx.navigate(`orders/${order.id}`);
     } catch (err) { showError(err); }
   });
@@ -342,7 +345,7 @@ export async function renderOrder(ctx) {
       } catch (err) { showError(err); }
     });
     el.querySelector('#delete').addEventListener('click', async () => {
-      if (!(await confirmDialog('Delete this draft order?', { confirmLabel: 'Delete' }))) return;
+      if (!(await confirmDialog('Delete this open cart?', { confirmLabel: 'Delete' }))) return;
       try {
         await api(`/orders/${o.id}`, { method: 'DELETE' });
         ctx.navigate('orders');

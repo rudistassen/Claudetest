@@ -363,7 +363,7 @@ export function registerOrderingRoutes(router, db) {
 
   router.put('/orders/:id', requirePerm('orders.manage'), (req, res) => {
     const order = loadOrder(req);
-    if (order.status !== 'draft') throw badRequest('Only draft orders can be edited');
+    if (order.status !== 'draft') throw badRequest('Only open carts can be changed');
     const lines = parseLines(req.body.lines);
     tx(db, () => {
       db.prepare('UPDATE purchase_orders SET delivery_date = ?, notes = ? WHERE id = ?')
@@ -375,7 +375,7 @@ export function registerOrderingRoutes(router, db) {
 
   router.post('/orders/:id/send', requirePerm('orders.manage'), (req, res) => {
     const order = loadOrder(req);
-    if (order.status !== 'draft') throw badRequest('Only draft orders can be sent');
+    if (order.status !== 'draft') throw badRequest('Only open carts can be sent');
     db.prepare(`UPDATE purchase_orders SET status = 'sent', sent_at = datetime('now') WHERE id = ?`).run(order.id);
     res.json(loadOrder(req));
   });
@@ -405,7 +405,7 @@ export function registerOrderingRoutes(router, db) {
 
   router.delete('/orders/:id', requirePerm('orders.manage'), (req, res) => {
     const order = loadOrder(req);
-    if (order.status !== 'draft') throw badRequest('Only draft orders can be deleted');
+    if (order.status !== 'draft') throw badRequest('Only open carts can be deleted');
     db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(order.id);
     res.json({ ok: true });
   });
