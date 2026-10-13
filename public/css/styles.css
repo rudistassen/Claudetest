@@ -3012,3 +3012,12 @@ img.lesson-media { background: transparent; }
 .po-main small { color: var(--muted); font-size: 0.8rem; }
 .po-side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem; flex: none; }
 .po-side .badge { font-size: 0.7rem; }
+
+/* Phones: nothing pushes a page wider than the screen (tables that scroll sideways still do, inside themselves),
+   and the rota's day view stays put sideways – it scrolls up and down only, without pinching out. */
+html, body { overflow-x: clip; }
+@media (max-width: 760px) {
+  body:has(.pd-datebar) { touch-action: pan-y; }
+  .pd-list, .pd-item, .pd-card, .pd-head, .pd-datebar, .pd-stats { min-width: 0; max-width: 100%; }
+  .pd-name, .pd-line { overflow-wrap: anywhere; }
+}
