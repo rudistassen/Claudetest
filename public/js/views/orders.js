@@ -27,6 +27,32 @@ export async function renderList(ctx) {
   el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => ctx.navigate(`orders/${tr.dataset.id}`)));
 }
 
+// Stock & Ordering → Receive order: orders sent and waiting for delivery, soonest first.
+export async function renderReceive(ctx) {
+  const { el, state, stale, navigate } = ctx;
+  const list = await api(`/orders${qs({ location_id: state.locationId, status: 'sent' })}`);
+  if (stale()) return;
+  const today = todayISO();
+  list.sort((a, b) => (a.delivery_date ?? '9999').localeCompare(b.delivery_date ?? '9999') || a.id - b.id);
+  el.innerHTML = `
+    <div class="page-head">
+      <h1>Receive order${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
+      <div class="actions">${sitePicker(state)}<a class="btn" href="#/orders">All orders</a></div>
+    </div>
+    <p class="muted">Orders sent and waiting for delivery. Tap <strong>Receive</strong> when it arrives to check it in against what was ordered.</p>
+    <section class="card">
+      ${list.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>Supplier</th><th>Delivery</th><th>Items</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody>${list.map((o) => `<tr>
+          <td><a href="#/orders/${o.id}">PO-${o.id}</a></td><td>${esc(o.supplier_name)}${o.reply_unread ? ' <span class="badge badge-sent">💬 New reply</span>' : ''}</td>
+          <td>${o.delivery_date ? `${fmtDate(o.delivery_date)}${o.delivery_date < today ? ' <span class="alert-text small">late</span>' : o.delivery_date === today ? ' <strong class="small">today</strong>' : ''}` : '<span class="muted">Not set</span>'}</td>
+          <td>${o.line_count}</td><td class="num">${money(o.total)}</td>
+          <td class="num"><button class="btn btn-small btn-primary" data-receive="${o.id}">Receive</button></td></tr>`).join('')}</tbody>
+      </table></div>` : '<div class="empty">Nothing waiting to be delivered. <a href="#/orders/new">Start a new order</a>.</div>'}
+    </section>`;
+  el.querySelectorAll('[data-receive]').forEach((b) => b.addEventListener('click', () => navigate(`orders/${b.dataset.receive}?receive=1`)));
+}
+
 function linesTable(rows, { showSuggest }) {
   return `<div class="table-wrap"><table class="order-lines">
     <thead><tr><th>Product</th><th>Unit</th>${showSuggest ? '<th class="num">Par</th><th class="num">On hand</th><th class="num">Suggested</th>' : ''}
@@ -324,4 +350,6 @@ export async function renderOrder(ctx) {
       ctx.rerender();
     },
   }));
+  // From Receive order: straight into checking the delivery in.
+  if (ctx.query?.receive && o.status === 'sent') el.querySelector('#receive')?.click();
 }
