@@ -86,9 +86,9 @@ export async function render(ctx) {
           <label class="line-only"><input type="checkbox" class="line-only-box" ${existing ? 'checked' : ''}> Only what I’m ordering</label>
           <span class="muted small line-count"></span>
         </div>
-        ${[...groups].map(([cat, list]) => `<section class="prep-group"><h3 class="group-title">${esc(cat)}</h3>
+        ${[...groups].map(([cat, list]) => `<section class="prep-group"><h3 class="prep-cat">${esc(cat)} <span>${list.length}</span></h3>
           <ul class="prep-lines">${list.map((r) => `<li data-line="${r.id}" data-search="${esc(`${r.name} ${r.category ?? ''}`.toLowerCase())}" class="${had.get(r.id) ? 'is-ordering' : ''}">
-            <span class="prep-name"><strong>${esc(r.name)}</strong><small>${esc(r.yield_unit)}${r.shelf_life ? ` · ${esc(r.shelf_life)}` : ''}</small></span>
+            <span class="prep-name"><span><strong>${esc(r.name)}</strong> <span class="prep-unit">${esc(r.yield_unit)}</span></span>${r.shelf_life ? `<small>${esc(r.shelf_life)}</small>` : ''}</span>
             <span class="qty-step"><button type="button" data-step="-1" aria-label="One less ${esc(r.name)}">−</button><input class="qty-input po-qty" type="number" min="0" step="any" inputmode="decimal" data-recipe="${r.id}" value="${had.get(r.id) ?? ''}" aria-label="Amount of ${esc(r.name)} in ${esc(r.yield_unit)}"><button type="button" data-step="1" aria-label="One more ${esc(r.name)}">+</button></span>
           </li>`).join('')}</ul></section>`).join('')}`
         : `<div class="empty">No prepped recipes yet. Add them under <a href="#/recipes/prep">Menu → Prepped recipes</a>.</div>`}

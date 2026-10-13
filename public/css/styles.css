@@ -3044,3 +3044,10 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .prep-orders-day summary { cursor: pointer; padding: 0.3rem 0; color: var(--muted); }
 .prep-orders-day .po-side { gap: 0.3rem; }
 @media print { .prep-day { break-inside: avoid; } }
+
+/* Prep ordering: the unit beside the name, and clear category headings */
+.prep-unit { display: inline-block; font-size: 0.72rem; font-weight: 600; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 0.45rem; line-height: 1.5; vertical-align: 2px; white-space: nowrap; }
+.prep-cat { display: flex; align-items: center; justify-content: space-between; margin: 1.1rem 0 0.2rem; padding: 0.45rem 0.7rem; border-radius: 10px;
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface)); border-left: 4px solid var(--brand); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text); }
+.prep-cat span { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.prep-group:first-of-type .prep-cat { margin-top: 0.6rem; }
