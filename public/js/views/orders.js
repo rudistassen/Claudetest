@@ -18,16 +18,21 @@ export async function renderList(ctx) {
       <div class="actions">${sitePicker(state)}<a class="btn btn-primary" href="#/orders/new">+ New order</a></div>
     </div>
     <div class="tabs">${STATUSES.map(([v, l]) => `<a href="#/orders${v ? `?status=${v}` : ''}" class="${status === v ? 'active' : ''}">${l}</a>`).join('')}</div>
-    <section class="card">
-      ${orders.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>#</th><th>Supplier</th><th>Status</th><th>Items</th><th class="num">Total</th><th>Delivery</th><th>Created</th></tr></thead>
-        <tbody>${orders.map((o) => `<tr class="clickable" data-id="${o.id}">
-          <td><a href="#/orders/${o.id}">PO-${o.id}</a></td><td>${esc(o.supplier_name)}</td><td>${statusBadge(o.status)}${o.reply_unread ? ' <span class="badge badge-sent" title="The supplier has replied">💬 New reply</span>' : o.emailed_to ? ' <span class="muted small" title="Emailed from the orders mailbox">✉</span>' : ''}</td>
-          <td>${o.line_count}</td><td class="num">${money(o.total)}</td><td>${fmtDate(o.delivery_date)}</td>
-          <td>${fmtDateTime(o.created_at)} · ${esc(o.created_by_name ?? '')}</td></tr>`).join('')}</tbody>
-      </table></div>` : '<div class="empty">No orders yet.</div>'}
+    <section class="card po-list-card">
+      ${orders.length ? `<ul class="po-list">${orders.map((o) => orderRow(o)).join('')}</ul>` : '<div class="empty">No orders yet.</div>'}
     </section>`;
-  el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => ctx.navigate(`orders/${tr.dataset.id}`)));
+}
+
+// One order in a list: the supplier first and biggest, then the delivery date, items and number; the total and
+// status on the right. extra: something more on the right (e.g. a Receive button).
+function orderRow(o, { extra = '', today = null, status = true } = {}) {
+  const late = today && o.delivery_date && o.delivery_date < today;
+  const due = today && o.delivery_date === today;
+  return `<li class="po-row"><a href="#/orders/${o.id}">
+      <span class="po-main"><strong class="po-supplier">${esc(o.supplier_name)}</strong>
+        <small>${o.delivery_date ? `Delivery ${fmtDate(o.delivery_date)}${late ? ' <span class="alert-text">late</span>' : due ? ' <strong>today</strong>' : ''}` : 'No delivery date'} · ${o.line_count} item${o.line_count === 1 ? '' : 's'} · PO-${o.id}</small></span>
+      <span class="po-side"><strong>${money(o.total)}</strong>
+        <span>${status ? statusBadge(o.status) : ''}${o.reply_unread ? ' <span class="badge badge-sent" title="The supplier has replied">💬 New reply</span>' : ''}</span></span></a>${extra}</li>`;
 }
 
 // Stock & Ordering → Receive order: orders sent and waiting for delivery, soonest first.
@@ -44,14 +49,8 @@ export async function renderReceive(ctx) {
     </div>
     <p class="muted">Orders sent and waiting for delivery. Tap <strong>Receive</strong> when it arrives to check it in against what was ordered.</p>
     <section class="card">
-      ${list.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>#</th><th>Supplier</th><th>Delivery</th><th>Items</th><th class="num">Total</th><th></th></tr></thead>
-        <tbody>${list.map((o) => `<tr>
-          <td><a href="#/orders/${o.id}">PO-${o.id}</a></td><td>${esc(o.supplier_name)}${o.reply_unread ? ' <span class="badge badge-sent">💬 New reply</span>' : ''}</td>
-          <td>${o.delivery_date ? `${fmtDate(o.delivery_date)}${o.delivery_date < today ? ' <span class="alert-text small">late</span>' : o.delivery_date === today ? ' <strong class="small">today</strong>' : ''}` : '<span class="muted">Not set</span>'}</td>
-          <td>${o.line_count}</td><td class="num">${money(o.total)}</td>
-          <td class="num"><button class="btn btn-small btn-primary" data-receive="${o.id}">Receive</button></td></tr>`).join('')}</tbody>
-      </table></div>` : '<div class="empty">Nothing waiting to be delivered. <a href="#/orders/new">Start a new order</a>.</div>'}
+      ${list.length ? `<ul class="po-list">${list.map((o) => orderRow(o, { today, status: false, extra: `<button class="btn btn-small btn-primary" data-receive="${o.id}">Receive</button>` })).join('')}</ul>`
+        : '<div class="empty">Nothing waiting to be delivered. <a href="#/orders/new">Start a new order</a>.</div>'}
     </section>`;
   el.querySelectorAll('[data-receive]').forEach((b) => b.addEventListener('click', () => navigate(`orders/${b.dataset.receive}?receive=1`)));
 }

@@ -2999,3 +2999,16 @@ img.lesson-media { background: transparent; }
 .cart-list li + li { border-top: 1px solid var(--border); }
 .cart-list a { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.55rem 0.1rem; color: inherit; text-decoration: none; }
 .cart-list small { display: block; color: var(--muted); }
+
+/* Order history and Receive order: one compact row per order */
+.po-list-card { padding-top: 0.3rem; padding-bottom: 0.3rem; }
+.po-list { list-style: none; margin: 0; padding: 0; }
+.po-row { display: flex; align-items: center; gap: 0.6rem; }
+.po-row + .po-row { border-top: 1px solid var(--border); }
+.po-row > a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.15rem; color: inherit; text-decoration: none; }
+@media (hover: hover) { .po-row > a:hover .po-supplier { text-decoration: underline; } }
+.po-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.po-supplier { font-size: 1.08rem; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-main small { color: var(--muted); font-size: 0.8rem; }
+.po-side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem; flex: none; }
+.po-side .badge { font-size: 0.7rem; }
