@@ -82,13 +82,16 @@ export async function render(ctx) {
       </div>
       ${existing ? `<p class="notice">You’ve already ordered for ${fmtDate(day)} – change the amounts below and save to update that order.</p>` : ''}
       ${sentAlready.length ? `<p class="notice">The prep kitchen has already sent an order for ${fmtDate(day)}. Anything you order now is a separate order.</p>` : ''}
-      ${data.recipes.length ? [...groups].map(([cat, list]) => `<h3 class="group-title">${esc(cat)}</h3>
-        <div class="table-wrap"><table class="po-table">
-          <thead><tr><th>Prepped recipe</th><th class="num">Amount</th></tr></thead>
-          <tbody>${list.map((r) => `<tr>
-            <td><strong>${esc(r.name)}</strong>${r.shelf_life ? `<small class="muted">${esc(r.shelf_life)}</small>` : ''}</td>
-            <td class="num"><input class="qty-input po-qty" type="number" min="0" step="any" inputmode="decimal" data-recipe="${r.id}" value="${had.get(r.id) ?? ''}" aria-label="Amount of ${esc(r.name)}"> <span class="muted">${esc(r.yield_unit)}</span></td>
-          </tr>`).join('')}</tbody></table></div>`).join('')
+      ${data.recipes.length ? `<div class="line-filter">
+          <input type="search" class="line-search" placeholder="Search prepped recipes – name or category" aria-label="Search prepped recipes" autocomplete="off">
+          <label class="line-only"><input type="checkbox" class="line-only-box" ${existing ? 'checked' : ''}> Only what I’m ordering</label>
+          <span class="muted small line-count"></span>
+        </div>
+        ${[...groups].map(([cat, list]) => `<section class="prep-group"><h3 class="group-title">${esc(cat)}</h3>
+          <ul class="prep-lines">${list.map((r) => `<li data-line="${r.id}" data-search="${esc(`${r.name} ${r.category ?? ''}`.toLowerCase())}" class="${had.get(r.id) ? 'is-ordering' : ''}">
+            <span class="prep-name"><strong>${esc(r.name)}</strong><small>${esc(r.yield_unit)}${r.shelf_life ? ` · ${esc(r.shelf_life)}` : ''}</small></span>
+            <span class="qty-step"><button type="button" data-step="-1" aria-label="One less ${esc(r.name)}">−</button><input class="qty-input po-qty" type="number" min="0" step="any" inputmode="decimal" data-recipe="${r.id}" value="${had.get(r.id) ?? ''}" aria-label="Amount of ${esc(r.name)} in ${esc(r.yield_unit)}"><button type="button" data-step="1" aria-label="One more ${esc(r.name)}">+</button></span>
+          </li>`).join('')}</ul></section>`).join('')}`
         : `<div class="empty">No prepped recipes yet. Add them under <a href="#/recipes/prep">Menu → Prepped recipes</a>.</div>`}
       <label class="field"><span>Notes for the prep kitchen</span><textarea name="notes" rows="2" maxlength="1000" placeholder="e.g. please send before 10am">${esc(existing?.notes ?? '')}</textarea></label>
       <p class="form-error" hidden></p>
@@ -97,18 +100,51 @@ export async function render(ctx) {
         ${existing ? '<button type="button" class="btn btn-ghost" id="po-delete">Delete order</button>' : ''}
       </div>
     </form>
-    <section class="card">
+    <section class="card po-list-card">
       <h2>Orders</h2>
-      ${upcoming.length || past.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Needed on</th><th>Site</th><th>Items</th><th>Status</th><th></th></tr></thead>
-        <tbody>${[...upcoming, ...past.slice(0, 20)].map((o) => `<tr class="${o.needed_on < todayISO() ? 'inactive' : ''}">
-          <td>${fmtDate(o.needed_on)}</td><td>${esc(o.location_name)}</td><td class="small">${summary(o)}</td><td>${badge(o.status)}</td>
-          <td class="num">${o.status === 'ordered' && o.needed_on >= todayISO() ? `<button class="btn btn-small" data-edit-site="${o.location_id}" data-edit-day="${o.needed_on}">Change</button>` : ''}</td></tr>`).join('')}</tbody>
-      </table></div>` : '<p class="muted">No orders yet.</p>'}
+      ${upcoming.length || past.length ? `<ul class="po-list">${[...upcoming, ...past.slice(0, 20)].map((o) => `<li class="po-row ${o.needed_on < todayISO() ? 'is-past' : ''}">
+          <span class="po-main"><strong class="po-supplier">${esc(o.location_name)}</strong>
+            <small>Needed ${fmtDate(o.needed_on)} · ${o.lines.length} item${o.lines.length === 1 ? '' : 's'}</small>
+            <small class="prep-summary">${summary(o)}</small></span>
+          <span class="po-side">${badge(o.status)}${o.status === 'ordered' && o.needed_on >= todayISO() ? `<button class="btn btn-small" data-edit-site="${o.location_id}" data-edit-day="${o.needed_on}">Change</button>` : ''}</span>
+        </li>`).join('')}</ul>` : '<p class="muted">No orders yet.</p>'}
     </section>`;
   wireTabs();
 
   const form = el.querySelector('#po-form');
+  // − / +, searching and “only what I’m ordering” – as on supplier orders. Searching only hides rows.
+  const lines = [...form.querySelectorAll('[data-line]')];
+  const search = form.querySelector('.line-search');
+  const only = form.querySelector('.line-only-box');
+  const count = form.querySelector('.line-count');
+  const amount = (li) => Number(li.querySelector('.qty-input').value) || 0;
+  const filter = () => {
+    if (!search) return;
+    const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    let hiddenOrdering = 0;
+    for (const li of lines) {
+      const hit = words.every((w) => li.dataset.search.includes(w)) && (words.length > 0 || !only.checked || amount(li) > 0);
+      li.hidden = !hit;
+      if (hit) shown++;
+      else if (amount(li) > 0) hiddenOrdering++;
+    }
+    form.querySelectorAll('.prep-group').forEach((g) => { g.hidden = ![...g.querySelectorAll('[data-line]')].some((li) => !li.hidden); });
+    count.textContent = words.length || only.checked ? `${shown} of ${lines.length}${hiddenOrdering ? ` · ${hiddenOrdering} more in the order, hidden by the search` : ''}` : '';
+  };
+  form.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
+    const box = b.parentElement.querySelector('.qty-input');
+    const next = Math.max(0, (Number(box.value) || 0) + Number(b.dataset.step));
+    box.value = next ? String(Math.round(next * 100) / 100) : '';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+  }));
+  form.addEventListener('input', (e) => {
+    if (e.target.matches('.po-qty')) { e.target.closest('[data-line]').classList.toggle('is-ordering', amount(e.target.closest('[data-line]')) > 0); if (search?.value) filter(); }
+  });
+  search?.addEventListener('input', filter);
+  search?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+  only?.addEventListener('change', filter);
+  filter();
   el.querySelector('#po-site')?.addEventListener('change', (e) => go({ site: e.target.value }));
   el.querySelector('#po-day').addEventListener('change', (e) => e.target.value && go({ date: e.target.value }));
   el.querySelectorAll('[data-edit-site]').forEach((b) => b.addEventListener('click', () => go({ site: b.dataset.editSite, date: b.dataset.editDay })));

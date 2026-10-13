@@ -3021,3 +3021,15 @@ html, body { overflow-x: clip; }
   .pd-list, .pd-item, .pd-card, .pd-head, .pd-datebar, .pd-stats { min-width: 0; max-width: 100%; }
   .pd-name, .pd-line { overflow-wrap: anywhere; }
 }
+
+/* Prep kitchen ordering: compact rows with − / + */
+.prep-lines { list-style: none; margin: 0 0 0.6rem; padding: 0; }
+.prep-lines li { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.1rem; border-bottom: 1px solid var(--border); }
+.prep-lines li[hidden], .prep-group[hidden] { display: none; }
+.prep-lines li.is-ordering { background: color-mix(in srgb, var(--brand) 7%, transparent); }
+.prep-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.prep-name small { color: var(--muted); font-size: 0.78rem; }
+.po-row .prep-summary { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.po-row.is-past { opacity: 0.65; }
+.po-list-card h2 { margin: 0.5rem 0 0.2rem; }
+li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
