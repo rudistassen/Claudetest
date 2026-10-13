@@ -61,3 +61,19 @@ test('sites order prepped recipes for a day; the prep list adds them up in batch
   const s = await login('staff1@cafe.local');
   assert.equal((await s('/prep-orders')).status, 403);
 });
+
+test('the prep list shows every day with orders at once', async () => {
+  const a = await login('admin@cafe.local');
+  const site = db.prepare('SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1').get().id;
+  const egg = db.prepare(`SELECT id FROM recipes WHERE name = 'Egg mayo filling'`).get().id;
+  const from = new Date(Date.now() + 40 * 86400000).toISOString().slice(0, 10);
+  const plus = (n) => new Date(Date.parse(`${from}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  for (const [n, q] of [[0, 300], [2, 500], [9, 700]]) {
+    assert.equal((await a('/prep-orders', { method: 'POST', body: { location_id: site, needed_on: plus(n), lines: [{ recipe_id: egg, quantity: q }] } })).status, 201);
+  }
+  const r = (await a(`/prep-orders/lists?from=${from}&days=8`)).data;
+  assert.equal(r.to, plus(7));
+  assert.deepEqual(r.days.map((d) => d.date), [plus(0), plus(2)], 'only days with orders, within the 8 days');
+  assert.equal(r.days[1].items[0].total, 500);
+  assert.equal((await a(`/prep-orders/lists?from=${plus(7)}&days=8`)).data.days.map((d) => d.date).join(), plus(9));
+});

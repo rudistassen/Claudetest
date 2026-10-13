@@ -21,39 +21,38 @@ export async function render(ctx) {
   const wireTabs = () => el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => navigate(`prep-orders${qs({ tab: b.dataset.tab === 'list' ? 'list' : undefined, site })}`)));
 
   if (tab === 'list') {
-    const data = await api(`/prep-orders/list${qs({ date: day })}`);
+    // Every day with orders, one after another: today and the next 7 days (or the week picked).
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(query.date ?? '') ? query.date : todayISO();
+    const data = await api(`/prep-orders/lists${qs({ from, days: 8 })}`);
     if (stale()) return;
+    const dayCard = (d) => `<section class="card prep-day">
+        <div class="prep-day-head"><h2>${fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'long' })}${d.date === todayISO() ? ' <span class="badge badge-sent">Today</span>' : ''}</h2>
+          <span class="muted small">${d.orders.length} order${d.orders.length === 1 ? '' : 's'} · ${d.orders.filter((o) => o.status === 'sent').length} sent</span></div>
+        <ul class="prep-make">${d.items.map((i) => `<li><span class="prep-name"><strong>${esc(i.name)}</strong>
+            <small>${i.sites.map((x) => `${esc(x.location_name)} ${qty(x.quantity)}`).join(' · ')}</small></span>
+            <span class="prep-total"><strong>${qty(i.total)} ${esc(i.unit)}</strong>${i.batches_to_make ? `<small>${i.batches_to_make} batch${i.batches_to_make === 1 ? '' : 'es'}</small>` : ''}</span></li>`).join('')}</ul>
+        <details class="prep-orders-day"><summary class="small">The orders (${d.orders.length})</summary>
+          <ul class="po-list">${d.orders.map((o) => `<li class="po-row">
+            <span class="po-main"><strong class="po-supplier">${esc(o.location_name)}</strong><small class="prep-summary">${summary(o)}</small>${o.notes ? `<small>“${esc(o.notes)}”</small>` : ''}</span>
+            <span class="po-side">${badge(o.status)}<button class="btn btn-small ${o.status === 'sent' ? 'btn-ghost' : 'btn-primary'}" data-sent="${o.id}" data-to="${o.status === 'sent' ? '' : '1'}">${o.status === 'sent' ? 'Undo sent' : '✓ Mark sent'}</button></span></li>`).join('')}</ul>
+        </details>
+      </section>`;
     el.innerHTML = `${head}
-      <p class="muted">Everything the sites have ordered from the prep kitchen for a day, added up for each prepped recipe.</p>
+      <p class="muted">Everything the sites have ordered from the prep kitchen, day by day, added up for each prepped recipe.</p>
       <div class="filters">
-        <button class="btn" data-day="-1" aria-label="Previous day">‹</button>
-        <input type="date" id="pl-day" value="${day}" aria-label="Day">
-        <button class="btn" data-day="1" aria-label="Next day">›</button>
+        <button class="btn" data-week="-7" aria-label="The week before">‹ Earlier</button>
+        <span class="small"><strong>${fmtDate(data.from, { day: 'numeric', month: 'short' })} – ${fmtDate(data.to, { day: 'numeric', month: 'short' })}</strong></span>
+        <button class="btn" data-week="7" aria-label="The week after">Later ›</button>
+        ${from !== todayISO() ? '<button class="btn btn-ghost" data-week="0">From today</button>' : ''}
         <button class="btn" id="pl-print">Print</button>
       </div>
-      <section class="card">
-        <h2>Prep list · ${fmtDate(day, { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
-        ${data.items.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Prepped recipe</th><th class="num">Total ordered</th><th>By site</th></tr></thead>
-          <tbody>${data.items.map((i) => `<tr>
-            <td><strong>${esc(i.name)}</strong></td>
-            <td class="num"><strong>${qty(i.total)} ${esc(i.unit)}</strong></td>
-            <td class="small">${i.sites.map((x) => `${esc(x.location_name)} ${qty(x.quantity)}`).join(' · ')}</td></tr>`).join('')}</tbody>
-        </table></div>` : '<p class="muted">Nothing ordered for this day yet.</p>'}
-      </section>
-      ${data.orders.length ? `<section class="card">
-        <h2>Orders for this day</h2>
-        <div class="table-wrap"><table>
-          <thead><tr><th>Site</th><th>Items</th><th>Status</th><th></th></tr></thead>
-          <tbody>${data.orders.map((o) => `<tr>
-            <td><strong>${esc(o.location_name)}</strong>${o.notes ? `<small class="muted">${esc(o.notes)}</small>` : ''}</td>
-            <td class="small">${summary(o)}</td><td>${badge(o.status)}</td>
-            <td class="num"><button class="btn btn-small ${o.status === 'sent' ? 'btn-ghost' : 'btn-primary'}" data-sent="${o.id}" data-to="${o.status === 'sent' ? '' : '1'}">${o.status === 'sent' ? 'Undo sent' : '✓ Mark sent'}</button></td></tr>`).join('')}</tbody>
-        </table></div></section>` : ''}`;
+      ${data.days.length ? data.days.map(dayCard).join('') : `<div class="card empty">Nothing ordered for ${fmtDate(data.from, { day: 'numeric', month: 'short' })} – ${fmtDate(data.to, { day: 'numeric', month: 'short' })} yet.</div>`}`;
     wireTabs();
-    el.querySelector('#pl-day').addEventListener('change', (e) => e.target.value && go({ date: e.target.value }));
-    el.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => go({ date: addDays(day, Number(b.dataset.day)) })));
-    el.querySelector('#pl-print').addEventListener('click', () => window.print());
+    el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
+      const n = Number(b.dataset.week);
+      navigate(`prep-orders${qs({ tab: 'list', site, date: n ? addDays(from, n) : undefined })}`);
+    }));
+    el.querySelector('#pl-print').addEventListener('click', () => { el.querySelectorAll('details.prep-orders-day').forEach((d) => { d.open = true; }); window.print(); });
     el.querySelectorAll('[data-sent]').forEach((b) => b.addEventListener('click', async () => {
       b.disabled = true;
       try { await api(`/prep-orders/${b.dataset.sent}/sent`, { method: 'POST', body: { sent: !!b.dataset.to } }); toast(b.dataset.to ? 'Marked as sent' : 'Back to ordered'); rerender(); } catch (err) { showError(err); b.disabled = false; }

@@ -3033,3 +3033,14 @@ html, body { overflow-x: clip; }
 .po-row.is-past { opacity: 0.65; }
 .po-list-card h2 { margin: 0.5rem 0 0.2rem; }
 li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
+/* Prep list: one card per day */
+.prep-day { margin-bottom: 1rem; }
+.prep-day-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.prep-day-head h2 { margin: 0; }
+.prep-make { list-style: none; margin: 0.6rem 0 0.4rem; padding: 0; }
+.prep-make li { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.1rem; border-bottom: 1px solid var(--border); }
+.prep-total { flex: none; text-align: right; display: flex; flex-direction: column; }
+.prep-total small { color: var(--muted); font-size: 0.75rem; }
+.prep-orders-day summary { cursor: pointer; padding: 0.3rem 0; color: var(--muted); }
+.prep-orders-day .po-side { gap: 0.3rem; }
+@media print { .prep-day { break-inside: avoid; } }

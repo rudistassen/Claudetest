@@ -3,7 +3,7 @@
 import { assertLocation, requirePerm } from '../auth.js';
 import { tx } from '../db.js';
 import { loadRecipes } from '../recipes.js';
-import { badRequest, date, id, notFound, num, round2, str, today } from '../util.js';
+import { addDays, badRequest, date, id, notFound, num, round2, str, today } from '../util.js';
 
 export function registerPrepOrderRoutes(router, db) {
   const perm = requirePerm('orders.manage');
@@ -40,8 +40,21 @@ export function registerPrepOrderRoutes(router, db) {
   });
 
   // The prep list for a day: everything ordered for it, by recipe, with each site's amount and the batches to make.
-  router.get('/prep-orders/list', perm, (req, res) => {
-    const day = date(req.query.date, 'date') ?? today();
+  router.get('/prep-orders/list', perm, (req, res) => res.json(prepList(req, date(req.query.date, 'date') ?? today())));
+
+  // The prep lists for several days at once ({ from, days: up to 31 }): only days with orders.
+  router.get('/prep-orders/lists', perm, (req, res) => {
+    const from = date(req.query.from, 'from') ?? today();
+    const n = Math.min(31, Math.max(1, Number(req.query.days) || 8));
+    const days = [];
+    for (let i = 0; i < n; i++) {
+      const list = prepList(req, addDays(from, i));
+      if (list.orders.length) days.push(list);
+    }
+    res.json({ from, to: addDays(from, n - 1), days });
+  });
+
+  function prepList(req, day) {
     const sites = visible(req);
     const orders = sites.length ? withLines(db.prepare(`${ORDER_SELECT} WHERE o.needed_on = ? AND o.location_id IN (${sites.map(() => '?').join(', ')}) ORDER BY l.name`)
       .all(day, ...sites)) : [];
@@ -62,8 +75,8 @@ export function registerPrepOrderRoutes(router, db) {
       batches: t.yield_quantity ? round2(t.total / t.yield_quantity) : null,
       batches_to_make: t.yield_quantity ? Math.ceil(t.total / t.yield_quantity - 1e-9) : null,
     })).sort((a, b) => a.name.localeCompare(b.name));
-    res.json({ date: day, orders, items });
-  });
+    return { date: day, orders, items };
+  }
 
   function body(req, existing = null) {
     const b = req.body ?? {};
