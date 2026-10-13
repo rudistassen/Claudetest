@@ -54,11 +54,16 @@ export async function renderReceive(ctx) {
 }
 
 function linesTable(rows, { showSuggest }) {
-  return `<div class="table-wrap"><table class="order-lines">
+  return `<div class="line-filter">
+      <input type="search" class="line-search" placeholder="Search products – name, code or category" aria-label="Search products" autocomplete="off">
+      <label class="line-only"><input type="checkbox" class="line-only-box"> Only what I’m ordering</label>
+      <span class="muted small line-count"></span>
+    </div>
+    <div class="table-wrap"><table class="order-lines">
     <thead><tr><th>Product</th><th>Unit</th>${showSuggest ? '<th class="num">Par</th><th class="num">On hand</th><th class="num">Suggested</th>' : ''}
       <th class="num">Unit cost</th><th class="num">Order qty</th><th class="num">Line total</th></tr></thead>
     <tbody>${rows.map((r) => `
-      <tr data-product="${r.product_id}" data-cost="${r.unit_cost}">
+      <tr data-product="${r.product_id}" data-cost="${r.unit_cost}" data-search="${esc(`${r.name} ${r.sku ?? ''} ${r.category ?? ''}`.toLowerCase())}">
         <td>${esc(r.name)}</td><td>${esc(packUnit(r.unit, r.pack_quantity))}</td>
         ${showSuggest ? `<td class="num">${qty(r.par_level)}</td><td class="num">${qty(r.on_hand)}</td><td class="num">${qty(r.suggested)}</td>` : ''}
         <td class="num">${money(r.unit_cost)}</td>
@@ -84,6 +89,25 @@ function bindLines(root, minOrder) {
   };
   root.querySelectorAll('.qty-input').forEach((i) => i.addEventListener('input', update));
   update();
+  // Searching only hides rows: quantities already typed stay in the order.
+  const search = root.querySelector('.line-search');
+  const only = root.querySelector('.line-only-box');
+  const count = root.querySelector('.line-count');
+  const filter = () => {
+    const words = (search?.value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    const rows = [...root.querySelectorAll('tr[data-product]')];
+    for (const tr of rows) {
+      const ordering = (Number(tr.querySelector('.qty-input').value) || 0) > 0;
+      const hit = words.every((w) => tr.dataset.search.includes(w)) && (!only?.checked || ordering);
+      tr.hidden = !hit;
+      if (hit) shown++;
+    }
+    if (count) count.textContent = words.length || only?.checked ? `${shown} of ${rows.length} products` : '';
+  };
+  search?.addEventListener('input', filter);
+  search?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+  only?.addEventListener('change', filter);
   return () => [...root.querySelectorAll('tr[data-product]')]
     .map((tr) => ({ product_id: Number(tr.dataset.product), quantity: Number(tr.querySelector('.qty-input').value) || 0 }))
     .filter((l) => l.quantity > 0);

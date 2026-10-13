@@ -2953,3 +2953,8 @@ img.lesson-media { background: transparent; }
 .em-on { display: flex; align-items: center; gap: 0.45rem; margin: 0.6rem 0 0.2rem; flex-wrap: wrap; }
 .em-on input { width: 1.1rem; height: 1.1rem; }
 .em-kind.is-off .em-fields, .em-kind.is-off .em-uses { opacity: 0.55; }
+
+/* Orders: searching the products */
+.line-filter { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin: 0.4rem 0 0.7rem; }
+.line-filter .line-search { flex: 1 1 260px; max-width: 420px; }
+.line-only { display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
