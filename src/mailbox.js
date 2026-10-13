@@ -115,7 +115,7 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
       const filter = `receivedDateTime ge ${new Date(since).toISOString().replace(/\.\d+Z$/, 'Z')}${withAttachmentsOnly ? ' and hasAttachments eq true' : ''}`;
       let url = `${user}/mailFolders/inbox/messages?${new URLSearchParams({
         $filter: filter, $orderby: 'receivedDateTime asc', $top: '50',
-        $select: 'id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,hasAttachments,conversationId',
+        $select: 'id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,hasAttachments,conversationId,webLink',
       })}`;
       const out = [];
       for (let page = 0; url && page < 5; page++) {
@@ -131,6 +131,7 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
             preview: m.bodyPreview ?? '',
             hasAttachments: m.hasAttachments !== false,
             conversationId: m.conversationId ?? null,
+            webLink: m.webLink ?? null,
           });
         }
         url = body['@odata.nextLink'] ?? null;
@@ -180,6 +181,18 @@ export function graphMailbox({ tenant, clientId, secret, address }, { fetchFn = 
     async reply(messageId, text) {
       await call(`${user}/messages/${encodeURIComponent(messageId)}/reply`, { method: 'POST', body: { comment: text }, writing: 'send' });
     },
+    // A new email in its own thread (saved as a draft, then sent, so Atlas knows the thread to match replies to).
+    // Needs Mail.ReadWrite and Mail.Send. Returns { conversationId }.
+    async sendNew({ to, cc = [], subject, html, text }) {
+      const draft = await call(`${user}/messages`, { method: 'POST', writing: true, body: {
+        subject,
+        body: html ? { contentType: 'HTML', content: html } : { contentType: 'Text', content: text ?? '' },
+        toRecipients: to.map((address) => ({ emailAddress: { address } })),
+        ccRecipients: cc.map((address) => ({ emailAddress: { address } })),
+      } });
+      await call(`${user}/messages/${encodeURIComponent(draft.id)}/send`, { method: 'POST', writing: 'send' });
+      return { conversationId: draft.conversationId ?? null };
+    },
     async send({ to, subject, text }) {
       await call(`${user}/sendMail`, { method: 'POST', writing: 'send', body: {
         message: { subject, body: { contentType: 'Text', content: text }, toRecipients: [{ emailAddress: { address: to } }] },
@@ -214,7 +227,22 @@ export function memoryMailbox(messages = [], address = 'invoices@example.com') {
     sent: [],
     async reply(id, text) { this.sent.push({ reply_to: id, text }); },
     async send(email) { this.sent.push(email); },
+    async sendNew(email) {
+      const conversationId = `conv-${this.sent.length + 1}-${Date.now()}`;
+      this.sent.push({ ...email, conversationId });
+      return { conversationId };
+    },
   };
+}
+
+/** The orders mailbox (e.g. orders@…): supplier orders are emailed from it and replies to them read from it. */
+export function ordersMailboxConfig(env = process.env) {
+  const tenant = cleanEnv(env.MS_TENANT_ID);
+  const clientId = cleanEnv(env.MS_CLIENT_ID);
+  const secret = cleanEnv(env.MS_CLIENT_SECRET);
+  const address = cleanEnv(env.ORDERS_MAILBOX);
+  if (!tenant || !clientId || !secret || !address) return null;
+  return { tenant, clientId, secret, address, minutes: Math.max(2, Number(cleanEnv(env.ORDERS_INBOX_MINUTES)) || 5) };
 }
 
 /** The Microsoft app's sign-in details, for sending email through Microsoft 365 (null unless all three are set). */

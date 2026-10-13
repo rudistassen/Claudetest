@@ -852,6 +852,24 @@ CREATE TABLE IF NOT EXISTS supplier_site_refs (
 );
 CREATE INDEX IF NOT EXISTS idx_supplier_site_refs ON supplier_site_refs(supplier_id);
 
+-- Supplier orders emailed from the orders mailbox (ORDERS_MAILBOX), and the replies to them: each email in or out.
+CREATE TABLE IF NOT EXISTS order_messages (
+  id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+  from_address TEXT,
+  from_name TEXT,
+  to_address TEXT,
+  subject TEXT,
+  body TEXT,
+  email_message_id TEXT UNIQUE,
+  web_link TEXT,
+  has_attachments INTEGER NOT NULL DEFAULT 0,
+  sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_order_messages ON order_messages(order_id, created_at);
+
 -- Product categories (Stock & Ordering → Product categories): every product is in one (products.category holds its
 -- name), and each can have the Xero account code its lines go to on a bill.
 CREATE TABLE IF NOT EXISTS product_categories (
@@ -1112,6 +1130,11 @@ CREATE TABLE IF NOT EXISTS user_areas (
 
 // Columns added after the first release; ALTER TABLE for databases created before them.
 const MIGRATIONS = [
+  // Orders emailed from the orders mailbox: the email thread, and whether there's a reply nobody has looked at.
+  ['purchase_orders', 'email_conversation_id', 'ALTER TABLE purchase_orders ADD COLUMN email_conversation_id TEXT'],
+  ['purchase_orders', 'emailed_to', 'ALTER TABLE purchase_orders ADD COLUMN emailed_to TEXT'],
+  ['purchase_orders', 'reply_unread', 'ALTER TABLE purchase_orders ADD COLUMN reply_unread INTEGER NOT NULL DEFAULT 0'],
+  ['purchase_orders', 'last_reply_at', 'ALTER TABLE purchase_orders ADD COLUMN last_reply_at TEXT'],
   // An admin looking at Atlas as someone else would see it (read-only), on this sign-in only.
   ['sessions', 'view_as_user_id', 'ALTER TABLE sessions ADD COLUMN view_as_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL'],
   // Training courses built in Atlas: shown to staff once published, maybe open to everyone, a quiz pass mark, and

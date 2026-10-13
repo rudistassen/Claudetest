@@ -7,8 +7,9 @@ import { xeroConfig } from './xero.js';
 import { appVersion } from './app-version.js';
 import { brevoMailer, emailConfig, withSenders } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
-import { careersMailboxConfig, eventsMailboxConfig, graphMailbox, graphMailer, mailboxConfig, mailboxSetup, microsoftMailConfig } from './mailbox.js';
+import { careersMailboxConfig, eventsMailboxConfig, graphMailbox, graphMailer, mailboxConfig, mailboxSetup, microsoftMailConfig, ordersMailboxConfig } from './mailbox.js';
 import { startEventsInbox } from './events.js';
+import { startOrdersInbox } from './order-inbox.js';
 import { enquiryReaderFromEnv } from './enquiry-reader.js';
 import { startCareersInbox } from './careers-inbox.js';
 import { startInvoiceInbox } from './invoice-inbox.js';
@@ -119,6 +120,14 @@ if (events) {
   startEventsInbox(db, { mailbox: events, reader: enquiryReader, minutes: eventsSettings.minutes });
 }
 
+// The orders mailbox (Microsoft 365, the same app): supplier orders are emailed from it and replies matched to them.
+const ordersSettings = ordersMailboxConfig();
+const orders = ordersSettings ? graphMailbox(ordersSettings, { withAttachmentsOnly: false, label: 'orders mailbox', variable: 'ORDERS_MAILBOX' }) : null;
+if (orders) {
+  console.log(`Orders mailbox connected (${ordersSettings.address}); checking for supplier replies every ${ordersSettings.minutes} minutes.`);
+  startOrdersInbox(db, { mailbox: orders, minutes: ordersSettings.minutes });
+}
+
 // Google reviews for each site.
 const placesSettings = placesConfig();
 const places = placesSettings ? googlePlaces(placesSettings.key) : null;
@@ -139,4 +148,4 @@ try {
 const version = appVersion(publicDir);
 const xeroSettings = xeroConfig();
 if (xeroSettings) console.log('Xero: set up – connect it under Setup → Xero.');
-createApp(db, { square, mailer, invoiceReader, rotaReader, rotaAnalyst, mailbox, careers, events, enquiryReader, places, version, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Atlas running at http://localhost:${port}`));
+createApp(db, { square, mailer, invoiceReader, rotaReader, rotaAnalyst, mailbox, careers, events, enquiryReader, places, version, orders, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Atlas running at http://localhost:${port}`));

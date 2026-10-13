@@ -19,6 +19,7 @@ export const PUSH_KINDS = [
   { key: 'late', label: 'Someone is late or hasn’t clocked in for their shift', group: 'For managers', perms: ['rota.edit', 'staff.manage'] },
   { key: 'enquiry', label: 'A new events enquiry comes in', group: 'For managers', perms: ['events.manage'] },
   { key: 'application', label: 'A new job application comes in', group: 'For managers', perms: ['people.recruitment'] },
+  { key: 'order_reply', label: 'A supplier replies to an order', group: 'For managers', perms: ['orders.manage'] },
   { key: 'training_signoff', label: 'Someone passes a course that needs your sign-off', group: 'For managers', perms: ['people.training'] },
 ];
 const KIND_KEYS = new Set(PUSH_KINDS.map((k) => k.key));

@@ -29,6 +29,7 @@ export function registerEmailSettingsRoutes(router, db, mailer, inboxes = {}) {
         uses: senderFor(db, mailer, key),
       })),
       inboxes: [
+        ['orders', 'Supplier orders', 'Orders are emailed to suppliers from it, and their replies are added to the order.', 'ORDERS_MAILBOX'],
         ['events', 'Events enquiries', 'Read for enquiries, and replies to customers are sent from it.', 'EVENTS_MAILBOX'],
         ['careers', 'Careers (job applications)', 'Read for applications; replies are drafted in it.', 'CAREERS_MAILBOX'],
         ['invoices', 'Supplier invoices', 'Read for invoices to import.', 'INVOICE_MAILBOX'],

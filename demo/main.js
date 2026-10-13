@@ -6,6 +6,7 @@ import { loadUser, registerAuthRoutes, requireAuth, blockWhileViewingAs } from '
 import { openDb, publishAllShifts } from '../src/db.js';
 import { registerAdminRoutes } from '../src/routes/admin.js';
 import { registerOrderingRoutes } from '../src/routes/ordering.js';
+import { checkOrderReplies, registerOrderEmailRoutes } from '../src/order-inbox.js';
 import { registerRecipeRoutes } from '../src/routes/recipes.js';
 import { registerRotaRoutes } from '../src/routes/rota.js';
 import { registerSafetyRoutes } from '../src/routes/safety.js';
@@ -137,6 +138,21 @@ async function boot() {
   registerAdminRoutes(api, db, square);
   registerRotaRoutes(api, db, { rotaReader: demoRotaReader(), rotaAnalyst: demoRotaAnalyst() });
   registerOrderingRoutes(api, db);
+  // The orders mailbox: a pretend supplier answers each emailed order a few seconds later.
+  const ordersBox = memoryMailbox([], 'orders@brewandbarrel.co.uk');
+  const sendOrder = ordersBox.sendNew.bind(ordersBox);
+  ordersBox.sendNew = async (email) => {
+    const out = await sendOrder(email);
+    const n = ordersBox.messages.length + 1;
+    ordersBox.messages.push({
+      id: `demo-reply-${n}`, subject: `RE: ${email.subject}`, from: email.to[0], fromName: 'Orders desk', to: [ordersBox.address],
+      receivedAt: new Date(Date.now() + 3000).toISOString(), conversationId: out.conversationId, hasAttachments: false, webLink: null,
+      body: 'Hi,\n\nThanks for your order – all confirmed for delivery as requested. The 1L oat milk is out of stock this week, so we’ll send the Barista Edition instead at the same price unless you tell us otherwise.\n\nKind regards,\nOrders desk',
+    });
+    return out;
+  };
+  registerOrderEmailRoutes(api, db, ordersBox);
+  setInterval(() => { checkOrderReplies(db, { mailbox: ordersBox }); }, 8000);
   registerStockRoutes(api, db);
   registerPushRoutes(api, db);
   registerPrepOrderRoutes(api, db);

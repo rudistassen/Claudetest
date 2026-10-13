@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { loadUser, registerAuthRoutes, requireAuth, blockWhileViewingAs } from './auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerOrderingRoutes } from './routes/ordering.js';
+import { registerOrderEmailRoutes } from './order-inbox.js';
 import { registerRecipeRoutes } from './routes/recipes.js';
 import { registerRotaRoutes } from './routes/rota.js';
 import { registerSalesRoutes } from './routes/sales.js';
@@ -55,7 +56,7 @@ export function trustProxy(env) {
 // places: Google Maps, for each site's rating and reviews (see google-reviews.js), or null when it isn't set up.
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
 // xero: { config, fetch? } when Xero is set up (see xero.js), otherwise null.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, events = null, enquiryReader = null, rotaReader = null, rotaAnalyst = null, places = null, version = null, weather = londonWeather(), xero = null } = {}) {
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, events = null, enquiryReader = null, rotaReader = null, rotaAnalyst = null, places = null, version = null, weather = londonWeather(), xero = null, orders = null } = {}) {
   // Each kind of email comes from the address set up for it in Setup → Email.
   mailer = withSenders(db, mailer);
   const xeroClient = xero ? new Xero(db, xero.config, xero.fetch) : null;
@@ -109,6 +110,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerAdminRoutes(api, db, square);
   registerRotaRoutes(api, db, { rotaReader, rotaAnalyst });
   registerOrderingRoutes(api, db);
+  registerOrderEmailRoutes(api, db, orders);
   registerStockRoutes(api, db);
   registerPushRoutes(api, db);
   registerPrepOrderRoutes(api, db);
@@ -120,7 +122,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerOpenOrderRoutes(api, db, square);
   registerLeaveRoutes(api, db);
   registerReportRoutes(api, db, mailer);
-  registerEmailSettingsRoutes(api, db, mailer, { events, careers, invoices: mailbox });
+  registerEmailSettingsRoutes(api, db, mailer, { orders, events, careers, invoices: mailbox });
   registerInvoiceRoutes(api, db, invoiceReader, { xero: xeroClient });
   registerXeroRoutes(api, db, xeroClient);
   registerPeopleRoutes(api, db, { careers });

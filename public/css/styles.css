@@ -2934,3 +2934,18 @@ img.lesson-media { background: transparent; }
 .em-help ol { padding-left: 1.2rem; }
 .em-help li { margin-bottom: 0.35rem; }
 .em-code { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.78rem; }
+
+/* Supplier orders: emails with the supplier */
+.po-mail-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.po-mail-head h2 { margin: 0 0 0.2rem; }
+.po-thread { list-style: none; margin: 0.8rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.po-msg { border: 1px solid var(--border); border-radius: 12px; padding: 0.65rem 0.8rem; max-width: 46rem; }
+.po-msg.po-in { background: var(--surface); border-left: 4px solid var(--brand); }
+.po-msg.po-out { background: var(--surface-2); margin-left: auto; }
+.po-msg-head { display: flex; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+.po-body { margin-top: 0.35rem; white-space: normal; overflow-wrap: anywhere; max-height: 22rem; overflow: auto; }
+.po-reply { margin-top: 0.8rem; }
+.po-envelope { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.8rem; margin: 0 0 0.8rem; }
+.po-envelope dt { font-weight: 600; color: var(--muted); }
+.po-envelope dd { margin: 0; }
+.po-preview { white-space: pre-wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; font: inherit; font-size: 0.85rem; max-height: 18rem; overflow: auto; }

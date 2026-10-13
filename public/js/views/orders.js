@@ -19,7 +19,7 @@ export async function renderList(ctx) {
       ${orders.length ? `<div class="table-wrap"><table>
         <thead><tr><th>#</th><th>Supplier</th><th>Status</th><th>Items</th><th class="num">Total</th><th>Delivery</th><th>Created</th></tr></thead>
         <tbody>${orders.map((o) => `<tr class="clickable" data-id="${o.id}">
-          <td><a href="#/orders/${o.id}">PO-${o.id}</a></td><td>${esc(o.supplier_name)}</td><td>${statusBadge(o.status)}</td>
+          <td><a href="#/orders/${o.id}">PO-${o.id}</a></td><td>${esc(o.supplier_name)}</td><td>${statusBadge(o.status)}${o.reply_unread ? ' <span class="badge badge-sent" title="The supplier has replied">💬 New reply</span>' : o.emailed_to ? ' <span class="muted small" title="Emailed from the orders mailbox">✉</span>' : ''}</td>
           <td>${o.line_count}</td><td class="num">${money(o.total)}</td><td>${fmtDate(o.delivery_date)}</td>
           <td>${fmtDateTime(o.created_at)} · ${esc(o.created_by_name ?? '')}</td></tr>`).join('')}</tbody>
       </table></div>` : '<div class="empty">No orders yet.</div>'}
@@ -129,10 +129,78 @@ Order reference: PO-${o.id}
 Thank you`;
 }
 
+// ---- Emailing orders from the orders mailbox, and the supplier's replies ----
+
+function conversation(o, mail) {
+  if (!mail) return '';
+  const msgs = mail.messages ?? [];
+  if (!mail.connected && !msgs.length) return '';
+  const lastIn = [...msgs].reverse().find((m) => m.direction === 'in');
+  return `<section class="card po-mail" id="po-mail">
+    <div class="po-mail-head"><div><h2>Emails with ${esc(o.supplier_name)}</h2>
+      <p class="muted small">${mail.connected ? `From ${esc(mail.address)} – the supplier’s replies appear here (checked every few minutes)${mail.last_check ? `, last checked ${fmtDateTime(mail.last_check)}` : ''}.` : 'The orders mailbox isn’t connected at the moment.'}</p>
+      ${mail.last_error ? `<p class="notice small">Couldn’t check for replies: ${esc(mail.last_error)}</p>` : ''}</div>
+      ${mail.connected && msgs.length ? '<button class="btn btn-small" id="po-check">Check for replies</button>' : ''}</div>
+    ${msgs.length ? `<ol class="po-thread">${msgs.map((m) => `<li class="po-msg po-${m.direction}">
+      <div class="po-msg-head"><strong>${m.direction === 'in' ? esc(m.from_name || m.from_address || 'Supplier') : `${esc(m.sent_by_name ?? 'Atlas')} → ${esc(m.to_address ?? '')}`}</strong>
+        <span class="muted small">${fmtDateTime(m.created_at)}</span></div>
+      ${m.subject ? `<div class="small muted">${esc(m.subject)}</div>` : ''}
+      <div class="po-body">${esc(m.body ?? '').replace(/\n/g, '<br>')}</div>
+      ${m.has_attachments || m.web_link ? `<div class="small">${m.has_attachments ? '📎 Has attachments · ' : ''}${m.web_link ? `<a href="${esc(m.web_link)}" target="_blank" rel="noopener">Open in Outlook</a>` : ''}</div>` : ''}
+    </li>`).join('')}</ol>` : `<p class="muted">Not emailed yet. Use <strong>✉ Email to supplier</strong> to send it from ${esc(mail.address)}.</p>`}
+    ${mail.connected && lastIn ? `<form id="po-reply" class="po-reply">
+      <label class="field"><span>Reply to ${esc(lastIn.from_name || lastIn.from_address)}</span><textarea name="text" rows="3" required maxlength="5000" placeholder="e.g. Thanks – the substitute is fine."></textarea></label>
+      <div class="actions"><button class="btn btn-primary" type="submit">Send reply</button></div></form>` : ''}
+  </section>`;
+}
+
+function wireEmail(el, o, mail, ctx) {
+  el.querySelector('#email')?.addEventListener('click', () => {
+    const p = mail.preview;
+    openModal({
+      title: `Email PO-${o.id} to ${o.supplier_name}`,
+      wide: true,
+      body: `${mail.to.length ? '' : '<p class="notice small">There’s no order email address for this supplier yet – add one in Stock &amp; Ordering → Suppliers.</p>'}
+        <dl class="po-envelope"><dt>From</dt><dd>${esc(mail.address)}</dd><dt>To</dt><dd>${esc(mail.to.join(', ') || '–')}</dd>
+          ${mail.cc.length ? `<dt>Cc</dt><dd>${esc(mail.cc.join(', '))}</dd>` : ''}<dt>Subject</dt><dd>${esc(p.subject)}</dd></dl>
+        ${field('Add a message (optional)', textarea('message', '', 'rows="2" maxlength="2000" placeholder="e.g. Please could you deliver before 10am?"'))}
+        <details><summary class="small">See the email</summary><pre class="po-preview">${esc(p.text)}</pre></details>
+        ${o.status === 'sent' ? '<p class="muted small">This sends the order again as a new email.</p>' : '<p class="muted small">Save any changes to the order first. Sending marks it as sent.</p>'}`,
+      submitLabel: 'Send email',
+      onSubmit: async (v) => {
+        const r = await api(`/orders/${o.id}/email`, { method: 'POST', body: { message: v.message } });
+        toast(`Order emailed to ${r.to.join(', ')}`);
+        ctx.rerender();
+      },
+    });
+  });
+  el.querySelector('#po-check')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      const r = await api('/orders-inbox/check', { method: 'POST' });
+      toast(r.error ? `Couldn’t check: ${r.error}` : r.added ? `${r.added} new repl${r.added === 1 ? 'y' : 'ies'}` : 'No new replies', r.error ? 'error' : 'ok');
+      ctx.rerender();
+    } catch (err) { showError(err); e.target.disabled = false; }
+  });
+  const reply = el.querySelector('#po-reply');
+  reply?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = reply.querySelector('[type=submit]');
+    btn.disabled = true;
+    try {
+      await api(`/orders/${o.id}/reply`, { method: 'POST', body: { text: reply.text.value } });
+      toast('Reply sent');
+      ctx.rerender();
+    } catch (err) { showError(err); btn.disabled = false; }
+  });
+}
+
 export async function renderOrder(ctx) {
   const { el, params, stale } = ctx;
-  const o = await api(`/orders/${params[0]}`);
+  const [o, mail] = await Promise.all([api(`/orders/${params[0]}`), api(`/orders/${params[0]}/emails`).catch(() => null)]);
   if (stale()) return;
+  // Emailing from the orders mailbox (Microsoft 365), when it's connected; otherwise the person's own email app.
+  const inbox = mail?.connected;
   const draft = o.status === 'draft';
   const receivedTotal = o.lines.reduce((s, l) => s + (l.received_quantity ?? 0) * l.unit_cost, 0);
 
@@ -141,8 +209,8 @@ export async function renderOrder(ctx) {
       <h1>PO-${o.id} · ${esc(o.supplier_name)}</h1>
       <div class="actions">
         <a class="btn" href="#/orders">‹ Orders</a>
-        ${draft ? '<button class="btn btn-primary" id="send">Send to supplier</button><button class="btn btn-ghost" id="delete">Delete</button>' : ''}
-        ${o.status === 'sent' ? '<button class="btn btn-primary" id="receive">Receive delivery</button><button class="btn" id="resend">Email again</button><button class="btn btn-ghost" id="cancel">Cancel order</button>' : ''}
+        ${draft ? `<button class="btn btn-primary" id="${inbox ? 'email' : 'send'}">${inbox ? '✉ Email to supplier' : 'Send to supplier'}</button>${inbox ? '<button class="btn" id="send">Mark as sent</button>' : ''}<button class="btn btn-ghost" id="delete">Delete</button>` : ''}
+        ${o.status === 'sent' ? `<button class="btn btn-primary" id="receive">Receive delivery</button><button class="btn" id="${inbox ? 'email' : 'resend'}">Email again</button><button class="btn btn-ghost" id="cancel">Cancel order</button>` : ''}
         <button class="btn" id="copy">Copy order text</button>
         <button class="btn" id="print">Print</button>
       </div>
@@ -174,7 +242,8 @@ export async function renderOrder(ctx) {
       </table></div>
       ${o.status === 'received' ? `<p><strong>Value received:</strong> ${money(receivedTotal)}${Math.abs(receivedTotal - o.total) > 0.005 ? ` <span class="alert-text">(${money(receivedTotal - o.total)} vs ordered)</span>` : ''}</p>` : ''}
       ${o.notes ? `<p><strong>Notes:</strong> ${esc(o.notes)}</p>` : ''}
-    </section>`}`;
+    </section>`}
+    ${conversation(o, mail)}`;
 
   const mailto = () => {
     if (isDemo) {
@@ -214,10 +283,11 @@ export async function renderOrder(ctx) {
       } catch (err) { showError(err); }
     });
     el.querySelector('#send').addEventListener('click', async () => {
-      if (!(await confirmDialog(`Mark PO-${o.id} as sent and open an email to ${o.supplier_name}? Save any changes first.`, { confirmLabel: 'Send', title: 'Send order' }))) return;
+      const ask = inbox ? `Mark PO-${o.id} as sent without emailing it (e.g. you ordered by phone or on the supplier’s website)?` : `Mark PO-${o.id} as sent and open an email to ${o.supplier_name}? Save any changes first.`;
+      if (!(await confirmDialog(ask, { confirmLabel: inbox ? 'Mark as sent' : 'Send', title: 'Send order' }))) return;
       try {
         await api(`/orders/${o.id}/send`, { method: 'POST' });
-        mailto();
+        if (!inbox) mailto();
         ctx.rerender();
       } catch (err) { showError(err); }
     });
@@ -231,6 +301,7 @@ export async function renderOrder(ctx) {
   }
 
   el.querySelector('#resend')?.addEventListener('click', mailto);
+  if (inbox) wireEmail(el, o, mail, ctx);
   el.querySelector('#cancel')?.addEventListener('click', async () => {
     if (!(await confirmDialog('Cancel this order?', { confirmLabel: 'Cancel order' }))) return;
     try {

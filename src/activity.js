@@ -139,6 +139,8 @@ const ACTIONS = [
   ['PUT', '/orders/:id', 'Ordering', 'Changed an order'],
   ['DELETE', '/orders/:id', 'Ordering', 'Deleted an order'],
   ['POST', '/orders/:id/send', 'Ordering', 'Sent an order'],
+  ['POST', '/orders/:id/email', 'Ordering', 'Emailed an order to the supplier'],
+  ['POST', '/orders/:id/reply', 'Ordering', 'Replied to a supplier about an order'],
   ['POST', '/orders/:id/receive', 'Ordering', 'Received an order'],
   ['POST', '/orders/:id/cancel', 'Ordering', 'Cancelled an order'],
   ['POST', '/prep-orders', 'Ordering', 'Started a prep kitchen order'],
