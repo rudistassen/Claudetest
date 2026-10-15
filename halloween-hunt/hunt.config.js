@@ -20,7 +20,7 @@
 
 export default {
   name: 'The Great Pumpkin Hunt',
-  business: 'Our Cafe',
+  business: 'Buddy\'s Deli',
   intro:
     'Follow the spooky clues, find the hidden QR codes and scan them with your phone camera. ' +
     'Collect 6 to win a free treat!',
@@ -36,11 +36,11 @@ export default {
   privacyNote:
     'We use your email only to run this hunt and make sure each person claims one prize. ' +
     'We delete it after the hunt unless you tick the box to hear about our offers.',
-  marketingConsentLabel: 'Yes, email me about Our Cafe\'s offers and events. I can unsubscribe at any time.',
+  marketingConsentLabel: 'Yes, email me about Buddy\'s Deli\'s offers and events. I can unsubscribe at any time.',
 
   // The hunt only accepts scans between these dates (inclusive, UK time).
   // Set either to null to leave it open-ended.
-  startDate: '2026-10-24',
+  startDate: null,
   endDate: '2026-11-01',
   timeZone: 'Europe/London',
 

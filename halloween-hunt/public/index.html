@@ -3,14 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1a0f2e">
+  <meta name="theme-color" content="#12170b">
   <title>Halloween Treasure Hunt</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fraunces:opsz,wght@9..144,800;9..144,900&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="logo-square.svg" type="image/svg+xml">
 </head>
 <body>
+  <svg class="cobweb" viewBox="0 0 120 120" aria-hidden="true" fill="none" stroke="#fff6ea" stroke-width="1.2">
+    <path d="M0 0 L120 30 M0 0 L95 95 M0 0 L30 120 M0 0 L120 0 M0 0 L0 120"/>
+    <path d="M24 0 Q20 10 24 6 Q14 14 22 22 Q10 20 6 24 Q8 16 0 24"/>
+    <path d="M52 0 Q46 18 50 13 Q30 30 46 46 Q20 40 13 50 Q18 30 0 52"/>
+    <path d="M84 0 Q76 26 82 21 Q50 48 74 74 Q34 64 21 82 Q28 50 0 84"/>
+    <path d="M118 0 Q106 34 114 29 Q72 66 102 102 Q48 90 29 114 Q38 72 0 118"/>
+  </svg>
   <div class="sky" aria-hidden="true">
     <span class="bat b1">🦇</span><span class="bat b2">🦇</span><span class="bat b3">🦇</span>
   </div>
@@ -18,7 +26,10 @@
   <main class="wrap">
     <header class="hero">
       <div class="moon" aria-hidden="true"></div>
-      <p class="business" id="business"></p>
+      <div class="logo-wrap">
+        <img class="logo" id="business" src="logo.svg" alt="Buddy's Deli">
+        <span class="spider" aria-hidden="true"><span>🕷️</span></span>
+      </div>
       <h1 id="title">Halloween Treasure Hunt</h1>
       <p class="intro" id="intro"></p>
     </header>

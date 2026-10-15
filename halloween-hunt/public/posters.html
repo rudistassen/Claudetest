@@ -4,33 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hunt QR Posters</title>
-  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="logo-square.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fraunces:opsz,wght@9..144,800;9..144,900&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
   <style>
-    body { margin: 0; font-family: 'Nunito', system-ui, sans-serif; background: #f4f1f8; color: #1a0f2e; }
+    body { margin: 0; font-family: 'Nunito', system-ui, sans-serif; background: #fff6ea; color: #12170b; }
     .controls { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
     .controls h1 { margin-top: 0; }
     label { font-weight: 800; display: block; margin-bottom: 6px; }
-    input { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #b9aed0; border-radius: 8px; }
+    input { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #b9c29a; border-radius: 8px; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    button { font: inherit; font-weight: 800; padding: 10px 18px; border-radius: 999px; border: 0; background: #ff7a1a; color: #1a0f2e; cursor: pointer; }
+    button { font: inherit; font-weight: 800; padding: 10px 18px; border-radius: 999px; border: 0; background: #ff8a1f; color: #12170b; cursor: pointer; }
     .warn { background: #fff1d6; border: 1px solid #e0a43a; border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
     table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #fff; font-size: .9rem; }
-    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e3ddec; vertical-align: top; word-break: break-all; }
-    th { background: #ece6f5; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e6e1cf; vertical-align: top; word-break: break-all; }
+    th { background: #eef0e2; }
 
     .poster {
-      width: 190mm; min-height: 270mm; margin: 24px auto; background: #1a0f2e; color: #f6efe6;
-      border-radius: 12px; padding: 18mm 14mm; text-align: center; box-sizing: border-box;
+      width: 190mm; height: 270mm; overflow: hidden; margin: 24px auto; background: radial-gradient(ellipse at top, #2c3a1c, #12170b 70%); color: #fff6ea; border: 3mm solid #55692d;
+      border-radius: 12px; padding: 14mm 14mm 12mm; text-align: center; box-sizing: border-box;
       display: flex; flex-direction: column; align-items: center; justify-content: space-between;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
-    .poster h2 { font-family: 'Creepster', cursive; font-weight: 400; color: #ff7a1a; font-size: 44pt; margin: 0; line-height: 1.05; }
-    .poster .sub { font-size: 18pt; font-weight: 800; margin: 6mm 0 0; }
-    .poster .qr { background: #fff; padding: 6mm; border-radius: 8mm; width: 120mm; height: 120mm; }
+    .poster h2 { font-family: 'Creepster', cursive; font-weight: 400; color: #ff8a1f; font-size: 40pt; margin: 0; line-height: 1.05; }
+    .poster .sub { font-size: 16pt; font-weight: 800; margin: 4mm 0 0; }
+    .poster .qr { background: #fff; padding: 6mm; border-radius: 8mm; width: 110mm; height: 110mm; }
     .poster .qr svg { width: 100%; height: 100%; display: block; }
     .poster .scan { font-size: 20pt; font-weight: 800; margin: 0; }
     .poster .small { font-size: 11pt; opacity: .8; margin: 2mm 0 0; }
     .poster .emoji { font-size: 34pt; }
+    .poster .logo { width: 46mm; height: auto; border-radius: 4mm; border: 1mm solid #fff6ea; margin-top: 4mm; transform: rotate(-3deg); }
 
     @media print {
       @page { size: A4; margin: 10mm; }
@@ -107,6 +109,10 @@
         const bottom = el('div');
         bottom.append(el('p', 'scan', scan));
         bottom.append(el('p', 'small', small));
+        const logo = el('img', 'logo');
+        logo.src = 'logo.svg';
+        logo.alt = '';
+        bottom.append(logo);
         p.append(top, qr, bottom);
         return p;
       }

@@ -5,7 +5,11 @@ import { makeCodes, parseCodes, withCodes } from '../src/codes.js';
 import { openDb } from '../src/db.js';
 import { createApp, validateConfig } from '../src/server.js';
 
-const config = withCodes(baseConfig, parseCodes(makeCodes(baseConfig)));
+// Fixed dates so the tests don't depend on what's in hunt.config.js.
+const config = withCodes(
+  { ...baseConfig, startDate: '2026-10-24', endDate: '2026-11-01', timeZone: 'Europe/London' },
+  parseCodes(makeCodes(baseConfig)),
+);
 
 let clock = new Date('2026-10-26T14:00:00Z');
 let server;

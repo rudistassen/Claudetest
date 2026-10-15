@@ -79,7 +79,7 @@
     $('loading').hidden = true;
     document.title = hunt.name;
     $('title').textContent = hunt.name;
-    $('business').textContent = hunt.business || '';
+    $('business').alt = hunt.business || '';
     $('intro').textContent = hunt.intro;
 
     const won = Boolean(hunt.player?.prize);

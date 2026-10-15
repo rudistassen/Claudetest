@@ -1,12 +1,16 @@
 :root {
-  --night: #1a0f2e;
-  --night-2: #2a1846;
-  --card: #2f1d4f;
-  --orange: #ff7a1a;
+  /* Buddy's Deli colours (olive and cream from the logo) after dark, plus pumpkin orange */
+  --night: #12170b;
+  --night-2: #263219;
+  --card: #222c16;
+  --line: #3f4f2b;
+  --olive: #55692d;
+  --cream: #fff6ea;
+  --orange: #ff8a1f;
   --orange-soft: #ffb066;
-  --green: #7ddc5a;
-  --text: #f6efe6;
-  --muted: #c3b5d8;
+  --green: #a9c45e;
+  --text: #fff6ea;
+  --muted: #c9c8a7;
   --radius: 18px;
 }
 
@@ -28,41 +32,45 @@ body {
   padding: 24px 16px calc(40px + env(safe-area-inset-bottom));
 }
 
-h1, h2 {
-  font-family: 'Creepster', 'Nunito', cursive;
-  font-weight: 400;
-  letter-spacing: 1px;
-  color: var(--orange);
-  margin: 0 0 8px;
+h1, h2 { margin: 0 0 8px; }
+h1 {
+  font-family: 'Creepster', 'Nunito', cursive; font-weight: 400; letter-spacing: 1px; color: var(--orange);
+  font-size: clamp(2.4rem, 11vw, 3.4rem); line-height: 1.05; text-shadow: 0 0 18px rgba(255, 138, 31, .45);
 }
-h1 { font-size: clamp(2.4rem, 11vw, 3.4rem); line-height: 1.05; text-shadow: 0 0 18px rgba(255, 122, 26, .45); }
-h2 { font-size: 1.9rem; }
+h2 { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 1.6rem; color: var(--cream); letter-spacing: -.3px; }
 
 /* ----- Header ----- */
 
-.hero { text-align: center; padding: 28px 0 12px; position: relative; }
+.hero { text-align: center; padding: 20px 0 12px; position: relative; }
 .moon {
-  width: 84px; height: 84px; margin: 0 auto 12px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #fff8d6, #f3d77a 60%, #c9a94a);
-  box-shadow: 0 0 40px 10px rgba(243, 215, 122, .35);
+  width: 150px; height: 150px; margin: 0 auto; border-radius: 50%;
+  background: radial-gradient(circle at 38% 35%, #fffbe8, #f6e3a1 55%, #d9bd6a);
+  box-shadow: 0 0 60px 18px rgba(246, 227, 161, .28);
 }
-.business { margin: 0; text-transform: uppercase; letter-spacing: 3px; font-size: .8rem; color: var(--muted); font-weight: 800; }
+/* The logo sits in front of the moon like a sign, with a spider dangling off it */
+.logo-wrap { position: relative; width: 200px; max-width: 62%; margin: -78px auto 18px; transform: rotate(-3deg); }
+.logo {
+  display: block; width: 100%; height: auto; border-radius: 16px; border: 3px solid var(--cream);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .55), 0 0 0 6px rgba(255, 138, 31, .25);
+}
+.spider { position: absolute; right: -26px; top: -6px; width: 2px; height: 58px; background: rgba(255, 246, 234, .55); transform-origin: top center; animation: dangle 3s ease-in-out infinite; }
+.spider span { position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%); font-size: 1.4rem; }
 .intro { margin: 8px 0 0; font-size: 1.05rem; }
 
 .notice {
-  background: #4a2a12; border: 1px solid var(--orange); border-radius: 12px;
+  background: #3d2a10; border: 1px solid var(--orange); border-radius: 12px;
   padding: 12px 14px; margin: 16px 0; font-weight: 700;
 }
 
 /* ----- Progress ----- */
 
 .progress-card {
-  background: var(--card); border-radius: var(--radius); padding: 18px 12px; margin: 20px 0 28px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 12px; margin: 20px 0 28px;
   text-align: center; box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
 }
 .pumpkins { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; font-size: 2.3rem; }
 .pumpkin { filter: grayscale(1) brightness(.45); transition: filter .4s, transform .4s; }
-.pumpkin.lit { filter: drop-shadow(0 0 8px rgba(255, 122, 26, .9)); transform: scale(1.08); }
+.pumpkin.lit { filter: drop-shadow(0 0 8px rgba(255, 138, 31, .9)); transform: scale(1.08); }
 .count { margin: 8px 0 0; font-weight: 800; font-size: 1.2rem; }
 
 /* ----- Clues ----- */
@@ -71,15 +79,15 @@ h2 { font-size: 1.9rem; }
 .clues { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
 .clue {
   background: var(--card); border-radius: var(--radius); padding: 14px 16px;
-  border: 2px solid transparent;
+  border: 2px solid var(--line);
 }
-.clue.done { border-color: var(--green); background: #24341f; }
+.clue.done { border-color: var(--green); background: #2c3a1b; }
 .clue-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .clue-num {
   flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
   background: var(--orange); color: var(--night); font-weight: 800;
 }
-.clue.done .clue-num { background: var(--green); }
+.clue.done .clue-num { background: var(--green); color: var(--night); }
 .clue-name { font-weight: 800; }
 .clue:not(.done) .clue-name { color: var(--muted); font-style: italic; }
 .clue-text { margin: 0; font-size: 1.02rem; }
@@ -89,11 +97,11 @@ h2 { font-size: 1.9rem; }
 
 .prize {
   text-align: center; margin: 20px 0; padding: 22px 16px; border-radius: var(--radius);
-  background: linear-gradient(160deg, #ff8a2a, #c2410c);
-  color: #fff; box-shadow: 0 0 40px rgba(255, 122, 26, .5);
+  background: linear-gradient(160deg, #ff9a35, #d24d0c);
+  color: #fff; box-shadow: 0 0 40px rgba(255, 138, 31, .45);
 }
-.prize h2 { color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .25); }
-.prize.claimed { background: #3a3346; box-shadow: none; }
+.prize h2 { font-family: 'Creepster', cursive; font-weight: 400; font-size: 2rem; letter-spacing: 1px; color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .25); }
+.prize.claimed { background: var(--olive); box-shadow: none; }
 .prize-icon { font-size: 3.4rem; }
 .prize-icon.spin { animation: wobble 2s ease-in-out infinite; }
 .prize-what { font-size: 1.25rem; font-weight: 800; margin: 0 0 10px; }
@@ -113,7 +121,7 @@ h2 { font-size: 1.9rem; }
 .btn-ghost { background: transparent; color: #fff; border: 2px solid rgba(255, 255, 255, .7); font-size: .9rem; padding: 8px 16px; }
 
 .modal {
-  position: fixed; inset: 0; background: rgba(8, 4, 16, .8); display: grid; place-items: center;
+  position: fixed; inset: 0; background: rgba(10, 13, 6, .85); display: grid; place-items: center;
   padding: 16px; z-index: 10;
 }
 .modal[hidden] { display: none; }
@@ -138,30 +146,35 @@ h2 { font-size: 1.9rem; }
   50% { transform: translateX(50vw) translateY(-20px); }
   to { transform: translateX(110vw) translateY(10px); }
 }
+@keyframes dangle { 0%, 100% { transform: rotate(6deg) scaleY(1); } 50% { transform: rotate(-6deg) scaleY(1.15); } }
 @keyframes wobble { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg) scale(1.1); } }
 @keyframes pulse { from { opacity: .7; } to { opacity: 1; } }
 @keyframes pop { from { transform: scale(.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .bat, .prize-icon.spin, .modal-card { animation: none; }
+  .bat, .prize-icon.spin, .modal-card, .spider { animation: none; }
 }
 
 /* ----- Sign-up ----- */
 
-.join { background: var(--card); border-radius: var(--radius); padding: 20px 16px; margin: 20px 0; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
+.join { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 16px; margin: 20px 0; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
 .join label { display: block; font-weight: 800; margin-bottom: 6px; }
 .join input[type=email] {
   width: 100%; font: inherit; font-size: 1.05rem; padding: 12px 14px; border-radius: 12px;
-  border: 2px solid #5b4385; background: var(--night); color: var(--text);
+  border: 2px solid var(--line); background: var(--night); color: var(--text);
 }
 .join input[type=email]:focus { outline: none; border-color: var(--orange); }
 .join .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 14px 0; }
 .join .check input { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--orange); }
 .join .btn { width: 100%; }
-.join-pending { background: #4a2a12; border-radius: 12px; padding: 10px 12px; font-weight: 700; }
+.join-pending { background: #3d2a10; border-radius: 12px; padding: 10px 12px; font-weight: 700; }
 .error { color: #ff9b9b; font-weight: 700; }
 .small { color: var(--muted); font-size: .85rem; margin: 10px 0 0; }
 .link { font: inherit; background: none; border: 0; padding: 0; color: var(--orange-soft); text-decoration: underline; cursor: pointer; }
 .loading { text-align: center; color: var(--muted); }
 .prize-label { margin: 0; font-size: .85rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 800; }
 .btn:disabled { opacity: .6; }
+
+/* Cobweb in the top corner */
+.cobweb { position: fixed; top: 0; left: 0; width: 120px; height: 120px; opacity: .22; pointer-events: none; z-index: 0; }
+.wrap { z-index: 1; }
