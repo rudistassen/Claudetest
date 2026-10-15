@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hunt QR Posters</title>
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; font-family: 'Nunito', system-ui, sans-serif; background: #f4f1f8; color: #1a0f2e; }
+    .controls { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+    .controls h1 { margin-top: 0; }
+    label { font-weight: 800; display: block; margin-bottom: 6px; }
+    input { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #b9aed0; border-radius: 8px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    button { font: inherit; font-weight: 800; padding: 10px 18px; border-radius: 999px; border: 0; background: #ff7a1a; color: #1a0f2e; cursor: pointer; }
+    .warn { background: #fff1d6; border: 1px solid #e0a43a; border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #fff; font-size: .9rem; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e3ddec; vertical-align: top; word-break: break-all; }
+    th { background: #ece6f5; }
+
+    .poster {
+      width: 190mm; min-height: 270mm; margin: 24px auto; background: #1a0f2e; color: #f6efe6;
+      border-radius: 12px; padding: 18mm 14mm; text-align: center; box-sizing: border-box;
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .poster h2 { font-family: 'Creepster', cursive; font-weight: 400; color: #ff7a1a; font-size: 44pt; margin: 0; line-height: 1.05; }
+    .poster .sub { font-size: 18pt; font-weight: 800; margin: 6mm 0 0; }
+    .poster .qr { background: #fff; padding: 6mm; border-radius: 8mm; width: 120mm; height: 120mm; }
+    .poster .qr svg { width: 100%; height: 100%; display: block; }
+    .poster .scan { font-size: 20pt; font-weight: 800; margin: 0; }
+    .poster .small { font-size: 11pt; opacity: .8; margin: 2mm 0 0; }
+    .poster .emoji { font-size: 34pt; }
+
+    @media print {
+      @page { size: A4; margin: 10mm; }
+      body { background: #fff; }
+      .controls { display: none; }
+      .poster { margin: 0 auto; page-break-after: always; break-after: page; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <h1>QR posters</h1>
+    <p>Print one poster for each checkpoint and hide it at the place its clue describes. Also print the <strong>Start</strong> poster for your counter or window so customers can open the clues.</p>
+    <label for="base">Web address of the hunt (where index.html is published)</label>
+    <input id="base" type="url" placeholder="https://yourcafe.co.uk/halloween-hunt/">
+    <div id="warn" class="warn" hidden></div>
+    <div class="row">
+      <button type="button" id="print">Print posters</button>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Checkpoint</th><th>Clue</th><th>Test link</th></tr></thead>
+      <tbody id="table"></tbody>
+    </table>
+  </div>
+  <div id="posters"></div>
+
+  <script src="vendor/qrcode.js"></script>
+  <script src="config.js"></script>
+  <script>
+    (() => {
+      const cfg = window.HUNT_CONFIG;
+      const baseInput = document.getElementById('base');
+      const defaultBase = new URL('./', location.href).href;
+      let saved = null;
+      try { saved = localStorage.getItem('halloween-hunt:posters-base'); } catch {}
+      baseInput.value = saved || defaultBase;
+
+      function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text !== undefined) e.textContent = text;
+        return e;
+      }
+
+      function qrSvg(text) {
+        const qr = qrcode(0, 'M');
+        qr.addData(text);
+        qr.make();
+        return qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+      }
+
+      function huntUrl(code) {
+        let base = baseInput.value.trim() || defaultBase;
+        if (!base.endsWith('/') && !base.endsWith('.html')) base += '/';
+        const url = new URL(base);
+        if (code) url.searchParams.set('c', code);
+        return url.href;
+      }
+
+      function poster({ title, sub, url, scan, small, emoji }) {
+        const p = el('section', 'poster');
+        const top = el('div');
+        top.append(el('div', 'emoji', emoji));
+        top.append(el('h2', null, title));
+        top.append(el('p', 'sub', sub));
+        const qr = el('div', 'qr');
+        qr.innerHTML = qrSvg(url);
+        const bottom = el('div');
+        bottom.append(el('p', 'scan', scan));
+        bottom.append(el('p', 'small', small));
+        p.append(top, qr, bottom);
+        return p;
+      }
+
+      function render() {
+        const warn = document.getElementById('warn');
+        let url = null;
+        try { url = new URL(huntUrl()); } catch {}
+        const local = !url || url.protocol === 'file:' || url.hostname === 'localhost' || url.hostname.startsWith('127.');
+        warn.hidden = !local;
+        warn.textContent = 'This address only works on this computer. Publish the hunt online first and enter its real web address above, or customers\' phones won\'t be able to open the QR codes.';
+
+        const table = document.getElementById('table');
+        table.replaceChildren();
+        const wrap = document.getElementById('posters');
+        wrap.replaceChildren();
+        if (!url) {
+          warn.textContent = 'That doesn\'t look like a web address. It should start with https://';
+          return;
+        }
+
+        wrap.append(poster({
+          emoji: '🎃🦇🎃',
+          title: cfg.name,
+          sub: `Find ${cfg.required} hidden QR codes and win ${cfg.prize}!`,
+          url: huntUrl(),
+          scan: 'Scan to get your clues',
+          small: 'Point your phone camera at the code',
+        }));
+
+        cfg.checkpoints.forEach((cp, i) => {
+          const url = huntUrl(cp.code);
+          const tr = document.createElement('tr');
+          const link = el('a', null, url);
+          link.href = url;
+          link.target = '_blank';
+          const linkTd = el('td');
+          linkTd.append(link);
+          tr.append(el('td', null, String(i + 1)), el('td', null, cp.name), el('td', null, cp.clue), linkTd);
+          table.append(tr);
+
+          wrap.append(poster({
+            emoji: '🕸️👻🕸️',
+            title: cp.name,
+            sub: `${cfg.name} · checkpoint`,
+            url,
+            scan: 'You found one! Scan me',
+            small: `Collect ${cfg.required} to win ${cfg.prize}`,
+          }));
+        });
+      }
+
+      baseInput.addEventListener('change', () => {
+        try { localStorage.setItem('halloween-hunt:posters-base', baseInput.value.trim()); } catch {}
+        render();
+      });
+      document.getElementById('print').addEventListener('click', () => window.print());
+      render();
+    })();
+  </script>
+</body>
+</html>

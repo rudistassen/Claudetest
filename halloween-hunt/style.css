@@ -1,0 +1,147 @@
+:root {
+  --night: #1a0f2e;
+  --night-2: #2a1846;
+  --card: #2f1d4f;
+  --orange: #ff7a1a;
+  --orange-soft: #ffb066;
+  --green: #7ddc5a;
+  --text: #f6efe6;
+  --muted: #c3b5d8;
+  --radius: 18px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Nunito', system-ui, sans-serif;
+  color: var(--text);
+  background: radial-gradient(ellipse at top, var(--night-2), var(--night) 60%) fixed, var(--night);
+  line-height: 1.5;
+}
+
+.wrap {
+  position: relative;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 16px calc(40px + env(safe-area-inset-bottom));
+}
+
+h1, h2 {
+  font-family: 'Creepster', 'Nunito', cursive;
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: var(--orange);
+  margin: 0 0 8px;
+}
+h1 { font-size: clamp(2.4rem, 11vw, 3.4rem); line-height: 1.05; text-shadow: 0 0 18px rgba(255, 122, 26, .45); }
+h2 { font-size: 1.9rem; }
+
+/* ----- Header ----- */
+
+.hero { text-align: center; padding: 28px 0 12px; position: relative; }
+.moon {
+  width: 84px; height: 84px; margin: 0 auto 12px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff8d6, #f3d77a 60%, #c9a94a);
+  box-shadow: 0 0 40px 10px rgba(243, 215, 122, .35);
+}
+.business { margin: 0; text-transform: uppercase; letter-spacing: 3px; font-size: .8rem; color: var(--muted); font-weight: 800; }
+.intro { margin: 8px 0 0; font-size: 1.05rem; }
+
+.notice {
+  background: #4a2a12; border: 1px solid var(--orange); border-radius: 12px;
+  padding: 12px 14px; margin: 16px 0; font-weight: 700;
+}
+
+/* ----- Progress ----- */
+
+.progress-card {
+  background: var(--card); border-radius: var(--radius); padding: 18px 12px; margin: 20px 0 28px;
+  text-align: center; box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+}
+.pumpkins { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; font-size: 2.3rem; }
+.pumpkin { filter: grayscale(1) brightness(.45); transition: filter .4s, transform .4s; }
+.pumpkin.lit { filter: drop-shadow(0 0 8px rgba(255, 122, 26, .9)); transform: scale(1.08); }
+.count { margin: 8px 0 0; font-weight: 800; font-size: 1.2rem; }
+
+/* ----- Clues ----- */
+
+.tip { color: var(--muted); margin-top: 0; }
+.clues { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.clue {
+  background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+  border: 2px solid transparent;
+}
+.clue.done { border-color: var(--green); background: #24341f; }
+.clue-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.clue-num {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--orange); color: var(--night); font-weight: 800;
+}
+.clue.done .clue-num { background: var(--green); }
+.clue-name { font-weight: 800; }
+.clue:not(.done) .clue-name { color: var(--muted); font-style: italic; }
+.clue-text { margin: 0; font-size: 1.02rem; }
+.clue.done .clue-text { color: var(--muted); }
+
+/* ----- Prize ----- */
+
+.prize {
+  text-align: center; margin: 20px 0; padding: 22px 16px; border-radius: var(--radius);
+  background: linear-gradient(160deg, #ff8a2a, #c2410c);
+  color: #fff; box-shadow: 0 0 40px rgba(255, 122, 26, .5);
+}
+.prize h2 { color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .25); }
+.prize.claimed { background: #3a3346; box-shadow: none; }
+.prize-icon { font-size: 3.4rem; }
+.prize-icon.spin { animation: wobble 2s ease-in-out infinite; }
+.prize-what { font-size: 1.25rem; font-weight: 800; margin: 0 0 10px; }
+.prize-code {
+  display: inline-block; font-family: ui-monospace, Menlo, monospace; font-size: 1.6rem; font-weight: 800;
+  letter-spacing: 3px; background: rgba(0, 0, 0, .3); padding: 6px 14px; border-radius: 10px; margin: 4px 0;
+}
+.prize-clock { font-weight: 700; margin: 8px 0; animation: pulse 1s ease-in-out infinite alternate; }
+.prize-how { margin: 8px 0 16px; }
+
+/* ----- Buttons & modal ----- */
+
+.btn {
+  font: inherit; font-weight: 800; font-size: 1.05rem; border: 0; border-radius: 999px;
+  padding: 12px 24px; background: var(--orange); color: var(--night); cursor: pointer;
+}
+.btn-ghost { background: transparent; color: #fff; border: 2px solid rgba(255, 255, 255, .7); font-size: .9rem; padding: 8px 16px; }
+
+.modal {
+  position: fixed; inset: 0; background: rgba(8, 4, 16, .8); display: grid; place-items: center;
+  padding: 16px; z-index: 10;
+}
+.modal[hidden] { display: none; }
+.modal-card {
+  background: var(--card); border: 2px solid var(--orange); border-radius: var(--radius);
+  max-width: 400px; width: 100%; padding: 24px 20px; text-align: center; animation: pop .35s ease-out;
+}
+.modal-icon { font-size: 3.6rem; }
+
+.foot { color: var(--muted); font-size: .85rem; text-align: center; margin-top: 32px; }
+
+/* ----- Flying bats ----- */
+
+.sky { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.bat { position: absolute; font-size: 1.6rem; opacity: .7; animation: fly 14s linear infinite; }
+.b1 { top: 8%; animation-delay: 0s; }
+.b2 { top: 22%; animation-delay: -5s; font-size: 1.2rem; animation-duration: 18s; }
+.b3 { top: 48%; animation-delay: -10s; font-size: 1rem; animation-duration: 22s; }
+
+@keyframes fly {
+  from { transform: translateX(-10vw) translateY(0); }
+  50% { transform: translateX(50vw) translateY(-20px); }
+  to { transform: translateX(110vw) translateY(10px); }
+}
+@keyframes wobble { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg) scale(1.1); } }
+@keyframes pulse { from { opacity: .7; } to { opacity: 1; } }
+@keyframes pop { from { transform: scale(.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .bat, .prize-icon.spin, .modal-card { animation: none; }
+}
