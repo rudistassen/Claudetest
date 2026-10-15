@@ -2,17 +2,17 @@
 // Halloween treasure hunt settings.
 // ---------------------------------------------------------------------------
 //
-// This file stays on the server: customers never see the checkpoint codes.
 // After editing it, push to GitHub and Railway redeploys automatically.
 //
 // Each checkpoint is a place you hide a QR code. The QR code opens the hunt
-// with the checkpoint's secret `code`. Print the posters from /posters.html
-// (sign in on /staff.html with the admin password first).
+// with the checkpoint's secret code. The codes are NOT in this file: they're
+// in the HUNT_CODES variable on Railway, so nobody can read them on GitHub.
+// Run `npm run make-codes` to generate them (see README.md). Print the
+// posters from /posters.html (sign in on /staff.html as admin first).
 //
-// - `id` identifies the checkpoint in the database. Don't change it once the
-//   hunt has started, or scans of that checkpoint will stop counting.
-// - `code` is printed in the QR code. Keep it hard to guess (letters and
-//   numbers, 8 or more). You can change it, but then reprint that poster.
+// - `id` identifies the checkpoint in the database and in HUNT_CODES. Use
+//   lowercase letters and dashes. Don't change it once the hunt has started,
+//   or scans of that checkpoint will stop counting.
 // - `clue` is shown to customers before they find the checkpoint.
 // - `found` is the message shown when they scan it.
 // - You can have more checkpoints than `required`, so customers can choose
@@ -47,56 +47,48 @@ export default {
   checkpoints: [
     {
       id: 'cauldron',
-      code: 'ubiB4K6p',
       name: 'The Witch\'s Cauldron',
       clue: 'Where beans are ground and the steam does hiss, a bubbling brew you must not miss.',
       found: 'Double, double, toil and trouble — you found the cauldron!',
     },
     {
       id: 'bookshelf',
-      code: 'NkqLFo27',
       name: 'The Haunted Bookshelf',
       clue: 'Stories sleep upon my shelves; read my spines, or find me yourselves.',
       found: 'The books whispered your name. Checkpoint found!',
     },
     {
       id: 'window',
-      code: 'wne0Bxn4',
       name: 'The Ghostly Window',
       clue: 'I let in light but keep out the cold; look where the street meets glass, if you are bold.',
       found: 'Boo! A ghost was watching you through the glass.',
     },
     {
       id: 'seat',
-      code: 'BMLII9xq',
       name: 'The Skeleton\'s Seat',
       clue: 'Rest your bones where the comfy cushions are; the skeleton\'s chair is never far.',
       found: 'The skeleton saved you a seat. Well done!',
     },
     {
       id: 'web',
-      code: 'dctUaDdG',
       name: 'The Spider\'s Web',
       clue: 'High in a corner where the cobwebs grow, an eight-legged friend waits below.',
       found: 'You got caught in the web — in a good way!',
     },
     {
       id: 'pumpkins',
-      code: '5lmSRzfZ',
       name: 'The Pumpkin Patch',
       clue: 'Round and orange, I sit outside the door; count the pumpkins, then look for one more.',
       found: 'You picked the perfect pumpkin!',
     },
     {
       id: 'bats',
-      code: 'PB34zpiQ',
       name: 'The Bat Cave',
       clue: 'Hang upside down where the cups are stacked; the bats are hiding at the back.',
       found: 'Flap flap! You found the bat cave.',
     },
     {
       id: 'mummy',
-      code: 'K2PP0v8r',
       name: 'The Mummy\'s Tomb',
       clue: 'Wrapped up tight like a sweet treat, find me where the cakes and pastries meet.',
       found: 'The mummy is un-wrapped — checkpoint found!',

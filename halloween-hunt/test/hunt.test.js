@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import config from '../hunt.config.js';
+import baseConfig from '../hunt.config.js';
+import { makeCodes, parseCodes, withCodes } from '../src/codes.js';
 import { openDb } from '../src/db.js';
 import { createApp, validateConfig } from '../src/server.js';
+
+const config = withCodes(baseConfig, parseCodes(makeCodes(baseConfig)));
 
 let clock = new Date('2026-10-26T14:00:00Z');
 let server;
@@ -191,6 +194,20 @@ describe('admin', () => {
     assert.doesNotMatch(after.data, /claimer@example\.com/);
     assert.equal((await a('admin/stats')).data.winners, stats.data.winners);
   });
+});
+
+test('codes come from HUNT_CODES, not the config file', () => {
+  assert.ok(baseConfig.checkpoints.every((c) => !('code' in c)));
+  const ids = baseConfig.checkpoints.map((c) => c.id);
+  const parsed = parseCodes(`${ids[0]}=abc12345\n ${ids[1]} = def67890 ,`);
+  assert.equal(parsed.get(ids[0]), 'abc12345');
+  assert.equal(parsed.get(ids[1]), 'def67890');
+  assert.throws(() => withCodes(baseConfig, parsed), /missing codes for: .*mummy/);
+  const all = parseCodes(makeCodes(baseConfig));
+  all.set('typo', 'zzzzzzzz');
+  assert.throws(() => withCodes(baseConfig, all), /aren't in hunt.config.js: typo/);
+  assert.throws(() => parseCodes('nonsense'), /should look like/);
+  assert.throws(() => withCodes(baseConfig, parseCodes(undefined)), /missing codes/);
 });
 
 test('config checks catch mistakes', () => {

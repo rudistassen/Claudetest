@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/index.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
+    "make-codes": "node scripts/make-codes.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
   },
   "engines": {

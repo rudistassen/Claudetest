@@ -28,7 +28,7 @@ It's a small Node.js app with its own SQLite database, built to run on [Railway]
 
 You'll need a Railway account. Running a small app like this with a volume needs a paid plan: the Hobby plan costs about $5 a month, which includes some usage. Check [railway.com/pricing](https://railway.com/pricing) for current prices.
 
-1. **Edit `hunt.config.js`**: hunt name, prize, `required`, dates and the checkpoints. Write clues for your own hiding places and **change every checkpoint `code`** to your own random letters and numbers (8 or more). Commit and push to GitHub.
+1. **Edit `hunt.config.js`**: hunt name, prize, `required`, dates and the checkpoints. Write clues for your own hiding places. Commit and push to GitHub. The checkpoint codes aren't in this file. They go in a Railway variable (step 4), so nobody can read them on GitHub.
 2. **Create the service.** In Railway choose **New Project → Deploy from GitHub repo** and pick this repository. Then open the service's **Settings**:
    - **Source → Root Directory**: `/halloween-hunt`
    - **Source → Branch**: the branch that has the hunt on it (e.g. `main` once it's merged).
@@ -37,6 +37,7 @@ You'll need a Railway account. Running a small app like this with a volume needs
 
    | Variable | Value |
    | --- | --- |
+   | `HUNT_CODES` | The secret code for each checkpoint, e.g. `cauldron=V5e38u3PQD,bookshelf=ugb34xzSQ7,…`. See *Checkpoint codes* below. |
    | `DB_PATH` | `/data/hunt.db` |
    | `STAFF_PASSWORD` | A password for counter staff (checking and claiming prizes). |
    | `ADMIN_PASSWORD` | A different, stronger password for you (totals, posters, email export). |
@@ -45,7 +46,19 @@ You'll need a Railway account. Running a small app like this with a volume needs
 6. Open `https://<your address>/staff.html`, sign in with the admin password and choose **Print QR posters**. Check the web address at the top is your live address, then print. Use the test links in the table to try each checkpoint in a private browser window.
 7. Hide the checkpoint posters where the clues point, put the Start poster somewhere visible, and give staff the staff password and the `/staff.html` link (add it to the home screen of the counter tablet).
 
-Railway redeploys automatically whenever you push changes to the branch. If you change a checkpoint's code or the web address after printing, reprint that poster. Don't change a checkpoint's `id` once the hunt has started.
+Railway redeploys automatically whenever you push changes to the branch, or when you change a variable. If you change a checkpoint's code or the web address after printing, reprint that poster. Don't change a checkpoint's `id` once the hunt has started.
+
+### Checkpoint codes
+
+Each QR code contains a secret code for its checkpoint. The codes live only in the `HUNT_CODES` variable on Railway: a comma-separated list of `checkpoint-id=code`, with one entry for every checkpoint `id` in `hunt.config.js`.
+
+To get a fresh set, either:
+- run `npm run make-codes` in the `halloween-hunt` folder, or
+- deploy without `HUNT_CODES`. The app won't start, but its **Deploy Logs** on Railway print a ready-made set to copy.
+
+Paste the value (everything after `HUNT_CODES=`) into the variable on Railway.
+
+If you add, remove or rename a checkpoint in `hunt.config.js`, update `HUNT_CODES` to match. If they don't match, the app won't start, and the deploy logs say which checkpoints are missing or unknown. Changing a code takes effect straight away, but the old printed poster for that checkpoint stops working, so reprint it.
 
 Keep the service at **one replica**: the SQLite database lives on the volume and can't be shared between copies.
 
@@ -68,6 +81,7 @@ Requires Node.js 22.13 or newer.
 ```bash
 cd halloween-hunt
 npm install
+export HUNT_CODES="$(npm run -s make-codes | cut -d= -f2-)"
 STAFF_PASSWORD=staff ADMIN_PASSWORD=admin npm start   # http://localhost:3000
 npm test
 ```
