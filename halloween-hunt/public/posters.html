@@ -43,9 +43,10 @@
 <body>
   <div class="controls">
     <h1>QR posters</h1>
+    <p><a href="staff.html">← Back to staff page</a></p>
     <p>Print one poster for each checkpoint and hide it at the place its clue describes. Also print the <strong>Start</strong> poster for your counter or window so customers can open the clues.</p>
-    <label for="base">Web address of the hunt (where index.html is published)</label>
-    <input id="base" type="url" placeholder="https://yourcafe.co.uk/halloween-hunt/">
+    <label for="base">Web address of the hunt</label>
+    <input id="base" type="url" placeholder="https://your-hunt.up.railway.app/">
     <div id="warn" class="warn" hidden></div>
     <div class="row">
       <button type="button" id="print">Print posters</button>
@@ -58,12 +59,17 @@
   <div id="posters"></div>
 
   <script src="vendor/qrcode.js"></script>
-  <script src="config.js"></script>
   <script>
-    (() => {
-      const cfg = window.HUNT_CONFIG;
+    (async () => {
+      const res = await fetch('/api/admin/checkpoints');
+      if (!res.ok) {
+        document.querySelector('.controls').innerHTML =
+          '<h1>QR posters</h1><p>Please <a href="staff.html">sign in with the admin password</a> first, then come back to this page.</p>';
+        return;
+      }
+      const cfg = await res.json();
       const baseInput = document.getElementById('base');
-      const defaultBase = new URL('./', location.href).href;
+      const defaultBase = location.origin + '/';
       let saved = null;
       try { saved = localStorage.getItem('halloween-hunt:posters-base'); } catch {}
       baseInput.value = saved || defaultBase;
@@ -111,7 +117,7 @@
         try { url = new URL(huntUrl()); } catch {}
         const local = !url || url.protocol === 'file:' || url.hostname === 'localhost' || url.hostname.startsWith('127.');
         warn.hidden = !local;
-        warn.textContent = 'This address only works on this computer. Publish the hunt online first and enter its real web address above, or customers\' phones won\'t be able to open the QR codes.';
+        warn.textContent = 'This address only works on this computer. Open this page on your live Railway web address instead, or customers\' phones won\'t be able to open the QR codes.';
 
         const table = document.getElementById('table');
         table.replaceChildren();

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a0f2e">
+  <title>Halloween Treasure Hunt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="sky" aria-hidden="true">
+    <span class="bat b1">🦇</span><span class="bat b2">🦇</span><span class="bat b3">🦇</span>
+  </div>
+
+  <main class="wrap">
+    <header class="hero">
+      <div class="moon" aria-hidden="true"></div>
+      <p class="business" id="business"></p>
+      <h1 id="title">Halloween Treasure Hunt</h1>
+      <p class="intro" id="intro"></p>
+    </header>
+
+    <div id="notice" class="notice" hidden></div>
+
+    <section id="join" class="join" hidden>
+      <h2>Start the hunt</h2>
+      <p id="join-pending" class="join-pending" hidden>🎃 Nice find! Enter your email to collect this checkpoint.</p>
+      <form id="join-form" novalidate>
+        <label for="email">Your email address</label>
+        <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required placeholder="you@example.com">
+        <label class="check"><input id="consent" type="checkbox"> <span id="consent-label"></span></label>
+        <p class="error" id="join-error" hidden></p>
+        <button class="btn" type="submit" id="join-btn">Let's go!</button>
+        <p class="small" id="privacy"></p>
+        <p class="small">Already started on another phone? Enter the same email to carry on.</p>
+      </form>
+    </section>
+
+    <div id="game" hidden>
+      <section id="prize" class="prize" hidden aria-live="polite"></section>
+
+      <section class="progress-card">
+        <div class="pumpkins" id="pumpkins" aria-hidden="true"></div>
+        <p class="count" id="count"></p>
+      </section>
+
+      <section>
+        <h2>Your clues</h2>
+        <p class="tip">Solve a clue, find the QR code hidden there, and scan it with your phone camera. You can find them in any order.</p>
+        <ol class="clues" id="clues"></ol>
+      </section>
+
+      <footer class="foot">
+        <p>Playing as <strong id="who"></strong> · <button type="button" class="link" id="leave">Not you?</button></p>
+      </footer>
+    </div>
+
+    <p id="loading" class="loading">Summoning the clues…</p>
+  </main>
+
+  <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="modal-icon" id="modal-icon"></div>
+      <h2 id="modal-title"></h2>
+      <p id="modal-text"></p>
+      <button class="btn" id="modal-close" type="button">Keep hunting</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

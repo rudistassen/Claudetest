@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#1a0f2e">
+  <title>Hunt Staff</title>
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .panel { background: var(--card); border-radius: var(--radius); padding: 18px 16px; margin: 16px 0; }
+    .panel label { display: block; font-weight: 800; margin-bottom: 6px; }
+    .field {
+      width: 100%; font: inherit; font-size: 1.1rem; padding: 12px 14px; border-radius: 12px;
+      border: 2px solid #5b4385; background: var(--night); color: var(--text);
+    }
+    .field:focus { outline: none; border-color: var(--orange); }
+    .inline { display: flex; gap: 8px; }
+    .inline .field { flex: 1; min-width: 0; }
+    .result { margin-top: 14px; padding: 14px; border-radius: 12px; background: var(--night); }
+    .result.ok { border: 2px solid var(--green); }
+    .result.warn { border: 2px solid var(--orange); }
+    .result.bad { border: 2px solid #ff6b6b; }
+    .result .big { font-size: 1.3rem; font-weight: 800; margin: 0 0 6px; }
+    .result p { margin: 4px 0; overflow-wrap: anywhere; }
+    .result .btn { width: 100%; margin-top: 10px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+    .stat { background: var(--night); border-radius: 12px; padding: 12px; }
+    .stat b { display: block; font-size: 1.6rem; color: var(--orange); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid #47326b; }
+    td:last-child, th:last-child { text-align: right; }
+    .actions { display: grid; gap: 8px; margin-top: 14px; }
+    .actions a, .actions button { text-align: center; text-decoration: none; }
+    .danger { background: transparent; color: #ff9b9b; border: 2px solid #ff9b9b; }
+    .top { display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="top">
+      <h1 style="font-size: 2.2rem">Hunt staff</h1>
+      <button type="button" class="link" id="logout" hidden>Sign out</button>
+    </div>
+
+    <section class="panel" id="login" hidden>
+      <form id="login-form">
+        <label for="password">Staff password</label>
+        <input class="field" id="password" type="password" autocomplete="current-password" required>
+        <p class="error" id="login-error" hidden></p>
+        <button class="btn" type="submit" style="margin-top: 12px; width: 100%">Sign in</button>
+      </form>
+    </section>
+
+    <div id="signed-in" hidden>
+      <section class="panel">
+        <form id="lookup-form">
+          <label for="q">Customer's claim code or email</label>
+          <div class="inline">
+            <input class="field" id="q" autocomplete="off" autocapitalize="characters" placeholder="BOO-XXXXX" required>
+            <button class="btn" type="submit">Check</button>
+          </div>
+        </form>
+        <div id="result" hidden></div>
+      </section>
+
+      <section class="panel" id="admin" hidden>
+        <h2>Hunt totals</h2>
+        <div class="stats" id="stats"></div>
+        <table>
+          <thead><tr><th>Checkpoint</th><th>Scans</th></tr></thead>
+          <tbody id="cp-table"></tbody>
+        </table>
+        <div class="actions">
+          <a class="btn" href="posters.html">Print QR posters</a>
+          <a class="btn btn-ghost" href="/api/admin/export.csv">Download players (CSV)</a>
+          <button class="btn danger" type="button" id="delete-emails">After the hunt: delete emails of people who didn't opt in</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="staff.js"></script>
+</body>
+</html>

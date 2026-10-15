@@ -145,3 +145,23 @@ h2 { font-size: 1.9rem; }
 @media (prefers-reduced-motion: reduce) {
   .bat, .prize-icon.spin, .modal-card { animation: none; }
 }
+
+/* ----- Sign-up ----- */
+
+.join { background: var(--card); border-radius: var(--radius); padding: 20px 16px; margin: 20px 0; box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
+.join label { display: block; font-weight: 800; margin-bottom: 6px; }
+.join input[type=email] {
+  width: 100%; font: inherit; font-size: 1.05rem; padding: 12px 14px; border-radius: 12px;
+  border: 2px solid #5b4385; background: var(--night); color: var(--text);
+}
+.join input[type=email]:focus { outline: none; border-color: var(--orange); }
+.join .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 14px 0; }
+.join .check input { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--orange); }
+.join .btn { width: 100%; }
+.join-pending { background: #4a2a12; border-radius: 12px; padding: 10px 12px; font-weight: 700; }
+.error { color: #ff9b9b; font-weight: 700; }
+.small { color: var(--muted); font-size: .85rem; margin: 10px 0 0; }
+.link { font: inherit; background: none; border: 0; padding: 0; color: var(--orange-soft); text-decoration: underline; cursor: pointer; }
+.loading { text-align: center; color: var(--muted); }
+.prize-label { margin: 0; font-size: .85rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 800; }
+.btn:disabled { opacity: .6; }
