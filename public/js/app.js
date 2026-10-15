@@ -8,6 +8,7 @@ import * as rotalog from './views/rotalog.js';
 import * as inbox from './views/inbox.js';
 import * as salesbudget from './views/salesbudget.js';
 import * as courses from './views/courses.js';
+import * as chat from './views/chat.js';
 import * as stafflog from './views/stafflog.js';
 import * as parlevels from './views/parlevels.js';
 import * as rotacosts from './views/rotacosts.js';
@@ -144,6 +145,8 @@ const ROUTES = [
   [/^admin\/payment-links$/, paymentlinks.render, ['payments.send']],
   [/^mybrew$/, mybrew.renderMyBrew, ['mybrew.view']],
   [/^notifications$/, inbox.render],
+  [/^chat$/, chat.renderList, ['chat.use']],
+  [/^chat\/(\d+)$/, chat.renderChat, ['chat.use']],
   [/^admin\/news$/, mybrew.renderNewsSetup, ['news.manage']],
   [/^admin\/documents$/, mybrew.renderDocumentsSetup, ['documents.manage']],
   [/^invoices$/, invoices.renderList, ['invoices.manage']],
@@ -173,7 +176,7 @@ const allowed = (who) => !who || (who === 'admin' ? state.isAdmin : who.all ? st
 function navGroups() {
   return [
     ['Dashboards', [['dashboard', 'HQ Dashboard', '▦', ['dashboard.view']], ['manager', 'Manager Dashboard', '◧', ['dashboard.manager']]]],
-    [null, [['mybrew', 'My Atlas', '◉', ['mybrew.view']]]],
+    [null, [['mybrew', 'My Atlas', '◉', ['mybrew.view']], ['chat', 'Chat', '✆', ['chat.use']]]],
     ['Rota', [
       ['rota', 'Rota', '◷', ROTA],
       ['timeoff', 'Time off', '☀', ['leave.request', 'leave.manage', 'leave.edit']],
@@ -309,6 +312,24 @@ async function showNewsBadge(force = false) {
 }
 window.addEventListener('news:read', () => showNewsBadge(true));
 
+// Unread chat messages (in chats that aren't muted), shown on Chat in the menus.
+let chatUnread = { count: 0, at: 0, user: null };
+async function showChatBadge(force = false) {
+  if (!state.can('chat.use')) return;
+  if (force || chatUnread.user !== state.user?.id || Date.now() - chatUnread.at > 30000) {
+    try { chatUnread = { count: (await api('/chat/unread')).count, at: Date.now(), user: state.user?.id }; } catch { return; }
+  }
+  const title = `${chatUnread.count} unread message${chatUnread.count === 1 ? '' : 's'}`;
+  document.querySelectorAll('[data-chat-badge]').forEach((b) => {
+    b.hidden = !chatUnread.count;
+    b.textContent = chatUnread.count > 99 ? '99+' : chatUnread.count;
+    b.title = title;
+  });
+  document.querySelectorAll('[data-chat-dot]').forEach((d) => { d.hidden = !chatUnread.count; d.title = title; });
+}
+window.addEventListener('chat:read', () => showChatBadge(true));
+setInterval(() => { if (state.user && !document.hidden) showChatBadge(); }, 30000);
+
 // Menu sections someone has folded away, remembered in this browser.
 const NAV_FOLD_KEY = 'cafe-ops:nav-folded';
 function foldedGroups() {
@@ -417,6 +438,7 @@ const ICON = {
   checks: '<rect x="3" y="3" width="18" height="18" rx="5"/><path d="m8 12 3 3 5-6"/>',
   timeoff: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   mybrew: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  chat: '<path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.5L3 21l1.9-5.4A8.5 8.5 0 1 1 21 11.5Z"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
@@ -424,9 +446,9 @@ const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 // The phone icon bar: home, the everyday pages this person can use, then the full menu.
 function tabBar(items, active) {
   const has = (p) => items.some(([q]) => q === p);
-  const tabs = [home() !== 'mybrew' && !['rota', 'safety', 'timeoff'].includes(home()) ? [home(), 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : has('timeoff') ? ['timeoff', 'Time off', 'timeoff'] : null, has('mybrew') ? ['mybrew', 'My Atlas', 'mybrew'] : null].filter(Boolean);
+  const tabs = [home() !== 'mybrew' && !['rota', 'safety', 'timeoff'].includes(home()) ? [home(), 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : has('timeoff') ? ['timeoff', 'Time off', 'timeoff'] : null, has('chat') ? ['chat', 'Chat', 'chat'] : null, has('mybrew') ? ['mybrew', 'My Atlas', 'mybrew'] : null].filter(Boolean);
   return `<nav class="tabbar" aria-label="Quick links">
-    ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'rota' ? BELL : ''}</a>`).join('')}
+    ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'chat' ? '<span class="nav-badge" data-chat-badge hidden></span>' : ''}${p === 'rota' ? BELL : ''}</a>`).join('')}
     <button type="button" class="tabbar-menu">${icon('menu')}<span>Menu</span></button>
   </nav>`;
 }
@@ -459,7 +481,7 @@ function renderShell() {
   const section = groups.find(([, items]) => items.some(([p]) => p === active))?.[0] ?? null;
   document.body.dataset.section = section ? (NAV_TONES[section] ?? 'setup') : '';
   document.body.style.setProperty('--section-label', section ? JSON.stringify(section) : '""');
-  const link = ([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}"><span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'rota/requests' ? '<span class="nav-badge" data-req-badge hidden></span>' : ''}</a>`;
+  const link = ([p, label, icon]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}"><span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'chat' ? '<span class="nav-badge" data-chat-badge hidden></span>' : ''}${p === 'rota/requests' ? '<span class="nav-badge" data-req-badge hidden></span>' : ''}</a>`;
   const viewing = state.user.viewed_by ? `<div class="view-as-bar" role="status"><span>👁 Viewing as <strong>${esc(state.user.name)}</strong><span class="view-as-note"> · look only</span></span>
       <button type="button" class="btn btn-small" id="view-as-stop">Stop viewing</button></div>` : '';
   document.body.classList.toggle('is-viewing-as', !!state.user.viewed_by);
@@ -469,7 +491,7 @@ function renderShell() {
       <a class="brand" href="#/${home()}" aria-label="Atlas – home">${logo(26)}${isDemo ? ' <span class="demo-pill">Demo</span>' : ''}</a>
       <nav class="topnav" aria-label="Main menu">
         ${groups.map(([heading, items]) => {
-          if (!heading) return items.map(([p, label]) => `<a href="#/${p}" class="topnav-btn ${active === p ? 'is-active' : ''}">${label}${p === 'mybrew' ? '<span class="nav-dot" data-news-dot hidden></span>' : ''}</a>`).join('');
+          if (!heading) return items.map(([p, label]) => `<a href="#/${p}" class="topnav-btn ${active === p ? 'is-active' : ''}">${label}${p === 'mybrew' ? '<span class="nav-dot" data-news-dot hidden></span>' : ''}${p === 'chat' ? '<span class="nav-dot" data-chat-dot hidden></span>' : ''}</a>`).join('');
           const here = items.some(([p]) => p === active) || path === `hub/${HUBS[heading]}`;
           if (HUBS[heading]) return `<a href="#/hub/${HUBS[heading]}" class="topnav-btn ${here ? 'is-active' : ''}">${esc(TOP_LABELS[heading] ?? heading)}${heading === 'Rota' ? BELL : ''}</a>`;
           const hasNews = items.some(([p]) => p === 'mybrew');
@@ -540,6 +562,7 @@ function renderShell() {
     } catch (err) { showError(err); e.target.disabled = false; }
   });
   showNewsBadge();
+  showChatBadge();
   showRequestBadge();
   showEventsBadge();
   document.querySelectorAll('[data-install]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); install(); }));
@@ -749,6 +772,7 @@ export async function route({ keepScroll = false } = {}) {
     if (!isDemo && seq === routeSeq) maybeStartTour(state, navigate);
     showRequestBadge();
     showEventsBadge();
+    showChatBadge();
   } catch (err) {
     if (seq !== routeSeq) return;
     if (restoreScroll) document.body.style.minHeight = '';

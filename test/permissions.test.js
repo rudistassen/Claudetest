@@ -38,7 +38,7 @@ test('built-in Manager and Staff sets keep what each role could do before', asyn
   const manager = sets.find((s) => s.built_in === 'manager');
   const staff = sets.find((s) => s.built_in === 'staff');
   assert.ok(manager.permissions.includes('staff.manage') && !manager.permissions.includes('recipes.edit'));
-  assert.deepEqual(staff.permissions.sort(), ['availability.own', 'checklists.complete', 'leave.request', 'mybrew.view', 'recipes.view', 'rota.view', 'safety.complete', 'stock.count', 'wastage.record', 'wastage.reports']);
+  assert.deepEqual(staff.permissions.sort(), ['availability.own', 'chat.use', 'checklists.complete', 'leave.request', 'mybrew.view', 'recipes.view', 'rota.view', 'safety.complete', 'stock.count', 'wastage.record', 'wastage.reports']);
   assert.ok(manager.people >= 7 && staff.people > 7, 'everyone without a set counts under their role’s set');
 
   const s1 = await login('staff1@cafe.local');

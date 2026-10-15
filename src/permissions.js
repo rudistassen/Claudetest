@@ -6,6 +6,10 @@ export const PERMISSION_AREAS = [
   ['My Atlas', [
     ['mybrew.view', 'See My Atlas – their home page with their shifts, tasks, training and news'],
   ]],
+  ['Chat', [
+    ['chat.use', 'Chat – read and reply in the group chats they’re in'],
+    ['chat.manage', 'Start group chats and choose who’s in them'],
+  ]],
   ['Dashboards', [
     ['dashboard.view', 'See the HQ Dashboard (every site they can access, side by side; sales and labour figures also need “See sales”)'],
     ['dashboard.manager', 'See the Manager Dashboard (their site’s day and everything waiting on them; opens on their home site)'],
@@ -126,7 +130,7 @@ export const DEFAULT_SETS = [
     built_in: 'staff',
     name: 'Staff',
     description: 'Works in a site: food-safety checks, wastage, stock counts, the rota and recipes.',
-    permissions: ['mybrew.view', 'leave.request', 'availability.own', 'safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
+    permissions: ['mybrew.view', 'chat.use', 'leave.request', 'availability.own', 'safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
   },
 ];
 

@@ -606,6 +606,49 @@ CREATE TABLE IF NOT EXISTS news_reads (
   PRIMARY KEY (post_id, user_id)
 );
 
+-- Staff chat: group chats with chosen people, everyone at chosen sites, or everyone (all_sites).
+CREATE TABLE IF NOT EXISTS chat_groups (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  all_sites INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS chat_group_sites (
+  group_id INTEGER NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  PRIMARY KEY (group_id, location_id)
+);
+CREATE TABLE IF NOT EXISTS chat_group_members (
+  group_id INTEGER NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY,
+  group_id INTEGER NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  body TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_group ON chat_messages(group_id, id);
+CREATE TABLE IF NOT EXISTS chat_photos (
+  message_id INTEGER PRIMARY KEY REFERENCES chat_messages(id) ON DELETE CASCADE,
+  file_type TEXT NOT NULL,
+  data BLOB NOT NULL
+);
+-- How far each person has read in each chat, and whether they've muted its phone notifications.
+CREATE TABLE IF NOT EXISTS chat_reads (
+  group_id INTEGER NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_read_id INTEGER NOT NULL DEFAULT 0,
+  muted INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (group_id, user_id)
+);
+
 -- Company documents on My Atlas: handbooks, policies and forms, for every site or chosen sites.
 CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY,
@@ -1595,6 +1638,19 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 19');
+  }
+  if (version < 20) {
+    // Staff chat arrived: everyone can chat, and whoever could post news or manage staff can set chats up.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        const add = ['chat.use', ...(perms.some((p) => ['news.manage', 'staff.manage'].includes(p)) ? ['chat.manage'] : [])];
+        const next = [...new Set([...perms, ...add])];
+        if (next.length !== perms.length) db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify(next), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 20');
   }
   ensureDefaultSets(db);
   return db;

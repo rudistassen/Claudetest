@@ -13,6 +13,8 @@ export const PUSH_KINDS = [
   { key: 'news', label: 'New news or a policy to read', group: 'News' },
   { key: 'training', label: 'You’re given a training course, or it’s signed off', group: 'Training' },
   { key: 'task', label: 'You’re given a task', group: 'Tasks' },
+  // Chat messages go to the phone only (they're in the chat itself, so they aren't kept on the Notifications page).
+  { key: 'chat', label: 'A new message in one of your chats', group: 'Chat', perms: ['chat.use'], inbox: false },
   { key: 'holiday_request', label: 'Someone asks for holiday', group: 'For managers', perms: ['leave.manage'] },
   { key: 'drop_request', label: 'Someone asks to drop a shift', group: 'For managers', perms: ['rota.approve'] },
   { key: 'pickup_request', label: 'Someone asks to pick up an open shift', group: 'For managers', perms: ['rota.approve'] },
@@ -23,6 +25,7 @@ export const PUSH_KINDS = [
   { key: 'training_signoff', label: 'Someone passes a course that needs your sign-off', group: 'For managers', perms: ['people.training'] },
 ];
 const KIND_KEYS = new Set(PUSH_KINDS.map((k) => k.key));
+const NOT_KEPT = new Set(PUSH_KINDS.filter((k) => k.inbox === false).map((k) => k.key));
 export const kindsFor = (user) => PUSH_KINDS.filter((k) => !k.perms || k.perms.some((p) => can(user, p)));
 
 let send = null;
@@ -78,13 +81,14 @@ export function notify(db, userIds, kind, { title, body, url = '/', tag } = {}, 
     if (!to.length) return Promise.resolve(0);
     // Each person's Notifications page keeps it (whether or not they have notifications on a phone); tapping it on
     // the phone opens that page with this one at the top.
+    const kept = !NOT_KEPT.has(kind);
     const keep = db.prepare('INSERT INTO notifications (user_id, kind, title, body, url) VALUES (?, ?, ?, ?, ?)');
-    const saved = new Map(to.map((id) => [id, Number(keep.run(id, kind, title, body ?? null, url).lastInsertRowid)]));
+    const saved = new Map(kept ? to.map((id) => [id, Number(keep.run(id, kind, title, body ?? null, url).lastInsertRowid)]) : []);
     db.prepare(`DELETE FROM notifications WHERE created_at < datetime('now', '-60 days')`).run();
     if (!send) return Promise.resolve(0);
     const subs = db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${to.map(() => '?').join(', ')})`).all(...to);
     return Promise.all(subs.map(async (s) => {
-      const payload = JSON.stringify({ title, body, url: `/#/notifications?n=${saved.get(s.user_id)}`, page: url, tag: tag ?? kind, kind });
+      const payload = JSON.stringify({ title, body, url: kept ? `/#/notifications?n=${saved.get(s.user_id)}` : url, page: url, tag: tag ?? kind, kind });
       try {
         await send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload);
         db.prepare(`UPDATE push_subscriptions SET last_sent_at = datetime('now') WHERE id = ?`).run(s.id);

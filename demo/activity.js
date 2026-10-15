@@ -153,3 +153,30 @@ export function seedChecklists(db) {
     todo.run(admin.id, 'Sign off the new summer menu', '+7 days');
   }
 }
+
+// Sample chats: the first site's team (everyone based there), and the managers of every site.
+export function seedChat(db) {
+  const site = db.prepare('SELECT id, name FROM locations ORDER BY id LIMIT 1').get();
+  const admin = db.prepare(`SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1`).get().id;
+  const person = (email) => db.prepare('SELECT id FROM users WHERE email = ?').get(email)?.id;
+  const chat = (name, description, by) => Number(db.prepare(`INSERT INTO chat_groups (name, description, created_by, created_at) VALUES (?, ?, ?, datetime('now', '-2 days'))`)
+    .run(name, description, by).lastInsertRowid);
+  const say = (group, who, minutesAgo, body) => db.prepare(`INSERT INTO chat_messages (group_id, user_id, body, created_at) VALUES (?, ?, ?, datetime('now', ?))`)
+    .run(group, who, body, `-${minutesAgo} minutes`);
+
+  const team = chat(`${site.name} team`, 'Day-to-day chat for everyone at the site', person('manager1@cafe.local'));
+  db.prepare('INSERT INTO chat_group_sites (group_id, location_id) VALUES (?, ?)').run(team, site.id);
+  db.prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)').run(team, admin);
+  say(team, person('manager1@cafe.local'), 1500, 'Morning all! Reminder the window cleaner is in at 10, so keep the front tables clear for half an hour 🙏');
+  say(team, person('staff1@cafe.local'), 1490, 'No problem 👍');
+  say(team, person('staff1-2@cafe.local'), 95, 'Is anyone able to swap my Saturday close? Happy to take a Sunday in return');
+  say(team, person('staff1-3@cafe.local'), 80, 'I can do it – I’ll ask on the rota so it gets approved');
+  say(team, person('manager1@cafe.local'), 42, 'Thanks both. Oat milk delivery is late today, so use the backup in the dry store until it arrives.');
+
+  const managers = chat('Managers', 'All the site managers', admin);
+  for (const m of db.prepare(`SELECT id FROM users WHERE role = 'manager' AND active = 1`).all()) db.prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)').run(managers, m.id);
+  db.prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)').run(managers, admin);
+  say(managers, admin, 300, 'Next week’s rotas need publishing by Thursday please, so everyone has them before the weekend.');
+  say(managers, person('manager2@cafe.local'), 240, 'Will do. We’re short a barista on Friday – can anyone lend someone?');
+  say(managers, person('manager1@cafe.local'), 200, 'I can send one of mine from 11 till close 👍');
+}
