@@ -178,3 +178,25 @@ h2 { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 1.6re
 /* Cobweb in the top corner */
 .cobweb { position: fixed; top: 0; left: 0; width: 120px; height: 120px; opacity: .22; pointer-events: none; z-index: 0; }
 .wrap { z-index: 1; }
+
+/* ----- Scan button and camera screen ----- */
+
+.scan-btn {
+  position: sticky; top: 10px; z-index: 5; display: block; width: 100%; margin: 4px 0 0;
+  font-size: 1.15rem; padding: 14px 24px; box-shadow: 0 6px 24px rgba(0, 0, 0, .5), 0 0 0 4px rgba(255, 138, 31, .25);
+}
+.scan-btn[hidden] { display: none; }
+
+.scanner { position: fixed; inset: 0; z-index: 20; background: #000; }
+.scanner[hidden] { display: none; }
+.scanner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scan-frame {
+  position: absolute; left: 50%; top: 42%; width: min(70vw, 70vh, 320px); aspect-ratio: 1;
+  transform: translate(-50%, -50%); border-radius: 24px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .45); border: 4px solid var(--orange);
+}
+.scan-bottom {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 16px calc(24px + env(safe-area-inset-bottom));
+  text-align: center; background: linear-gradient(transparent, rgba(0, 0, 0, .8) 35%);
+}
+.scan-msg { font-weight: 800; font-size: 1.1rem; margin: 0 0 14px; text-shadow: 0 1px 4px #000; }

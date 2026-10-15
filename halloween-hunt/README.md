@@ -8,7 +8,7 @@ It's a small Node.js app with its own SQLite database, built to run on [Railway]
 
 **Customers**
 1. They scan the **Start** poster (at the counter or in the window) and enter their email. Ticking the marketing box is optional.
-2. They solve a clue, find the hidden QR poster and scan it. If they scan a checkpoint before signing up, it's collected as soon as they enter their email.
+2. They solve a clue, find the hidden QR poster and scan it, either with the **Scan a QR code** button at the top of the hunt page (it opens the camera inside the page) or with their phone's camera app. If they scan a checkpoint before signing up, it's collected as soon as they enter their email.
 3. They can find checkpoints in any order. The sample config has 8 checkpoints and they need 6, so not everyone crowds round the same spot.
 4. After the 6th they see a claim code (e.g. `BOO-NMP48`) with a live clock.
 5. Progress is saved on the server, so if they change phone they just enter the same email again.
@@ -89,4 +89,4 @@ npm test
 
 The local database is saved to `halloween-hunt/data/hunt.db`. Scans are only accepted between the hunt dates, so change `startDate` to try it before then.
 
-The QR code generator in `public/vendor/qrcode.js` is [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) by Kazuhiko Arase (MIT licence).
+The QR reader in `public/vendor/jsQR.min.js` is [jsQR](https://github.com/cozmo/jsQR) (Apache 2.0 licence, see `jsQR-LICENSE.txt`). It's only used on phones without a built-in QR reader and only downloaded when the camera is opened. The QR code generator in `public/vendor/qrcode.js` is [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) by Kazuhiko Arase (MIT licence).

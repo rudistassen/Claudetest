@@ -51,6 +51,8 @@
     </section>
 
     <div id="game" hidden>
+      <button class="btn scan-btn" id="scan-btn" type="button">📷 Scan a QR code</button>
+
       <section id="prize" class="prize" hidden aria-live="polite"></section>
 
       <section class="progress-card">
@@ -60,7 +62,7 @@
 
       <section>
         <h2>Your clues</h2>
-        <p class="tip">Solve a clue, find the QR code hidden there, and scan it with your phone camera. You can find them in any order.</p>
+        <p class="tip">Solve a clue, find the QR code hidden there, and tap <strong>Scan a QR code</strong> (or use your phone's camera app). You can find them in any order.</p>
         <ol class="clues" id="clues"></ol>
       </section>
 
@@ -71,6 +73,15 @@
 
     <p id="loading" class="loading">Summoning the clues…</p>
   </main>
+
+  <div class="scanner" id="scanner" hidden role="dialog" aria-modal="true" aria-label="Scan a QR code">
+    <video id="scan-video" playsinline muted></video>
+    <div class="scan-frame" aria-hidden="true"></div>
+    <div class="scan-bottom">
+      <p class="scan-msg" id="scan-msg">Point your camera at a hunt QR code</p>
+      <button class="btn" id="scan-close" type="button">Cancel</button>
+    </div>
+  </div>
 
   <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-card">

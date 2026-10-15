@@ -98,6 +98,7 @@
       return;
     }
     $('who').textContent = hunt.player.email;
+    $('scan-btn').hidden = Boolean(hunt.player.prize);
     renderPrize();
     renderProgress();
     renderClues();
@@ -169,6 +170,110 @@
       } catch { /* try again next time */ }
     }, 10000);
   }
+
+  // ----- In-page QR scanner -------------------------------------------------
+  // Uses the browser's built-in QR reader where there is one (Android
+  // Chrome), otherwise jsQR, which is only downloaded when first needed.
+
+  const scanner = { stream: null, timer: null, detect: null, lastText: '', msgTimer: null };
+
+  async function qrDecoder() {
+    if ('BarcodeDetector' in window) {
+      try {
+        if ((await BarcodeDetector.getSupportedFormats()).includes('qr_code')) {
+          const detector = new BarcodeDetector({ formats: ['qr_code'] });
+          return async (video) => (await detector.detect(video))[0]?.rawValue || null;
+        }
+      } catch { /* fall back to jsQR */ }
+    }
+    if (!window.jsQR) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'vendor/jsQR.min.js';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('The QR reader could not load. Check your connection.'));
+        document.head.append(s);
+      });
+    }
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    return async (video) => {
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      if (!w || !h) return null;
+      const scale = Math.min(1, 720 / Math.max(w, h));
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      return window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' })?.data || null;
+    };
+  }
+
+  function scanMessage(text) {
+    $('scan-msg').textContent = text;
+    clearTimeout(scanner.msgTimer);
+    scanner.msgTimer = setTimeout(() => { $('scan-msg').textContent = 'Point your camera at a hunt QR code'; }, 2500);
+  }
+
+  function closeScanner() {
+    clearTimeout(scanner.timer);
+    clearTimeout(scanner.msgTimer);
+    scanner.timer = null;
+    scanner.stream?.getTracks().forEach((t) => t.stop());
+    scanner.stream = null;
+    $('scan-video').srcObject = null;
+    $('scanner').hidden = true;
+    $('scan-msg').textContent = 'Point your camera at a hunt QR code';
+  }
+
+  function scanned(text) {
+    let code = null;
+    try { code = new URL(text, location.href).searchParams.get('c'); } catch { /* not a link */ }
+    if (!code) {
+      if (text !== scanner.lastText) scanMessage('That isn\'t one of our hunt QR codes. Keep looking!');
+      scanner.lastText = text;
+      return false;
+    }
+    closeScanner();
+    submitScan(code);
+    return true;
+  }
+
+  async function openScanner() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return showModal('📷', 'Camera not available', 'Your browser can\'t open the camera here. Use your phone\'s camera app to scan the QR code instead.', 'OK');
+    }
+    $('scanner').hidden = false;
+    scanner.lastText = '';
+    try {
+      scanner.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      const video = $('scan-video');
+      video.srcObject = scanner.stream;
+      await video.play();
+      scanner.detect = scanner.detect || (await qrDecoder());
+    } catch (err) {
+      closeScanner();
+      const blocked = err.name === 'NotAllowedError' || err.name === 'SecurityError';
+      return showModal('📷', blocked ? 'Camera blocked' : 'Camera not available',
+        blocked
+          ? 'Allow camera access for this site in your browser settings and try again, or use your phone\'s camera app to scan the QR code.'
+          : 'We couldn\'t open your camera. Use your phone\'s camera app to scan the QR code instead.',
+        'OK');
+    }
+    const loop = async () => {
+      if (!scanner.stream) return;
+      let text = null;
+      try { text = await scanner.detect($('scan-video')); } catch { /* try the next frame */ }
+      if (text && scanned(text)) return;
+      if (scanner.stream) scanner.timer = setTimeout(loop, 150);
+    };
+    loop();
+  }
+
+  $('scan-btn').addEventListener('click', openScanner);
+  $('scan-close').addEventListener('click', closeScanner);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('scanner').hidden) closeScanner(); });
 
   // ----- Join / leave -------------------------------------------------------
 
