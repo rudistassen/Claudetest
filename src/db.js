@@ -609,6 +609,7 @@ CREATE TABLE IF NOT EXISTS news_reads (
 -- Staff chat: group chats with chosen people, everyone at chosen sites, or everyone (all_sites).
 CREATE TABLE IF NOT EXISTS chat_groups (
   id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT 'group',  -- 'group', or 'direct' (one-to-one messages between two people)
   name TEXT NOT NULL,
   description TEXT,
   all_sites INTEGER NOT NULL DEFAULT 0,
@@ -1349,6 +1350,8 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);
       COMMIT; PRAGMA foreign_keys = ON;`);
   }],
+  // Chats are group chats or direct (one-to-one) messages.
+  ['chat_groups', 'kind', `ALTER TABLE chat_groups ADD COLUMN kind TEXT NOT NULL DEFAULT 'group'`],
 ];
 
 export const PUBLISH_COLUMNS = `pub_location_id = location_id, pub_user_id = user_id, pub_date = date,
@@ -1651,6 +1654,18 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 20');
+  }
+  if (version < 21) {
+    // Direct (one-to-one) messages arrived: everyone who can chat can send them.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        if (!perms.includes('chat.use') || perms.includes('chat.direct')) continue;
+        db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify([...perms, 'chat.direct']), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 21');
   }
   ensureDefaultSets(db);
   return db;

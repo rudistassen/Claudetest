@@ -144,7 +144,7 @@ test('only whoever set a chat up (or an admin) can change it; without chat.use t
   assert.equal((await noChat('/chat/unread')).body.count, 0);
 });
 
-test('upgrading gives everyone chat, and chat set-up to people who post news or manage staff', () => {
+test('upgrading gives everyone chat and direct messages, and chat set-up to people who post news or manage staff', () => {
   const dir = mkdtempSync(join(tmpdir(), 'atlas-chat-'));
   try {
     const file = join(dir, 'app.db');
@@ -156,8 +156,63 @@ test('upgrading gives everyone chat, and chat set-up to people who post news or 
     const perms = (name) => JSON.parse(d.prepare('SELECT permissions FROM permission_sets WHERE name = ?').get(name).permissions);
     assert.ok(perms('Leads').includes('chat.use') && perms('Leads').includes('chat.manage'));
     assert.ok(perms('Floor').includes('chat.use') && !perms('Floor').includes('chat.manage'));
+    assert.ok(perms('Floor').includes('chat.direct') && perms('Leads').includes('chat.direct'));
     d.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('direct messages: one-to-one with people at your own sites, private to the two of you (and admins)', async () => {
+  const staff1 = await login('staff1@cafe.local');
+  const staff12 = await login('staff1-2@cafe.local');
+  const staff13 = await login('staff1-3@cafe.local');
+  const admin = await login('admin@cafe.local');
+  const people = (await staff1('/chat/direct/people')).body;
+  // Only people at their own site (everyone in the demo can work at every site, but that doesn't count here).
+  assert.ok(people.some((u) => u.id === userId('staff1-2@cafe.local')));
+  assert.ok(!people.some((u) => u.id === userId('staff2@cafe.local')));
+  assert.ok(!people.some((u) => u.id === userId('staff1@cafe.local')));
+  assert.equal((await staff1('/chat/direct', { method: 'POST', body: { user_id: userId('staff2@cafe.local') } })).status, 403);
+
+  const dm = await staff1('/chat/direct', { method: 'POST', body: { user_id: userId('staff1-2@cafe.local') } });
+  assert.equal(dm.status, 201);
+  // Opening it again (from either side) gives the same conversation.
+  assert.equal((await staff1('/chat/direct', { method: 'POST', body: { user_id: userId('staff1-2@cafe.local') } })).body.id, dm.body.id);
+  assert.equal((await staff12('/chat/direct', { method: 'POST', body: { user_id: userId('staff1@cafe.local') } })).body.id, dm.body.id);
+
+  pushed.length = 0;
+  db.prepare(`INSERT OR IGNORE INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, 'https://push.example/s12', 'k', 'a')`).run(userId('staff1-2@cafe.local'));
+  assert.equal((await staff1(`/chat/${dm.body.id}/messages`, { method: 'POST', body: { body: 'Can you swap Friday?' } })).status, 201);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(pushed.at(-1).title, db.prepare('SELECT name FROM users WHERE email = ?').get('staff1@cafe.local').name);
+
+  // Each sees it under the other's name; nobody else can open it, and it can't be edited like a group.
+  const name = (email) => db.prepare('SELECT name FROM users WHERE email = ?').get(email).name;
+  const theirs = (await staff12('/chat')).body.groups.find((g) => g.id === dm.body.id);
+  assert.equal(theirs.kind, 'direct');
+  assert.equal(theirs.name, name('staff1@cafe.local'));
+  assert.equal((await staff1(`/chat/${dm.body.id}`)).body.group.name, name('staff1-2@cafe.local'));
+  assert.equal((await staff13(`/chat/${dm.body.id}`)).status, 404);
+  assert.equal((await admin(`/chat/${dm.body.id}`)).status, 404);
+  assert.equal((await admin(`/chat/${dm.body.id}`, { method: 'PUT', body: { name: 'x', member_ids: [1, 2] } })).status, 403);
+
+  // Admins can read it on Setup → Direct messages, and that's recorded in the Staff log; nobody else can.
+  assert.equal((await staff1('/chat-admin/direct')).status, 403);
+  assert.equal((await staff1(`/chat-admin/direct/${dm.body.id}`)).status, 403);
+  const list = (await admin('/chat-admin/direct')).body;
+  assert.ok(list.some((c) => c.id === dm.body.id && c.messages === 1));
+  const read = await admin(`/chat-admin/direct/${dm.body.id}`);
+  assert.deepEqual(read.body.messages.map((m) => m.body), ['Can you swap Friday?']);
+  const logged = db.prepare(`SELECT detail FROM activity_log WHERE action = 'Read a direct message conversation' ORDER BY id DESC LIMIT 1`).get();
+  assert.ok(logged.detail.includes(name('staff1@cafe.local')));
+  // What people say in chats never goes in the Staff log.
+  assert.ok(!db.prepare(`SELECT 1 FROM activity_log WHERE detail LIKE '%swap Friday%'`).get());
+  assert.ok(db.prepare(`SELECT 1 FROM activity_log WHERE action = 'Sent a chat message'`).get());
+
+  // Without the permission, direct messages disappear (and you can't be messaged).
+  db.prepare('UPDATE users SET custom_permissions = ? WHERE id = ?').run(JSON.stringify(['chat.use']), userId('staff1-2@cafe.local'));
+  assert.ok(!(await staff12('/chat')).body.groups.some((g) => g.id === dm.body.id));
+  assert.equal((await staff12('/chat/direct/people')).status, 403);
+  assert.ok(!(await staff1('/chat/direct/people')).body.some((u) => u.id === userId('staff1-2@cafe.local')));
 });

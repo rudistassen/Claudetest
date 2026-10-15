@@ -179,4 +179,10 @@ export function seedChat(db) {
   say(managers, admin, 300, 'Next week’s rotas need publishing by Thursday please, so everyone has them before the weekend.');
   say(managers, person('manager2@cafe.local'), 240, 'Will do. We’re short a barista on Friday – can anyone lend someone?');
   say(managers, person('manager1@cafe.local'), 200, 'I can send one of mine from 11 till close 👍');
+
+  const dm = Number(db.prepare(`INSERT INTO chat_groups (kind, name, created_by, created_at) VALUES ('direct', '', ?, datetime('now', '-1 day'))`).run(person('staff1-2@cafe.local')).lastInsertRowid);
+  for (const u of [person('staff1@cafe.local'), person('staff1-2@cafe.local')]) db.prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)').run(dm, u);
+  say(dm, person('staff1-2@cafe.local'), 70, 'Hey, did I leave my black jumper in the staff room yesterday?');
+  say(dm, person('staff1@cafe.local'), 65, 'Yes! It’s on the hook by the lockers 🙂');
+  say(dm, person('staff1-2@cafe.local'), 20, 'Amazing, thank you!');
 }

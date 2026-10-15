@@ -147,6 +147,8 @@ const ROUTES = [
   [/^notifications$/, inbox.render],
   [/^chat$/, chat.renderList, ['chat.use']],
   [/^chat\/(\d+)$/, chat.renderChat, ['chat.use']],
+  [/^admin\/direct-messages$/, chat.renderDirectAdmin, 'admin'],
+  [/^admin\/direct-messages\/(\d+)$/, chat.renderDirectAdminView, 'admin'],
   [/^admin\/news$/, mybrew.renderNewsSetup, ['news.manage']],
   [/^admin\/documents$/, mybrew.renderDocumentsSetup, ['documents.manage']],
   [/^invoices$/, invoices.renderList, ['invoices.manage']],
@@ -247,6 +249,7 @@ function navGroups() {
       ['admin/email-reports', 'Email reports', '✉', 'admin'],
       ['admin/news', 'News', '✎', ['news.manage']],
       ['admin/documents', 'Documents', '❐', ['documents.manage']],
+      ['admin/direct-messages', 'Direct messages', '✉', 'admin'],
       ['safety/setup', 'Compliance checks', '☑', ['safety.manage']],
     ]],
   ].map(([heading, items]) => [heading, items.filter(([, , , who]) => allowed(who))]).filter(([, items]) => items.length);

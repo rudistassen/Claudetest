@@ -3062,6 +3062,12 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .chat-row:hover { background: var(--surface-2); }
 .chat-row .nav-badge { margin-left: 0; flex: none; }
 .chat-avatar { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-deep); font-weight: 700; font-size: 0.95rem; }
+.chat-avatar.is-person { background: var(--accent-soft); color: var(--accent); }
+.chat-room.is-readonly .chat-messages { padding-bottom: 1rem; }
+.chat-dm-picks { display: flex; flex-direction: column; max-height: 50vh; overflow-y: auto; margin-bottom: 0.5rem; }
+.chat-dm-pick { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.4rem; border: 0; border-bottom: 1px solid var(--border); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.chat-dm-pick:hover { background: var(--surface-2); }
+.chat-dm-pick[hidden] { display: none; }
 .chat-avatar.small { width: 28px; height: 28px; font-size: 0.72rem; }
 .chat-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
 .chat-row-top { display: flex; justify-content: space-between; gap: 0.5rem; }

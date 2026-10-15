@@ -65,6 +65,13 @@ const leave = (db, leaveId) => {
   const l = leaveId ? db.prepare('SELECT l.start_date, l.end_date, u.name FROM leave_requests l JOIN users u ON u.id = l.user_id WHERE l.id = ?').get(Number(leaveId)) : null;
   return l ? join(l.name, l.start_date === l.end_date ? fmtDay(l.start_date) : `${fmtDay(l.start_date)} – ${fmtDay(l.end_date)}`) : null;
 };
+// A chat's name; a direct message's is the two people in it.
+const chatName = (db, groupId) => {
+  const g = db.prepare('SELECT kind, name FROM chat_groups WHERE id = ?').get(Number(groupId));
+  if (!g) return null;
+  if (g.kind !== 'direct') return g.name;
+  return `Direct message: ${db.prepare('SELECT u.name FROM chat_group_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY u.name').all(Number(groupId)).map((r) => r.name).join(' and ')}`;
+};
 const site = (db, locationId) => nameOf(db, 'locations', 'name', locationId);
 const week = (b) => (b?.week ? `week of ${fmtDay(b.week)}` : b?.week_start ? `week of ${fmtDay(b.week_start)}` : null);
 
@@ -217,6 +224,13 @@ const ACTIONS = [
   ['POST', '/events/marketing/file', 'Events', 'Uploaded a marketing list'],
   ['DELETE', '/events/marketing/senders/:email', 'Events', 'Removed a marketing sender'],
   // News and documents
+  // Chat: what was done, never what was said.
+  ['POST', '/chat/direct', 'Chat', 'Started a direct message', (db, p, b) => person(db, b.user_id)],
+  ['POST', '/chat/:id/messages', 'Chat', 'Sent a chat message', (db, p) => chatName(db, p.id)],
+  ['DELETE', '/chat/:id/messages/:messageId', 'Chat', 'Deleted a chat message', (db, p) => chatName(db, p.id)],
+  ['POST', '/chat', 'Chat', 'Started a group chat', (db, p, b) => b.name],
+  ['PUT', '/chat/:id', 'Chat', 'Changed a group chat', (db, p) => chatName(db, p.id)],
+  ['DELETE', '/chat/:id', 'Chat', 'Deleted a group chat', (db, p) => chatName(db, p.id)],
   ['POST', '/news/:id/read', 'News', 'Confirmed they’d read a news post', (db, p) => nameOf(db, 'news_posts', 'title', p.id)],
   ['POST', '/news', 'News', 'Posted news', (db, p, b) => b.title],
   ['PUT', '/news/:id', 'News', 'Changed a news post', (db, p) => nameOf(db, 'news_posts', 'title', p.id)],
@@ -252,7 +266,7 @@ const ACTIONS = [
 });
 
 // Saves that happen in the background or are too small to be worth logging.
-const QUIET = /^\/(push\/(subscribe|unsubscribe|prefs)|notifications\/read|auth\/|news\/media|training\/media|.*\/check$|reviews\/sync|payment-links\/\d+\/check)/;
+const QUIET = /^\/(push\/(subscribe|unsubscribe|prefs)|notifications\/read|auth\/|news\/media|training\/media|chat\/\d+\/(read|mute)$|.*\/check$|reviews\/sync|payment-links\/\d+\/check)/;
 
 /** What a request does, in words (or null if it isn't worth logging). */
 export function describe(db, method, path, body = {}) {

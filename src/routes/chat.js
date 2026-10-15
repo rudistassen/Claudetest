@@ -1,6 +1,8 @@
 // Staff chat: group chats that managers set up, choosing who's in each one – particular people, everyone at chosen
 // sites, or everyone. Members read and reply (with a photo if they like); each person sees only their own groups.
-import { ACCESS_FIELDS, ACCESS_JOIN, can, PUBLIC_USER_FIELDS, requirePerm, siteIdsFor, withPermissions } from '../auth.js';
+// Direct messages are private one-to-one chats between two people who share a site; admins can read them.
+import { ACCESS_FIELDS, ACCESS_JOIN, can, PUBLIC_USER_FIELDS, requireAdmin, requirePerm, siteIdsFor, withPermissions } from '../auth.js';
+import { logActivity } from '../activity.js';
 import { tx } from '../db.js';
 import { badRequest, bool, forbidden, id, notFound, str } from '../util.js';
 import { notify } from '../push.js';
@@ -36,11 +38,20 @@ export function registerChatRoutes(router, db) {
     const extra = db.prepare('SELECT location_id FROM user_sites WHERE user_id = ?').all(u.id).map((r) => r.location_id);
     return u.location_id ? [u.location_id, ...extra] : extra;
   };
-  const inGroup = (g, u) => g.all_sites || g.member_ids.includes(u.id) || ownSites(u).some((s) => g.site_ids.includes(s));
+  const inGroup = (g, u) => (g.kind === 'direct' ? g.member_ids.includes(u.id) && can(u, 'chat.direct')
+    : g.all_sites || g.member_ids.includes(u.id) || ownSites(u).some((s) => g.site_ids.includes(s)));
+  // The sites that count for direct messages: where someone is based or has been added (or, for people with no
+  // home site such as head office, every site they can work with).
+  const dmSites = (u) => { const own = ownSites(u); return own.length ? own : siteIdsFor(db, u); };
+  // A direct message is shown under the other person's name.
+  const otherIn = (g, userId) => g.member_ids.find((m) => m !== userId);
+  const nameOf = (userId) => db.prepare('SELECT name FROM users WHERE id = ?').get(userId)?.name ?? 'Someone who has left';
+  const titleFor = (g, userId) => (g.kind === 'direct' ? nameOf(otherIn(g, userId)) : g.name);
   const members = (g) => chatters().filter((u) => inGroup(g, u));
 
   // The group's creator, admins, and members who can set up chats can change it.
-  const canEdit = (req, g) => req.user.role === 'admin' || g.created_by === req.user.id || (can(req.user, 'chat.manage') && inGroup(g, req.user));
+  // (Nobody changes a direct message.)
+  const canEdit = (req, g) => g.kind !== 'direct' && (req.user.role === 'admin' || g.created_by === req.user.id || (can(req.user, 'chat.manage') && inGroup(g, req.user)));
 
   // A group this person is in (or, for managing it, can edit).
   const mine = (req) => {
@@ -70,7 +81,7 @@ export function registerChatRoutes(router, db) {
     const list = myGroups(req).map((g) => {
       const last = db.prepare(`${MESSAGE_SELECT} WHERE m.group_id = ? ORDER BY m.id DESC LIMIT 1`).get(g.id);
       return {
-        id: g.id, name: g.name, description: g.description,
+        id: g.id, kind: g.kind, name: titleFor(g, req.user.id), description: g.kind === 'direct' ? null : g.description,
         last: last ? { author: last.author, body: last.deleted_at ? 'Message deleted' : last.body || (last.has_photo ? '📷 Photo' : ''), created_at: last.created_at, mine: last.user_id === req.user.id } : null,
         unread: unreadIn(g.id, req.user.id),
         muted: !!lastRead(g.id, req.user.id)?.muted,
@@ -78,12 +89,75 @@ export function registerChatRoutes(router, db) {
         sort: last?.created_at ?? g.created_at,
       };
     }).sort((a, b) => (a.sort < b.sort ? 1 : a.sort > b.sort ? -1 : b.id - a.id));
-    res.json({ groups: list, can_create: can(req.user, 'chat.manage') });
+    res.json({ groups: list, can_create: can(req.user, 'chat.manage'), can_direct: can(req.user, 'chat.direct') });
   });
 
   // Unread messages across all their chats (for the menu badge).
   router.get('/chat/unread', (req, res) => {
     res.json({ count: myGroups(req).reduce((n, g) => n + (lastRead(g.id, req.user.id)?.muted ? 0 : unreadIn(g.id, req.user.id)), 0) });
+  });
+
+  // --- Direct messages ---
+
+  // Who this person can message: people who share a site with them (admins can message anyone).
+  const reachable = (req) => {
+    const mine = dmSites(req.user);
+    return chatters().filter((u) => u.id !== req.user.id && can(u, 'chat.direct')
+      && (req.user.role === 'admin' || dmSites(u).some((s) => mine.includes(s))));
+  };
+  router.get('/chat/direct/people', requirePerm('chat.direct'), (req, res) => {
+    res.json(reachable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name, position: u.position })));
+  });
+
+  // Opens the direct message with someone: the one they already have, or a new one. { user_id } → { id }
+  router.post('/chat/direct', requirePerm('chat.direct'), (req, res) => {
+    const other = id(req.body.user_id, 'user_id', { required: true });
+    if (!reachable(req).some((u) => u.id === other)) throw forbidden('You can only message people at your sites');
+    const existing = db.prepare(`SELECT g.id FROM chat_groups g WHERE g.kind = 'direct'
+      AND EXISTS (SELECT 1 FROM chat_group_members m WHERE m.group_id = g.id AND m.user_id = ?)
+      AND EXISTS (SELECT 1 FROM chat_group_members m WHERE m.group_id = g.id AND m.user_id = ?)`).get(req.user.id, other);
+    if (existing) return res.json({ id: existing.id });
+    const newId = tx(db, () => {
+      const r = db.prepare(`INSERT INTO chat_groups (kind, name, created_by) VALUES ('direct', '', ?)`).run(req.user.id);
+      for (const u of [req.user.id, other]) db.prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)').run(r.lastInsertRowid, u);
+      return Number(r.lastInsertRowid);
+    });
+    res.status(201).json({ id: newId });
+  });
+
+  // --- Admins: reading direct messages (each look is recorded in the Staff log) ---
+
+  const directChats = () => db.prepare(`SELECT g.id, g.created_at,
+      (SELECT COUNT(*) FROM chat_messages m WHERE m.group_id = g.id AND m.deleted_at IS NULL) AS messages,
+      (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.group_id = g.id) AS last_at
+    FROM chat_groups g WHERE g.kind = 'direct'`).all();
+  const peopleIn = (groupId) => db.prepare(`SELECT u.id, u.name, l.name AS location_name FROM chat_group_members m JOIN users u ON u.id = m.user_id
+    LEFT JOIN locations l ON l.id = u.location_id WHERE m.group_id = ? ORDER BY u.name`).all(groupId);
+  router.get('/chat-admin/direct', requireAdmin, (req, res) => {
+    res.json(directChats().filter((c) => c.messages > 0).map((c) => ({ ...c, people: peopleIn(c.id) }))
+      .sort((a, b) => (a.last_at < b.last_at ? 1 : a.last_at > b.last_at ? -1 : 0)));
+  });
+  const directFor = (req) => {
+    const g = group(Number(req.params.id));
+    if (!g || g.kind !== 'direct') throw notFound('Direct message');
+    return g;
+  };
+  router.get('/chat-admin/direct/:id', requireAdmin, (req, res) => {
+    const g = directFor(req);
+    const people = peopleIn(g.id);
+    // Deleted messages stay hidden here too.
+    const rows = db.prepare(`${MESSAGE_SELECT} WHERE m.group_id = ? ORDER BY m.id`).all(g.id);
+    logActivity(db, req, { kind: 'change', area: 'Chat', action: 'Read a direct message conversation', detail: people.map((p) => p.name).join(' and '), path: `GET ${req.path}` });
+    res.json({ id: g.id, people, messages: rows.map((m) => ({ ...m, body: m.deleted_at ? '' : m.body, has_photo: !m.deleted_at && !!m.has_photo })) });
+  });
+  router.get('/chat-admin/direct/:id/photos/:messageId', requireAdmin, (req, res) => {
+    const g = directFor(req);
+    const p = db.prepare(`SELECT p.file_type, p.data FROM chat_photos p JOIN chat_messages m ON m.id = p.message_id
+      WHERE p.message_id = ? AND m.group_id = ?`).get(Number(req.params.messageId), g.id);
+    if (!p) throw notFound('Photo');
+    res.setHeader('Content-Type', p.file_type);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(asBody(p.data));
   });
 
   // A chat's messages: the latest page, older ones (?before=id) or new ones since the last fetch (?after=id).
@@ -96,7 +170,7 @@ export function registerChatRoutes(router, db) {
       : db.prepare(`${MESSAGE_SELECT} WHERE m.group_id = ? ${before ? 'AND m.id < ?' : ''} ORDER BY m.id DESC LIMIT ${PAGE}`).all(...(before ? [g.id, before] : [g.id])).reverse();
     const people = members(g);
     res.json({
-      group: { id: g.id, name: g.name, description: g.description, all_sites: !!g.all_sites, site_ids: g.site_ids, member_ids: g.member_ids, can_edit: canEdit(req, g), muted: !!lastRead(g.id, req.user.id)?.muted },
+      group: { id: g.id, kind: g.kind, name: titleFor(g, req.user.id), description: g.kind === 'direct' ? null : g.description, all_sites: !!g.all_sites, site_ids: g.site_ids, member_ids: g.member_ids, can_edit: canEdit(req, g), muted: !!lastRead(g.id, req.user.id)?.muted },
       members: people.map((u) => ({ id: u.id, name: u.name, location_name: u.location_name })),
       messages: rows.map((m) => shapeMessage(req, g, m)),
       more: !after && rows.length === PAGE,
@@ -147,7 +221,7 @@ export function registerChatRoutes(router, db) {
     // Everyone else in the chat who hasn't muted it gets a phone notification (not kept on the Notifications page).
     const muted = new Set(db.prepare('SELECT user_id FROM chat_reads WHERE group_id = ? AND muted = 1').all(g.id).map((r) => r.user_id));
     notify(db, members(g).map((u) => u.id).filter((u) => u !== req.user.id && !muted.has(u)), 'chat', {
-      title: `${req.user.name} · ${g.name}`,
+      title: g.kind === 'direct' ? req.user.name : `${req.user.name} · ${g.name}`,
       body: body.trim() ? body.trim().replace(/\s+/g, ' ').slice(0, 140) : '📷 Photo',
       url: `/#/chat/${g.id}`,
       tag: `chat-${g.id}`,

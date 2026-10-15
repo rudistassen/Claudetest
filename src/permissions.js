@@ -8,6 +8,7 @@ export const PERMISSION_AREAS = [
   ]],
   ['Chat', [
     ['chat.use', 'Chat – read and reply in the group chats they’re in'],
+    ['chat.direct', 'Direct messages – private one-to-one chats with people at their own sites (admins can read them)'],
     ['chat.manage', 'Start group chats and choose who’s in them'],
   ]],
   ['Dashboards', [
@@ -130,7 +131,7 @@ export const DEFAULT_SETS = [
     built_in: 'staff',
     name: 'Staff',
     description: 'Works in a site: food-safety checks, wastage, stock counts, the rota and recipes.',
-    permissions: ['mybrew.view', 'chat.use', 'leave.request', 'availability.own', 'safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
+    permissions: ['mybrew.view', 'chat.use', 'chat.direct', 'leave.request', 'availability.own', 'safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
   },
 ];
 
