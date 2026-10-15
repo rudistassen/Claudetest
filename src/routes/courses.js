@@ -109,7 +109,7 @@ export function registerCourseRoutes(router, db) {
     const locationId = id(req.query.location_id, 'location_id');
     if (locationId) assertLocation(req, locationId);
     const sites = locationId ? [locationId] : req.user.site_ids;
-    const people = sites.length ? db.prepare(`SELECT u.id, u.name, u.position, u.location_id, l.name AS location_name FROM users u
+    const people = sites.length ? db.prepare(`SELECT u.id, u.name, u.rota_group, u.location_id, l.name AS location_name FROM users u
       LEFT JOIN locations l ON l.id = u.location_id
       WHERE u.active = 1 AND u.role != 'admin' AND u.location_id IN (${sites.map(() => '?').join(',')}) ORDER BY u.name`).all(...sites) : [];
     const courses = db.prepare('SELECT * FROM training_courses WHERE active = 1 AND published = 1 ORDER BY name').all();

@@ -87,7 +87,7 @@ export const PERMISSION_AREAS = [
     ['people.recruitment', 'Recruitment: jobs, candidates and the careers inbox'],
     ['people.training', 'Learning & development: training records, online courses, giving courses to people and signing them off'],
     ['people.performance', 'Performance: one-to-ones, probation reviews and appraisals'],
-    ['people.areas', 'Areas: who is trained to work in each area'],
+    ['people.areas', 'Skills areas: who is trained in each skill (shown under their name on the rota)'],
   ]],
   ['Events', [
     ['events.manage', 'See and answer event enquiries from the events inbox'],

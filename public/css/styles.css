@@ -3128,3 +3128,7 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
   .chat-room { height: calc(100dvh - 7rem - 64px - env(safe-area-inset-bottom)); }
   .chat-msg { max-width: 88%; }
 }
+
+/* The skills someone is trained in, in grey under their name on the rota. */
+.rota th small.rota-skills, .day-name small.rota-skills { display: block; color: var(--muted); font-weight: 400; font-size: 0.7rem; line-height: 1.25; white-space: normal; }
+.pd-skills { color: var(--muted); font-size: 0.75rem; }

@@ -42,7 +42,7 @@ import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
 import { demoPlaces } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from '../src/invites.js';
 import { HttpError, addDays, today } from '../src/util.js';
-import { seedActivity, seedChat, seedCourse, seedChecklists } from './activity.js';
+import { seedActivity, seedChat, seedCourse, seedChecklists, seedSkills } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
 import { registerPushRoutes } from '../src/push.js';
 import { activityLogger, registerActivityRoutes } from '../src/activity.js';
@@ -110,6 +110,7 @@ async function boot() {
   seedActivity(db);
   seedCourse(db);
   seedChat(db);
+  seedSkills(db);
   seedChecklists(db);
   publishAllShifts(db);
 

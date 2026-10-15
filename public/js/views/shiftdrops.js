@@ -39,7 +39,7 @@ export function dropsPanel(data, { open = true } = {}) {
     ${claims.length ? `<h2>Shift pick-up requests <span class="badge badge-sent">${claims.length}</span></h2>
       <ul class="drops-list">${claims.map((d) => `<li>
         <div><strong>${esc(d.claimed_by_name)}</strong> wants to pick up <strong>${esc(when(d))}</strong>
-          <small>${site(d)} · ${hrs(d.hours)}${d.position ? ` · ${esc(d.position)}` : ''}</small>
+          <small>${site(d)} · ${hrs(d.hours)}</small>
           ${d.claim_problem ? `<small class="tone-bad">⚠ ${esc(d.claim_problem.replace(/^You’re/, 'They’re').replace(/^You /, 'They '))}</small>` : ''}</div>
         <div class="drops-actions"><button class="btn btn-small btn-primary" data-claim-approve="${d.id}" ${d.claim_problem ? 'disabled' : ''}>Approve</button>
           <button class="btn btn-small" data-claim-decline="${d.id}">Decline</button></div></li>`).join('')}</ul>` : ''}
@@ -56,7 +56,7 @@ export function dropsPanel(data, { open = true } = {}) {
         <div class="drops-actions"><button class="btn btn-small btn-ghost" data-claim-cancel="${d.id}">Cancel</button></div></li>`).join('')}</ul>` : ''}
     ${openList.length ? `<h2>Open shifts <span class="badge badge-new">${openList.length}</span></h2>
       <ul class="drops-list">${openList.map((d) => `<li>
-        <div><strong>${esc(when(d))}</strong><small>${site(d)} · ${hrs(d.hours)}${d.position ? ` · ${esc(d.position)}` : ''}</small>
+        <div><strong>${esc(when(d))}</strong><small>${site(d)} · ${hrs(d.hours)}</small>
           ${d.can_claim ? '' : `<small class="muted">${esc(d.claim_problem ?? '')}</small>`}</div>
         <div class="drops-actions">${d.can_claim ? `<button class="btn btn-small btn-primary" data-claim="${d.id}">Pick up</button>` : ''}
           ${d.can_withdraw ? `<button class="btn btn-small btn-ghost" data-withdraw="${d.id}">Withdraw</button>` : ''}</div></li>`).join('')}</ul>` : ''}
@@ -94,7 +94,7 @@ export function claimShift(d, done, { canClaim = true, problem = null, canWithdr
   openModal({
     title: 'Open shift',
     body: `<p><strong>${esc(when(d))}</strong></p>
-      <p>${site(d)} · ${hrs(d.hours)}${d.break_minutes ? ` · ${d.break_minutes} min break` : ''}${d.position ? ` · ${esc(d.position)}` : ''}</p>
+      <p>${site(d)} · ${hrs(d.hours)}${d.break_minutes ? ` · ${d.break_minutes} min break` : ''}</p>
       ${d.notes ? `<p class="small">${esc(d.notes)}</p>` : ''}
       ${canClaim ? '<p class="muted small">A manager needs to approve it first – it’s held for you until they do, and you’ll get a notification.</p>' : problem ? `<p class="notice">${esc(problem)}</p>` : ''}`,
     submitLabel: 'Ask to pick up',

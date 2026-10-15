@@ -106,7 +106,7 @@ export function registerChatRoutes(router, db) {
       && (req.user.role === 'admin' || dmSites(u).some((s) => mine.includes(s))));
   };
   router.get('/chat/direct/people', requirePerm('chat.direct'), (req, res) => {
-    res.json(reachable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name, position: u.position })));
+    res.json(reachable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name, rota_group: u.rota_group })));
   });
 
   // Opens the direct message with someone: the one they already have, or a new one. { user_id } → { id }
@@ -260,7 +260,7 @@ export function registerChatRoutes(router, db) {
     const sites = req.user.site_ids;
     res.json({
       people: chatters().filter((u) => req.user.role === 'admin' || req.user.all_sites || u.site_ids.some((s) => sites.includes(s)))
-        .map((u) => ({ id: u.id, name: u.name, location_id: u.location_id, location_name: u.location_name, position: u.position })),
+        .map((u) => ({ id: u.id, name: u.name, location_id: u.location_id, location_name: u.location_name, rota_group: u.rota_group })),
       sites: db.prepare(`SELECT id, name FROM locations WHERE active = 1 AND id IN (${sites.map(() => '?').join(', ') || 'NULL'}) ORDER BY name`).all(...sites),
       can_all: req.user.role === 'admin' || !!req.user.all_sites,
     });

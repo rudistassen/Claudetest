@@ -44,7 +44,6 @@ function changesFor(user, v, alreadyLinked) {
   if (user.name !== v.name) out.push(`Name ${user.name} → ${v.name}`);
   if ((user.email ?? '').toLowerCase() !== (v.email ?? '').toLowerCase()) out.push(`Email ${user.email ?? '–'} → ${v.email}`);
   if (Math.abs((user.hourly_rate ?? 0) - (v.hourly_rate ?? 0)) > 0.004) out.push(`Pay ${pounds(user.hourly_rate)} → ${pounds(v.hourly_rate)}`);
-  if ((user.position ?? '') !== (v.position ?? '')) out.push(`Job title ${user.position || '–'} → ${v.position || '–'}`);
   if (user.location_id !== v.location_id) out.push('Home site set');
   if (!user.active) out.push('Reactivated');
   if (!alreadyLinked) out.push('Linked to Square');

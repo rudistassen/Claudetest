@@ -260,7 +260,7 @@ async function editChat(groupId, navigate) {
           <div class="chat-site-picks">${options.sites.map((s) => `<label class="check"><input type="checkbox" data-site="${s.id}" ${sites.has(s.id) ? 'checked' : ''}> <span>Everyone at ${esc(s.name)}</span></label>`).join('')}</div>` : ''}
           <p class="muted small">And/or particular people:</p>
           <input type="search" class="chat-people-search" placeholder="Search people" aria-label="Search people">
-          <div class="chat-people-picks">${options.people.map((u) => `<label class="check" data-name="${esc(`${u.name} ${u.location_name ?? ''} ${u.position ?? ''}`.toLowerCase())}"><input type="checkbox" data-person="${u.id}" ${picked.has(u.id) ? 'checked' : ''}> <span>${esc(u.name)} <small class="muted">${esc(u.location_name ?? '')}${u.position ? ` · ${esc(u.position)}` : ''}</small></span></label>`).join('')}</div>
+          <div class="chat-people-picks">${options.people.map((u) => `<label class="check" data-name="${esc(`${u.name} ${u.location_name ?? ''} ${u.rota_group ?? ''}`.toLowerCase())}"><input type="checkbox" data-person="${u.id}" ${picked.has(u.id) ? 'checked' : ''}> <span>${esc(u.name)} <small class="muted">${esc(u.location_name ?? '')}${u.rota_group ? ` · ${esc(u.rota_group)}` : ''}</small></span></label>`).join('')}</div>
           <p class="muted small chat-picked-count"></p>
         </div>
       </fieldset>`,
@@ -309,9 +309,9 @@ async function startDirect() {
   const { form, close } = openModal({
     title: 'Message someone',
     body: people.length ? `<input type="search" class="chat-people-search" placeholder="Search people" aria-label="Search people">
-      <div class="chat-dm-picks">${people.map((u) => `<button type="button" class="chat-dm-pick" data-person="${u.id}" data-name="${esc(`${u.name} ${u.location_name ?? ''} ${u.position ?? ''}`.toLowerCase())}">
+      <div class="chat-dm-picks">${people.map((u) => `<button type="button" class="chat-dm-pick" data-person="${u.id}" data-name="${esc(`${u.name} ${u.location_name ?? ''} ${u.rota_group ?? ''}`.toLowerCase())}">
         <span class="chat-avatar small is-person" aria-hidden="true">${esc(initials(u.name))}</span>
-        <span>${esc(u.name)} <small class="muted">${esc(u.location_name ?? '')}${u.position ? ` · ${esc(u.position)}` : ''}</small></span></button>`).join('')}</div>
+        <span>${esc(u.name)} <small class="muted">${esc(u.location_name ?? '')}${u.rota_group ? ` · ${esc(u.rota_group)}` : ''}</small></span></button>`).join('')}</div>
       <p class="muted small">You can message people at your sites. Only the two of you see the conversation – and Atlas admins, who can read direct messages if they need to.</p>`
       : '<p>There’s nobody at your sites to message yet.</p>',
   });

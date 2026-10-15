@@ -2,7 +2,7 @@ import { ldTiles } from './courses.js';
 import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, siteColour, siteFilter, siteScope, textarea, toast, todayISO } from '../lib.js';
 
 // People: Recruitment (jobs and their candidates), Learning and development (training and who has done it),
-// Performance (one-to-ones, probation reviews and appraisals) and Areas (where each person can work).
+// Performance (one-to-ones, probation reviews and appraisals) and Skills areas (what each person is trained in).
 
 const STAGES = [['applied', 'Applied'], ['interview', 'Interview'], ['trial', 'Trial shift'], ['offer', 'Offered'], ['hired', 'Hired'], ['rejected', 'Not taken on']];
 const STAGE = Object.fromEntries(STAGES);
@@ -607,12 +607,12 @@ export async function renderTraining(ctx) {
       <p class="muted small">Tap a box to record training. Tap a name for everything they’ve done, or a course to change it.</p>
       ${data.people.length ? `<div class="table-wrap"><table class="pp-matrix">
         <thead><tr><th>Person</th>${data.courses.map((c) => `<th><button class="link-btn" data-course="${c.id}">${esc(c.name)}</button>${c.renew_months ? `<small class="muted"> ↻ every ${c.renew_months} months</small>` : ''}</th>`).join('')}</tr></thead>
-        <tbody>${data.people.map((p) => `<tr><th scope="row"><button class="link-btn" data-history="${p.id}">${esc(p.name)}</button>${p.position ? `<small class="muted">${esc(p.position)}</small>` : ''}</th>
+        <tbody>${data.people.map((p) => `<tr><th scope="row"><button class="link-btn" data-history="${p.id}">${esc(p.name)}</button>${p.rota_group ? `<small class="muted">${esc(p.rota_group)}</small>` : ''}</th>
           ${data.courses.map((c) => {
             const r = rec.get(`${p.id}|${c.id}`);
             const label = !r ? '–' : r.status === 'expired' ? `Expired ${fmtDate(r.expires_on, { day: 'numeric', month: 'short' })}` : r.status === 'due_soon' ? `Due ${fmtDate(r.expires_on, { day: 'numeric', month: 'short' })}` : `✓ ${fmtDate(r.completed_on, { day: 'numeric', month: 'short', year: '2-digit' })}`;
             return `<td><button class="pp-cell pp-${r ? r.status : 'none'}" data-cell="${p.id}|${c.id}" title="${esc(`${p.name} – ${c.name}`)}">${label}</button></td>`;
-          }).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">No staff at this site yet.</div>'}
+          }).join('')}</tr>`).join('')}</tbody></table></div>` : `<div class="empty">${role ? 'Nobody with this rota role here.' : 'No staff at this site yet.'}</div>`}
     </section>` : `<section class="card"><h2>Add your training courses</h2>
       <p>List the training your team needs – Atlas then shows who has done what, and what’s about to run out.</p>
       <p class="muted small">Quick add:</p>
@@ -651,7 +651,7 @@ export async function renderTraining(ctx) {
         <div class="pp-pick-tools"><input type="search" data-pick-search placeholder="Search names…" aria-label="Search names" autocomplete="off">
           <button type="button" class="btn btn-small" data-pick-all>Tick all shown</button><button type="button" class="btn btn-small btn-ghost" data-pick-none>Clear</button></div>
         <div class="pp-pick-list">${data.people.map((p) => `<label class="pp-pick-item" data-name="${esc(p.name.toLowerCase())}"><input type="checkbox" data-who="${p.id}" ${userIds.includes(p.id) ? 'checked' : ''}>
-          <span>${esc(p.name)}${p.position ? `<small class="muted">${esc(p.position)}</small>` : ''}</span></label>`).join('')}</div>
+          <span>${esc(p.name)}${p.rota_group ? `<small class="muted">${esc(p.rota_group)}</small>` : ''}</span></label>`).join('')}</div>
       </fieldset>
       ${field('Notes (optional)', textarea('notes', '', 'maxlength="1000" placeholder="e.g. Certificate number, score"'))}`,
     submitLabel: 'Save',
@@ -744,7 +744,7 @@ export async function renderPerformance(ctx) {
       ${rows.length ? `<div class="table-wrap"><table class="pp-perf">
         <thead><tr><th>Person</th>${multi ? '<th>Site</th>' : ''}<th>Last review</th><th>Rating</th><th>Next review</th><th></th></tr></thead>
         <tbody>${rows.map((r) => `<tr>
-          <td><a href="#/people/performance/${r.id}"><strong>${esc(r.name)}</strong></a>${r.position ? `<small class="muted">${esc(r.position)}</small>` : ''}</td>
+          <td><a href="#/people/performance/${r.id}"><strong>${esc(r.name)}</strong></a>${r.rota_group ? `<small class="muted">${esc(r.rota_group)}</small>` : ''}</td>
           ${multi ? `<td>${siteTag(r.location_name, r.location_id)}</td>` : ''}
           <td>${r.last ? `${day(r.last.review_date)}<small class="muted">${KIND[r.last.kind]}${r.reviews > 1 ? ` · ${r.reviews} in all` : ''}</small>` : '<span class="muted">None yet</span>'}</td>
           <td>${stars(r.last?.rating)}</td>
@@ -808,7 +808,7 @@ export async function renderPerson(ctx) {
   if (query.new) reviewModal(null);
 }
 
-// ---- Areas ----
+// ---- Skills areas ----
 
 const AREA_IDEAS = ['Barista', 'Bar', 'Floor', 'Till', 'Kitchen', 'Bakery'];
 const NEXT_LEVEL = { none: 'learning', learning: 'trained', trained: null };
@@ -819,40 +819,51 @@ export async function renderAreas(ctx) {
   const scope = siteScope(state, query.scope);
   const data = await api(`/areas${siteQuery(state, scope)}`);
   if (stale()) return;
+  // Filter by rota role as well as home site.
+  const roles = [...new Set(data.people.map((p) => p.rota_group).filter(Boolean))].sort();
+  const role = roles.includes(query.role) ? query.role : query.role === 'none' ? 'none' : '';
+  if (role) data.people = data.people.filter((p) => (role === 'none' ? !p.rota_group : p.rota_group === role));
   const level = new Map(data.links.map((l) => [`${l.user_id}|${l.area_id}`, l.level]));
   const count = (aid, lv) => data.people.filter((p) => level.get(`${p.id}|${aid}`) === lv).length;
 
   el.innerHTML = `
-    <div class="page-head"><h1>Areas</h1><div class="actions"><button class="btn btn-primary" id="pp-new-area">+ Area</button></div></div>
-    ${filters(state, scope)}
+    <div class="page-head"><h1>Skills areas</h1><div class="actions"><button class="btn btn-primary" id="pp-new-area">+ Skills area</button></div></div>
+    <form class="filters" id="pp-filters">${siteFilter(state, scope)}
+      ${roles.length ? `<select name="role" aria-label="Rota role">
+        <option value="">All rota roles</option>
+        ${roles.map((r) => `<option value="${esc(r)}" ${r === role ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+        ${data.people.some((p) => !p.rota_group) || role === 'none' ? `<option value="none" ${role === 'none' ? 'selected' : ''}>No rota role</option>` : ''}
+      </select>` : ''}</form>
     ${data.areas.length ? `<section class="card">
-      <p class="muted small">Who can work where. Tap a box to change it: blank → <strong>learning</strong> → <strong>trained</strong> → blank. Tap an area’s name to rename or remove it.</p>
+      <p class="muted small">Who is trained in each skill. Tap a box to change it: blank → <strong>learning</strong> → <strong>trained</strong> → blank. Tap a skill’s name to rename or remove it. Trained skills show in grey under each person’s name on the rota.</p>
       ${data.people.length ? `<div class="table-wrap"><table class="pp-matrix pp-areas">
         <thead><tr><th>Person</th>${data.areas.map((a) => `<th><button class="link-btn" data-area="${a.id}">${esc(a.name)}</button></th>`).join('')}</tr></thead>
-        <tbody>${data.people.map((p) => `<tr><th scope="row">${esc(p.name)}${p.position ? `<small class="muted">${esc(p.position)}</small>` : ''}</th>
+        <tbody>${data.people.map((p) => `<tr><th scope="row">${esc(p.name)}${p.rota_group ? `<small class="muted">${esc(p.rota_group)}</small>` : ''}</th>
           ${data.areas.map((a) => {
             const lv = level.get(`${p.id}|${a.id}`) ?? 'none';
             return `<td><button class="pp-cell pp-${lv}" data-user="${p.id}" data-area-cell="${a.id}" data-level="${lv}" title="${esc(`${p.name} – ${a.name}`)}">${LEVEL_LABEL[lv] ?? '–'}</button></td>`;
           }).join('')}</tr>`).join('')}</tbody>
         <tfoot><tr><th>Trained</th>${data.areas.map((a) => `<td data-count="${a.id}"><strong>${count(a.id, 'trained')}</strong>${count(a.id, 'learning') ? ` <span class="muted small">+${count(a.id, 'learning')} learning</span>` : ''}</td>`).join('')}</tr></tfoot>
       </table></div>` : '<div class="empty">No staff at this site yet.</div>'}
-    </section>` : `<section class="card"><h2>Set up your areas</h2>
-      <p>Add the areas people work in – then tick who is trained or learning in each, so you can see your cover at a glance.</p>
+    </section>` : `<section class="card"><h2>Set up your skills areas</h2>
+      <p>Add the skills areas people work in – then tick who is trained or learning in each, so you can see your cover at a glance.</p>
       <p class="muted small">Quick add:</p>
       <div class="chips">${AREA_IDEAS.map((n) => `<button class="chip chip-btn" data-idea="${esc(n)}">+ ${esc(n)}</button>`).join('')}</div>
     </section>`}`;
 
-  wireFilters(el, 'people/areas', navigate);
+  const filterForm = el.querySelector('#pp-filters');
+  filterForm.addEventListener('submit', (e) => { e.preventDefault(); navigate(`people/areas${qs({ scope: filterForm.scope?.value, role: filterForm.role?.value || undefined })}`); });
+  filterForm.role?.addEventListener('change', () => filterForm.requestSubmit());
   const areaModal = (a) => openModal({
-    title: a ? `Rename ${a.name}` : 'New area',
-    body: field('Area name', input('name', a?.name, 'required maxlength="60" placeholder="e.g. Kitchen"')),
-    submitLabel: a ? 'Save' : 'Add area',
+    title: a ? `Rename ${a.name}` : 'New skills area',
+    body: field('Skills area name', input('name', a?.name, 'required maxlength="60" placeholder="e.g. Kitchen, Barista, Bar"')),
+    submitLabel: a ? 'Save' : 'Add skills area',
     onSubmit: async (v) => {
       await api(a ? `/areas/${a.id}` : '/areas', { method: a ? 'PUT' : 'POST', body: v });
       toast(a ? 'Saved' : 'Area added');
       rerender();
     },
-    danger: a ? 'Remove area' : null,
+    danger: a ? 'Remove skills area' : null,
     onDanger: async () => {
       await api(`/areas/${a.id}`, { method: 'DELETE' });
       toast(`${a.name} removed`);

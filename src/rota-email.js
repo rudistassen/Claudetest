@@ -19,7 +19,7 @@ export function rotaEmail(db, user, ws) {
   const first = String(user.name ?? '').split(' ')[0] || 'there';
   const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i)).map((d) => ({ d, list: shifts.filter((s) => s.date === d) }));
   const link = appUrl() ? `${appUrl()}/#/rota?view=mine&week=${ws}` : null;
-  const line = (s) => `${s.start_time}–${s.end_time} at ${s.location_name}${s.break_minutes ? ` (${s.break_minutes} min break)` : ''}${s.position ? ` · ${s.position}` : ''}${s.sick ? ' · off sick' : ''}`;
+  const line = (s) => `${s.start_time}–${s.end_time} at ${s.location_name}${s.break_minutes ? ` (${s.break_minutes} min break)` : ''}${s.sick ? ' · off sick' : ''}`;
   const subject = `Your shifts for the week of ${shortDay(ws)}`;
   const text = [`Hi ${first},`, `The rota for the week of ${shortDay(ws)} has been published and your shifts have changed. Here’s your week:`,
     days.map(({ d, list }) => `${dayName(d)}: ${list.length ? list.map(line).join('; ') : 'Day off'}`).join('\n'),

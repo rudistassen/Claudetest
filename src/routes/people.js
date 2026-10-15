@@ -32,7 +32,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
     if (locationId) assertLocation(req, locationId);
     const sites = locationId ? [locationId] : req.user.site_ids;
     if (!sites.length) return [];
-    return db.prepare(`SELECT u.id, u.name, u.position, u.location_id, l.name AS location_name FROM users u
+    return db.prepare(`SELECT u.id, u.name, u.position, u.rota_group, u.location_id, l.name AS location_name FROM users u
       LEFT JOIN locations l ON l.id = u.location_id
       WHERE u.active = 1 AND u.role != 'admin' AND u.location_id IN (${sites.map(() => '?').join(',')}) ORDER BY u.name`).all(...sites);
   };

@@ -186,3 +186,24 @@ export function seedChat(db) {
   say(dm, person('staff1@cafe.local'), 65, 'Yes! It’s on the hook by the lockers 🙂');
   say(dm, person('staff1-2@cafe.local'), 20, 'Amazing, thank you!');
 }
+
+// Sample skills areas and rota roles: who is trained (or learning) in what, shown under names on the rota.
+export function seedSkills(db) {
+  const area = (name) => Number(db.prepare('INSERT INTO work_areas (name) VALUES (?)').run(name).lastInsertRowid);
+  const ids = Object.fromEntries(['Barista', 'Till', 'Floor', 'Kitchen', 'Bakery'].map((n) => [n, area(n)]));
+  const roleFor = { Manager: 'Management', Barista: 'Front of house', 'Front of house': 'Front of house', Kitchen: 'Kitchen' };
+  const skillsFor = {
+    Manager: [['Barista', 'trained'], ['Till', 'trained'], ['Floor', 'trained']],
+    Barista: [['Barista', 'trained'], ['Till', 'trained'], ['Floor', 'learning']],
+    'Front of house': [['Till', 'trained'], ['Floor', 'trained'], ['Barista', 'learning']],
+    Kitchen: [['Kitchen', 'trained'], ['Bakery', 'learning']],
+  };
+  db.prepare(`SELECT id, position FROM users WHERE role != 'admin' AND active = 1`).all().forEach((u, i) => {
+    db.prepare('UPDATE users SET rota_group = ? WHERE id = ?').run(roleFor[u.position] ?? null, u.id);
+    for (const [name, level] of skillsFor[u.position] ?? []) {
+      // A few people are further along than others.
+      const lv = level === 'learning' && i % 3 === 0 ? 'trained' : level;
+      db.prepare('INSERT INTO user_areas (user_id, area_id, level) VALUES (?, ?, ?)').run(u.id, ids[name], lv);
+    }
+  });
+}

@@ -206,7 +206,7 @@ function navGroups() {
       ['people/recruitment', 'Recruitment', '✎', ['people.recruitment']],
       ['people/training', 'Learning & development', '✦', ['people.training']],
       ['people/performance', 'Performance', '★', ['people.performance']],
-      ['people/areas', 'Areas', '◫', ['people.areas']],
+      ['people/areas', 'Skills areas', '◫', ['people.areas']],
       ['admin/staff', 'Staff', '☺', ['staff.manage']],
     ]],
     ['Menu', [
@@ -377,7 +377,7 @@ const TILE_NOTES = {
   'people/recruitment': 'Jobs you’re hiring for and their candidates',
   'people/training': 'Training courses and who has done them',
   'people/performance': 'One-to-ones, probation reviews and appraisals',
-  'people/areas': 'Who is trained to work in each area',
+  'people/areas': 'Who is trained in each skill – shown on the rota',
   'admin/staff': 'Everyone’s access, home site, role and pay',
   'admin/staff-log': 'Who signed in, and every change people made',
   recipes: 'What you sell, costed and linked to Square sales',

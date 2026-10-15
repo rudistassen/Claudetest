@@ -637,6 +637,11 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
       LEFT JOIN locations l ON l.id = u.location_id
       WHERE (u.location_id IN (${inList}) AND u.active = 1) OR u.id IN (SELECT user_id FROM ${table} WHERE location_id IN (${inList}) AND date BETWEEN ? AND ?)
       ORDER BY ${all ? "l.name IS NULL, l.name, " : ''}CASE u.role WHEN 'manager' THEN 0 ELSE 1 END, u.name`).all(...ids, ...ids, ws, we);
+    // The skills areas each person is trained in (People → Skills areas), shown under their name.
+    const skills = new Map();
+    for (const r of db.prepare(`SELECT ua.user_id, a.name FROM user_areas ua JOIN work_areas a ON a.id = ua.area_id
+        WHERE a.active = 1 AND ua.level = 'trained' ORDER BY a.name`).all()) skills.set(r.user_id, [...(skills.get(r.user_id) ?? []), r.name]);
+    for (const u of staff) u.skills = skills.get(u.id) ?? [];
     // On a single site's rota, the same people's shifts at other sites that week, so it's clear when they're not free.
     const staffIds = staff.map((u) => u.id);
     const away = all || !staffIds.length ? [] : db.prepare(`${select(editor ? 'draft_shifts' : 'published_shifts')}

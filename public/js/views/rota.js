@@ -390,7 +390,7 @@ export async function render(ctx) {
             const u = person(x.user_id);
             const from = u && u.location_id !== id && u.location_name ? `Covering from ${u.location_name}` : '';
             return `<li class="day-person ${x.state && x.state !== 'published' ? `is-${x.state}` : ''}" ${canEdit ? `data-drop data-user="${x.user_id}" data-date="${day}" data-site="${id}"` : ''}>
-              <span class="day-name">${personName(x.user_id, x.user_name)}</span>
+              <span class="day-name">${personName(x.user_id, x.user_name)}${u?.skills?.length ? `<small class="rota-skills">${u.skills.map(esc).join(' · ')}</small>` : ''}</span>
               <button class="day-card ${x.state && x.state !== 'published' ? `shift-${x.state}` : ''} ${x.sick ? 'shift-sick' : ''}" data-shift="${x.id}" ${canEdit ? '' : 'disabled'}
                 title="${esc([shiftTitle(x), from].filter(Boolean).join(' · ') || `${x.start_time}–${x.end_time}`)}">
                 <span>${x.start_time}–${x.end_time}</span>${TAGS[x.state] ? `<em class="shift-tag">${TAGS[x.state]}</em>` : ''}${dropTag(x)}</button>
@@ -470,6 +470,7 @@ export async function render(ctx) {
           <span class="pd-body">
             <span class="pd-time">${x.start_time} – ${x.end_time}<span class="pd-break">${pdIcon('cup')}${x.break_minutes ?? 0}m</span></span>
             <span class="pd-name">${esc(x.user_name)}</span>
+            ${u?.skills?.length ? `<span class="pd-line pd-skills">${esc(u.skills.join(' · '))}</span>` : ''}
             ${role ? `<span class="pd-line">${pdIcon('case')}${esc(role)}</span>` : ''}
             <span class="pd-line">${pdIcon('pin')}${esc(siteName(x.location_id))}${from ? ` · ${esc(from)}` : ''}</span>
           </span>
@@ -623,7 +624,7 @@ export async function render(ctx) {
           </th></tr>
           ${fc && siteOfGroup(groupId) ? `<tr class="rota-forecast" data-in-group="${esc(groupId)}"><th>${budgeted([siteOfGroup(groupId)]) ? 'Budget' : 'Forecast'} gross sales · labour %</th>${shownDays.map((d) => `<td class="num">${fcCell([siteOfGroup(groupId)], d)}</td>`).join('')}<td></td></tr>` : ''}` : `
             <tr class="${u.location_id !== site ? 'rota-cover' : ''}" ${groupId ? `data-in-group="${esc(groupId)}"` : ''}>
-              <th>${personName(u.id, u.name, 'strong')}${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
+              <th>${personName(u.id, u.name, 'strong')}${u.skills?.length ? `<small class="rota-skills">${u.skills.map(esc).join(' · ')}</small>` : ''}${u.location_id !== site ? `<small>cover${u.location_name ? ` from ${esc(u.location_name)}` : ''}</small>` : ''}</th>
               ${shownDays.map((d) => {
                 const shifts = (byCell.get(cellKey(u.id, site, d)) ?? []).filter((x) => !x.away);
                 const off = !!holidayOn(u.id, d, 'approved');

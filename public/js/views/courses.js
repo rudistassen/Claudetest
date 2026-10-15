@@ -119,7 +119,7 @@ export async function renderAssign(ctx) {
       <div class="chips">${filterLink('', 'Everyone', data.people.length)}${filterLink('todo', 'Courses to do', counts.todo)}${filterLink('late', 'Overdue', counts.late)}${filterLink('none', 'No courses yet', counts.none)}</div>
     </div>
     ${shown.length ? `<ul class="as-list">${shown.map((p) => `<li class="as-person card" data-name="${esc(p.name.toLowerCase())}">
-      <div class="as-who"><strong>${esc(p.name)}</strong><small class="muted">${esc([p.position, state.multiSite ? p.location_name : null].filter(Boolean).join(' · '))}</small></div>
+      <div class="as-who"><strong>${esc(p.name)}</strong><small class="muted">${esc([p.rota_group, state.multiSite ? p.location_name : null].filter(Boolean).join(' · '))}</small></div>
       <div class="as-courses">${p.courses.length ? p.courses.map((c) => chip(p, c)).join('') : '<span class="muted small">No courses given yet</span>'}</div>
       ${data.courses.length ? `<button type="button" class="btn btn-small" data-give-to="${p.id}">+ Give a course</button>` : ''}
     </li>`).join('')}</ul>` : '<div class="card empty">Nobody here.</div>'}
@@ -144,7 +144,7 @@ export async function renderAssign(ctx) {
           <input type="${person ? 'checkbox' : 'radio'}" name="course" value="${c.id}" ${person ? '' : 'required'}><span>${esc(c.name)}${has.has(c.id) ? ' <small class="muted">· already given</small>' : ''}${c.open_to_all ? '<small class="muted">Open to everyone</small>' : ''}</span></label>`).join('')}</div></fieldset>
         ${person ? '' : `<fieldset class="pp-pick"><legend>Who should do it <span class="muted small" data-picked></span></legend>
           <div class="pp-pick-tools"><button type="button" class="btn btn-small" data-pick-all>Tick everyone shown</button><button type="button" class="btn btn-small btn-ghost" data-pick-none>Clear</button></div>
-          <div class="pp-pick-list">${shown.map((p) => `<label class="pp-pick-item"><input type="checkbox" data-who="${p.id}"><span>${esc(p.name)}<small class="muted">${esc([p.position, p.location_name].filter(Boolean).join(' · '))}</small></span></label>`).join('')}</div></fieldset>`}
+          <div class="pp-pick-list">${shown.map((p) => `<label class="pp-pick-item"><input type="checkbox" data-who="${p.id}"><span>${esc(p.name)}<small class="muted">${esc([p.rota_group, p.location_name].filter(Boolean).join(' · '))}</small></span></label>`).join('')}</div></fieldset>`}
         ${field('Due by (optional)', input('due_on', '', `type="date" min="${todayISO()}"`))}
         <p class="muted small">They’ll see it in My tasks on My Atlas and get a notification. Giving a course to someone who has done it before asks them to do it again.</p>`,
       submitLabel: 'Give course',
@@ -450,7 +450,7 @@ export async function renderDesigner(ctx) {
     const people = team.people;
     const already = new Set(design.assigned.map((p) => p.user_id));
     const sites = [...new Map(people.filter((p) => p.location_id).map((p) => [p.location_id, p.location_name])).entries()];
-    const roles = [...new Set(people.map((p) => p.position).filter(Boolean))].sort();
+    const roles = [...new Set(people.map((p) => p.rota_group).filter(Boolean))].sort();
     const { form } = openModal({
       title: `Give “${settings.name}” to people`,
       wide: true,
@@ -460,8 +460,8 @@ export async function renderDesigner(ctx) {
             <button type="button" class="btn btn-small" data-pick-all>Tick all shown</button><button type="button" class="btn btn-small btn-ghost" data-pick-none>Clear</button></div>
           ${sites.length > 1 ? `<div class="chips cd-pick-chips"><span class="muted small">Tick a site:</span>${sites.map(([id, name]) => `<button type="button" class="chip chip-btn" data-pick-site="${id}">${esc(name)}</button>`).join('')}</div>` : ''}
           ${roles.length ? `<div class="chips cd-pick-chips"><span class="muted small">Tick a role:</span>${roles.map((r) => `<button type="button" class="chip chip-btn" data-pick-role="${esc(r)}">${esc(r)}</button>`).join('')}</div>` : ''}
-          <div class="pp-pick-list">${people.map((p) => `<label class="pp-pick-item" data-name="${esc(p.name.toLowerCase())}" data-site="${p.location_id ?? ''}" data-role="${esc(p.position ?? '')}">
-            <input type="checkbox" data-who="${p.id}"><span>${esc(p.name)}${already.has(p.id) ? ' <small class="muted">· already given it</small>' : ''}<small class="muted">${esc([p.position, p.location_name].filter(Boolean).join(' · '))}</small></span></label>`).join('')}</div>
+          <div class="pp-pick-list">${people.map((p) => `<label class="pp-pick-item" data-name="${esc(p.name.toLowerCase())}" data-site="${p.location_id ?? ''}" data-role="${esc(p.rota_group ?? '')}">
+            <input type="checkbox" data-who="${p.id}"><span>${esc(p.name)}${already.has(p.id) ? ' <small class="muted">· already given it</small>' : ''}<small class="muted">${esc([p.rota_group, p.location_name].filter(Boolean).join(' · '))}</small></span></label>`).join('')}</div>
         </fieldset>
         <p class="muted small">They’ll see it in My tasks on My Atlas and get a notification. Giving it to someone who’s done it before asks them to do it again.</p>`,
       submitLabel: 'Give course',
