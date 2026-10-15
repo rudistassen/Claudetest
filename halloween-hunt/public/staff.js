@@ -29,8 +29,11 @@
     $('login').hidden = true;
     $('signed-in').hidden = false;
     $('logout').hidden = false;
-    $('admin').hidden = role !== 'admin';
-    if (role === 'admin') loadStats();
+    for (const id of ['admin', 'cp-panel', 'admin-tools']) $(id).hidden = role !== 'admin';
+    if (role === 'admin') {
+      loadStats();
+      loadCheckpoints();
+    }
     $('q').focus();
   }
 
@@ -130,6 +133,78 @@
       tr.append(el('td', null, `${c.number}. ${c.name}`), el('td', null, String(c.scans)));
       return tr;
     }));
+  }
+
+  // ----- Checkpoint wording -------------------------------------------------
+
+  function field(label, value, multiline, max) {
+    const wrap = el('div');
+    const l = el('label', null, label);
+    const input = el(multiline ? 'textarea' : 'input', 'field');
+    input.value = value;
+    input.maxLength = max;
+    l.append(input);
+    wrap.append(l);
+    return { wrap, input };
+  }
+
+  function checkpointCard(cp) {
+    const card = el('div', 'cp');
+    const head = el('div', 'cp-head', `Checkpoint ${cp.number}`);
+    const badge = el('span', 'badge', 'Edited');
+    badge.hidden = !cp.edited;
+    head.append(badge);
+    const name = field('Name', cp.name, false, 80);
+    const clue = field('Clue', cp.clue, true, 400);
+    const found = field('Message when they find it', cp.found, true, 400);
+
+    const actions = el('div', 'cp-actions');
+    const save = el('button', 'btn', 'Save');
+    save.type = 'button';
+    const reset = el('button', 'btn btn-ghost', 'Undo my changes');
+    reset.type = 'button';
+    reset.hidden = !cp.edited;
+    const status = el('span', 'cp-status');
+    actions.append(save, reset, status);
+    card.append(head, name.wrap, clue.wrap, found.wrap, actions);
+
+    async function send(body, doneText) {
+      save.disabled = reset.disabled = true;
+      status.textContent = 'Saving…';
+      status.className = 'cp-status';
+      try {
+        const r = await api('admin/checkpoints/' + encodeURIComponent(cp.id), body);
+        name.input.value = r.name;
+        clue.input.value = r.clue;
+        found.input.value = r.found;
+        badge.hidden = reset.hidden = !r.edited;
+        status.textContent = doneText;
+        status.className = 'cp-status ok';
+        loadStats();
+      } catch (err) {
+        if (handleAuthError(err)) return;
+        status.textContent = err.message;
+        status.className = 'cp-status bad';
+      } finally {
+        save.disabled = reset.disabled = false;
+      }
+    }
+    save.addEventListener('click', () =>
+      send({ name: name.input.value, clue: clue.input.value, found: found.input.value }, '✓ Saved — live now'));
+    reset.addEventListener('click', () => {
+      if (confirm(`Put checkpoint ${cp.number} back to its original wording from hunt.config.js?`)) send({ reset: true }, '✓ Back to the original');
+    });
+    for (const f of [name, clue, found]) f.input.addEventListener('input', () => { status.textContent = ''; });
+    return card;
+  }
+
+  async function loadCheckpoints() {
+    try {
+      const data = await api('admin/checkpoints');
+      $('cp-list').replaceChildren(...data.checkpoints.map(checkpointCard));
+    } catch (err) {
+      handleAuthError(err);
+    }
   }
 
   $('delete-emails').addEventListener('click', async () => {

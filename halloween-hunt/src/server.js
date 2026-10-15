@@ -94,8 +94,21 @@ function csvCell(value) {
 // options: { staffPassword, adminPassword, now } (now is for tests)
 export function createApp(db, config, { staffPassword, adminPassword, now = () => new Date() } = {}) {
   validateConfig(config);
-  const byCode = new Map(config.checkpoints.map((c) => [c.code, c]));
   const checkpointIds = new Set(config.checkpoints.map((c) => c.id));
+
+  // Checkpoints with any wording edited on the admin page swapped in.
+  const savedText = db.prepare('SELECT checkpoint_id, name, clue, found FROM checkpoint_text');
+  function isEdited(c) {
+    const o = config.checkpoints.find((x) => x.id === c.id);
+    return c.name !== o.name || c.clue !== o.clue || c.found !== o.found;
+  }
+  function checkpoints() {
+    const saved = new Map(savedText.all().map((r) => [r.checkpoint_id, r]));
+    return config.checkpoints.map((c) => {
+      const s = saved.get(c.id);
+      return s ? { ...c, name: s.name, clue: s.clue, found: s.found } : c;
+    });
+  }
 
   const app = express();
   app.disable('x-powered-by');
@@ -174,7 +187,7 @@ export function createApp(db, config, { staffPassword, adminPassword, now = () =
       startDate: config.startDate,
       endDate: config.endDate,
       status: huntStatus(),
-      checkpoints: config.checkpoints.map((c, i) => ({
+      checkpoints: checkpoints().map((c, i) => ({
         number: i + 1,
         clue: c.clue,
         found: found.has(c.id),
@@ -237,7 +250,8 @@ export function createApp(db, config, { staffPassword, adminPassword, now = () =
     const status = huntStatus();
     if (status !== 'open') return res.json({ result: status, hunt: huntPayload(req.playerId) });
 
-    const cp = byCode.get(String(req.body?.code ?? '').trim());
+    const code = String(req.body?.code ?? '').trim();
+    const cp = checkpoints().find((c) => c.code === code);
     if (!cp) {
       if (!badScanLimit(req.playerId)) throw new HttpError(429, 'Too many wrong codes. Please try again later.');
       return res.json({ result: 'invalid', hunt: huntPayload(req.playerId) });
@@ -331,7 +345,7 @@ export function createApp(db, config, { staffPassword, adminPassword, now = () =
       marketingOptIns: db.prepare('SELECT COUNT(*) AS n FROM players WHERE marketing_consent = 1').get().n,
       winners: db.prepare('SELECT COUNT(*) AS n FROM prizes').get().n,
       claimed: db.prepare('SELECT COUNT(*) AS n FROM prizes WHERE claimed_at IS NOT NULL').get().n,
-      checkpoints: config.checkpoints.map((c, i) => ({ number: i + 1, name: c.name, scans: scanCounts.get(c.id) || 0 })),
+      checkpoints: checkpoints().map((c, i) => ({ number: i + 1, name: c.name, scans: scanCounts.get(c.id) || 0 })),
     });
   });
 
@@ -340,8 +354,38 @@ export function createApp(db, config, { staffPassword, adminPassword, now = () =
       name: config.name,
       required: config.required,
       prize: config.prize,
-      checkpoints: config.checkpoints.map((c, i) => ({ number: i + 1, name: c.name, clue: c.clue, code: c.code })),
+      checkpoints: checkpoints().map((c, i) => ({
+        id: c.id, number: i + 1, name: c.name, clue: c.clue, found: c.found, code: c.code, edited: isEdited(c),
+      })),
     });
+  });
+
+  const saveText = db.prepare(`
+    INSERT INTO checkpoint_text (checkpoint_id, name, clue, found) VALUES (?, ?, ?, ?)
+    ON CONFLICT (checkpoint_id) DO UPDATE SET
+      name = excluded.name, clue = excluded.clue, found = excluded.found, updated_at = datetime('now')`);
+  const deleteText = db.prepare('DELETE FROM checkpoint_text WHERE checkpoint_id = ?');
+
+  function textField(body, key, label, max) {
+    const value = String(body?.[key] ?? '').trim();
+    if (!value) throw new HttpError(400, `${label} can't be empty`);
+    if (value.length > max) throw new HttpError(400, `${label} is too long (${max} characters at most)`);
+    return value;
+  }
+
+  api.post('/admin/checkpoints/:id', requireAdmin, (req, res) => {
+    if (!checkpointIds.has(req.params.id)) throw new HttpError(404, 'No such checkpoint');
+    const original = config.checkpoints.find((c) => c.id === req.params.id);
+    if (req.body?.reset === true) {
+      deleteText.run(original.id);
+    } else {
+      const name = textField(req.body, 'name', 'The name', 80);
+      const clue = textField(req.body, 'clue', 'The clue', 400);
+      const found = textField(req.body, 'found', 'The found message', 400);
+      saveText.run(original.id, name, clue, found);
+    }
+    const c = checkpoints().find((x) => x.id === original.id);
+    res.json({ id: c.id, name: c.name, clue: c.clue, found: c.found, edited: isEdited(c) });
   });
 
   api.get('/admin/export.csv', requireAdmin, (_req, res) => {

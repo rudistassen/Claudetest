@@ -23,6 +23,15 @@ CREATE TABLE IF NOT EXISTS scans (
   PRIMARY KEY (player_id, checkpoint_id)
 );
 
+-- Checkpoint wording edited on the admin page; replaces what's in hunt.config.js.
+CREATE TABLE IF NOT EXISTS checkpoint_text (
+  checkpoint_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  clue TEXT NOT NULL,
+  found TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS prizes (
   player_id INTEGER PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
   claim_code TEXT NOT NULL UNIQUE,

@@ -20,6 +20,7 @@ It's a small Node.js app with its own SQLite database, built to run on [Railway]
 
 **Admins** sign in on the same page with the admin password and also get:
 - Totals: players, winners, prizes claimed, marketing opt-ins and scans per checkpoint.
+- **Checkpoints**: change each checkpoint's name, clue and the message customers see when they find it. Changes go live as soon as you save, with no redeploy. **Undo my changes** puts a checkpoint back to the wording in `hunt.config.js`. Names are printed on the posters, so reprint a poster if you rename its checkpoint.
 - **Print QR posters**: an A4 Start poster plus one poster per checkpoint.
 - **Download players (CSV)**: everyone's email, opt-in, progress and claim status.
 - **Delete emails of people who didn't opt in**: use this after the hunt (see *Privacy* below).
@@ -28,7 +29,7 @@ It's a small Node.js app with its own SQLite database, built to run on [Railway]
 
 You'll need a Railway account. Running a small app like this with a volume needs a paid plan: the Hobby plan costs about $5 a month, which includes some usage. Check [railway.com/pricing](https://railway.com/pricing) for current prices.
 
-1. **Edit `hunt.config.js`**: hunt name, prize, `required`, dates and the checkpoints. Write clues for your own hiding places. Commit and push to GitHub. The checkpoint codes aren't in this file. They go in a Railway variable (step 4), so nobody can read them on GitHub.
+1. **Edit `hunt.config.js`**: hunt name, prize, `required`, dates and the checkpoints. You can write the clues here, or later on the admin page (wording saved there replaces what's in this file). Commit and push to GitHub. The checkpoint codes aren't in this file. They go in a Railway variable (step 4), so nobody can read them on GitHub.
 2. **Create the service.** In Railway choose **New Project → Deploy from GitHub repo** and pick this repository. Then open the service's **Settings**:
    - **Source → Root Directory**: `/halloween-hunt`
    - **Source → Branch**: the branch that has the hunt on it (e.g. `main` once it's merged).

@@ -35,6 +35,18 @@
     .actions { display: grid; gap: 8px; margin-top: 14px; }
     .actions a, .actions button { text-align: center; text-decoration: none; }
     .danger { background: transparent; color: #ff9b9b; border: 2px solid #ff9b9b; }
+    .cp { border-top: 1px solid var(--line); padding: 14px 0 4px; }
+    .cp:first-of-type { border-top: 0; }
+    .cp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 800; }
+    .badge { font-size: .75rem; background: var(--olive); color: var(--cream); border-radius: 999px; padding: 2px 8px; }
+    .cp label { font-size: .9rem; margin: 10px 0 4px; }
+    .cp .field { font-weight: 400; }
+    textarea.field { min-height: 76px; resize: vertical; font-size: 1rem; }
+    .cp-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .cp-actions .btn { padding: 8px 18px; font-size: .95rem; }
+    .cp-status { font-weight: 700; font-size: .9rem; }
+    .cp-status.ok { color: var(--green); }
+    .cp-status.bad { color: #ff9b9b; }
     .top { display: flex; justify-content: space-between; align-items: center; }
   </style>
 </head>
@@ -73,6 +85,16 @@
           <thead><tr><th>Checkpoint</th><th>Scans</th></tr></thead>
           <tbody id="cp-table"></tbody>
         </table>
+      </section>
+
+      <section class="panel" id="cp-panel" hidden>
+        <h2>Checkpoints</h2>
+        <p class="small">Change what customers see for each checkpoint. Changes go live as soon as you save. The name is printed on the checkpoint's poster, so reprint it if you change the name. Clues aren't on the posters.</p>
+        <div id="cp-list"></div>
+      </section>
+
+      <section class="panel" id="admin-tools" hidden>
+        <h2>Tools</h2>
         <div class="actions">
           <a class="btn" href="posters.html">Print QR posters</a>
           <a class="btn btn-ghost" href="/api/admin/export.csv">Download players (CSV)</a>

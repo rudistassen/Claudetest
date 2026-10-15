@@ -200,6 +200,42 @@ describe('admin', () => {
   });
 });
 
+describe('editing checkpoints', () => {
+  test('admins can change the wording and undo it; customers see it straight away', async () => {
+    const [cp] = config.checkpoints;
+    const staff = client();
+    await staff('staff/login', { password: 'staff-pass' });
+    assert.equal((await staff('admin/checkpoints/' + cp.id, { name: 'X', clue: 'Y', found: 'Z' })).status, 403);
+
+    const admin = client();
+    await admin('staff/login', { password: 'admin-pass' });
+    const saved = await admin('admin/checkpoints/' + cp.id, { name: ' The Bread Bin ', clue: 'Where loaves sleep.', found: 'Crumbs!' });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(saved.data, { id: cp.id, name: 'The Bread Bin', clue: 'Where loaves sleep.', found: 'Crumbs!', edited: true });
+
+    const list = await admin('admin/checkpoints');
+    assert.equal(list.data.checkpoints[0].name, 'The Bread Bin');
+    assert.equal(list.data.checkpoints[0].edited, true);
+    assert.equal(list.data.checkpoints[1].edited, false);
+
+    const player = client();
+    await player('join', { email: 'reader@example.com' });
+    assert.equal((await player('hunt')).data.checkpoints[0].clue, 'Where loaves sleep.');
+    const scan = await player('scan', { code: cp.code });
+    assert.deepEqual(scan.data.checkpoint, { name: 'The Bread Bin', message: 'Crumbs!' });
+    assert.equal(scan.data.hunt.checkpoints[0].name, 'The Bread Bin');
+
+    assert.equal((await admin('admin/checkpoints/' + cp.id, { name: '', clue: 'a', found: 'b' })).status, 400);
+    assert.equal((await admin('admin/checkpoints/' + cp.id, { name: 'a'.repeat(81), clue: 'a', found: 'b' })).status, 400);
+    assert.equal((await admin('admin/checkpoints/nope', { name: 'a', clue: 'b', found: 'c' })).status, 404);
+
+    const reset = await admin('admin/checkpoints/' + cp.id, { reset: true });
+    assert.equal(reset.data.name, cp.name);
+    assert.equal(reset.data.edited, false);
+    assert.equal((await player('hunt')).data.checkpoints[0].clue, cp.clue);
+  });
+});
+
 test('codes come from HUNT_CODES, not the config file', () => {
   assert.ok(baseConfig.checkpoints.every((c) => !('code' in c)));
   const ids = baseConfig.checkpoints.map((c) => c.id);
