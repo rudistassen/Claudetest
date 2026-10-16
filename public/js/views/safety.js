@@ -1,8 +1,8 @@
-import { addDays, api, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, statusBadge, textarea, toast, todayISO, siteScope, siteFilter, sitePicker } from '../lib.js';
+import { addDays, api, chooseSite, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, statusBadge, textarea, toast, todayISO, siteScope, siteFilter, sitePicker } from '../lib.js';
 
-// Compliance (once called Trail): food-safety checklists, the compliance report and setting up checks for each site.
+// Compliance (once called Trail): food safety checks, the compliance report and setting up checks for each site.
 function trailTabs(state, active) {
-  const items = [['safety', 'Checklist', true], ['safety/report', 'Compliance report', state.can('safety.report')], ['safety/setup', 'Set up', state.can('safety.manage')]]
+  const items = [['safety', 'Food Safety Checks', true], ['safety/report', 'Compliance report', state.can('safety.report')], ['safety/setup', 'Set up', state.can('safety.manage')]]
     .filter(([, , ok]) => ok);
   return items.length > 1 ? `<div class="tabs trail-tabs">${items.map(([p, l]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${l}</a>`).join('')}</div>` : '';
 }
@@ -66,6 +66,13 @@ function section(title, tasks, state) {
 
 export async function renderChecklist(ctx) {
   const { el, state, query, stale } = ctx;
+  // Opened from a site's tile on Compliance (?site=): that site's checks.
+  const picked = state.locations.find((l) => l.active && String(l.id) === query.site);
+  if (picked) {
+    chooseSite(state, picked.id);
+    // Drop ?site= from the address, so picking another site on this page isn't undone.
+    history.replaceState(null, '', `${location.pathname}${location.search}#/safety${qs({ date: query.date })}`);
+  }
   const date = query.date || todayISO();
   const data = await api(`/safety/checklist${qs({ location_id: state.locationId, date })}`);
   if (stale()) return;
@@ -75,7 +82,7 @@ export async function renderChecklist(ctx) {
 
   el.innerHTML = `
     <div class="page-head">
-      <h1>Compliance${state.multiSite ? '' : ` · ${esc(state.location?.name ?? '')}`}</h1>
+      <h1>Food Safety Checks${state.location?.name ? ` · ${esc(state.location.name)}` : ''}</h1>
       <div class="actions">
         ${sitePicker(state)}
         <button class="btn" data-day="-1">‹</button>

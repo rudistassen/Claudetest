@@ -196,7 +196,7 @@ function navGroups() {
       ['checklists/setup', 'Set up checklists', '⚙', ['checklists.manage']],
     ]],
     ['Compliance', [
-      ['safety', 'Checklist', '✓', SAFETY],
+      ['safety', 'Food Safety Checks', '✓', SAFETY],
       ['safety/report', 'Compliance report', '▤', ['safety.report']],
       ['safety/setup', 'Set up checks', '☑', ['safety.manage']],
     ]],
@@ -349,7 +349,7 @@ const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 const HUBS = { Rota: 'rota-menu', 'Checklists & Tasks': 'checklists-tasks', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
-  safety: 'Today’s checks – tick them off as you go',
+  safety: 'Today’s food safety checks – tick them off as you go',
   'safety/report': 'How each site is doing, and every failed check',
   'safety/setup': 'Add and change the checks for each site',
   rota: 'See and plan the week’s shifts',
@@ -413,7 +413,34 @@ const TILE_GROUPS = {
   'orders/new': 'Purchasing', 'orders/receive': 'Purchasing', orders: 'Purchasing', 'prep-orders': 'Purchasing', 'prep-orders/list': 'Purchasing',
   stock: 'Stock and waste', wastage: 'Stock and waste',
 };
+// On Compliance, a Food Safety Checks tile for each site (when there's more than one), with how far it's got today.
+const siteCheckTile = (l, ic, on) => `<a class="hub-tile ${on ? 'is-active' : ''}" href="#/safety?site=${l.id}" ${on ? 'aria-current="page"' : ''}>
+  <span class="hub-icon" aria-hidden="true">${ic}</span>
+  <span class="hub-text"><strong>${esc(l.name)}</strong><small data-site-checks="${l.id}">Today’s food safety checks</small></span>
+  <span class="hub-go" aria-hidden="true">›</span></a>`;
 const hubTiles = (items, active) => {
+  const safetyItem = items.find(([p]) => p === 'safety');
+  const sites = state.locations.filter((l) => l.active);
+  if (!safetyItem || sites.length < 2) return hubTilesOf(items, active);
+  const rest = items.filter(([p]) => p !== 'safety');
+  // The site whose checks are open: the one picked on its tile, else the site already chosen.
+  const shown = Number(parseHash().query.site) || state.locationId;
+  return `<p class="hub-group-head">${esc(safetyItem[1])}</p>${sites.map((l) => siteCheckTile(l, safetyItem[2], active === 'safety' && shown === l.id)).join('')}
+    ${rest.length ? `<p class="hub-group-head">Reports and set up</p>${hubTilesOf(rest, active)}` : ''}`;
+};
+// Fills in each site's tile with today's progress (e.g. "12 of 20 done today").
+async function showSiteChecks(root) {
+  const tiles = [...root.querySelectorAll('[data-site-checks]')];
+  await Promise.all(tiles.map(async (t) => {
+    try {
+      const d = await api(`/safety/checklist${qs({ location_id: t.dataset.siteChecks })}`);
+      const daily = d.tasks.filter((x) => x.frequency === 'daily');
+      const done = daily.filter((x) => x.check).length;
+      if (daily.length) t.textContent = `${done} of ${daily.length} daily checks done today`;
+    } catch { /* keep the plain description */ }
+  }));
+}
+const hubTilesOf = (items, active) => {
   const main = items.filter(([p]) => !SETUP_TILES.has(p) && !ADMIN_TILES.has(p) && !TILE_GROUPS[p]);
   const group = (title, has) => {
     const list = items.filter(([p]) => has(p));
@@ -435,6 +462,7 @@ function renderHub({ el, params }) {
   el.innerHTML = `
     <div class="page-head"><h1 class="hub-title">${esc(TOP_LABELS[heading] ?? heading)}</h1></div>
     <div class="hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}">${hubTiles(items, null)}</div>`;
+  showSiteChecks(el);
 }
 
 // Line icons for the bar along the bottom on phones.
@@ -759,6 +787,7 @@ export async function route({ keepScroll = false } = {}) {
       <nav class="hub-rail hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}" aria-label="${esc(TOP_LABELS[heading] ?? heading)}">
         <p class="hub-rail-head">${esc(TOP_LABELS[heading] ?? heading)}</p>${hubTiles(items, active)}</nav>
       <div class="hub-main"></div></div>`;
+    showSiteChecks(el.querySelector('.hub-rail'));
     view = el.querySelector('.hub-main');
   }
   view.innerHTML = '<div class="loading">Loading…</div>';
