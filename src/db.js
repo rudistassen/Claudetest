@@ -539,7 +539,8 @@ CREATE TABLE IF NOT EXISTS xero_connection (
   tracking_category_id TEXT,
   tracking_category_name TEXT,
   site_options TEXT,
-  auto_send INTEGER NOT NULL DEFAULT 0
+  auto_send INTEGER NOT NULL DEFAULT 0,
+  bank_access INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS invoice_lines (
@@ -1352,6 +1353,8 @@ const MIGRATIONS = [
   }],
   // Chats are group chats or direct (one-to-one) messages.
   ['chat_groups', 'kind', `ALTER TABLE chat_groups ADD COLUMN kind TEXT NOT NULL DEFAULT 'group'`],
+  // Whether an admin has let Atlas read bank accounts in Xero (Reporting → Bank).
+  ['xero_connection', 'bank_access', 'ALTER TABLE xero_connection ADD COLUMN bank_access INTEGER NOT NULL DEFAULT 0'],
 ];
 
 export const PUBLISH_COLUMNS = `pub_location_id = location_id, pub_user_id = user_id, pub_date = date,

@@ -18,6 +18,7 @@ import { registerOpenOrderRoutes } from './routes/open-orders.js';
 import { registerReportRoutes } from './reports.js';
 import { registerInvoiceRoutes } from './routes/invoices.js';
 import { registerXeroRoutes } from './routes/xero.js';
+import { registerBankRoutes } from './routes/bank.js';
 import { registerPeopleRoutes } from './routes/people.js';
 import { Xero } from './xero.js';
 import { registerNewsRoutes } from './routes/news.js';
@@ -128,6 +129,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerEmailSettingsRoutes(api, db, mailer, { orders, events, careers, invoices: mailbox });
   registerInvoiceRoutes(api, db, invoiceReader, { xero: xeroClient });
   registerXeroRoutes(api, db, xeroClient);
+  registerBankRoutes(api, db, xeroClient);
   registerPeopleRoutes(api, db, { careers });
   registerCareersRoutes(api, db, { mailbox: careers });
   registerEventRoutes(api, db, { mailbox: events, reader: enquiryReader });

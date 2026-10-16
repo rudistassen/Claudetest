@@ -12,6 +12,9 @@ const API = 'https://api.xero.com';
 // Bills, suppliers, account codes / tracking categories, and attaching the invoice file. offline_access keeps the
 // connection going without signing in again. (XERO_SCOPES overrides this if Xero asks for different ones.)
 export const DEFAULT_SCOPES = 'offline_access accounting.invoices accounting.contacts accounting.settings accounting.attachments';
+// Reading bank accounts (Reporting → Bank), asked for only once an admin allows it: bank transactions, payments
+// against bills and invoices, and the bank summary (balances). Read only. XERO_BANK_SCOPES overrides this.
+export const BANK_SCOPES = 'accounting.banktransactions.read accounting.payments.read accounting.reports.banksummary.read';
 
 /** Xero settings from the environment, or null when Xero isn't set up. */
 export function xeroConfig(env = process.env) {
@@ -21,6 +24,7 @@ export function xeroConfig(env = process.env) {
     clientSecret: env.XERO_CLIENT_SECRET.trim(),
     redirectUri: env.XERO_REDIRECT_URI?.trim() || (appUrl(env) ? `${appUrl(env)}/api/xero/callback` : null),
     scopes: env.XERO_SCOPES?.trim() || DEFAULT_SCOPES,
+    bankScopes: env.XERO_BANK_SCOPES?.trim() || BANK_SCOPES,
   };
 }
 
@@ -39,8 +43,10 @@ export class Xero {
 
   connection() { return this.db.prepare('SELECT * FROM xero_connection WHERE id = 1').get() ?? null; }
 
-  authorizeUrl(state, redirectUri) {
-    return `${LOGIN}?${new URLSearchParams({ response_type: 'code', client_id: this.config.clientId, redirect_uri: redirectUri, scope: this.config.scopes, state })}`;
+  /** Xero's sign-in page; bank adds read-only access to bank accounts. */
+  authorizeUrl(state, redirectUri, bank = false) {
+    const scope = bank ? `${this.config.scopes} ${this.config.bankScopes ?? BANK_SCOPES}` : this.config.scopes;
+    return `${LOGIN}?${new URLSearchParams({ response_type: 'code', client_id: this.config.clientId, redirect_uri: redirectUri, scope, state })}`;
   }
 
   async token(params) {
@@ -62,7 +68,7 @@ export class Xero {
   }
 
   /** Finishes connecting: swaps the code from Xero's sign-in for tokens and saves the organisation. */
-  async connect(code, redirectUri, userId) {
+  async connect(code, redirectUri, userId, { bank = false } = {}) {
     const t = await this.token({ grant_type: 'authorization_code', code, redirect_uri: redirectUri });
     const res = await this.fetch(`${API}/connections`, { headers: { Authorization: `Bearer ${t.access_token}`, Accept: 'application/json' } });
     const tenants = (await res.json().catch(() => [])) ?? [];
@@ -73,12 +79,15 @@ export class Xero {
       ON CONFLICT(id) DO UPDATE SET tenant_id = excluded.tenant_id, tenant_name = excluded.tenant_name, access_token = excluded.access_token,
         refresh_token = excluded.refresh_token, expires_at = excluded.expires_at, connected_by = excluded.connected_by, connected_at = excluded.connected_at, last_error = NULL`)
       .run(org.tenantId, org.tenantName ?? 'Xero', t.access_token, t.refresh_token, Date.now() + (t.expires_in ?? 1800) * 1000, userId);
+    this.db.prepare('UPDATE xero_connection SET bank_access = ? WHERE id = 1').run(bank ? 1 : 0);
+    this.bankCache = new Map();
     return { tenant_name: org.tenantName };
   }
 
   disconnect() {
     const c = this.connection();
-    this.db.prepare('UPDATE xero_connection SET access_token = NULL, refresh_token = NULL, tenant_id = NULL WHERE id = 1').run();
+    this.db.prepare('UPDATE xero_connection SET access_token = NULL, refresh_token = NULL, tenant_id = NULL, bank_access = 0 WHERE id = 1').run();
+    this.bankCache = new Map();
     // Tell Xero too, so the connection disappears from its list of connected apps.
     if (c?.refresh_token) {
       this.fetch(`${IDENTITY}/connect/revocation`, {
@@ -132,8 +141,114 @@ export class Xero {
     }).catch((err) => { throw new HttpError(502, `Could not reach Xero: ${err.message}`); });
     const data = await res.json().catch(() => ({}));
     if (res.status === 429) throw new HttpError(502, 'Xero is busy – try again in a minute');
-    if (!res.ok) throw new HttpError(502, `Xero: ${message(data, `HTTP ${res.status}`)}`);
+    if (!res.ok) {
+      const err = new HttpError(502, `Xero: ${message(data, `HTTP ${res.status}`)}`);
+      err.xeroStatus = res.status;
+      throw err;
+    }
     return data;
+  }
+
+  // --- Bank (read only) ---
+
+  bankAllowed() { return !!this.connection()?.bank_access; }
+
+  /** Reads bank data from Xero, kept for a few minutes so moving around the page doesn't keep asking Xero. */
+  async bankRead(key, fn) {
+    if (!this.bankAllowed()) throw new HttpError(400, 'Atlas hasn’t been allowed to read your bank accounts in Xero yet – an admin can allow it under Setup → Xero');
+    this.bankCache ??= new Map();
+    const hit = this.bankCache.get(key);
+    if (hit && hit.at > Date.now() - BANK_CACHE_MS) return hit.data;
+    try {
+      const data = await fn();
+      this.bankCache.set(key, { at: Date.now(), data });
+      if (this.bankCache.size > 200) this.bankCache.delete(this.bankCache.keys().next().value);
+      return data;
+    } catch (err) {
+      // Xero refusing means the bank access wasn't given (or was taken away): ask for it again.
+      if (err.xeroStatus === 401 || err.xeroStatus === 403) {
+        this.db.prepare('UPDATE xero_connection SET bank_access = 0 WHERE id = 1').run();
+        throw new HttpError(400, 'Xero didn’t let Atlas read your bank accounts – an admin can allow it again under Setup → Xero');
+      }
+      throw err;
+    }
+  }
+
+  /** Bank accounts in Xero with their balances: [{ id, name, code, number_last4, currency, opening, received, spent, balance }]. */
+  async bankAccounts(today) {
+    return this.bankRead(`accounts|${today}`, async () => {
+      const r = await this.api('GET', `/Accounts?where=${encodeURIComponent('Type=="BANK"')}`);
+      const accounts = (r.Accounts ?? []).filter((a) => a.Status !== 'ARCHIVED');
+      // Balances from the Bank Summary report (this month so far); without it the accounts still show.
+      let summary = new Map();
+      try {
+        const rep = await this.api('GET', `/Reports/BankSummary?fromDate=${today.slice(0, 8)}01&toDate=${today}`);
+        summary = bankSummary(rep);
+      } catch (err) {
+        if (err.xeroStatus === 401 || err.xeroStatus === 403) throw err;
+      }
+      return accounts.map((a) => {
+        const s = summary.get(a.AccountID) ?? summary.get(a.Name) ?? null;
+        const digits = String(a.BankAccountNumber ?? '').replace(/\D/g, '');
+        return {
+          id: a.AccountID, name: a.Name, code: a.Code ?? null, currency: a.CurrencyCode ?? 'GBP',
+          number_last4: digits.length >= 4 ? digits.slice(-4) : null,
+          opening: s?.opening ?? null, received: s?.received ?? null, spent: s?.spent ?? null, balance: s?.closing ?? null,
+        };
+      });
+    });
+  }
+
+  /**
+   * Money in and out of a bank account between two dates (YYYY-MM-DD), newest first: what's been entered or
+   * reconciled in Xero – spend and receive money, transfers, and payments of bills and invoices.
+   */
+  async bankLines(accountId, from, to) {
+    return this.bankRead(`lines|${accountId}|${from}|${to}`, async () => {
+      const where = encodeURIComponent(`Date>=DateTime(${from.replace(/-/g, ',')}) AND Date<=DateTime(${to.replace(/-/g, ',')})`);
+      const pages = async (path, key) => {
+        const out = [];
+        for (let page = 1; page <= BANK_MAX_PAGES; page++) {
+          const r = await this.api('GET', `${path}?where=${where}&page=${page}`);
+          const list = r[key] ?? [];
+          out.push(...list);
+          if (list.length < 100) break;
+        }
+        return out;
+      };
+      const [txns, payments] = await Promise.all([pages('/BankTransactions', 'BankTransactions'), pages('/Payments', 'Payments')]);
+      const lines = [
+        ...txns.filter((t) => t.Status !== 'DELETED' && t.BankAccount?.AccountID === accountId).map((t) => {
+          const out = /SPEND/.test(t.Type ?? '');
+          return {
+            id: `t-${t.BankTransactionID}`, date: xeroDate(t.DateString, t.Date),
+            who: t.Contact?.Name || t.LineItems?.[0]?.Description || null,
+            details: t.Contact?.Name ? (t.LineItems?.[0]?.Description ?? null) : null,
+            reference: t.Reference || null,
+            kind: /TRANSFER/.test(t.Type) ? 'Transfer' : /OVERPAYMENT/.test(t.Type) ? 'Overpayment' : /PREPAYMENT/.test(t.Type) ? 'Prepayment' : out ? 'Spend money' : 'Receive money',
+            amount_in: out ? null : Number(t.Total ?? 0), amount_out: out ? Number(t.Total ?? 0) : null,
+            reconciled: !!t.IsReconciled,
+            url: `https://go.xero.com/Bank/ViewTransaction.aspx?bankTransactionID=${encodeURIComponent(t.BankTransactionID)}`,
+          };
+        }),
+        ...payments.filter((p) => p.Status !== 'DELETED' && p.Account?.AccountID === accountId).map((p) => {
+          const out = PAYMENTS_OUT.includes(p.PaymentType);
+          const doc = p.Invoice ?? p.CreditNote ?? p.Prepayment ?? p.Overpayment ?? {};
+          const bill = p.PaymentType === 'ACCPAYPAYMENT';
+          return {
+            id: `p-${p.PaymentID}`, date: xeroDate(p.DateString, p.Date),
+            who: doc.Contact?.Name ?? null,
+            details: doc.InvoiceNumber ? `${bill ? 'Bill' : 'Invoice'} ${doc.InvoiceNumber}` : null,
+            reference: p.Reference || null,
+            kind: bill ? 'Bill paid' : p.PaymentType === 'ACCRECPAYMENT' ? 'Invoice paid' : 'Payment',
+            amount_in: out ? null : Number(p.Amount ?? 0), amount_out: out ? Number(p.Amount ?? 0) : null,
+            reconciled: !!p.IsReconciled,
+            url: p.Invoice?.InvoiceID ? `https://go.xero.com/${bill ? 'AccountsPayable' : 'AccountsReceivable'}/View.aspx?InvoiceID=${encodeURIComponent(p.Invoice.InvoiceID)}` : null,
+          };
+        }),
+      ].filter((l) => l.date >= from && l.date <= to);
+      return lines.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    });
   }
 
   /** What the settings page offers: expense account codes and tracking categories with their options. */
@@ -238,6 +353,38 @@ export class Xero {
       throw err;
     }
   }
+}
+
+const BANK_CACHE_MS = 5 * 60 * 1000;
+// Up to 2,000 of each a time (Xero sends 100 a page).
+const BANK_MAX_PAGES = 20;
+// Payments that take money out of the bank (paying a bill, refunding a customer); the rest bring it in.
+const PAYMENTS_OUT = ['ACCPAYPAYMENT', 'ARCREDITPAYMENT', 'AROVERPAYMENTPAYMENT', 'ARPREPAYMENTPAYMENT'];
+
+/** A Xero date ("2026-10-01T00:00:00", or "/Date(1759276800000+0000)/") as YYYY-MM-DD. */
+export function xeroDate(dateString, date) {
+  if (dateString) return String(dateString).slice(0, 10);
+  const ms = /\/Date\((-?\d+)/.exec(String(date ?? ''));
+  return ms ? new Date(Number(ms[1])).toISOString().slice(0, 10) : String(date ?? '').slice(0, 10);
+}
+
+/** Each bank account's row in Xero's Bank Summary report, by account ID (and by name): { opening, received, spent, closing }. */
+export function bankSummary(report) {
+  const out = new Map();
+  const num = (c) => (c?.Value === undefined || c?.Value === '' ? null : Number(String(c.Value).replace(/,/g, '')));
+  const walk = (rows) => {
+    for (const row of rows ?? []) {
+      if (row.Rows) walk(row.Rows);
+      if (row.RowType !== 'Row' || !row.Cells?.length) continue;
+      const [name, opening, received, spent, closing] = row.Cells;
+      const v = { opening: num(opening), received: num(received), spent: num(spent), closing: num(closing) };
+      const id = name.Attributes?.find((a) => /account/i.test(a.Id ?? ''))?.Value;
+      if (id) out.set(id, v);
+      if (name.Value) out.set(name.Value, v);
+    }
+  };
+  walk(report?.Reports?.[0]?.Rows);
+  return out;
 }
 
 /** The bill's page in Xero. */

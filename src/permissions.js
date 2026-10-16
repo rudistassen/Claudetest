@@ -70,6 +70,9 @@ export const PERMISSION_AREAS = [
     ['reports.sickness', 'Sickness report – who was off sick and when'],
     ['reports.reviews', 'Reviews report – Google reviews for each site'],
   ]],
+  ['Bank', [
+    ['bank.view', 'See the business’s bank accounts from Xero: balances and money in and out (read only)'],
+  ]],
   ['Sales & trading', [
     ['sales.view', 'See sales, labour costs and the Sales, Trading and Rota costs pages'],
     ['sales.sync', 'Sync sales from Square (up to a week at a time)'],
@@ -125,7 +128,7 @@ export const DEFAULT_SETS = [
     built_in: 'manager',
     name: 'Manager',
     description: 'Runs a site: rota, orders, stock, staff and sales for their own site.',
-    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products', 'payments.send', 'rota.ai', 'staff.log'].includes(p)),
+    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products', 'payments.send', 'rota.ai', 'staff.log', 'bank.view'].includes(p)),
   },
   {
     built_in: 'staff',

@@ -29,6 +29,7 @@ export function registerXeroRoutes(router, db, xero) {
       tracking_category_name: c?.tracking_category_name ?? null,
       site_options: siteOptions,
       auto_send: !!c?.auto_send,
+      bank_access: !!c?.bank_access && !!xero?.connected(),
       sent: db.prepare('SELECT COUNT(*) AS n FROM invoices WHERE xero_invoice_id IS NOT NULL').get().n,
     });
   });
@@ -63,8 +64,10 @@ export function registerXeroRoutes(router, db, xero) {
     const redirectUri = xero.config.redirectUri ?? `${req.protocol}://${req.get('host')}/api/xero/callback`;
     const state = randomBytes(18).toString('base64url');
     for (const [k, v] of pending) if (v.until < Date.now()) pending.delete(k);
-    pending.set(state, { userId: req.user.id, redirectUri, until: Date.now() + STATE_MINUTES * 60000 });
-    res.redirect(xero.authorizeUrl(state, redirectUri));
+    // Bank access is asked for when an admin allows it (?bank=1), and kept whenever Xero is reconnected; ?bank=0 stops it.
+    const bank = req.query.bank === '1' || (req.query.bank !== '0' && !!xero.connection()?.bank_access);
+    pending.set(state, { userId: req.user.id, redirectUri, bank, until: Date.now() + STATE_MINUTES * 60000 });
+    res.redirect(xero.authorizeUrl(state, redirectUri, bank));
   });
 
   router.get('/xero/callback', requireAdmin, async (req, res) => {
@@ -74,11 +77,19 @@ export function registerXeroRoutes(router, db, xero) {
     if (req.query.error) return back({ error: req.query.error === 'access_denied' ? 'You cancelled connecting to Xero' : `Xero: ${req.query.error_description || req.query.error}` });
     if (!xero || !p || p.until < Date.now() || p.userId !== req.user.id) return back({ error: 'That sign-in had expired – try connecting again' });
     try {
-      await xero.connect(String(req.query.code ?? ''), p.redirectUri, req.user.id);
-      back({ connected: '1' });
+      await xero.connect(String(req.query.code ?? ''), p.redirectUri, req.user.id, { bank: p.bank });
+      back({ connected: '1', ...(p.bank ? { bank: '1' } : {}) });
     } catch (err) {
       back({ error: err.message });
     }
+  });
+
+  // Stops reading bank accounts (until an admin allows it again).
+  router.post('/xero/bank-off', requireAdmin, (_req, res) => {
+    needXero();
+    db.prepare('UPDATE xero_connection SET bank_access = 0 WHERE id = 1').run();
+    xero.bankCache = new Map();
+    res.json({ ok: true });
   });
 
   router.post('/xero/disconnect', requireAdmin, (_req, res) => {

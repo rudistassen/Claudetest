@@ -24,6 +24,7 @@ import { registerReportRoutes } from '../src/reports.js';
 import { demoInvoiceReader } from '../src/invoice-demo.js';
 import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { registerXeroRoutes } from '../src/routes/xero.js';
+import { registerBankRoutes } from '../src/routes/bank.js';
 import { registerPeopleRoutes } from '../src/routes/people.js';
 import { registerCareersRoutes } from '../src/careers-inbox.js';
 import { registerEventRoutes } from '../src/events.js';
@@ -172,6 +173,7 @@ async function boot() {
   registerInvoiceRoutes(api, db, invoiceReader);
   // Xero isn't connected in the demo: Setup → Xero shows how to set it up.
   registerXeroRoutes(api, db, null);
+  registerBankRoutes(api, db, null);
   // A pretend careers inbox with a few applications waiting, so People → Recruitment's "Check now" can be tried.
   const careersInbox = memoryMailbox([
     { id: 'cv-1', subject: 'Barista application', from: 'maya.patel@example.com', fromName: 'Maya Patel', to: ['careers@example.com'], receivedAt: new Date(Date.now() - 26 * 3600000).toISOString(),

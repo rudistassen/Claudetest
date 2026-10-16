@@ -9,6 +9,7 @@ import * as inbox from './views/inbox.js';
 import * as salesbudget from './views/salesbudget.js';
 import * as courses from './views/courses.js';
 import * as chat from './views/chat.js';
+import * as bank from './views/bank.js';
 import * as stafflog from './views/stafflog.js';
 import * as parlevels from './views/parlevels.js';
 import * as rotacosts from './views/rotacosts.js';
@@ -105,6 +106,7 @@ const ROUTES = [
   [/^par-levels\/saved$/, parlevels.renderSaved, ['reports.par_levels']],
   [/^par-levels\/saved\/(\d+)$/, parlevels.renderReport, ['reports.par_levels']],
   [/^reviews$/, reviews.render, ['reports.reviews']],
+  [/^bank$/, bank.render, ['bank.view']],
   [/^open-orders$/, openorders.render, ['reports.open_orders']],
   [/^sickness$/, sickness.renderReport, ['reports.sickness']],
   [/^rota\/requests$/, requests.render, ['rota.approve', 'leave.manage']],
@@ -237,6 +239,7 @@ function navGroups() {
       ['breaks', 'Breaks', '☕', ['reports.breaks']],
       ['sickness', 'Sickness', '✚', ['reports.sickness']],
       ['reviews', 'Reviews', '★', ['reports.reviews']],
+      ['bank', 'Bank', '£', ['bank.view']],
     ]],
     ['Setup', [
       ['admin/permissions', 'Permissions', '⚿', 'admin'],

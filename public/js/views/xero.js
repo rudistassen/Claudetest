@@ -7,7 +7,7 @@ export async function render(ctx) {
   const { el, state, stale, query, rerender } = ctx;
   const x = await api('/xero');
   if (stale()) return;
-  if (query.connected) toast(`Connected to ${x.tenant_name ?? 'Xero'}`);
+  if (query.connected) toast(query.bank ? 'Bank access allowed – see Reporting → Bank' : `Connected to ${x.tenant_name ?? 'Xero'}`);
   if (query.error) setTimeout(() => showError(new Error(query.error)), 0);
   const sites = state.locations.filter((l) => l.active);
 
@@ -48,8 +48,19 @@ export async function render(ctx) {
       <p class="muted small">Since ${fmtDateTime(x.connected_at)} · ${x.sent} invoice${x.sent === 1 ? '' : 's'} sent so far</p>
       <button class="btn btn-small btn-ghost" id="xero-disconnect">Disconnect</button>
     </section>
+    <section class="card">
+      <h2>Bank accounts ${x.bank_access ? '✓' : ''}</h2>
+      ${x.bank_access ? `<p>Atlas can read your bank accounts in Xero – balances and money in and out, read only. See them in <a href="#/bank">Reporting → Bank</a> (and choose who else can with the “Bank” permission).</p>
+        <button class="btn btn-small btn-ghost" id="xero-bank-off">Stop reading bank accounts</button>`
+        : `<p>Let Atlas show your business bank accounts from Xero – balances, and money in and out – in Reporting → Bank. It’s read only: Atlas can’t move money or change anything.</p>
+        <p><a class="btn btn-primary" href="/api/xero/connect?bank=1">Allow bank access</a></p>
+        <p class="muted small">You’ll sign in to Xero again and approve read-only access to bank transactions, payments and the bank summary.</p>`}
+    </section>
     <section class="card" id="xero-settings"><div class="loading">Loading your Xero account codes…</div></section>`;
 
+  el.querySelector('#xero-bank-off')?.addEventListener('click', async () => {
+    try { await api('/xero/bank-off', { method: 'POST' }); toast('Atlas no longer reads your bank accounts'); rerender(); } catch (err) { showError(err); }
+  });
   el.querySelector('#xero-disconnect').addEventListener('click', async () => {
     try { await api('/xero/disconnect', { method: 'POST' }); toast('Disconnected from Xero'); rerender(); } catch (err) { showError(err); }
   });
