@@ -3237,3 +3237,9 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .dash-hip .kpi.kpi-checks, .dash-hip .kpi.kpi-compact { padding: 0.65rem 0.85rem 0.7rem; }
 .kpi-checks::after, .kpi-compact::after { display: none; }
 .kpi-checks .kpi-pair strong small { display: inline; margin: 0; }
+
+/* Manager Dashboard: daily checks (done and failed) in one card, and who's clocked in now. */
+.md-tile.md-checks, .md-tile.md-clocked { text-decoration: none; text-align: left; font: inherit; cursor: pointer; }
+.md-pair { display: flex; gap: 1.4rem; align-items: flex-end; font-weight: 400 !important; }
+.md-pair > span { display: flex; flex-direction: column; font-weight: 400; }
+.md-pair strong small { display: inline; font-size: 0.6em; font-weight: 600; }

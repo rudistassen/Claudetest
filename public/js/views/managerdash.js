@@ -1,4 +1,4 @@
-import { addDays, api, esc, fmtDate, money, qs, siteScope, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, money, openModal, qs, siteScope, todayISO } from '../lib.js';
 import { chosenTimeframe, ROSTER, shortName, timeframe, timeframeBar, wireTimeframe } from './dashboard.js';
 
 // Manager Dashboard: one site's day at a glance for the person running it – how today's trading and labour are
@@ -154,10 +154,19 @@ export async function render(ctx) {
     tiles.push(`<div class="md-tile"><span>This week’s rota</span><strong class="${tone}">${pctText(t.labour_pct)}</strong>
       <small>${t.labour_pct === null ? 'no forecast yet' : `${word} · ${money(t.cost)} vs ${money(t.sales_budget)} ${t.budgeted ? 'budget' : 'forecast'}`}</small></div>`);
   }
+  // Daily checks done and failed in one card (for the timeframe), like the HQ Dashboard.
   if (fig) {
     const d = ranged && fig.period ? fig.period.daily : fig.daily;
-    tiles.push(`<div class="md-tile"><span>Checks ${word}</span><strong class="${d.fails ? 'md-bad' : d.done >= d.due ? 'md-good' : ''}">${d.done} / ${d.due}</strong>
-      <small>${d.fails ? `${plural(d.fails, 'failed check')}` : d.done >= d.due ? 'all done' : ranged || !isToday ? `${d.due ? Math.round((d.done / d.due) * 100) : 100}% done` : `${d.due - d.done} to go`}</small></div>`);
+    tiles.push(`<a class="md-tile md-checks" href="#/safety/checks"><span>Daily checks ${word}</span>
+      <span class="md-pair"><span><strong class="${d.due && d.done >= d.due ? 'md-good' : ''}">${d.done}<small> / ${d.due}</small></strong>
+        <small>${d.due && d.done >= d.due ? 'all done' : ranged || !isToday ? `done · ${d.due ? Math.round((d.done / d.due) * 100) : 100}%` : `done · ${d.due - d.done} to go`}</small></span>
+        <span><strong class="${d.fails ? 'md-bad' : ''}">${d.fails}</strong><small>failed</small></span></span></a>`);
+  }
+  // Who's clocked in right now (from Square), with a list of who.
+  const clockedIn = card && got.day?.labour_synced && card.clock_ins ? card.clock_ins.filter((c) => !c.end) : null;
+  if (clockedIn) {
+    tiles.push(`<button type="button" class="md-tile md-clocked" id="md-clocked"><span>Clocked in now</span><strong>${clockedIn.length}</strong>
+      <small>of ${card.shifts_today?.length ?? 0} on today’s rota · <u>see who</u></small></button>`);
   }
 
   // ---- This week so far: sales against the budget, and labour % against the target ----
@@ -241,6 +250,14 @@ export async function render(ctx) {
     ${state.can('dashboard.view') ? '<p class="muted small">Want every site side by side? <a href="#/dashboard">Open the HQ Dashboard</a>.</p>' : ''}
   </div>`;
 
+  el.querySelector('#md-clocked')?.addEventListener('click', () => openModal({
+    title: `Clocked in now (${clockedIn.length})`,
+    body: clockedIn.length ? `<ul class="clocked-list">${[...clockedIn].sort((a, b) => a.start.localeCompare(b.start)).map((c) => `<li>
+        <strong>${esc(shortName(c.name))}</strong>
+        <span class="muted">since ${esc(c.start)}${c.rota ? ` · rota ${esc(c.rota)}` : c.not_on_rota ? ' · not on the rota' : ''}</span>
+        <span>${c.on_break ? '<span class="badge badge-on-break">On break</span>' : '<span class="badge badge-received">In</span>'}</span>
+      </li>`).join('')}</ul>` : '<p class="muted">Nobody is clocked in right now.</p>',
+  }));
   wireTimeframe(el, { t, tf, today, navigate, page: 'manager', key: TF_KEY, keep: { scope: query.scope } });
   const form = el.querySelector('#md-site');
   form?.addEventListener('change', () => navigate(`manager${qs({ scope: form.scope.value })}`));
