@@ -242,7 +242,7 @@ export async function renderMyBrew(ctx) {
     <header class="mb-hero">
       <div class="mb-hero-top">
         <p class="mb-eyebrow">My Atlas · ${fmtDate(today, { weekday: 'short', day: 'numeric', month: 'short' })}</p>
-        <a class="btn mb-inbox" href="#/notifications" aria-label="Notifications">🔔 <span class="mb-inbox-text">Notifications</span><span class="nav-badge" id="mb-inbox-count" hidden></span></a>
+        <a class="btn mb-inbox" href="#/notifications" aria-label="Notifications">🔔 <span class="mb-inbox-text">Notifications</span><span class="nav-badge" data-inbox-badge hidden></span></a>
       </div>
       <h1 class="mb-hello">${greeting()}, <em>${esc(firstName(u.name))}.</em></h1>
       <p class="mb-quip">“${esc(quipFor(today))}” <span>— today’s brew</span></p>
@@ -303,10 +303,7 @@ export async function renderMyBrew(ctx) {
         <section class="card mb-push" id="mb-push" data-mb="all"></section>
     </div>`;
   renderNotifications(el.querySelector('#mb-push'), { isAdmin: state.isAdmin });
-  api('/notifications').then(({ unread }) => {
-    const badge = el.querySelector('#mb-inbox-count');
-    if (badge && unread) { badge.textContent = unread > 99 ? '99+' : String(unread); badge.hidden = false; }
-  }).catch(() => {});
+  document.dispatchEvent(new Event('notifications-read'));
 
   wireDrops(el, drops, () => ctx.rerender());
   // All / Shifts / News: shows just those sections.

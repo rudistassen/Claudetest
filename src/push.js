@@ -173,6 +173,10 @@ export function registerPushRoutes(router, db) {
       // The kinds this person can get, by group, for the type filter.
       my_groups: [...new Set(kindsFor(req.user).filter((k) => k.inbox !== false).map((k) => k.group))] });
   });
+  // How many they haven't read (for the bell's badge).
+  router.get('/notifications/unread', (req, res) => {
+    res.json({ count: db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(req.user.id).n });
+  });
   // Marks one as read (when it's opened).
   router.post('/notifications/:id/read', (req, res) => {
     db.prepare(`UPDATE notifications SET read_at = datetime('now') WHERE id = ? AND user_id = ? AND read_at IS NULL`).run(Number(req.params.id), req.user.id);

@@ -345,6 +345,24 @@ async function showChatBadge(force = false) {
   document.querySelectorAll('[data-chat-dot]').forEach((d) => { d.hidden = !chatUnread.count; d.title = title; });
 }
 window.addEventListener('chat:read', () => showChatBadge(true));
+
+// Unread notifications, shown on the bell (and on Notifications in the menus and on My Atlas).
+let inboxUnread = { count: 0, at: 0, user: null };
+async function showInboxBadge(force = false) {
+  if (!state.user) return;
+  if (force || inboxUnread.user !== state.user.id || Date.now() - inboxUnread.at > 30000) {
+    try { inboxUnread = { count: (await api('/notifications/unread')).count, at: Date.now(), user: state.user.id }; } catch { return; }
+  }
+  const n = inboxUnread.count;
+  document.querySelectorAll('[data-inbox-badge]').forEach((b) => {
+    b.hidden = !n;
+    b.textContent = n > 99 ? '99+' : n;
+    b.title = `${n} unread notification${n === 1 ? '' : 's'}`;
+  });
+  document.querySelector('.topbar-bell')?.setAttribute('aria-label', n ? `Notifications – ${n} unread` : 'Notifications');
+}
+document.addEventListener('notifications-read', () => showInboxBadge(true));
+setInterval(() => { if (state.user && !document.hidden) showInboxBadge(); }, 30000);
 setInterval(() => { if (state.user && !document.hidden) showChatBadge(); }, 30000);
 
 // Menu sections someone has folded away, remembered in this browser.
@@ -526,6 +544,9 @@ function renderShell() {
         }).join('')}
       </nav>
       <span class="topbar-gap"></span>
+      <a href="#/notifications" class="topbar-bell ${path === 'notifications' ? 'is-active' : ''}" aria-label="Notifications" title="Notifications">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M18 16v-5a6 6 0 1 0-12 0v5l-1.5 2h15ZM10 20.5a2.2 2.2 0 0 0 4 0"/></svg>
+        <span class="bell-badge" data-inbox-badge hidden></span></a>
       <div class="topnav-group user-menu">
         <button type="button" class="user-btn" aria-haspopup="true" aria-expanded="false" title="${esc(state.user.name)}">
           <span class="ring" aria-hidden="true"><span class="avatar">${esc(initials(state.user.name) || '?')}</span></span><span class="user-name">${esc(state.user.name)}</span><span class="topnav-caret" aria-hidden="true">▾</span>
@@ -534,7 +555,7 @@ function renderShell() {
           <p class="topnav-heading">${esc(state.user.name)}</p>
           <div class="topnav-links">
             <a href="#/account" class="${path === 'account' ? 'active' : ''}"><span class="nav-icon">☺</span><span class="nav-label">My account</span></a>
-            <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span></a>
+            <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span><span class="nav-badge" data-inbox-badge hidden></span></a>
             <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
             <a href="#" data-tour><span class="nav-icon">✦</span><span class="nav-label">Take the tour</span></a>
             <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
@@ -563,7 +584,7 @@ function renderShell() {
         <div class="nav-account">
           <a href="#/account" class="nav-account-head ${path === 'account' ? 'active' : ''}"><span class="ring" aria-hidden="true"><span class="avatar">${esc(initials(state.user.name) || '?')}</span></span>
             <span class="nav-account-who"><strong>${esc(state.user.name)}</strong><small>My account</small></span><span class="nav-caret" aria-hidden="true">›</span></a>
-          <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span></a>
+          <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span><span class="nav-badge" data-inbox-badge hidden></span></a>
           <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
           <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
           <a href="#" data-tour><span class="nav-icon">✦</span><span class="nav-label">Take the tour</span></a>
@@ -584,6 +605,7 @@ function renderShell() {
   });
   showNewsBadge();
   showChatBadge();
+  showInboxBadge();
   showRequestBadge();
   showEventsBadge();
   document.querySelectorAll('[data-install]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); install(); }));
@@ -794,6 +816,7 @@ export async function route({ keepScroll = false } = {}) {
     showRequestBadge();
     showEventsBadge();
     showChatBadge();
+    showInboxBadge();
   } catch (err) {
     if (seq !== routeSeq) return;
     if (restoreScroll) document.body.style.minHeight = '';

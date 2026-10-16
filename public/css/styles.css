@@ -225,7 +225,7 @@ main { flex: 1; min-width: 0; padding: 1rem 1.25rem 2.5rem; }
 .user-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1280px) { .user-name { display: none; } }
 /* Narrower computer screens: the top menu's items sit closer together so they all fit. */
-@media (max-width: 1440px) { .topnav-btn { padding: 0 0.5rem; } }
+@media (max-width: 1440px) { .topnav-btn { padding: 0 0.42rem; font-size: 0.9rem; } .topbar { gap: 0.7rem; } }
 
 /* Behind the open side menu: dims the page; tapping it closes the menu. */
 .nav-scrim { display: none; position: fixed; inset: 0; z-index: 29; background: rgba(20, 28, 24, 0.3); animation: fade-in 0.15s ease-out; }
@@ -3198,3 +3198,11 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .inbox-actions { flex: none; align-self: center; }
 .inbox-actions .btn { margin-left: 0 !important; }
 @media (max-width: 520px) { .inbox-actions { flex-direction: row; margin-left: 3.15rem; align-self: flex-start; } }
+
+/* The bell in the top bar, with how many notifications are unread. */
+.topbar-bell { position: relative; flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: var(--text); }
+.topbar-bell:hover, .topbar-bell.is-active { background: var(--surface-2); }
+.topbar-bell svg { width: 23px; height: 23px; }
+.bell-badge { position: absolute; top: 1px; right: 0; min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; border-radius: 99px; background: var(--bad); color: #fff;
+  font-size: 0.68rem; font-weight: 800; line-height: 1.15rem; text-align: center; box-shadow: 0 0 0 2px var(--surface); }
+.bell-badge[hidden] { display: none; }
