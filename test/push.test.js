@@ -178,8 +178,13 @@ test('notifications are kept on each person’s Notifications page, and a tap op
   assert.equal(kept.title, 'Atlas notifications are on');
   assert.equal(kept.read_at, null);
   assert.equal(msg.url, `/#/notifications?n=${kept.id}`, 'tapping opens the Notifications page at that one');
+  // One at a time (only your own), or all at once.
+  const other = await login('staff1-2@cafe.local');
+  await other(`/notifications/${kept.id}/read`, { method: 'POST' });
+  assert.equal((await staff('/notifications')).data.items.find((n) => n.id === kept.id).read_at, null, 'someone else can’t mark yours read');
+  await staff(`/notifications/${kept.id}/read`, { method: 'POST' });
+  assert.ok((await staff('/notifications')).data.items.find((n) => n.id === kept.id).read_at);
   await staff('/notifications/read', { method: 'POST' });
   assert.equal((await staff('/notifications')).data.unread, 0);
-  const other = await login('staff1-2@cafe.local');
   assert.ok(!(await other('/notifications')).data.items.some((n) => n.id === kept.id), 'only your own');
 });
