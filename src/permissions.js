@@ -20,6 +20,11 @@ export const PERMISSION_AREAS = [
     ['safety.complete', 'Complete compliance checks'],
     ['safety.manage', 'Set up their site’s checks and clear completed ones'],
     ['safety.report', 'See the compliance report'],
+    ['risk.view', 'Risk Management – read the risk assessments for their sites'],
+    ['risk.manage', 'Write, change and review risk assessments'],
+    ['incidents.report', 'Report an incident (accident, near miss, complaint…) and follow the ones they reported'],
+    ['incidents.manage', 'See and deal with every incident at their sites, and close them'],
+    ['compliance.documents', 'Compliance documents – certificates, inspections, insurance and licences, with expiry dates'],
   ]],
   ['Checklists & tasks', [
     ['checklists.complete', 'Tick off their site’s checklists (opening, closing, cleaning…)'],
@@ -134,7 +139,7 @@ export const DEFAULT_SETS = [
     built_in: 'staff',
     name: 'Staff',
     description: 'Works in a site: food-safety checks, wastage, stock counts, the rota and recipes.',
-    permissions: ['mybrew.view', 'chat.use', 'chat.direct', 'leave.request', 'availability.own', 'safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
+    permissions: ['mybrew.view', 'chat.use', 'chat.direct', 'risk.view', 'incidents.report', 'leave.request', 'availability.own', 'safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
   },
 ];
 

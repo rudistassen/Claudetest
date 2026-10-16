@@ -224,6 +224,18 @@ const ACTIONS = [
   ['POST', '/events/marketing/file', 'Events', 'Uploaded a marketing list'],
   ['DELETE', '/events/marketing/senders/:email', 'Events', 'Removed a marketing sender'],
   // News and documents
+  // Compliance
+  ['POST', '/risks', 'Compliance', 'Added a risk assessment', (db, p, b) => b.title],
+  ['PUT', '/risks/:id', 'Compliance', 'Changed a risk assessment', (db, p) => nameOf(db, 'risk_assessments', 'title', p.id)],
+  ['POST', '/risks/:id/reviewed', 'Compliance', 'Reviewed a risk assessment', (db, p) => nameOf(db, 'risk_assessments', 'title', p.id)],
+  ['DELETE', '/risks/:id', 'Compliance', 'Removed a risk assessment', (db, p) => nameOf(db, 'risk_assessments', 'title', p.id)],
+  ['POST', '/incidents', 'Compliance', 'Reported an incident', (db, p, b) => b.title],
+  ['PUT', '/incidents/:id', 'Compliance', 'Changed an incident', (db, p) => nameOf(db, 'incidents', 'title', p.id)],
+  ['POST', '/incidents/:id/status', 'Compliance', (b) => (b.status === 'closed' ? 'Closed an incident' : 'Updated an incident'), (db, p) => nameOf(db, 'incidents', 'title', p.id)],
+  ['POST', '/incidents/:id/notes', 'Compliance', 'Added a note to an incident', (db, p) => nameOf(db, 'incidents', 'title', p.id)],
+  ['POST', '/compliance-docs', 'Compliance', 'Uploaded a compliance document', (db, p, b) => b.title],
+  ['PUT', '/compliance-docs/:id', 'Compliance', 'Changed a compliance document', (db, p) => nameOf(db, 'compliance_documents', 'title', p.id)],
+  ['DELETE', '/compliance-docs/:id', 'Compliance', 'Deleted a compliance document', (db, p) => nameOf(db, 'compliance_documents', 'title', p.id)],
   // Chat: what was done, never what was said.
   ['POST', '/chat/direct', 'Chat', 'Started a direct message', (db, p, b) => person(db, b.user_id)],
   ['POST', '/chat/:id/messages', 'Chat', 'Sent a chat message', (db, p) => chatName(db, p.id)],

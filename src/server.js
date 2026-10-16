@@ -19,6 +19,7 @@ import { registerReportRoutes } from './reports.js';
 import { registerInvoiceRoutes } from './routes/invoices.js';
 import { registerXeroRoutes } from './routes/xero.js';
 import { registerBankRoutes } from './routes/bank.js';
+import { registerComplianceRoutes } from './routes/compliance.js';
 import { registerPeopleRoutes } from './routes/people.js';
 import { Xero } from './xero.js';
 import { registerNewsRoutes } from './routes/news.js';
@@ -90,6 +91,8 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   app.use('/api/news/media', express.json({ limit: '36mb' }));
   // Chat messages with a photo (up to 8 MB, a third bigger once encoded).
   app.use(/^\/api\/chat\/\d+\/messages$/, express.json({ limit: '12mb' }));
+  // Compliance documents (up to 20 MB, a third bigger once encoded).
+  app.use('/api/compliance-docs', express.json({ limit: '28mb' }));
   // Company documents (up to 20 MB, a third bigger once encoded).
   app.use('/api/documents', express.json({ limit: '28mb' }));
   // CVs added to a candidate (up to 10 MB, a third bigger once encoded).
@@ -130,6 +133,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerInvoiceRoutes(api, db, invoiceReader, { xero: xeroClient });
   registerXeroRoutes(api, db, xeroClient);
   registerBankRoutes(api, db, xeroClient);
+  registerComplianceRoutes(api, db);
   registerPeopleRoutes(api, db, { careers });
   registerCareersRoutes(api, db, { mailbox: careers });
   registerEventRoutes(api, db, { mailbox: events, reader: enquiryReader });

@@ -1,8 +1,8 @@
-import { addDays, api, chooseSite, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, statusBadge, textarea, toast, todayISO, siteScope, siteFilter, sitePicker } from '../lib.js';
+import { addDays, api, chooseSite, siteColour, confirmDialog, esc, field, fmtDate, fmtDateTime, input, openModal, qs, select, showError, statusBadge, textarea, toast, todayISO, siteScope, siteFilter, sitePicker } from '../lib.js';
 
 // Compliance (once called Trail): food safety checks, the compliance report and setting up checks for each site.
 function trailTabs(state, active) {
-  const items = [['safety', 'Food Safety Checks', true], ['safety/report', 'Compliance report', state.can('safety.report')], ['safety/setup', 'Set up', state.can('safety.manage')]]
+  const items = [['safety/checks', 'Food Safety Checks', true], ['compliance/reporting/food-safety', 'Compliance report', state.can('safety.report')], ['safety/setup', 'Set up Checks', state.can('safety.manage')]]
     .filter(([, , ok]) => ok);
   return items.length > 1 ? `<div class="tabs trail-tabs">${items.map(([p, l]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${l}</a>`).join('')}</div>` : '';
 }
@@ -71,7 +71,7 @@ export async function renderChecklist(ctx) {
   if (picked) {
     chooseSite(state, picked.id);
     // Drop ?site= from the address, so picking another site on this page isn't undone.
-    history.replaceState(null, '', `${location.pathname}${location.search}#/safety${qs({ date: query.date })}`);
+    history.replaceState(null, '', `${location.pathname}${location.search}#/safety/checks${qs({ date: query.date })}`);
   }
   const date = query.date || todayISO();
   const data = await api(`/safety/checklist${qs({ location_id: state.locationId, date })}`);
@@ -90,13 +90,13 @@ export async function renderChecklist(ctx) {
         <button class="btn" data-day="1" ${isToday ? 'disabled' : ''}>›</button>
       </div>
     </div>
-    ${trailTabs(state, 'safety')}
+    ${trailTabs(state, 'safety/checks')}
     ${!isToday ? `<p class="notice">You are recording checks for ${fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' })}. Late entries are time-stamped.</p>` : ''}
     ${section(`Daily checks · ${fmtDate(date)}`, daily, state)}
     ${section(`Weekly checks · week of ${fmtDate(data.week_start)}`, weekly, state)}
     ${!data.tasks.length ? `<div class="empty">No checks are set up for this site.${state.can('safety.manage') ? ' <a href="#/safety/setup">Set them up</a>' : ''}</div>` : ''}`;
 
-  const go = (d) => ctx.navigate(`safety${d === todayISO() ? '' : `?date=${d}`}`);
+  const go = (d) => ctx.navigate(`safety/checks${d === todayISO() ? '' : `?date=${d}`}`);
   el.querySelector('#check-date').addEventListener('change', (e) => e.target.value && go(e.target.value));
   el.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => go(addDays(date, Number(b.dataset.day)))));
 
@@ -179,7 +179,7 @@ export async function renderReport(ctx) {
         <button class="btn" type="button" id="print">Print</button>
       </form>
     </div>
-    ${trailTabs(state, 'safety/report')}
+    ${trailTabs(state, 'compliance/reporting/food-safety')}
     <section class="card">
       <h2>Daily checks completed</h2>
       <div class="table-wrap">
@@ -211,9 +211,36 @@ export async function renderReport(ctx) {
   el.querySelector('#range').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target;
-    ctx.navigate(`safety/report${qs({ from: f.from.value, to: f.to.value, scope: f.scope?.value })}`);
+    ctx.navigate(`compliance/reporting/food-safety${qs({ from: f.from.value, to: f.to.value, scope: f.scope?.value })}`);
   });
   el.querySelector('#print').addEventListener('click', () => window.print());
+}
+
+// --- Food Safety Checks: a tile for each site, with how far it's got today ---
+
+export async function renderSites(ctx) {
+  const { el, state } = ctx;
+  const sites = state.locations.filter((l) => l.active);
+  // One site: straight to its checks.
+  if (sites.length < 2) return renderChecklist(ctx);
+  el.innerHTML = `
+    <div class="page-head"><h1>Food Safety Checks</h1></div>
+    <p class="muted">Choose a site to do or look over today’s checks.</p>
+    <div class="hub-tiles site-check-tiles" data-tone="trail">${sites.map((l) => `<a class="hub-tile" href="#/safety/checks?site=${l.id}" style="--site:${siteColour(l.name, l.id)}">
+      <span class="hub-icon" aria-hidden="true">✓</span>
+      <span class="hub-text"><strong>${esc(l.name)}</strong><small data-site-checks="${l.id}">Today’s food safety checks</small></span>
+      <span class="hub-go" aria-hidden="true">›</span></a>`).join('')}</div>`;
+  // Each site's progress today (e.g. "12 of 20 daily checks done").
+  await Promise.all([...el.querySelectorAll('[data-site-checks]')].map(async (t) => {
+    try {
+      const d = await api(`/safety/checklist${qs({ location_id: t.dataset.siteChecks })}`);
+      const daily = d.tasks.filter((x) => x.frequency === 'daily');
+      const done = daily.filter((x) => x.check).length;
+      const fails = daily.filter((x) => x.check?.status === 'fail').length;
+      if (daily.length) t.textContent = `${done} of ${daily.length} daily checks done today${fails ? ` · ${fails} failed` : ''}`;
+      if (daily.length && done === daily.length) t.closest('.hub-tile').classList.add('is-complete');
+    } catch { /* keep the plain description */ }
+  }));
 }
 
 // --- Set up: the checks each site does ---

@@ -18,6 +18,7 @@ export const PUSH_KINDS = [
   { key: 'holiday_request', label: 'Someone asks for holiday', group: 'For managers', perms: ['leave.manage'] },
   { key: 'drop_request', label: 'Someone asks to drop a shift', group: 'For managers', perms: ['rota.approve'] },
   { key: 'pickup_request', label: 'Someone asks to pick up an open shift', group: 'For managers', perms: ['rota.approve'] },
+  { key: 'incident', label: 'Someone reports an incident at your site', group: 'For managers', perms: ['incidents.manage'] },
   { key: 'late', label: 'Someone is late or hasn’t clocked in for their shift', group: 'For managers', perms: ['rota.edit', 'staff.manage'] },
   { key: 'enquiry', label: 'A new events enquiry comes in', group: 'For managers', perms: ['events.manage'] },
   { key: 'application', label: 'A new job application comes in', group: 'For managers', perms: ['people.recruitment'] },

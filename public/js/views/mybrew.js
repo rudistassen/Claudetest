@@ -183,7 +183,7 @@ export async function renderMyBrew(ctx) {
     can('rota.view', 'rota.edit') ? { href: '#/rota', icon: '👥', label: 'Rota', detail: 'Who’s on when', c: ['#3ccf91', '#16935e'] } : null,
     { href: '#/timeoff', icon: '🌴', label: 'Time off', detail: 'Book holiday', c: ['#ffc94d', '#e09a12'] },
     learn.length ? { href: '#/learn', icon: '🎓', label: 'Training', detail: coursesToDo.length ? `${coursesToDo.length} course${coursesToDo.length === 1 ? '' : 's'} to do` : 'Courses to take', c: ['#7fc8c0', '#3f938a'] } : null,
-    can('safety.complete', 'safety.manage', 'safety.report') ? { href: '#/safety', icon: '✅', label: 'Checks', detail: 'Today’s checklist', c: ['#b07cff', '#7a45e0'] } : null,
+    can('safety.complete', 'safety.manage', 'safety.report') ? { href: '#/safety/checks', icon: '✅', label: 'Checks', detail: 'Today’s checklist', c: ['#b07cff', '#7a45e0'] } : null,
     can('wastage.record', 'wastage.reports', 'wastage.manage') ? { href: '#/wastage', icon: '🗑️', label: 'Wastage', detail: 'Log what’s thrown away', c: ['#ff6f91', '#d93a64'] } : null,
     can('dashboard.manager') ? { href: '#/manager', icon: '📊', label: 'Dashboard', detail: 'Your site today', c: ['#38c3d6', '#16879a'] }
       : can('dashboard.view') ? { href: '#/dashboard', icon: '📊', label: 'Dashboard', detail: 'Today at every site', c: ['#38c3d6', '#16879a'] } : null,
@@ -197,7 +197,7 @@ export async function renderMyBrew(ctx) {
   const toReview = leaveCount.count + drops.to_approve.length;
   const tasks = [
     toRead ? { icon: '📌', title: `Confirm you’ve read ${toRead} update${toRead === 1 ? '' : 's'}`, detail: 'In the newsfeed below', action: 'Read', go: 'news', primary: true } : null,
-    checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} compliance check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety', primary: true } : null,
+    checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} compliance check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety/checks', primary: true } : null,
     ...myTasks.filter((t) => t.status !== 'done').slice(0, 5).map((t) => ({ icon: '✔', title: t.title, detail: `${t.due_on ? `${t.status === 'overdue' ? 'Overdue – was due' : 'Due'} ${fmtDate(t.due_on, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Task'}${t.created_by_name ? ` · from ${t.created_by_name}` : ''}`, action: 'Open', href: '#/tasks', primary: t.status === 'overdue' })),
     lists && lists.checklists.some((c) => c.done < c.total) ? (() => {
       const left = lists.checklists.reduce((n, c) => n + c.total - c.done, 0);

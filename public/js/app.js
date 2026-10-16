@@ -10,6 +10,7 @@ import * as salesbudget from './views/salesbudget.js';
 import * as courses from './views/courses.js';
 import * as chat from './views/chat.js';
 import * as bank from './views/bank.js';
+import * as compliance from './views/compliance.js';
 import * as stafflog from './views/stafflog.js';
 import * as parlevels from './views/parlevels.js';
 import * as rotacosts from './views/rotacosts.js';
@@ -73,8 +74,15 @@ const ROUTES = [
   [/^checklists\/setup$/, checklists.renderChecklistSetup, ['checklists.manage']],
   [/^tasks$/, checklists.renderTasks],
   [/^todo$/, checklists.renderTodo, ['todo.use']],
-  [/^safety$/, safety.renderChecklist, SAFETY],
+  [/^safety$/, safety.renderSites, SAFETY],
+  [/^safety\/checks$/, safety.renderChecklist, SAFETY],
   [/^safety\/report$/, safety.renderReport, ['safety.report']],
+  [/^compliance\/reporting$/, compliance.renderReporting, ['safety.report']],
+  [/^compliance\/reporting\/food-safety$/, safety.renderReport, ['safety.report']],
+  [/^compliance\/risks$/, compliance.renderRisks, ['risk.view', 'risk.manage']],
+  [/^compliance\/incidents$/, compliance.renderIncidents, ['incidents.report', 'incidents.manage']],
+  [/^compliance\/incidents\/(\d+)$/, compliance.renderIncident, ['incidents.report', 'incidents.manage']],
+  [/^compliance\/documents$/, compliance.renderDocuments, ['compliance.documents']],
   [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
   [/^rota$/, rota.render, ROTA],
   [/^rota\/log$/, rotalog.render, ['rota.edit', 'rota.publish']],
@@ -197,8 +205,11 @@ function navGroups() {
     ]],
     ['Compliance', [
       ['safety', 'Food Safety Checks', '✓', SAFETY],
-      ['safety/report', 'Compliance report', '▤', ['safety.report']],
-      ['safety/setup', 'Set up checks', '☑', ['safety.manage']],
+      ['compliance/risks', 'Risk Management', '⚠', ['risk.view', 'risk.manage']],
+      ['compliance/incidents', 'Incident Management', '✚', ['incidents.report', 'incidents.manage']],
+      ['compliance/documents', 'Documents', '❐', ['compliance.documents']],
+      ['compliance/reporting', 'Reporting', '▤', ['safety.report']],
+      ['safety/setup', 'Set up Checks', '☑', ['safety.manage']],
     ]],
     ['Events', [
       ['events/enquiries', 'Enquiries', '✉', ['events.manage']],
@@ -349,8 +360,11 @@ const TOP_LABELS = { 'Stock and Ordering': 'Stock & Ordering' };
 const HUBS = { Rota: 'rota-menu', 'Checklists & Tasks': 'checklists-tasks', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock-ordering' };
 // The line under each page's name on its tile.
 const TILE_NOTES = {
-  safety: 'Today’s food safety checks – tick them off as you go',
-  'safety/report': 'How each site is doing, and every failed check',
+  safety: 'Each site’s food safety checks for today',
+  'compliance/risks': 'Risk assessments for each site, and when they’re due a review',
+  'compliance/incidents': 'Report accidents, near misses and complaints, and follow them up',
+  'compliance/documents': 'Certificates, inspections, insurance and licences – and when they run out',
+  'compliance/reporting': 'The compliance report: how each site is doing',
   'safety/setup': 'Add and change the checks for each site',
   rota: 'See and plan the week’s shifts',
   'rota/requests': 'Holiday and shift drops waiting for you, and team availability',
@@ -407,39 +421,13 @@ function hubOf(path) {
 // Tiles shown under a "Set up" heading at the end of their section's tiles.
 // Tiles shown under an "Admin" heading after the rest of their section's tiles (for managers).
 const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories', 'checklists/setup', 'invoices']);
-const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log', 'admin/staff']);
+const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log', 'admin/staff', 'compliance/documents', 'compliance/reporting', 'safety/setup']);
 // Headed groups of tiles within a section (shown first, in this order), e.g. Stock & Ordering's Purchasing.
 const TILE_GROUPS = {
   'orders/new': 'Purchasing', 'orders/receive': 'Purchasing', orders: 'Purchasing', 'prep-orders': 'Purchasing', 'prep-orders/list': 'Purchasing',
   stock: 'Stock and waste', wastage: 'Stock and waste',
 };
-// On Compliance, a Food Safety Checks tile for each site (when there's more than one), with how far it's got today.
-const siteCheckTile = (l, ic, on) => `<a class="hub-tile ${on ? 'is-active' : ''}" href="#/safety?site=${l.id}" ${on ? 'aria-current="page"' : ''}>
-  <span class="hub-icon" aria-hidden="true">${ic}</span>
-  <span class="hub-text"><strong>${esc(l.name)}</strong><small data-site-checks="${l.id}">Today’s food safety checks</small></span>
-  <span class="hub-go" aria-hidden="true">›</span></a>`;
-const hubTiles = (items, active) => {
-  const safetyItem = items.find(([p]) => p === 'safety');
-  const sites = state.locations.filter((l) => l.active);
-  if (!safetyItem || sites.length < 2) return hubTilesOf(items, active);
-  const rest = items.filter(([p]) => p !== 'safety');
-  // The site whose checks are open: the one picked on its tile, else the site already chosen.
-  const shown = Number(parseHash().query.site) || state.locationId;
-  return `<p class="hub-group-head">${esc(safetyItem[1])}</p>${sites.map((l) => siteCheckTile(l, safetyItem[2], active === 'safety' && shown === l.id)).join('')}
-    ${rest.length ? `<p class="hub-group-head">Reports and set up</p>${hubTilesOf(rest, active)}` : ''}`;
-};
-// Fills in each site's tile with today's progress (e.g. "12 of 20 done today").
-async function showSiteChecks(root) {
-  const tiles = [...root.querySelectorAll('[data-site-checks]')];
-  await Promise.all(tiles.map(async (t) => {
-    try {
-      const d = await api(`/safety/checklist${qs({ location_id: t.dataset.siteChecks })}`);
-      const daily = d.tasks.filter((x) => x.frequency === 'daily');
-      const done = daily.filter((x) => x.check).length;
-      if (daily.length) t.textContent = `${done} of ${daily.length} daily checks done today`;
-    } catch { /* keep the plain description */ }
-  }));
-}
+const hubTiles = (items, active) => hubTilesOf(items, active);
 const hubTilesOf = (items, active) => {
   const main = items.filter(([p]) => !SETUP_TILES.has(p) && !ADMIN_TILES.has(p) && !TILE_GROUPS[p]);
   const group = (title, has) => {
@@ -462,7 +450,6 @@ function renderHub({ el, params }) {
   el.innerHTML = `
     <div class="page-head"><h1 class="hub-title">${esc(TOP_LABELS[heading] ?? heading)}</h1></div>
     <div class="hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}">${hubTiles(items, null)}</div>`;
-  showSiteChecks(el);
 }
 
 // Line icons for the bar along the bottom on phones.
@@ -480,9 +467,9 @@ const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 // The phone icon bar: home, the everyday pages this person can use, then the full menu.
 function tabBar(items, active) {
   const has = (p) => items.some(([q]) => q === p);
-  const tabs = [home() !== 'mybrew' && !['rota', 'safety', 'timeoff'].includes(home()) ? [home(), 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety', 'Checks', 'checks'] : has('timeoff') ? ['timeoff', 'Time off', 'timeoff'] : null, has('chat') ? ['chat', 'Chat', 'chat'] : null, has('mybrew') ? ['mybrew', 'My Atlas', 'mybrew'] : null].filter(Boolean);
+  const tabs = [home() !== 'mybrew' && !['rota', 'safety', 'timeoff'].includes(home()) ? [home(), 'Home', 'home'] : null, has('rota') ? ['rota', 'Rota', 'rota'] : null, has('safety') ? ['safety/checks', 'Checks', 'checks'] : has('timeoff') ? ['timeoff', 'Time off', 'timeoff'] : null, has('chat') ? ['chat', 'Chat', 'chat'] : null, has('mybrew') ? ['mybrew', 'My Atlas', 'mybrew'] : null].filter(Boolean);
   return `<nav class="tabbar" aria-label="Quick links">
-    ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p ? 'is-on' : ''}" ${active === p ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'chat' ? '<span class="nav-badge" data-chat-badge hidden></span>' : ''}${p === 'rota' ? BELL : ''}</a>`).join('')}
+    ${tabs.map(([p, label, ic]) => `<a href="#/${p}" class="${active === p.split('/checks')[0] ? 'is-on' : ''}" ${active === p.split('/checks')[0] ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'chat' ? '<span class="nav-badge" data-chat-badge hidden></span>' : ''}${p === 'rota' ? BELL : ''}</a>`).join('')}
     <button type="button" class="tabbar-menu">${icon('menu')}<span>Menu</span></button>
   </nav>`;
 }
@@ -787,7 +774,6 @@ export async function route({ keepScroll = false } = {}) {
       <nav class="hub-rail hub-tiles" data-tone="${NAV_TONES[heading] ?? ''}" aria-label="${esc(TOP_LABELS[heading] ?? heading)}">
         <p class="hub-rail-head">${esc(TOP_LABELS[heading] ?? heading)}</p>${hubTiles(items, active)}</nav>
       <div class="hub-main"></div></div>`;
-    showSiteChecks(el.querySelector('.hub-rail'));
     view = el.querySelector('.hub-main');
   }
   view.innerHTML = '<div class="loading">Loading…</div>';

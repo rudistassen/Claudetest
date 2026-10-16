@@ -68,11 +68,11 @@ export async function render(ctx) {
   const add = (tone, icon, text, href) => needs.push({ tone, icon, text, href });
   if (card) {
     const daily = card.daily;
-    if (daily.fails) add('bad', '✕', `${plural(daily.fails, 'check')} failed today`, '#/safety');
+    if (daily.fails) add('bad', '✕', `${plural(daily.fails, 'check')} failed today`, '#/safety/checks');
     const left = daily.due - daily.done;
-    if (left > 0) add(hour >= 15 ? 'bad' : 'warn', '✓', `${plural(left, 'daily check')} still to do today (${daily.done} of ${daily.due} done)`, '#/safety');
+    if (left > 0) add(hour >= 15 ? 'bad' : 'warn', '✓', `${plural(left, 'daily check')} still to do today (${daily.done} of ${daily.due} done)`, '#/safety/checks');
     const weeklyLeft = card.weekly.due - card.weekly.done;
-    if (weeklyLeft > 0) add('warn', '✓', `${plural(weeklyLeft, 'weekly check')} still to do this week`, '#/safety');
+    if (weeklyLeft > 0) add('warn', '✓', `${plural(weeklyLeft, 'weekly check')} still to do this week`, '#/safety/checks');
     for (const p of card.roster ?? []) {
       if (p.status === 'late') add('bad', '⏰', `${shortName(p.name)} hasn’t clocked in – shift started at ${p.rota.split('–')[0]}`, '#/dashboard');
       if (p.status === 'missed') add('bad', '⏰', `${shortName(p.name)} didn’t clock in for ${p.rota}`, '#/dashboard');

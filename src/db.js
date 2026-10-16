@@ -651,6 +651,74 @@ CREATE TABLE IF NOT EXISTS chat_reads (
   PRIMARY KEY (group_id, user_id)
 );
 
+-- Compliance → Risk Management: risk assessments for a site (or every site, location_id empty), each rated
+-- likelihood × severity (1–5 each) and reviewed by a date.
+CREATE TABLE IF NOT EXISTS risk_assessments (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'Other',
+  hazards TEXT NOT NULL,
+  who_at_risk TEXT,
+  controls TEXT NOT NULL,
+  further_action TEXT,
+  likelihood INTEGER NOT NULL CHECK (likelihood BETWEEN 1 AND 5),
+  severity INTEGER NOT NULL CHECK (severity BETWEEN 1 AND 5),
+  owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  review_on TEXT,
+  reviewed_at TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+-- Compliance → Incident Management: accidents, near misses, complaints and so on, and what was done about them.
+CREATE TABLE IF NOT EXISTS incidents (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  occurred_on TEXT NOT NULL,
+  occurred_at TEXT,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  people_involved TEXT,
+  injury TEXT,
+  action_taken TEXT,
+  riddor INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'investigating', 'closed')),
+  outcome TEXT,
+  reported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  closed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  closed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS incident_notes (
+  id INTEGER PRIMARY KEY,
+  incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Compliance → Documents: certificates, inspection reports, insurance and licences, with when they run out.
+CREATE TABLE IF NOT EXISTS compliance_documents (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'other',
+  file_name TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  data BLOB NOT NULL,
+  issued_on TEXT,
+  expires_on TEXT,
+  notes TEXT,
+  uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+
 -- Company documents on My Atlas: handbooks, policies and forms, for every site or chosen sites.
 CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY,
@@ -1669,6 +1737,20 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 21');
+  }
+  if (version < 22) {
+    // Risk Management, Incident Management and compliance documents arrived: everyone can read the risk assessments
+    // and report an incident; whoever could set up their site's checks can manage all three.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        const add = ['risk.view', 'incidents.report', ...(perms.includes('safety.manage') ? ['risk.manage', 'incidents.manage', 'compliance.documents'] : [])];
+        const next = [...new Set([...perms, ...add])];
+        if (next.length !== perms.length) db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify(next), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 22');
   }
   ensureDefaultSets(db);
   return db;

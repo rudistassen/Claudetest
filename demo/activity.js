@@ -207,3 +207,39 @@ export function seedSkills(db) {
     }
   });
 }
+
+// Sample risk assessments, incidents and compliance documents.
+export function seedCompliance(db) {
+  const site = db.prepare('SELECT id FROM locations ORDER BY id LIMIT 1').get().id;
+  const manager = db.prepare(`SELECT id FROM users WHERE email = 'manager1@cafe.local'`).get()?.id ?? null;
+  const staff = db.prepare(`SELECT id FROM users WHERE email = 'staff1@cafe.local'`).get()?.id ?? null;
+  const day = (n) => db.prepare(`SELECT date('now', ?) AS d`).get(`${n} days`).d;
+  const risk = db.prepare(`INSERT INTO risk_assessments (location_id, title, category, hazards, who_at_risk, controls, further_action, likelihood, severity, owner_id, review_on, created_by, reviewed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-200 days'))`);
+  risk.run(null, 'Fire – the whole building', 'Fire', 'Cooking equipment, electrics, deep fat fryer, rubbish build-up.', 'Staff and customers – smoke inhalation, burns.',
+    'Fire alarm tested weekly, extinguishers serviced yearly, fire exits kept clear and checked daily, staff fire training on induction.', 'Fire drill every 6 months.', 2, 5, manager, day(160), manager);
+  risk.run(site, 'Hot drinks and the espresso machine', 'Health & safety', 'Steam wands, hot water, hot drinks carried through the café.', 'Baristas – scalds; customers – spilt drinks.',
+    'Training before using the machine, steam wand purged away from the body, lids offered on takeaways, trays for carrying.', null, 3, 2, manager, day(90), manager);
+  risk.run(site, 'Cleaning chemicals', 'COSHH (chemicals)', 'Sanitiser, oven cleaner and descaler – skin and eye irritation, fumes.', 'Staff cleaning.',
+    'Safety data sheets kept, gloves and goggles provided, chemicals stored away from food, never mixed.', 'Swap oven cleaner for a milder product.', 3, 3, staff, day(-5), manager);
+  risk.run(site, 'Allergens', 'Food safety', 'Undeclared allergens, cross-contact during prep.', 'Customers with allergies – serious reaction.',
+    'Allergen matrix kept up to date in Atlas, separate prep boards, staff ask about allergies at the till.', null, 2, 5, manager, day(200), manager);
+  risk.run(site, 'Slips, trips and falls', 'Health & safety', 'Wet floors, spills, cables, steps at the back door.', 'Staff and customers.',
+    'Spills cleaned straight away, wet floor signs, non-slip shoes for staff, back step marked.', null, 3, 3, manager, day(40), manager);
+
+  const inc = db.prepare(`INSERT INTO incidents (location_id, kind, occurred_on, occurred_at, title, description, people_involved, injury, action_taken, status, outcome, reported_by, closed_by, closed_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?))`);
+  inc.run(site, 'accident', day(-1), '11:20', 'Barista burnt hand on steam wand', 'Steam wand was knocked on while the jug was being moved.', 'Sam (barista)', 'Small burn on the back of the right hand – cooled under running water for 20 minutes, plaster applied.', 'First aid given, wand checked.', 'investigating', null, staff, null, null, '-1 days');
+  inc.run(site, 'near_miss', day(-3), '14:05', 'Wet floor by the toilets with no sign', 'A customer nearly slipped on water by the toilets. No sign was out.', null, null, 'Floor dried and sign put out.', 'open', null, staff, null, null, '-3 days');
+  inc.run(site, 'complaint', day(-12), '09:40', 'Customer found hair in a sandwich', 'Customer brought back a ham sandwich with a hair in it.', 'Customer – refunded, no contact details left.', null, 'Refunded and apologised.', 'closed', 'Reminded the kitchen team about hair nets; checked at the next two opening checks.', staff, manager, day(-10), '-12 days');
+  const id = db.prepare('SELECT id FROM incidents ORDER BY id LIMIT 1').get().id;
+  db.prepare('INSERT INTO incident_notes (incident_id, user_id, body) VALUES (?, ?, ?)').run(id, manager, 'Spoke to Sam – fine to carry on working. Looking at moving the milk jugs away from the wand.');
+
+  const doc = db.prepare(`INSERT INTO compliance_documents (location_id, title, category, file_name, file_type, size, data, issued_on, expires_on, notes, uploaded_by)
+    VALUES (?, ?, ?, ?, 'text/plain', ?, ?, ?, ?, ?, ?)`);
+  const file = (text) => { const b = new TextEncoder().encode(text); return [b.length, b]; };
+  doc.run(site, 'Gas safety certificate', 'certificate', 'gas-safety.txt', ...file('Gas safety certificate (sample)'), day(-340), day(25), 'Engineer: J Smith, Gas Safe 123456', manager);
+  doc.run(site, 'Food hygiene inspection report', 'inspection', 'fhrs.txt', ...file('Food hygiene rating 5 (sample)'), day(-200), null, 'Rating 5', manager);
+  doc.run(site, 'PAT testing certificate', 'certificate', 'pat.txt', ...file('PAT test (sample)'), day(-380), day(-15), null, manager);
+  doc.run(null, 'Public and employer’s liability insurance', 'insurance', 'insurance.txt', ...file('Insurance schedule (sample)'), day(-100), day(265), 'Policy no. ABC123', manager);
+}

@@ -25,6 +25,7 @@ import { demoInvoiceReader } from '../src/invoice-demo.js';
 import { registerInvoiceRoutes } from '../src/routes/invoices.js';
 import { registerXeroRoutes } from '../src/routes/xero.js';
 import { registerBankRoutes } from '../src/routes/bank.js';
+import { registerComplianceRoutes } from '../src/routes/compliance.js';
 import { registerPeopleRoutes } from '../src/routes/people.js';
 import { registerCareersRoutes } from '../src/careers-inbox.js';
 import { registerEventRoutes } from '../src/events.js';
@@ -43,7 +44,7 @@ import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
 import { demoPlaces } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from '../src/invites.js';
 import { HttpError, addDays, today } from '../src/util.js';
-import { seedActivity, seedChat, seedCourse, seedChecklists, seedSkills } from './activity.js';
+import { seedActivity, seedChat, seedCompliance, seedCourse, seedChecklists, seedSkills } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
 import { registerPushRoutes } from '../src/push.js';
 import { activityLogger, registerActivityRoutes } from '../src/activity.js';
@@ -112,6 +113,7 @@ async function boot() {
   seedCourse(db);
   seedChat(db);
   seedSkills(db);
+  seedCompliance(db);
   seedChecklists(db);
   publishAllShifts(db);
 
@@ -174,6 +176,7 @@ async function boot() {
   // Xero isn't connected in the demo: Setup → Xero shows how to set it up.
   registerXeroRoutes(api, db, null);
   registerBankRoutes(api, db, null);
+  registerComplianceRoutes(api, db);
   // A pretend careers inbox with a few applications waiting, so People → Recruitment's "Check now" can be tried.
   const careersInbox = memoryMailbox([
     { id: 'cv-1', subject: 'Barista application', from: 'maya.patel@example.com', fromName: 'Maya Patel', to: ['careers@example.com'], receivedAt: new Date(Date.now() - 26 * 3600000).toISOString(),
