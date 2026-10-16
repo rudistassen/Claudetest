@@ -3221,3 +3221,19 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .tf-option { display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 0.15rem; border-bottom: 1px solid var(--border); font-size: 1.05rem; cursor: pointer; }
 .tf-option input { width: 1.4rem; height: 1.4rem; accent-color: var(--text); flex: none; }
 @media (max-width: 640px) { .tf-pick { flex-basis: 100%; } }
+
+/* HQ Dashboard: daily checks done and failed in one smaller card. */
+.kpi.kpi-checks { color: inherit; text-decoration: none; }
+.kpi-checks .kpi-pair { display: flex; gap: 1.5rem; align-items: flex-end; }
+.kpi-checks .kpi-pair > div { display: flex; flex-direction: column; }
+.dash-hip .kpi-checks .kpi-pair strong, .kpi-checks .kpi-pair strong { font-size: 1.35rem; line-height: 1.1; }
+.kpi-checks .kpi-pair strong small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+.kpi-checks .kpi-pair > div > small { font-size: 0.75rem; color: var(--muted); }
+.kpi-checks .tone-bad strong, .kpi-checks .tone-bad small { color: var(--bad); }
+/* …and Clocked in beside it, the same size. */
+.dash-hip .kpi-compact strong { font-size: 1.35rem; }
+.kpi-compact > span, .kpi-checks > span { font-size: 0.72rem; }
+.kpi-compact small { font-size: 0.75rem; }
+.dash-hip .kpi.kpi-checks, .dash-hip .kpi.kpi-compact { padding: 0.65rem 0.85rem 0.7rem; }
+.kpi-checks::after, .kpi-compact::after { display: none; }
+.kpi-checks .kpi-pair strong small { display: inline; margin: 0; }

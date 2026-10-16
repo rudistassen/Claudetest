@@ -1,14 +1,14 @@
 import { addDays, api, esc, fmtDate, money, qs, siteScope, todayISO } from '../lib.js';
-import { COMPARE_NOTE, PERIOD_LABEL, PERIODS, periodRange, ROSTER, shortName } from './dashboard.js';
+import { chosenTimeframe, ROSTER, shortName, timeframe, timeframeBar, wireTimeframe } from './dashboard.js';
 
 // Manager Dashboard: one site's day at a glance for the person running it – how today's trading and labour are
 // going, who's in, and a "Needs you" list of everything waiting on them (requests, checks, the rota, orders, stock,
 // training, reviews and enquiries), each linking to where it's done. The HQ Dashboard is every site side by side.
 
 const TARGET = 30;
-// The period the sales, labour and checks tiles cover (remembered on this device): today, the last 7 days, or week,
-// month or year to date – compared like the HQ Dashboard.
-const PERIOD_KEY = 'cafe-ops:manager-period';
+// The timeframe the sales, labour and checks tiles cover (remembered on this device): a day, a Monday–Sunday week,
+// a month, a year or custom dates, stepped with the arrows – compared like the HQ Dashboard.
+const TF_KEY = 'cafe-ops:manager-timeframe';
 const mondayOf = (d) => { const day = (new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7; return addDays(d, -day); };
 const pctText = (p) => (p === null || p === undefined ? '–' : `${Math.round(p * 10) / 10}%`);
 const daysSince = (sqlUtc) => Math.floor((Date.now() - Date.parse(`${sqlUtc.replace(' ', 'T')}Z`)) / 86400000);
@@ -30,14 +30,19 @@ export async function render(ctx) {
   const week = mondayOf(today);
   const nextWeek = addDays(week, 7);
   const loc = { location_id: site };
-  let period = 'today';
-  try { const saved = localStorage.getItem(PERIOD_KEY); if (PERIODS.includes(saved)) period = saved; } catch { /* storage unavailable */ }
+  const tf = chosenTimeframe(query, TF_KEY);
+  const t = timeframe(tf, query, today);
+  const period = t.period;
   const ranged = period !== 'today';
-  const range = periodRange(period, today);
+  const range = t.range;
+  // The day the tiles are for (a day picked, or the last day of the timeframe); Needs you and who's on are always now.
+  const d0 = t.to;
+  const isToday = d0 === today;
   const seeMoney = can('sales.view', 'dashboard.sales');
 
   const want = {
-    day: api(`/dashboard${qs({ ...loc, from: ranged ? range.from : undefined })}`),
+    day: api(`/dashboard${qs(loc)}`),
+    shown: ranged || !isToday ? api(`/dashboard${qs({ ...loc, date: isToday ? undefined : d0, from: ranged ? range.from : undefined })}`) : null,
     trade: seeMoney && ranged ? api(`/trading${qs({ ...loc, from: range.from, to: range.to })}`) : null,
     tradePrev: seeMoney && ranged && range.prevTo ? api(`/trading${qs({ ...loc, from: range.prevFrom, to: range.prevTo })}`) : null,
     costs: can('sales.view', 'dashboard.sales') ? api(`/reports/rota-costs${qs({ ...loc, week })}`) : null,
@@ -60,6 +65,8 @@ export async function render(ctx) {
   if (stale()) return;
   const got = Object.fromEntries(keys.map((k, i) => [k, settled[i].status === 'fulfilled' ? settled[i].value : null]));
   const card = got.day?.locations?.[0] ?? null;
+  // The figures for the timeframe (today's card when it's today).
+  const fig = got.shown?.locations?.[0] ?? card;
   const siteName = card?.name ?? state.locations.find((l) => l.id === site)?.name ?? 'Your site';
   const hour = new Date().getHours();
 
@@ -108,19 +115,19 @@ export async function render(ctx) {
 
   // ---- The numbers: today, or the period picked ----
   const tiles = [];
-  const word = ranged ? PERIOD_LABEL[period].toLowerCase() : 'today';
+  const word = ranged ? (/^(This|Last) /.test(t.name) ? t.name.toLowerCase() : `· ${t.name}`) : isToday ? 'today' : `· ${t.title}`;
   const vs = (now, then, unit) => {
     if (!then) return `nothing to compare with ${unit}`;
     const diff = Math.round(((now - then) / then) * 100);
     return `${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff)}% ${diff >= 0 ? 'up on' : 'down on'} ${unit}`;
   };
-  const cmpUnit = COMPARE_NOTE[period];
-  if (card && card.gross_today !== undefined) {
+  const cmpUnit = t.compare;
+  if (fig && fig.gross_today !== undefined) {
     if (ranged && got.trade) {
       const t = got.trade.totals;
-      const lw = card.last_week ?? {};
-      // Week-type periods add last week's matching day up to this time; month and year compare whole days.
-      const sameTimeToo = period === 'week' || period === 'wtd';
+      const lw = fig.last_week ?? {};
+      // A week adds last week's matching day (up to this time, if it's today); months, years and dates compare whole days.
+      const sameTimeToo = period === 'wtd';
       const pt = got.tradePrev?.totals;
       const synced = got.trade.labour_synced;
       const cost = (x) => (x ? (synced ? x.clocked_cost : x.rostered_cost) : 0);
@@ -132,13 +139,13 @@ export async function render(ctx) {
       tiles.push(`<div class="md-tile"><span>Labour ${word}</span><strong class="${tone}">${pctText(pct)}</strong>
         <small>${pct === null ? 'no sales in this period' : `${wordTone} · ${money(cost(t))} ${synced ? 'clocked' : 'rostered'}`}</small></div>`);
     } else {
-      const now = card.gross_today ?? 0;
-      const then = card.last_week?.gross;
-      tiles.push(`<div class="md-tile"><span>Sales today</span><strong>${money(now)}</strong>
-        <small>${vs(now, then, 'this time last week')}</small></div>`);
-      const [tone, wordTone] = labourTone(card.labour_pct_today);
-      tiles.push(`<div class="md-tile"><span>Labour today</span><strong class="${tone}">${pctText(card.labour_pct_today)}</strong>
-        <small>${card.labour_pct_today === null ? 'no sales yet today' : `${wordTone} · ${money(card.labour_cost_today)} ${card.labour_basis === 'clocked' ? 'clocked' : 'rostered'} so far`}</small></div>`);
+      const now = fig.gross_today ?? 0;
+      const then = fig.last_week?.gross;
+      tiles.push(`<div class="md-tile"><span>Sales ${word}</span><strong>${money(now)}</strong>
+        <small>${vs(now, then, isToday ? 'this time last week' : 'the same day last week')}</small></div>`);
+      const [tone, wordTone] = labourTone(fig.labour_pct_today);
+      tiles.push(`<div class="md-tile"><span>Labour ${word}</span><strong class="${tone}">${pctText(fig.labour_pct_today)}</strong>
+        <small>${fig.labour_pct_today === null ? (isToday ? 'no sales yet today' : 'no sales that day') : `${wordTone} · ${money(fig.labour_cost_today)} ${fig.labour_basis === 'clocked' ? 'clocked' : 'rostered'}${isToday ? ' so far' : ''}`}</small></div>`);
     }
   }
   if (got.costs) {
@@ -147,10 +154,10 @@ export async function render(ctx) {
     tiles.push(`<div class="md-tile"><span>This week’s rota</span><strong class="${tone}">${pctText(t.labour_pct)}</strong>
       <small>${t.labour_pct === null ? 'no forecast yet' : `${word} · ${money(t.cost)} vs ${money(t.sales_budget)} ${t.budgeted ? 'budget' : 'forecast'}`}</small></div>`);
   }
-  if (card) {
-    const d = ranged && card.period ? card.period.daily : card.daily;
+  if (fig) {
+    const d = ranged && fig.period ? fig.period.daily : fig.daily;
     tiles.push(`<div class="md-tile"><span>Checks ${word}</span><strong class="${d.fails ? 'md-bad' : d.done >= d.due ? 'md-good' : ''}">${d.done} / ${d.due}</strong>
-      <small>${d.fails ? `${plural(d.fails, 'failed check')}` : d.done >= d.due ? 'all done' : ranged ? `${d.due ? Math.round((d.done / d.due) * 100) : 100}% done` : `${d.due - d.done} to go`}</small></div>`);
+      <small>${d.fails ? `${plural(d.fails, 'failed check')}` : d.done >= d.due ? 'all done' : ranged || !isToday ? `${d.due ? Math.round((d.done / d.due) * 100) : 100}% done` : `${d.due - d.done} to go`}</small></div>`);
   }
 
   // ---- This week so far: sales against the budget, and labour % against the target ----
@@ -218,10 +225,7 @@ export async function render(ctx) {
     <div class="page-head"><h1 class="hub-title">Manager Dashboard</h1>
       ${state.multiSite ? `<form class="filters" id="md-site"><select name="scope" aria-label="Site">${state.locations.filter((l) => l.active).map((l) => `<option value="${l.id}" ${l.id === site ? 'selected' : ''}>${esc(l.name)}${l.id === state.user.location_id ? ' (home)' : ''}</option>`).join('')}</select></form>` : ''}</div>
     <p class="md-hello">${esc(siteName)} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-    <div class="seg dash-periods dash-periods-top" role="group" aria-label="Show figures for">
-      ${PERIODS.map((p) => `<button type="button" class="${period === p ? 'is-on' : ''}" data-period="${p}">${PERIOD_LABEL[p]}</button>`).join('')}
-    </div>
-    ${ranged ? `<p class="muted small dash-period-note">${PERIOD_LABEL[period]}: ${fmtDate(range.from, { day: 'numeric', month: 'short' })} – ${fmtDate(range.to, { day: 'numeric', month: 'short' })}${seeMoney ? `, compared with ${COMPARE_NOTE[period]}` : ''}. Needs you, who’s on and the rota are always now.</p>` : ''}
+    ${timeframeBar(t, ranged || !isToday ? `${ranged ? `${fmtDate(range.from, { day: 'numeric', month: 'short', year: 'numeric' })} – ${fmtDate(range.to, { day: 'numeric', month: 'short', year: 'numeric' })}` : fmtDate(d0, { weekday: 'long', day: 'numeric', month: 'long' })}${seeMoney ? `, compared with ${esc(ranged ? t.compare : 'the same day last week')}` : ''}. Needs you, who’s on and the rota are always now.` : '')}
     ${tiles.length ? `<div class="md-tiles">${tiles.join('')}</div>` : ''}
     ${tracking}
     <div class="md-grid">
@@ -231,16 +235,13 @@ export async function render(ctx) {
           : '<p class="md-clear">✨ All clear – nothing waiting on you right now.</p>'}
       </section>
       <section class="card md-today"><h2>On today</h2>${onToday}
-        ${card ? `<p class="muted small md-more">Wastage ${ranged && card.period ? `${word}: ${money(card.period.wastage)}` : `this week: ${money(card.wastage_7d)}`}${card.orders_sent ? ` · ${plural(card.orders_sent, 'order')} waiting for delivery` : ''}</p>` : ''}</section>
+        ${card ? `<p class="muted small md-more">Wastage ${ranged && fig?.period ? `${word}: ${money(fig.period.wastage)}` : `this week: ${money(card.wastage_7d)}`}${card.orders_sent ? ` · ${plural(card.orders_sent, 'order')} waiting for delivery` : ''}</p>` : ''}</section>
     </div>
     ${weekRow}
     ${state.can('dashboard.view') ? '<p class="muted small">Want every site side by side? <a href="#/dashboard">Open the HQ Dashboard</a>.</p>' : ''}
   </div>`;
 
-  el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
-    try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }
-    ctx.rerender();
-  }));
+  wireTimeframe(el, { t, tf, today, navigate, page: 'manager', key: TF_KEY, keep: { scope: query.scope } });
   const form = el.querySelector('#md-site');
   form?.addEventListener('change', () => navigate(`manager${qs({ scope: form.scope.value })}`));
   form?.addEventListener('submit', (e) => { e.preventDefault(); navigate(`manager${qs({ scope: form.scope.value })}`); });

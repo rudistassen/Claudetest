@@ -370,6 +370,63 @@ export function stepTimeframe(t, dir, today) {
   const next = timeframe(t.tf, { date: anchor }, today);
   return next;
 }
+/** The timeframe selector: ‹ This week · 13 – 19 Oct ›, and a note under it (HTML). */
+export function timeframeBar(t, note = '') {
+  return `<div class="tf-bar">
+      <div class="tf-pick" role="group" aria-label="Timeframe">
+        <button type="button" class="tf-arrow" data-tf-step="-1" aria-label="${esc(t.prevLabel)}" title="${esc(t.prevLabel)}">‹</button>
+        <button type="button" class="tf-label" id="tf-open" aria-haspopup="dialog" title="Choose the timeframe"><strong>${esc(t.title)}</strong>${t.sub ? `<span> · ${esc(t.sub)}</span>` : ''}</button>
+        <button type="button" class="tf-arrow" data-tf-step="1" aria-label="${esc(t.nextLabel)}" title="${esc(t.nextLabel)}" ${t.atEnd ? 'disabled' : ''}>›</button>
+      </div>
+      ${note ? `<p class="muted small dash-period-note">${note}</p>` : ''}
+    </div>`;
+}
+
+/**
+ * Wires the selector: the arrows step back and forward by the timeframe; the middle opens the choice of timeframe.
+ * page is where it goes (with keep: other query values to keep, e.g. the site); key remembers the choice.
+ */
+export function wireTimeframe(el, { t, tf, today, navigate, page, key, keep = {} }) {
+  const goTo = (next) => {
+    try { if (next.tf !== 'custom') localStorage.setItem(key, next.tf); } catch { /* storage unavailable */ }
+    const live = next.to >= today && next.tf !== 'custom';
+    navigate(`${page}${qs({ ...keep, tf: next.tf === 'day' && live ? undefined : next.tf, date: live ? undefined : next.to, from: next.tf === 'custom' ? next.from : undefined })}`);
+  };
+  el.querySelectorAll('[data-tf-step]').forEach((b) => b.addEventListener('click', () => goTo(stepTimeframe(t, Number(b.dataset.tfStep), today))));
+  el.querySelector('#tf-open').addEventListener('click', () => {
+    const { form } = openModal({
+      title: 'Timeframe',
+      submitLabel: 'Done',
+      body: `<div class="tf-options">${[['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['custom', 'Custom dates']].map(([k, l]) => `<label class="tf-option">
+          <span>${l}</span><input type="radio" name="tf" value="${k}" ${tf === k ? 'checked' : ''}></label>`).join('')}</div>
+        <div class="tf-custom" ${tf === 'custom' ? '' : 'hidden'}>
+          <div class="row">${field('From', input('from', t.range.from, `type="date" max="${today}"`))}${field('To', input('to', t.range.to, `type="date" max="${today}"`))}</div>
+          <p class="muted small">Up to a year. Compared with the same number of days just before.</p>
+        </div>
+        <p class="muted small">Week runs Monday to Sunday. The arrows step back and forward a whole day, week, month or year.</p>`,
+      onSubmit: async (v, f) => {
+        const choice = f.tf.value;
+        if (choice === 'custom') {
+          if (!v.from || !v.to) throw new Error('Choose both dates');
+          const [from, to] = v.from <= v.to ? [v.from, v.to] : [v.to, v.from];
+          if ((Date.parse(to) - Date.parse(from)) / 86400000 > 365) throw new Error('Choose up to a year');
+          goTo({ tf: 'custom', from, to: to > today ? today : to });
+          return;
+        }
+        // Switching timeframe keeps the day you're on (so a week picked from a day is that day's week).
+        goTo(timeframe(choice, { date: t.to }, today));
+      },
+    });
+    form.querySelectorAll('[name=tf]').forEach((r) => r.addEventListener('change', () => { form.querySelector('.tf-custom').hidden = form.tf.value !== 'custom'; }));
+  });
+}
+
+/** Which timeframe to show: ?tf=, else the one remembered (not custom dates), else a day. */
+export function chosenTimeframe(query, key) {
+  if (TIMEFRAMES.includes(query.tf)) return query.tf;
+  try { const saved = localStorage.getItem(key); if (TIMEFRAMES.includes(saved) && saved !== 'custom') return saved; } catch { /* storage unavailable */ }
+  return 'day';
+}
 const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`;
 
 function bySite(t, period, prev, state) {
@@ -417,9 +474,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const today = todayISO();
   // One timeframe – a day, a Monday–Sunday week, a month, a year, or dates picked – stepped back and forward with
   // the arrows. A week, month or year still going runs up to today. Remembered in this browser (not custom dates).
-  let tf = TIMEFRAMES.includes(query.tf) ? query.tf : null;
-  if (!tf) { try { const saved = localStorage.getItem(TF_KEY); if (TIMEFRAMES.includes(saved) && saved !== 'custom') tf = saved; } catch { /* storage unavailable */ } }
-  tf ??= 'day';
+  const tf = chosenTimeframe(query, TF_KEY);
   const t = timeframe(tf, query, today);
   const d0 = t.to;
   const period = t.period;
@@ -523,14 +578,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         <button class="btn dash-pdf" id="dash-pdf">Download PDF</button>
       </div>
     </div>
-    <div class="tf-bar">
-      <div class="tf-pick" role="group" aria-label="Timeframe">
-        <button type="button" class="tf-arrow" data-tf-step="-1" aria-label="${esc(t.prevLabel)}" title="${esc(t.prevLabel)}">‹</button>
-        <button type="button" class="tf-label" id="tf-open" aria-haspopup="dialog" title="Choose the timeframe"><strong>${esc(t.title)}</strong>${t.sub ? `<span> · ${esc(t.sub)}</span>` : ''}</button>
-        <button type="button" class="tf-arrow" data-tf-step="1" aria-label="${esc(t.nextLabel)}" title="${esc(t.nextLabel)}" ${t.atEnd ? 'disabled' : ''}>›</button>
-      </div>
-      ${ranged ? `<p class="muted small dash-period-note">${fmtDate(range.from, { day: 'numeric', month: 'short', year: 'numeric' })} – ${fmtDate(range.to, { day: 'numeric', month: 'short', year: 'numeric' })}${seeSales ? `, compared with ${esc(t.compare)}` : ''}. Who’s in, clock-ins and rotas are ${shown.isToday ? 'today' : `for ${fmtDate(d0, { weekday: 'short', day: 'numeric', month: 'short' })}`}.</p>` : ''}
-    </div>
+    ${timeframeBar(t, ranged ? `${fmtDate(range.from, { day: 'numeric', month: 'short', year: 'numeric' })} – ${fmtDate(range.to, { day: 'numeric', month: 'short', year: 'numeric' })}${seeSales ? `, compared with ${esc(t.compare)}` : ''}. Who’s in, clock-ins and rotas are ${shown.isToday ? 'today' : `for ${fmtDate(d0, { weekday: 'short', day: 'numeric', month: 'short' })}`}.` : '')}
     <p class="print-only print-meta">Atlas dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     ${hasSales ? `<div class="dash-hero">
@@ -546,9 +594,10 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       </section>
     </div>` : ''}
     <div class="kpis">
-      <div class="kpi" data-icon="✓"><span>Daily checks done${ranged ? ` · ${word}` : ''}</span><strong>${checks.done} / ${checks.due}</strong>${ranged && checks.due ? `<small>${Math.round((checks.done / checks.due) * 100)}% done</small>` : ''}</div>
-      <div class="kpi ${checks.fails ? 'kpi-bad' : ''}" data-icon="!"><span>Failed checks ${word}</span><strong>${checks.fails}</strong></div>
-      ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>${shown.isToday ? 'Clocked in now' : 'Clocked in'}</span><strong>${clockedInNow}</strong><small>${shown.isToday ? `of ${totals.staff} on today’s rota` : `${totals.staff} on the rota`} · <u>see who</u></small></button>`}
+      <a class="kpi kpi-checks" href="#/safety"><span>Daily checks${word ? ` ${word}` : ''}</span>
+        <div class="kpi-pair"><div><strong>${checks.done}<small> / ${checks.due}</small></strong><small>done${checks.due ? ` · ${Math.round((checks.done / checks.due) * 100)}%` : ''}</small></div>
+          <div class="${checks.fails ? 'tone-bad' : ''}"><strong>${checks.fails}</strong><small>failed</small></div></div></a>
+      ${clockedInNow === null ? '' : `<button type="button" class="kpi kpi-button kpi-compact" id="clocked-in-now" data-icon="☺" aria-haspopup="dialog"><span>${shown.isToday ? 'Clocked in now' : 'Clocked in'}</span><strong>${clockedInNow}</strong><small>${shown.isToday ? `of ${totals.staff} on today’s rota` : `${totals.staff} on the rota`} · <u>see who</u></small></button>`}
     </div>` : ''}
     <section class="card weather" id="weather" hidden></section>
     ${trade?.square_connected ? bySite(trade, period, prevSales, state) : ''}
@@ -558,39 +607,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     <div class="site-cards">${locs.map((l) => card(l, state, data, siteSlice(l))).join('')}</div></div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
-  // The timeframe: the arrows step back and forward by it; the middle opens the choice of timeframe.
-  const goTo = (next) => {
-    try { if (next.tf !== 'custom') localStorage.setItem(TF_KEY, next.tf); } catch { /* storage unavailable */ }
-    const live = next.to >= today && next.tf !== 'custom';
-    navigate(`dashboard${qs({ tf: next.tf === 'day' && live ? undefined : next.tf, date: live ? undefined : next.to, from: next.tf === 'custom' ? next.from : undefined })}`);
-  };
-  el.querySelectorAll('[data-tf-step]').forEach((b) => b.addEventListener('click', () => goTo(stepTimeframe(t, Number(b.dataset.tfStep), today))));
-  el.querySelector('#tf-open').addEventListener('click', () => {
-    const { form } = openModal({
-      title: 'Timeframe',
-      submitLabel: 'Done',
-      body: `<div class="tf-options">${[['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['custom', 'Custom dates']].map(([k, l]) => `<label class="tf-option">
-          <span>${l}</span><input type="radio" name="tf" value="${k}" ${tf === k ? 'checked' : ''}></label>`).join('')}</div>
-        <div class="tf-custom" ${tf === 'custom' ? '' : 'hidden'}>
-          <div class="row">${field('From', input('from', range.from, `type="date" max="${today}"`))}${field('To', input('to', range.to, `type="date" max="${today}"`))}</div>
-          <p class="muted small">Up to a year. Compared with the same number of days just before.</p>
-        </div>
-        <p class="muted small">Week runs Monday to Sunday. The arrows step back and forward a whole day, week, month or year.</p>`,
-      onSubmit: async (v, f) => {
-        v.tf = f.tf.value;
-        if (v.tf === 'custom') {
-          if (!v.from || !v.to) throw new Error('Choose both dates');
-          const [from, to] = v.from <= v.to ? [v.from, v.to] : [v.to, v.from];
-          if ((Date.parse(to) - Date.parse(from)) / 86400000 > 365) throw new Error('Choose up to a year');
-          goTo({ tf: 'custom', from, to: to > today ? today : to });
-          return;
-        }
-        // Switching timeframe keeps the day you're on (so a week picked from a day is that day's week).
-        goTo(timeframe(v.tf, { date: d0 }, today));
-      },
-    });
-    form.querySelectorAll('[name=tf]').forEach((r) => r.addEventListener('change', () => { form.querySelector('.tf-custom').hidden = form.tf.value !== 'custom'; }));
-  });
+  wireTimeframe(el, { t, tf, today, navigate, page: 'dashboard', key: TF_KEY });
   // "Clocked in now": who's clocked in, site by site.
   el.querySelector('#clocked-in-now')?.addEventListener('click', () => {
     const sites = locs.map((l) => ({ l, people: (l.clock_ins ?? []).filter(inNow) })).filter((x) => x.people.length);
