@@ -167,7 +167,9 @@ export function registerPushRoutes(router, db) {
   // This person's notifications, newest first (the last 60 days, up to 100), and how many they haven't seen.
   router.get('/notifications', (req, res) => {
     const items = db.prepare('SELECT id, kind, title, body, url, created_at, read_at FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 100').all(req.user.id);
-    res.json({ items, unread: db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(req.user.id).n });
+    res.json({ items, unread: db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(req.user.id).n,
+      // Which group each kind is in (Your shifts, Holiday, For managers…), for filtering the list.
+      groups: Object.fromEntries(PUSH_KINDS.map((k) => [k.key, k.group])) });
   });
   // Marks them all as seen.
   router.post('/notifications/read', (req, res) => {

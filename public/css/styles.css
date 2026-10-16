@@ -3189,3 +3189,9 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .ack-no { color: var(--muted); }
 .pd-tick.is-waiting { color: var(--muted); }
 .confirm-bar small { display: inline; }
+
+/* Notifications: filter chips and a search above the list. */
+.inbox-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
+.inbox-filters .chips { flex: 1 1 auto; }
+.inbox-filters input[type=search] { flex: 0 1 240px; min-width: 160px; }
+.inbox-item[hidden] { display: none; }
