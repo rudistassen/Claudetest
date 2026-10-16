@@ -422,10 +422,10 @@ export function wireTimeframe(el, { t, tf, today, navigate, page, key, keep = {}
 }
 
 /** Which timeframe to show: ?tf=, else the one remembered (not custom dates), else a day. */
-export function chosenTimeframe(query, key) {
+export function chosenTimeframe(query, key, fallback = 'day') {
   if (TIMEFRAMES.includes(query.tf)) return query.tf;
   try { const saved = localStorage.getItem(key); if (TIMEFRAMES.includes(saved) && saved !== 'custom') return saved; } catch { /* storage unavailable */ }
-  return 'day';
+  return fallback;
 }
 const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`;
 

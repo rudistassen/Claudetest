@@ -1756,6 +1756,18 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 22');
   }
+  if (version < 23) {
+    // The Timecards report arrived: whoever could see the Breaks report (the same clock-ins) can see it.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        if (!perms.includes('reports.breaks') || perms.includes('reports.timecards')) continue;
+        db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify([...perms, 'reports.timecards']), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 23');
+  }
   ensureDefaultSets(db);
   return db;
 }

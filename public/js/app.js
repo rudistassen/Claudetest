@@ -11,6 +11,7 @@ import * as courses from './views/courses.js';
 import * as chat from './views/chat.js';
 import * as bank from './views/bank.js';
 import * as compliance from './views/compliance.js';
+import * as timecards from './views/timecards.js';
 import * as stafflog from './views/stafflog.js';
 import * as parlevels from './views/parlevels.js';
 import * as rotacosts from './views/rotacosts.js';
@@ -108,6 +109,7 @@ const ROUTES = [
   [/^trading$/, trading.render, ['reports.trading']],
   [/^trading\/heatmap$/, trading.renderHeatmap, ['reports.trading']],
   [/^breaks$/, breaks.render, ['reports.breaks']],
+  [/^timecards$/, timecards.render, ['reports.timecards']],
   [/^rota-costs$/, rotacosts.render, ['reports.rota_costs']],
   [/^par-levels$/, parlevels.render, ['reports.par_levels']],
   [/^par-levels\/new$/, parlevels.renderNew, ['reports.par_levels']],
@@ -248,6 +250,7 @@ function navGroups() {
       ['rota-costs', 'Rota costs', '⚖', ['reports.rota_costs']],
       ['par-levels', 'Par levels', '▥', ['reports.par_levels']],
       ['breaks', 'Breaks', '☕', ['reports.breaks']],
+      ['timecards', 'Timecards', '⏲', ['reports.timecards']],
       ['sickness', 'Sickness', '✚', ['reports.sickness']],
       ['reviews', 'Reviews', '★', ['reports.reviews']],
       ['bank', 'Bank', '£', ['bank.view']],

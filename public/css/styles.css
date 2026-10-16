@@ -3243,3 +3243,12 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .md-pair { display: flex; gap: 1.4rem; align-items: flex-end; font-weight: 400 !important; }
 .md-pair > span { display: flex; flex-direction: column; font-weight: 400; }
 .md-pair strong small { display: inline; font-size: 0.6em; font-weight: 600; }
+
+/* Reporting → Timecards */
+.tc-totals { display: flex; flex-wrap: wrap; gap: 0.5rem 1.6rem; margin: 0 0 0.75rem; }
+.tc-totals > div { display: flex; flex-direction: column; }
+.tc-totals strong { font-size: 1.25rem; }
+.tc-totals small { color: var(--muted); }
+.tc-flag { display: block; font-size: 0.75rem; font-weight: 600; }
+.tc-table tr[hidden] { display: none; }
+#tc-filters input[type=search] { flex: 1 1 200px; max-width: 280px; }

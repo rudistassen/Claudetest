@@ -72,6 +72,7 @@ export const PERMISSION_AREAS = [
     ['reports.rota_costs', 'Rota costs report – rota cost against the labour budget'],
     ['reports.par_levels', 'Par levels report – suggested pars from sales'],
     ['reports.breaks', 'Breaks report – missed and short breaks'],
+    ['reports.timecards', 'Timecards report – every clock-in, one row each, with hours (and pay, for people who can see it)'],
     ['reports.sickness', 'Sickness report – who was off sick and when'],
     ['reports.reviews', 'Reviews report – Google reviews for each site'],
   ]],

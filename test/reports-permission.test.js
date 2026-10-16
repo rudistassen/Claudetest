@@ -60,7 +60,8 @@ test('upgrading turns the old Reporting menu permission into each report people 
     d.close();
     d = openDb(file);
     const set = (name) => JSON.parse(d.prepare('SELECT permissions FROM permission_sets WHERE name = ?').get(name).permissions);
-    assert.deepEqual(set('Sales').filter((p) => p.startsWith('reports.')).sort(), ['reports.breaks', 'reports.open_orders', 'reports.par_levels', 'reports.rota_costs', 'reports.sales', 'reports.trading']);
+    assert.deepEqual(set('Sales').filter((p) => p.startsWith('reports.')).sort(), ['reports.breaks', 'reports.open_orders', 'reports.par_levels', 'reports.rota_costs', 'reports.sales', 'reports.timecards', 'reports.trading'],
+      'and the Timecards report, added later for whoever had the Breaks report');
     assert.deepEqual(set('Sick').filter((p) => p.startsWith('reports.')).sort(), ['reports.sickness']);
     assert.ok(!set('No menu').some((p) => p.startsWith('reports.')), 'no Reporting menu before, no reports now');
     const custom = JSON.parse(d.prepare(`SELECT custom_permissions FROM users WHERE email = 'c@x'`).get().custom_permissions);
