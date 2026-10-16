@@ -3252,3 +3252,12 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .tc-flag { display: block; font-size: 0.75rem; font-weight: 600; }
 .tc-table tr[hidden] { display: none; }
 #tc-filters input[type=search] { flex: 1 1 200px; max-width: 280px; }
+.tc-total th, .tc-total td { border-top: 2px solid var(--text); font-weight: 700; }
+.tc-total small { font-weight: 400; }
+.tc-hours strong { color: var(--brand-deep); }
+.tc-people ul { list-style: none; margin: 0 0 0.75rem; padding: 0.4rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.tc-people li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+.tc-people li:last-child { border-bottom: 0; }
+@media (max-width: 640px) { .tc-total th { display: block; } }
+.tc-foot-tag { display: none; }
+@media (max-width: 640px) { .tc-foot-tag { display: block; font-size: 0.75rem; font-weight: 400; color: var(--muted); } }

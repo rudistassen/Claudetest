@@ -8,6 +8,8 @@ import { chosenTimeframe, timeframe, timeframeBar, wireTimeframe } from './dashb
 const TF_KEY = 'cafe-ops:timecards-timeframe';
 const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, '0')}m` : `${Math.round(m)}m`);
 const hrs = (h) => Number(h).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// 26.98 → "26h 59m"
+const hm = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; };
 
 export async function render({ el, state, query, stale, navigate }) {
   const today = todayISO();
@@ -40,9 +42,11 @@ export async function render({ el, state, query, stale, navigate }) {
     </form>
     ${!data.labour_synced ? '<div class="card empty">No clock-ins yet – they come from Square once it’s connected (Setup → Square).</div>' : `
     <div class="tc-totals" id="tc-totals"></div>
+    <div class="tc-people" id="tc-people" hidden></div>
     ${data.rows.length ? `<section class="card"><div class="table-wrap"><table class="tc-table">
       <thead><tr><th>Date</th><th>Name</th>${multi ? '<th>Site</th>' : ''}<th>Rota</th><th>Clock in</th><th>Clock out</th><th>Breaks</th><th class="num">Paid hours</th>${data.see_pay ? '<th class="num">Pay</th>' : ''}</tr></thead>
-      <tbody>${data.rows.map(row).join('')}</tbody></table></div>
+      <tbody>${data.rows.map(row).join('')}</tbody>
+      <tfoot><tr class="tc-total"><th colspan="${multi ? 7 : 6}" id="tc-foot-label">Total</th><td class="num" id="tc-foot-hours"></td>${data.see_pay ? '<td class="num" id="tc-foot-pay"></td>' : ''}</tr></tfoot></table></div>
       <p class="tc-none empty" hidden>Nobody by that name in these dates.</p></section>`
       : '<div class="card empty">No clock-ins in these dates.</div>'}
     <p class="muted small">From Square. Paid hours leave out unpaid breaks. Late is against the nearest rota shift that day (more than 5 minutes after it starts).</p>`}`;
@@ -68,10 +72,34 @@ export async function render({ el, state, query, stale, navigate }) {
     const box = el.querySelector('#tc-totals');
     if (!box) return;
     const people = new Set(list.map((r) => r.user_id ?? r.name)).size;
+    const hours = list.reduce((n, r) => n + r.hours, 0);
+    const pay = list.reduce((n, r) => n + (r.cost ?? 0), 0);
+    // The total row under the table, for what's shown.
+    const label = el.querySelector('#tc-foot-label');
+    if (label) {
+      label.textContent = `Total${q ? ` for “${form.q.value.trim()}”` : ''} · ${list.length} timecard${list.length === 1 ? '' : 's'}`;
+      el.querySelector('#tc-foot-hours').innerHTML = `<span class="tc-foot-tag">Total hours </span><strong>${hrs(hours)}</strong><small class="muted"> (${hm(hours)})</small>`;
+      const footPay = el.querySelector('#tc-foot-pay');
+      if (footPay) footPay.innerHTML = `<strong>${money(pay)}</strong>`;
+    }
+    // Searching and more than one person matches: each person's total hours.
+    const byPerson = new Map();
+    for (const r of list) {
+      const k = r.user_id ?? r.name;
+      const p = byPerson.get(k) ?? { name: r.name, hours: 0, cards: 0, pay: 0 };
+      p.hours += r.hours; p.cards += 1; p.pay += r.cost ?? 0;
+      byPerson.set(k, p);
+    }
+    const peopleBox = el.querySelector('#tc-people');
+    if (peopleBox) {
+      peopleBox.hidden = !q || byPerson.size < 2;
+      peopleBox.innerHTML = peopleBox.hidden ? '' : `<ul>${[...byPerson.values()].sort((a, b) => b.hours - a.hours).map((p) => `<li><strong>${esc(p.name)}</strong>
+        <span>${hrs(p.hours)} h <small class="muted">(${hm(p.hours)}) · ${p.cards} timecard${p.cards === 1 ? '' : 's'}${data.see_pay ? ` · ${money(p.pay)}` : ''}</small></span></li>`).join('')}</ul>`;
+    }
     box.innerHTML = `<div><strong>${list.length}</strong><small>timecard${list.length === 1 ? '' : 's'}</small></div>
       <div><strong>${people}</strong><small>${people === 1 ? 'person' : 'people'}</small></div>
-      <div><strong>${hrs(list.reduce((n, r) => n + r.hours, 0))}</strong><small>paid hours</small></div>
-      ${data.see_pay ? `<div><strong>${money(list.reduce((n, r) => n + r.cost, 0))}</strong><small>pay</small></div>` : ''}
+      <div class="tc-hours"><strong>${hrs(hours)}</strong><small>total hours · ${hm(hours)}</small></div>
+      ${data.see_pay ? `<div><strong>${money(pay)}</strong><small>pay</small></div>` : ''}
       <div><strong class="${list.some((r) => r.late_minutes > 5) ? 'tone-bad' : ''}">${list.filter((r) => r.late_minutes > 5).length}</strong><small>late</small></div>`;
   };
   form.q.addEventListener('input', apply);
