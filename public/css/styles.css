@@ -3206,3 +3206,18 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .bell-badge { position: absolute; top: 1px; right: 0; min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; border-radius: 99px; background: var(--bad); color: #fff;
   font-size: 0.68rem; font-weight: 800; line-height: 1.15rem; text-align: center; box-shadow: 0 0 0 2px var(--surface); }
 .bell-badge[hidden] { display: none; }
+
+/* HQ Dashboard: one timeframe (day, week, month, year or dates), stepped with the arrows. */
+.tf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; margin: 0 0 1rem; }
+.tf-pick { display: flex; align-items: center; flex: 0 1 460px; min-width: 0; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); }
+.tf-arrow { flex: none; width: 3rem; height: 3rem; border: 0; background: none; color: var(--text); font-size: 1.6rem; line-height: 1; cursor: pointer; border-radius: 18px; }
+.tf-arrow:hover:not(:disabled) { background: var(--surface-2); }
+.tf-arrow:disabled { color: var(--border); cursor: default; }
+.tf-label { flex: 1; min-width: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 1.15rem; padding: 0.5rem 0.25rem; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-label strong { font-weight: 700; }
+.tf-label span { color: var(--muted); }
+.tf-bar .dash-period-note { margin: 0; flex: 1 1 260px; }
+.tf-options { display: flex; flex-direction: column; margin-bottom: 0.75rem; }
+.tf-option { display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 0.15rem; border-bottom: 1px solid var(--border); font-size: 1.05rem; cursor: pointer; }
+.tf-option input { width: 1.4rem; height: 1.4rem; accent-color: var(--text); flex: none; }
+@media (max-width: 640px) { .tf-pick { flex-basis: 100%; } }

@@ -1,5 +1,5 @@
 import { attachTip, pairedBarChart } from '../charts.js';
-import { addDays, api, chooseSite, esc, fmtDate, homeSite, isDemo, money, openModal, qs, siteColour, toast, todayISO } from '../lib.js';
+import { addDays, api, chooseSite, esc, field, fmtDate, homeSite, input, isDemo, money, openModal, qs, siteColour, toast, todayISO } from '../lib.js';
 import { clockInActions, wireClockInActions } from './breaks.js';
 import { sickAttrs, wireSickButtons } from './sickness.js';
 import { fmtPct, LABOUR_TARGET, labourTone } from './sales.js';
@@ -16,8 +16,8 @@ function progress(done, due) {
 // isToday/day: the day shown; canSick: whether this person can mark a rota shift as sickness (rota editors).
 const shown = { isToday: true, day: '', canSick: false, period: 'today' };
 // What the figures are compared with, in words: "last week" / "last month" / "last year", and the longer form.
-const cmpShort = () => (shown.period === 'mtd' ? 'last month' : shown.period === 'ytd' ? 'last year' : 'last week');
-const cmpLong = () => (shown.period === 'today' ? (shown.isToday ? 'by this time last week' : 'the same day last week')
+const cmpShort = () => shown.cmpShort ?? (shown.period === 'mtd' ? 'last month' : shown.period === 'ytd' ? 'last year' : 'last week');
+const cmpLong = () => (shown.cmpLong ?? null) ?? (shown.period === 'today' ? (shown.isToday ? 'by this time last week' : 'the same day last week')
   : shown.period === 'mtd' ? 'over the same dates last month' : shown.period === 'ytd' ? 'over the same dates last year' : 'over the same time last week');
 const dayWord = () => (shown.isToday ? 'today' : fmtDate(shown.day, { weekday: 'short', day: 'numeric', month: 'short' }));
 
@@ -206,7 +206,7 @@ function card(loc, state, data, slice = null) {
           <p class="small tone-${labourTone(g.pct)}">${fmtPct(g.pct)} of net sales${g.rota ? ' (rota)' : ''}</p>
         </div>
       </div>
-      <p class="small muted site-compare">${slice ? `${PERIOD_LABEL[shown.period]} vs ${COMPARE_NOTE[shown.period]}` : `${shown.isToday ? 'Today so far' : 'The whole day'} vs ${fmtDate(data.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })}${shown.isToday ? ' at the same time' : ''}`}</p>` : ''}
+      <p class="small muted site-compare">${slice ? `${PL(shown.period)} vs ${CN(shown.period)}` : `${shown.isToday ? 'Today so far' : 'The whole day'} vs ${fmtDate(data.compare_date, { weekday: 'short', day: 'numeric', month: 'short' })}${shown.isToday ? ' at the same time' : ''}`}</p>` : ''}
       <div class="site-grid">
         ${clocked ? `
         <div class="span-2">
@@ -233,10 +233,10 @@ function card(loc, state, data, slice = null) {
             : '<p class="muted">Nobody rostered</p>'}
         </div>`}
         <div class="site-checks span-2">
-          <h3>Daily compliance checks${per ? ` · ${PERIOD_LABEL[shown.period].toLowerCase()}` : ''}</h3>
+          <h3>Daily compliance checks${per ? ` · ${PL(shown.period).toLowerCase()}` : ''}</h3>
           ${per ? progress(per.daily.done, per.daily.due) : progress(loc.daily.done, loc.daily.due)}
-          ${(per ? per.daily.fails : loc.daily.fails) ? `<p class="alert-text">⚠ ${per ? per.daily.fails : loc.daily.fails} failed check(s) ${per ? PERIOD_LABEL[shown.period].toLowerCase() : dayWord()}</p>` : ''}
-          ${per ? `<p class="small muted">Wastage ${PERIOD_LABEL[shown.period].toLowerCase()}: ${money(per.wastage)}</p>` : ''}
+          ${(per ? per.daily.fails : loc.daily.fails) ? `<p class="alert-text">⚠ ${per ? per.daily.fails : loc.daily.fails} failed check(s) ${per ? PL(shown.period).toLowerCase() : dayWord()}</p>` : ''}
+          ${per ? `<p class="small muted">Wastage ${PL(shown.period).toLowerCase()}: ${money(per.wastage)}</p>` : ''}
         </div>
       </div>
     </section>`;
@@ -261,7 +261,6 @@ function downloadPdf(state, date) {
 }
 
 // Sales and labour % for each site, today or over the last 7 days (the same figures as the Trading page).
-const PERIOD_KEY = 'cafe-ops:dashboard-period';
 // The by-site panel's periods. Each runs up to the day shown (today, or a day picked), and is compared with the same
 // span before it: the same time last week (today, 7 days, week to date – with today up to this time), or the same
 // dates last month / last year (month and year to date – whole days).
@@ -269,6 +268,9 @@ export const PERIODS = ['today', 'week', 'wtd', 'mtd', 'ytd'];
 export const PERIOD_LABEL = { today: 'Today', week: 'Last 7 days', wtd: 'Week to date', mtd: 'Month to date', ytd: 'Year to date' };
 const PRINT_LABEL = { week: '7 days', wtd: 'week to date', mtd: 'month to date', ytd: 'year to date' };
 export const COMPARE_NOTE = { today: 'the same time last week', week: 'the same time last week', wtd: 'the same time last week', mtd: 'the same dates last month', ytd: 'the same dates last year' };
+// The timeframe's own name (This week, 6 – 12 Oct, September 2026…) and what it's compared with, when one is picked.
+const PL = (p) => shown.label ?? PERIOD_LABEL[p] ?? '';
+const CN = (p) => shown.compare ?? COMPARE_NOTE[p] ?? '';
 const pad = (n) => String(n).padStart(2, '0');
 const lastDayOf = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate(); // m is 1–12
 /** The dates a period covers up to d (YYYY-MM-DD), and the span it's compared with (null when nothing to fetch). */
@@ -288,6 +290,86 @@ export function periodRange(period, d) {
   if (period === 'ytd') return { from: `${y}-01-01`, to: d, prevFrom: `${y - 1}-01-01`, prevTo: `${y - 1}-${pad(m)}-${pad(Math.min(day, lastDayOf(y - 1, m)))}` };
   return { from: d, to: d, prevFrom: null, prevTo: null };
 }
+// --- The timeframe: a day, a week (Monday–Sunday), a month, a year, or custom dates ---
+const TF_KEY = 'cafe-ops:dashboard-timeframe';
+export const TIMEFRAMES = ['day', 'week', 'month', 'year', 'custom'];
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const mondayOf = (d) => addDays(d, -((new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7));
+const ymd = (d) => d.split('-').map(Number);
+const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+const short = (d, today) => fmtDate(d, { day: 'numeric', month: 'short', ...(d.slice(0, 4) !== today.slice(0, 4) ? { year: 'numeric' } : {}) });
+
+/**
+ * What a timeframe covers: { tf, from, to (the last day shown – never after today), period (how the figures are
+ * worked out, see periodRange), range, title and sub (for the selector), name and compare (for the figures), atEnd }.
+ */
+export function timeframe(tf, query, today) {
+  const anchor = ISO.test(query.date ?? '') && query.date < today ? query.date : today;
+  const cap = (d) => (d > today ? today : d);
+  let from;
+  let end;
+  if (tf === 'week') { from = mondayOf(anchor); end = addDays(from, 6); }
+  else if (tf === 'month') { const [y, m] = ymd(anchor); from = `${y}-${pad(m)}-01`; end = `${y}-${pad(m)}-${pad(lastDayOf(y, m))}`; }
+  else if (tf === 'year') { from = `${anchor.slice(0, 4)}-01-01`; end = `${anchor.slice(0, 4)}-12-31`; }
+  else if (tf === 'custom') {
+    from = ISO.test(query.from ?? '') ? query.from : addDays(anchor, -6);
+    end = anchor;
+    if (from > end) [from, end] = [end, from];
+  } else { from = anchor; end = anchor; }
+  const to = cap(end);
+  const live = end >= today;
+  const t = { tf, from, to, end, atEnd: live, period: { day: 'today', week: 'wtd', month: 'mtd', year: 'ytd', custom: 'custom' }[tf] ?? 'today' };
+  if (tf === 'custom') {
+    const n = days(from, to) + 1;
+    t.range = { from, to, prevFrom: addDays(from, -n), prevTo: addDays(from, -1) };
+  } else {
+    t.range = periodRange(t.period, to);
+  }
+  const lastWeek = addDays(mondayOf(today), -7);
+  if (tf === 'day') {
+    t.title = anchor === today ? 'Today' : anchor === addDays(today, -1) ? 'Yesterday' : fmtDate(anchor, { weekday: 'short', day: 'numeric', month: 'short', ...(anchor.slice(0, 4) !== today.slice(0, 4) ? { year: 'numeric' } : {}) });
+    t.sub = anchor === today ? 'so far' : '';
+    Object.assign(t, { name: null, compare: null, cmpShort: null, cmpLong: null, prevLabel: 'The day before', nextLabel: 'The next day' });
+  } else if (tf === 'week') {
+    t.title = live ? 'This week' : from === lastWeek ? 'Last week' : `Week of ${short(from, today)}`;
+    t.sub = `${short(from, today)} – ${short(end, today)}`;
+    Object.assign(t, { name: live ? 'This week' : t.title === 'Last week' ? 'Last week' : `w/c ${short(from, today)}`, compare: live ? 'the same time last week' : 'the week before',
+      cmpShort: live ? 'last week' : 'the week before', cmpLong: live ? 'over the same time last week' : 'over the week before', prevLabel: 'The week before', nextLabel: 'The next week' });
+  } else if (tf === 'month') {
+    const month = fmtDate(from, { month: 'long', year: 'numeric' });
+    t.title = live ? 'This month' : month;
+    t.sub = live ? month : '';
+    Object.assign(t, { name: live ? 'This month' : month, compare: live ? 'the same dates last month' : 'the month before', cmpShort: live ? 'last month' : 'the month before',
+      cmpLong: live ? 'over the same dates last month' : 'over the month before', prevLabel: 'The month before', nextLabel: 'The next month' });
+  } else if (tf === 'year') {
+    t.title = live ? 'This year' : from.slice(0, 4);
+    t.sub = live ? from.slice(0, 4) : '';
+    Object.assign(t, { name: live ? 'This year' : from.slice(0, 4), compare: live ? 'the same dates last year' : 'the year before', cmpShort: live ? 'last year' : 'the year before',
+      cmpLong: live ? 'over the same dates last year' : 'over the year before', prevLabel: 'The year before', nextLabel: 'The next year' });
+  } else {
+    t.title = `${short(from, today)} – ${short(to, today)}`;
+    t.sub = `${days(from, to) + 1} days`;
+    Object.assign(t, { name: t.title, compare: 'the same number of days before', cmpShort: 'the days before', cmpLong: 'over the same number of days before',
+      prevLabel: 'The same number of days before', nextLabel: 'The same number of days after' });
+  }
+  return t;
+}
+
+/** The timeframe one step back (-1) or forward (1): a day, week, month or year, or custom dates moved by their length. */
+export function stepTimeframe(t, dir, today) {
+  if (t.tf === 'custom') {
+    const n = (days(t.from, t.to) + 1) * dir;
+    const from = addDays(t.from, n);
+    return { tf: 'custom', from, to: addDays(t.to, n) > today ? today : addDays(t.to, n) };
+  }
+  let anchor;
+  if (t.tf === 'week') anchor = addDays(t.from, 7 * dir);
+  else if (t.tf === 'month') { const [y, m] = ymd(t.from); const nm = m + dir; const yy = y + Math.floor((nm - 1) / 12); const mm = ((nm - 1) % 12 + 12) % 12 + 1; anchor = `${yy}-${pad(mm)}-01`; }
+  else if (t.tf === 'year') anchor = `${Number(t.from.slice(0, 4)) + dir}-01-01`;
+  else anchor = addDays(t.from, dir);
+  const next = timeframe(t.tf, { date: anchor }, today);
+  return next;
+}
 const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits: 1 })} h`;
 
 function bySite(t, period, prev, state) {
@@ -298,7 +380,7 @@ function bySite(t, period, prev, state) {
   // Gross sales (blue) over the same period last week (grey), with the change.
   const salesCell = (now, then, { bars = true } = {}) => `<td class="dash-sales">
     ${bars ? `<span class="dash-bars"><span class="dash-bar"><span class="fill" style="width:${(now / maxSales) * 100}%"></span></span>
-      ${then !== null && then !== undefined ? `<span class="dash-bar dash-bar-prev" title="${COMPARE_NOTE[period][0].toUpperCase()}${COMPARE_NOTE[period].slice(1)}: ${money(then)}"><span class="fill" style="width:${(then / maxSales) * 100}%"></span></span>` : ''}</span>` : ''}
+      ${then !== null && then !== undefined ? `<span class="dash-bar dash-bar-prev" title="${CN(period)[0].toUpperCase()}${CN(period).slice(1)}: ${money(then)}"><span class="fill" style="width:${(then / maxSales) * 100}%"></span></span>` : ''}</span>` : ''}
     <strong>${money(now)}</strong> ${change(now, then)}</td>`;
   // Labour bars run to at least twice the target, so the target line sits in a sensible place.
   const scale = Math.max(LABOUR_TARGET * 2, ...rows.map((r) => Math.min(labour(r) ?? 0, 150)));
@@ -311,8 +393,8 @@ function bySite(t, period, prev, state) {
   return `
     <section class="card dash-sites">
       <header class="card-head">
-        <h2>Sales &amp; labour by site<span class="print-only"> · ${PRINT_LABEL[period] ?? dayWord()}</span></h2>
-        <span class="muted small">${PERIOD_LABEL[period] === 'Today' ? (shown.isToday ? 'Today' : dayWord()) : PERIOD_LABEL[period]}</span>
+        <h2>Sales &amp; labour by site<span class="print-only"> · ${(period === 'today' ? dayWord() : PL(period).toLowerCase())}</span></h2>
+        <span class="muted small">${PL(period) === 'Today' ? (shown.isToday ? 'Today' : dayWord()) : PL(period)}</span>
       </header>
       <div class="table-wrap"><table class="dash-table">
         <thead><tr><th>Site</th><th>Gross sales</th><th class="num">Orders</th><th>Labour % of net sales <small class="inline">(${t.labour_synced ? 'clocked' : 'rostered'} · target ${LABOUR_TARGET}%)</small></th></tr></thead>
@@ -326,23 +408,30 @@ function bySite(t, period, prev, state) {
           <td><strong class="tone-${labourTone(labour(total))}">${icon(labour(total))}${fmtPct(labour(total))}</strong></td></tr></tfoot>` : ''}
       </table></div>
       <p class="muted small">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
-        Grey bars are ${COMPARE_NOTE[period]}. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour.${state.can('reports.trading') ? ' <a href="#/trading">More on the Trading page →</a>' : ''}</p>
+        Grey bars are ${CN(period)}. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour.${state.can('reports.trading') ? ' <a href="#/trading">More on the Trading page →</a>' : ''}</p>
     </section>`;
 }
 
 export async function render({ el, state, navigate, stale, rerender, query = {} }) {
   const seeSales = state.can('sales.view');
-  let period = 'today';
-  try { const saved = localStorage.getItem(PERIOD_KEY); if (PERIODS.includes(saved)) period = saved; } catch { /* storage unavailable */ }
   const today = todayISO();
-  // Always today unless a day is picked (?date=), so coming back to the dashboard shows today again.
-  const d0 = /^\d{4}-\d{2}-\d{2}$/.test(query.date ?? '') && query.date < today ? query.date : today;
+  // One timeframe – a day, a Monday–Sunday week, a month, a year, or dates picked – stepped back and forward with
+  // the arrows. A week, month or year still going runs up to today. Remembered in this browser (not custom dates).
+  let tf = TIMEFRAMES.includes(query.tf) ? query.tf : null;
+  if (!tf) { try { const saved = localStorage.getItem(TF_KEY); if (TIMEFRAMES.includes(saved) && saved !== 'custom') tf = saved; } catch { /* storage unavailable */ } }
+  tf ??= 'day';
+  const t = timeframe(tf, query, today);
+  const d0 = t.to;
+  const period = t.period;
   shown.isToday = d0 === today;
   shown.day = d0;
   shown.canSick = state.can('rota.edit');
   shown.period = period;
+  Object.assign(shown, { label: t.name, compare: t.compare, cmpShort: t.cmpShort, cmpLong: t.cmpLong });
   const ranged = period !== 'today';
-  const range = periodRange(period, d0);
+  const range = t.range;
+  // The chart goes by month over a year (or long custom dates), otherwise by day.
+  const byMonth = period === 'ytd' || (period === 'custom' && days(range.from, range.to) > 62);
   const [data, leave, security, fresh, tradeToday, tradeRange, tradePrev] = await Promise.all([
     api(`/dashboard${qs({ date: shown.isToday ? undefined : d0, from: ranged ? range.from : undefined })}`),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
@@ -385,7 +474,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     if (period === 'today') return [l.id, sameTime];
     const before = tradePrev?.locations.find((x) => x.id === l.id)?.gross_sales ?? 0;
     // Month and year to date are compared with whole days last month / last year.
-    if (period === 'mtd' || period === 'ytd') return [l.id, before || null];
+    if (period === 'mtd' || period === 'ytd' || period === 'custom') return [l.id, before || null];
     return [l.id, sameTime === null && !before ? null : before + (sameTime ?? 0)];
   }));
   // Labour % by this time on the same day last week, worked out the same way (labour cost ÷ net sales, only
@@ -414,7 +503,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const checks = ranged
     ? locs.reduce((t, l) => ({ done: t.done + (l.period?.daily.done ?? 0), due: t.due + (l.period?.daily.due ?? 0), fails: t.fails + (l.period?.daily.fails ?? 0) }), { done: 0, due: 0, fails: 0 })
     : { done: totals.dailyDone, due: totals.dailyDue, fails: totals.fails };
-  const word = ranged ? PERIOD_LABEL[period].toLowerCase() : shown.isToday ? 'today' : '';
+  const word = ranged ? PL(period).toLowerCase() : shown.isToday ? 'today' : '';
   // Each site's figures over the period, for its card.
   const siteSlice = (l) => {
     if (!ranged || !tradeRange) return null;
@@ -431,17 +520,17 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     <div class="page-head">
       <h1>HQ Dashboard <small class="muted">· ${state.multiSite ? 'All sites' : esc(state.location?.name ?? '')}</small></h1>
       <div class="actions">
-        ${shown.isToday ? '' : '<button class="btn btn-small" id="dash-today">Back to today</button>'}
-        <label class="dash-date" title="Choose a day">
-          <span>${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><span class="dash-date-caret" aria-hidden="true">▾</span>
-          <input type="date" id="dash-date" value="${d0}" max="${today}" aria-label="Show the dashboard for a day">
-        </label>
         <button class="btn dash-pdf" id="dash-pdf">Download PDF</button>
       </div>
     </div>
-    ${seeSales ? `<div class="seg dash-periods dash-periods-top" role="group" aria-label="Show the dashboard for">
-      ${PERIODS.map((p) => `<button class="${period === p ? 'is-on' : ''}" data-period="${p}">${p === 'today' && !shown.isToday ? 'This day' : p === 'week' && !shown.isToday ? '7 days to here' : PERIOD_LABEL[p]}</button>`).join('')}
-    </div>${ranged ? `<p class="muted small dash-period-note">${PERIOD_LABEL[period]}: ${fmtDate(range.from, { day: 'numeric', month: 'short', year: period === 'ytd' ? 'numeric' : undefined })} – ${fmtDate(range.to, { day: 'numeric', month: 'short' })}, compared with ${COMPARE_NOTE[period]}. Who’s in, clock-ins and rotas are always ${shown.isToday ? 'today' : 'that day'}.</p>` : ''}` : ''}
+    <div class="tf-bar">
+      <div class="tf-pick" role="group" aria-label="Timeframe">
+        <button type="button" class="tf-arrow" data-tf-step="-1" aria-label="${esc(t.prevLabel)}" title="${esc(t.prevLabel)}">‹</button>
+        <button type="button" class="tf-label" id="tf-open" aria-haspopup="dialog" title="Choose the timeframe"><strong>${esc(t.title)}</strong>${t.sub ? `<span> · ${esc(t.sub)}</span>` : ''}</button>
+        <button type="button" class="tf-arrow" data-tf-step="1" aria-label="${esc(t.nextLabel)}" title="${esc(t.nextLabel)}" ${t.atEnd ? 'disabled' : ''}>›</button>
+      </div>
+      ${ranged ? `<p class="muted small dash-period-note">${fmtDate(range.from, { day: 'numeric', month: 'short', year: 'numeric' })} – ${fmtDate(range.to, { day: 'numeric', month: 'short', year: 'numeric' })}${seeSales ? `, compared with ${esc(t.compare)}` : ''}. Who’s in, clock-ins and rotas are ${shown.isToday ? 'today' : `for ${fmtDate(d0, { weekday: 'short', day: 'numeric', month: 'short' })}`}.</p>` : ''}
+    </div>
     <p class="print-only print-meta">Atlas dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     ${hasSales ? `<div class="dash-hero">
@@ -450,9 +539,9 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour ${word}</span><strong>${fmtPct(labourPct)}</strong>
         <small class="kpi-vs">${labourVersus(labourPct, labourThen)}</small></div>
       <section class="card dash-hourly">
-        <header class="dash-hourly-head"><h2>Gross sales by ${period === 'today' ? 'hour' : period === 'ytd' ? 'month' : 'day'}</h2>
+        <header class="dash-hourly-head"><h2>Gross sales by ${period === 'today' ? 'hour' : byMonth ? 'month' : 'day'}</h2>
           ${locs.length > 1 ? `<select id="hourly-site" class="hourly-site" aria-label="Site for the chart"><option value="">All sites</option>${locs.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select>` : ''}
-          <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>${ranged ? PERIOD_LABEL[period] : shown.isToday ? 'Today' : esc(dayWord())}</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${ranged ? COMPARE_NOTE[period] : `${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week`}</span></div></header>
+          <div class="chart-legend"><span><i class="chart-legend-bar" style="background:var(--series-1)"></i>${ranged ? PL(period) : shown.isToday ? 'Today' : esc(dayWord())}</span><span><i class="chart-legend-bar" style="background:var(--prev-bar)"></i>vs ${ranged ? CN(period) : `${fmtDate(addDays(d0, -7), { weekday: 'long' })} last week`}</span></div></header>
         <div id="hourly-chart" class="chart-box"><div class="loading">Loading…</div></div>
       </section>
     </div>` : ''}
@@ -469,15 +558,39 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     <div class="site-cards">${locs.map((l) => card(l, state, data, siteSlice(l))).join('')}</div></div>`;
 
   el.querySelector('#dash-pdf').addEventListener('click', () => downloadPdf(state, data.date));
-  // The date menu: pick an earlier day; today goes back to the live dashboard.
-  const datePick = el.querySelector('#dash-date');
-  datePick.addEventListener('click', () => { try { datePick.showPicker(); } catch { /* older browsers open it themselves */ } });
-  datePick.addEventListener('change', () => {
-    const v = datePick.value;
-    if (!v) return;
-    navigate(v >= today ? 'dashboard' : `dashboard?date=${v}`);
+  // The timeframe: the arrows step back and forward by it; the middle opens the choice of timeframe.
+  const goTo = (next) => {
+    try { if (next.tf !== 'custom') localStorage.setItem(TF_KEY, next.tf); } catch { /* storage unavailable */ }
+    const live = next.to >= today && next.tf !== 'custom';
+    navigate(`dashboard${qs({ tf: next.tf === 'day' && live ? undefined : next.tf, date: live ? undefined : next.to, from: next.tf === 'custom' ? next.from : undefined })}`);
+  };
+  el.querySelectorAll('[data-tf-step]').forEach((b) => b.addEventListener('click', () => goTo(stepTimeframe(t, Number(b.dataset.tfStep), today))));
+  el.querySelector('#tf-open').addEventListener('click', () => {
+    const { form } = openModal({
+      title: 'Timeframe',
+      submitLabel: 'Done',
+      body: `<div class="tf-options">${[['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['custom', 'Custom dates']].map(([k, l]) => `<label class="tf-option">
+          <span>${l}</span><input type="radio" name="tf" value="${k}" ${tf === k ? 'checked' : ''}></label>`).join('')}</div>
+        <div class="tf-custom" ${tf === 'custom' ? '' : 'hidden'}>
+          <div class="row">${field('From', input('from', range.from, `type="date" max="${today}"`))}${field('To', input('to', range.to, `type="date" max="${today}"`))}</div>
+          <p class="muted small">Up to a year. Compared with the same number of days just before.</p>
+        </div>
+        <p class="muted small">Week runs Monday to Sunday. The arrows step back and forward a whole day, week, month or year.</p>`,
+      onSubmit: async (v, f) => {
+        v.tf = f.tf.value;
+        if (v.tf === 'custom') {
+          if (!v.from || !v.to) throw new Error('Choose both dates');
+          const [from, to] = v.from <= v.to ? [v.from, v.to] : [v.to, v.from];
+          if ((Date.parse(to) - Date.parse(from)) / 86400000 > 365) throw new Error('Choose up to a year');
+          goTo({ tf: 'custom', from, to: to > today ? today : to });
+          return;
+        }
+        // Switching timeframe keeps the day you're on (so a week picked from a day is that day's week).
+        goTo(timeframe(v.tf, { date: d0 }, today));
+      },
+    });
+    form.querySelectorAll('[name=tf]').forEach((r) => r.addEventListener('change', () => { form.querySelector('.tf-custom').hidden = form.tf.value !== 'custom'; }));
   });
-  el.querySelector('#dash-today')?.addEventListener('click', () => navigate('dashboard'));
   // "Clocked in now": who's clocked in, site by site.
   el.querySelector('#clocked-in-now')?.addEventListener('click', () => {
     const sites = locs.map((l) => ({ l, people: (l.clock_ins ?? []).filter(inNow) })).filter((x) => x.people.length);
@@ -536,16 +649,18 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     // Last week's matching day up to this time (week-type periods): from /dashboard, which every site card has.
     const sameTimeNow = locs.filter((l) => !site || String(l.id) === site).reduce((n, l) => n + (l.last_week?.gross ?? 0), 0);
     let rows;
-    if (period === 'ytd') {
-      const byMonth = (days) => days.reduce((m, d) => m.set(Number(d.date.slice(5, 7)), (m.get(Number(d.date.slice(5, 7))) ?? 0) + d.gross_sales), new Map());
-      const now = byMonth(cur.days);
-      const then = byMonth(prev?.days ?? []);
-      rows = [...now.keys()].map((m) => ({ label: new Date(Date.UTC(2000, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }), title: new Date(Date.UTC(2000, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }), now: now.get(m), then: then.has(m) ? then.get(m) : null }));
+    if (byMonth) {
+      const monthly = (list) => list.reduce((m, d) => m.set(Number(d.date.slice(5, 7)), (m.get(Number(d.date.slice(5, 7))) ?? 0) + d.gross_sales), new Map());
+      const now = monthly(cur.days);
+      const then = monthly(prev?.days ?? []);
+      // Custom dates are compared month by month with the same number of days before, in order.
+      const thenInOrder = [...then.values()];
+      rows = [...now.keys()].map((m, i) => ({ label: new Date(Date.UTC(2000, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }), title: new Date(Date.UTC(2000, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }), now: now.get(m), then: period === 'custom' ? thenInOrder[i] ?? null : then.has(m) ? then.get(m) : null }));
     } else {
       rows = cur.days.map((d, i) => {
         const pd = prev?.days?.[i];
         const last = i === cur.days.length - 1 && sameTimeToo;
-        return { label: period === 'mtd' ? String(Number(d.date.slice(8))) : fmtDate(d.date, { weekday: 'short' }), title: fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'long' }),
+        return { label: period === 'mtd' ? String(Number(d.date.slice(8))) : period === 'custom' && cur.days.length > 7 ? fmtDate(d.date, { day: 'numeric', month: 'short' }) : fmtDate(d.date, { weekday: 'short' }), title: fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'long' }),
           now: d.gross_sales, then: last ? sameTimeNow : pd ? pd.gross_sales : null };
       });
     }
@@ -555,13 +670,13 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       label: (x) => x.label,
       title: (x) => x.title,
       series: [
-        { name: PERIOD_LABEL[period].toLowerCase(), value: (x) => x.now, color: 'var(--series-1)' },
-        { name: COMPARE_NOTE[period], value: (x) => x.then, color: 'var(--prev-bar)' },
+        { name: PL(period).toLowerCase(), value: (x) => x.now, color: 'var(--series-1)' },
+        { name: CN(period), value: (x) => x.then, color: 'var(--prev-bar)' },
       ],
       fmt: money,
       fmtAxis: whole,
       height: 190,
-      ariaLabel: `Gross sales by ${period === 'ytd' ? 'month' : 'day'}, ${PERIOD_LABEL[period].toLowerCase()}, against ${COMPARE_NOTE[period]}`,
+      ariaLabel: `Gross sales by ${byMonth ? 'month' : 'day'}, ${PL(period).toLowerCase()}, against ${CN(period)}`,
     });
   };
   const loadChart = () => {
@@ -621,10 +736,6 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     if (b) openTimecard(b.dataset.timecard);
   });
   wireSickButtons(el, rerender);
-  el.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => {
-    try { localStorage.setItem(PERIOD_KEY, b.dataset.period); } catch { /* storage unavailable */ }
-    rerender();
-  }));
   // Hover or focus a site for its labour cost, hours and sales per labour hour.
   el.querySelectorAll('[data-site-row]').forEach((tr) => {
     const r = trade.locations.find((l) => l.id === Number(tr.dataset.siteRow));
