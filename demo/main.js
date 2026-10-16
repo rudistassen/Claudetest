@@ -116,6 +116,9 @@ async function boot() {
   seedCompliance(db);
   seedChecklists(db);
   publishAllShifts(db);
+  // Most people have confirmed their shifts; a few haven't yet (staff1 – the demo's staff login – has some to confirm).
+  db.exec(`UPDATE shifts SET ack_at = datetime('now', '-1 day') WHERE id % 5 != 0
+    AND user_id != (SELECT id FROM users WHERE email = 'staff1@cafe.local')`);
 
   const config = { token: 'demo', environment: 'demo account', baseUrl: 'https://square.demo', version: '2025-01-23', syncMinutes: 5 };
   const square = { config, client: new SquareClient(config, fakeSquareFetch) };

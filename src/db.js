@@ -1421,6 +1421,8 @@ const MIGRATIONS = [
   }],
   // Chats are group chats or direct (one-to-one) messages.
   ['chat_groups', 'kind', `ALTER TABLE chat_groups ADD COLUMN kind TEXT NOT NULL DEFAULT 'group'`],
+  // When the person confirmed they've seen the shift as published (cleared when a change to it is published).
+  ['shifts', 'ack_at', 'ALTER TABLE shifts ADD COLUMN ack_at TEXT'],
   // Whether an admin has let Atlas read bank accounts in Xero (Reporting → Bank).
   ['xero_connection', 'bank_access', 'ALTER TABLE xero_connection ADD COLUMN bank_access INTEGER NOT NULL DEFAULT 0'],
 ];
@@ -1443,6 +1445,8 @@ export function publishShifts(db, locationIds, from, to) {
   const changes = db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE ${where} AND (${UNPUBLISHED})`).get(...args).n;
   tx(db, () => {
     db.prepare(`DELETE FROM shifts WHERE ${where} AND removed = 1`).run(...args);
+    // A new or changed shift needs confirming again by whoever it's for.
+    db.prepare(`UPDATE shifts SET ack_at = NULL WHERE ${where} AND (${UNPUBLISHED})`).run(...args);
     db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS} WHERE ${where}`).run(...args);
   });
   return changes;
@@ -1458,7 +1462,7 @@ const VIEWS = `
 DROP VIEW IF EXISTS published_shifts;
 CREATE VIEW published_shifts AS
   SELECT id, pub_location_id AS location_id, pub_user_id AS user_id, pub_date AS date, pub_start_time AS start_time,
-    pub_end_time AS end_time, pub_break_minutes AS break_minutes, position, notes, sick, sick_note
+    pub_end_time AS end_time, pub_break_minutes AS break_minutes, position, notes, sick, sick_note, ack_at
   FROM shifts WHERE pub_date IS NOT NULL;
 DROP VIEW IF EXISTS draft_shifts;
 CREATE VIEW draft_shifts AS

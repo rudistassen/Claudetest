@@ -744,11 +744,31 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
         .get(ws, all ? 'all' : String(ids[0])) ?? null : undefined,
       // Their last change, if it can still be undone.
       undo: editor ? undoFor(req.user.id) : undefined,
+      // Who has confirmed their published shifts from today on this week, and who hasn't yet.
+      confirmations: editor ? confirmationsFor(shifts) : undefined,
       // Dropped shifts that are open for anyone to pick up, and shifts someone has asked to drop.
       open_shifts: drops.open,
       drop_requested: drops.pending_shift_ids,
     });
   });
+
+  // From the rota's shifts (editors' rows, with what's published): each person with published shifts still to come,
+  // how many of them they've confirmed, and the names of anyone who hasn't confirmed them all.
+  const confirmationsFor = (rows) => {
+    const now = today();
+    const by = new Map();
+    for (const s of rows) {
+      if (!s.pub_date || s.pub_date < now || !s.pub_user_id) continue;
+      const p = by.get(s.pub_user_id) ?? { user_id: s.pub_user_id, shifts: 0, confirmed: 0 };
+      p.shifts++;
+      if (s.ack_at) p.confirmed++;
+      by.set(s.pub_user_id, p);
+    }
+    const people = [...by.values()];
+    const name = db.prepare('SELECT name FROM users WHERE id = ?');
+    const waiting = people.filter((p) => p.confirmed < p.shifts).map((p) => ({ ...p, name: name.get(p.user_id)?.name ?? 'Someone' })).sort((a, b) => a.name.localeCompare(b.name));
+    return { people: people.length, confirmed: people.length - waiting.length, waiting };
+  };
 
   // Unpublished changes at one site in a date range.
   const pendingAt = (locationId, from, to) => db.prepare(`SELECT COUNT(*) AS n FROM shifts WHERE location_id = ? AND date BETWEEN ? AND ? AND (${UNPUBLISHED})`)
@@ -781,13 +801,13 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     // Notifications: anyone whose shifts changed; and the first time a week is published at a site, everyone on it.
     const weekLabel = ws ? `w/c ${fmtDay(ws)}` : fmtDay(day);
     const url = `/#/rota?view=mine&week=${ws ?? weekStart(day)}`;
-    notify(db, [...changed], 'shift_changed', { title: 'Your shifts have changed', body: `Your rota for ${weekLabel} has been updated – tap to see your shifts`, url, tag: `shifts-${ws ?? day}` });
+    notify(db, [...changed], 'shift_changed', { title: 'Your shifts have changed', body: `Your rota for ${weekLabel} has been updated – tap to see and confirm your shifts`, url, tag: `shifts-${ws ?? day}` });
     if (ws) {
       for (const id of sitesDone) {
         const site = db.prepare('SELECT name FROM locations WHERE id = ?').get(id)?.name ?? 'your site';
         for (const r of db.prepare('SELECT DISTINCT user_id FROM published_shifts WHERE location_id = ? AND date BETWEEN ? AND ?').all(id, from, to)) {
           if (changed.has(r.user_id)) continue;
-          notifyOnce(db, `rota|${id}|${ws}|${r.user_id}`, [r.user_id], 'rota_published', { title: 'Rota published', body: `The ${site} rota for ${weekLabel} is out – tap to see your shifts`, url, tag: `rota-${ws}` });
+          notifyOnce(db, `rota|${id}|${ws}|${r.user_id}`, [r.user_id], 'rota_published', { title: 'Rota published', body: `The ${site} rota for ${weekLabel} is out – tap to see and confirm your shifts`, url, tag: `rota-${ws}` });
         }
         // Those whose shifts changed have now had this week's notice too.
         for (const u of changed) db.prepare('INSERT OR IGNORE INTO push_sent (key) VALUES (?)').run(`rota|${id}|${ws}|${u}`);
@@ -807,7 +827,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     clearUndo(req);
     tx(db, () => {
       if (s.removed) db.prepare('DELETE FROM shifts WHERE id = ?').run(s.id);
-      else db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS} WHERE id = ?`).run(s.id);
+      else db.prepare(`UPDATE shifts SET ${PUBLISH_COLUMNS}, ack_at = NULL WHERE id = ?`).run(s.id);
       logRota(db, req, { action: 'publish_shift', location_id: s.location_id, shift: s, details: `${s.removed ? 'Published the removal of' : 'Published'} ${shiftText(s)}` });
     });
     notify(db, [s.user_id, s.pub_user_id], 'shift_changed', {
@@ -868,6 +888,35 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     const people = db.prepare(`SELECT DISTINCT staff_id AS id, staff_name AS name FROM rota_log
       WHERE staff_id IS NOT NULL AND location_id IN (${ids.map(() => '?').join(', ')}) ORDER BY staff_name`).all(...ids);
     res.json({ from, to, entries: rows.slice(0, LIMIT), more: rows.length > LIMIT, people });
+  });
+
+  // --- Confirming shifts: once a shift is published, whoever it's for confirms they've seen it ---
+
+  // Their published shifts from today on that they haven't confirmed yet, and which weeks they're in.
+  const unconfirmed = (userId) => db.prepare(`SELECT id, date FROM published_shifts WHERE user_id = ? AND date >= ? AND ack_at IS NULL ORDER BY date`).all(userId, today());
+  router.get('/my-shifts/unconfirmed', (req, res) => {
+    const rows = unconfirmed(req.user.id);
+    res.json({ count: rows.length, weeks: [...new Set(rows.map((r) => weekStart(r.date)))] });
+  });
+
+  // Confirms their shifts: { ids } (or every unconfirmed one from today on).
+  router.post('/my-shifts/confirm', (req, res) => {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x) => id(x, 'ids')) : null;
+    const rows = unconfirmed(req.user.id).filter((r) => !ids || ids.includes(r.id));
+    const stamp = db.prepare(`UPDATE shifts SET ack_at = datetime('now') WHERE id = ? AND pub_user_id = ?`);
+    tx(db, () => { for (const r of rows) stamp.run(r.id, req.user.id); });
+    res.json({ confirmed: rows.length });
+  });
+
+  // Reminds everyone who hasn't confirmed their shifts for the week (at the sites shown) to do it.
+  router.post('/rota/confirm-reminder', requirePerm('rota.publish', 'rota.edit'), (req, res) => {
+    const ids = rotaSites(req, req.body.location_id);
+    const ws = weekStart(date(req.body.week, 'week', { required: true }));
+    const from = ws < today() ? today() : ws;
+    const people = db.prepare(`SELECT DISTINCT user_id FROM published_shifts WHERE location_id IN (${ids.map(() => '?').join(', ') || 'NULL'})
+      AND date BETWEEN ? AND ? AND ack_at IS NULL`).all(...ids, from, addDays(ws, 6)).map((r) => r.user_id);
+    notify(db, people, 'rota_published', { title: 'Please confirm your shifts', body: `Your shifts for w/c ${fmtDay(ws)} are waiting for you to confirm you’ve seen them`, url: `/#/rota?view=mine&week=${ws}`, tag: `confirm-${ws}` });
+    res.json({ reminded: people.length });
   });
 
   // Your own upcoming shifts, as published.

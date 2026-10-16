@@ -137,11 +137,12 @@ export async function renderMyBrew(ctx) {
   const checkSite = state.can('safety.complete') ? (todayShift?.location_id ?? (state.can('safety.manage') ? state.locationId : null)) : null;
   // Checklists (opening, closing…) where they're working today, and tasks given to them.
   const listSite = state.can('checklists.complete') ? (todayShift?.location_id ?? (state.can('checklists.manage') ? state.locationId : null)) : null;
-  const [checklist, leaveCount, myTasks, lists] = await Promise.all([
+  const [checklist, leaveCount, myTasks, lists, toConfirm] = await Promise.all([
     checkSite ? api(`/safety/checklist?location_id=${checkSite}`).catch(() => null) : null,
     state.can('leave.manage') ? api('/leave/pending-count').catch(() => ({ count: 0 })) : { count: 0 },
     api('/tasks/mine').catch(() => []),
     listSite ? api(`/checklists?location_id=${listSite}`).catch(() => null) : null,
+    api('/my-shifts/unconfirmed').catch(() => ({ count: 0, weeks: [] })),
   ]);
   if (stale()) return;
   const u = state.user;
@@ -196,6 +197,7 @@ export async function renderMyBrew(ctx) {
   const claimable = drops.open.filter((d) => d.can_claim).length;
   const toReview = leaveCount.count + drops.to_approve.length;
   const tasks = [
+    toConfirm.count ? { icon: '📅', title: `Confirm ${toConfirm.count} shift${toConfirm.count === 1 ? '' : 's'}`, detail: 'New or changed shifts on your rota – let your manager know you’ve seen them', action: 'See and confirm', href: `#/rota?view=mine&week=${toConfirm.weeks[0]}`, primary: true } : null,
     toRead ? { icon: '📌', title: `Confirm you’ve read ${toRead} update${toRead === 1 ? '' : 's'}`, detail: 'In the newsfeed below', action: 'Read', go: 'news', primary: true } : null,
     checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} compliance check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety/checks', primary: true } : null,
     ...myTasks.filter((t) => t.status !== 'done').slice(0, 5).map((t) => ({ icon: '✔', title: t.title, detail: `${t.due_on ? `${t.status === 'overdue' ? 'Overdue – was due' : 'Due'} ${fmtDate(t.due_on, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Task'}${t.created_by_name ? ` · from ${t.created_by_name}` : ''}`, action: 'Open', href: '#/tasks', primary: t.status === 'overdue' })),

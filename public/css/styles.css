@@ -3175,3 +3175,17 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 /* Food Safety Checks: a tile per site, its colour down the side; ticked off when today's checks are all done. */
 .site-check-tiles .hub-tile { border-left: 5px solid var(--site, var(--border)); }
 .site-check-tiles .hub-tile.is-complete .hub-icon { background: var(--good-soft); color: var(--good); }
+
+/* Confirming shifts: the nudge on My shifts, the tally on the rota, and a tick (or circle) on each published shift. */
+.confirm-shifts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1rem; padding: 0.9rem 1rem; margin-bottom: 1rem;
+  border-radius: var(--radius); background: var(--warn-soft); color: var(--text); }
+.confirm-shifts > div { display: flex; flex-direction: column; gap: 0.15rem; flex: 1 1 260px; }
+.confirm-shifts p { margin: 0; flex-basis: 100%; }
+.confirm-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; padding: 0.55rem 0.9rem; margin: 0 0 0.75rem;
+  border-radius: var(--radius); background: var(--warn-soft); font-size: 0.9rem; }
+.confirm-bar.is-done { background: var(--good-soft); }
+.ack { display: inline-block; margin-left: 0.3rem; font-size: 0.72rem; font-weight: 800; line-height: 1; vertical-align: 1px; }
+.ack-yes { color: var(--good); }
+.ack-no { color: var(--muted); }
+.pd-tick.is-waiting { color: var(--muted); }
+.confirm-bar small { display: inline; }

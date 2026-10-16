@@ -225,10 +225,24 @@ export async function render(ctx) {
   };
   // A shift at another site (greyed out on a single site's rota) says where it is; editors also see what's unpublished.
   const TAGS = { new: 'New', changed: 'Changed', removed: 'Removed' };
+  // For people who plan the rota: whether whoever a published shift (still to come) is for has confirmed it.
+  const ackMark = (s) => (!canEdit || !s.pub_date || s.state === 'new' || s.state === 'removed' || s.pub_date < today ? ''
+    : s.ack_at ? '<span class="ack ack-yes" title="Confirmed – they’ve seen this shift">✓</span>'
+      : '<span class="ack ack-no" title="Not confirmed yet – they haven’t seen this shift">○</span>');
   const shiftLabel = (s, u, site) => {
     const where = s.location_id !== site ? `@ ${s.location_name}` : '';
     const tag = TAGS[s.state] ? `<em class="shift-tag">${TAGS[s.state]}</em>` : '';
-    return `<span class="shift-time">${s.start_time}–${s.end_time}</span>${tag}${dropTag(s)}${where ? `<small>${esc(where)}</small>` : ''}`;
+    return `<span class="shift-time">${s.start_time}–${s.end_time}${ackMark(s)}</span>${tag}${dropTag(s)}${where ? `<small>${esc(where)}</small>` : ''}`;
+  };
+  // Who has confirmed their published shifts this week, and a nudge for anyone who hasn't.
+  const confirmBar = () => {
+    const c = data.confirmations;
+    if (!canEdit || !c?.people) return '';
+    const names = c.waiting.map((w) => `${esc(w.name)}${w.shifts > 1 ? ` <small class="muted">(${w.confirmed}/${w.shifts})</small>` : ''}`);
+    return `<div class="confirm-bar ${c.waiting.length ? '' : 'is-done'}">
+      <span><strong>${c.confirmed} of ${c.people}</strong> ${c.people === 1 ? 'person has' : 'people have'} confirmed their shifts${c.waiting.length ? ` · waiting for ${names.slice(0, 8).join(', ')}${names.length > 8 ? ` and ${names.length - 8} more` : ''}` : ' ✓'}</span>
+      ${c.waiting.length ? '<button class="btn btn-small" id="confirm-remind">Remind them</button>' : ''}
+    </div>`;
   };
   const shiftTitle = (s) => (s.state === 'new' ? 'New – staff can’t see this until you publish'
     : s.state === 'removed' ? 'Removed – staff still see this until you publish. Click to put it back.'
@@ -460,7 +474,8 @@ export async function render(ctx) {
       const u = person(x.user_id);
       const changed = x.state && x.state !== 'published';
       const status = changed ? `<em class="shift-tag">${TAGS[x.state]}</em>`
-        : `<span class="pd-tick" title="${canEdit ? 'Published' : 'Confirmed'}">✓✓</span>`;
+        : canEdit && !x.ack_at && x.date >= today ? '<span class="pd-tick is-waiting" title="Published – not confirmed yet">✓</span>'
+          : `<span class="pd-tick" title="${canEdit ? 'Published and confirmed' : 'Confirmed'}">✓✓</span>`;
       const role = u?.rota_group || '';
       const from = u && u.location_id !== x.location_id && u.location_name ? `Covering from ${u.location_name}` : '';
       return `<li class="pd-item" ${canEdit ? `data-drop data-user="${x.user_id}" data-date="${day}" data-site="${x.location_id}"` : ''}>
@@ -601,6 +616,7 @@ export async function render(ctx) {
         ${data.can_publish ? `<button class="btn btn-primary" id="publish">Publish ${all ? 'all sites' : 'this week'}</button>` : ''}
       </span>
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
+    ${confirmBar()}
     ${labourTracker()}
     ${gapsBox(gapList)}
     ${timeline ? `<div class="tl-days" role="group" aria-label="Show one day or the whole week">
@@ -975,6 +991,13 @@ export async function render(ctx) {
     shiftModal(null, { user_id: userId, date: td.dataset.date, location_id: Number(td.dataset.site), ...next });
   }));
   const scopeBody = { location_id: all ? 'all' : siteId, week, date: day ?? undefined };
+  el.querySelector('#confirm-remind')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      const r = await api('/rota/confirm-reminder', { method: 'POST', body: { location_id: all ? 'all' : siteId, week } });
+      toast(r.reminded ? `Reminded ${r.reminded} ${r.reminded === 1 ? 'person' : 'people'} to confirm their shifts` : 'Everyone has confirmed');
+    } catch (err) { showError(err); e.target.disabled = false; }
+  });
   el.querySelector('#publish')?.addEventListener('click', async () => {
     if (!(await confirmDialog(day ? `Publish the changes on ${fmtDate(day)}${all ? ' at every site' : ''}? Staff will see that day as it is now.` : `Publish ${pending} change${pending === 1 ? '' : 's'}${all ? ' across every site' : ''}? Staff will see the rota as it is now.`, { confirmLabel: 'Publish', title: 'Publish rota' }))) return;
     try {
@@ -1048,7 +1071,7 @@ export async function render(ctx) {
 // Just your own shifts for a week, at every site, as published. Easier to read on a phone than the full rota.
 async function renderMine(ctx, week) {
   const { el, stale } = ctx;
-  const shifts = await api(`/my-shifts${qs({ week })}`);
+  const [shifts, pending] = await Promise.all([api(`/my-shifts${qs({ week })}`), api('/my-shifts/unconfirmed').catch(() => ({ count: 0, weeks: [] }))]);
   if (stale()) return;
   const today = todayISO();
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
@@ -1066,6 +1089,18 @@ async function renderMine(ctx, week) {
         <button class="btn" id="print">Print</button>
       </div>
     </div>
+    ${(() => {
+      // Shifts still to come this week that they haven't confirmed yet (and other weeks waiting too).
+      const here = shifts.filter((s) => !s.ack_at && s.date >= today);
+      const elsewhere = pending.weeks.filter((w) => w !== week);
+      if (!here.length && !elsewhere.length) return '';
+      return `<div class="confirm-shifts">
+        ${here.length ? `<div><strong>Please confirm your shift${here.length === 1 ? '' : 's'}</strong>
+          <span>${here.length === 1 ? 'A shift has' : `${here.length} shifts have`} been added or changed this week. Check ${here.length === 1 ? 'it' : 'them'} below, then let your manager know you’ve seen ${here.length === 1 ? 'it' : 'them'}.</span></div>
+          <button class="btn btn-primary" id="confirm-shifts" data-ids="${here.map((s) => s.id).join(',')}">✓ Confirm ${here.length === 1 ? 'shift' : `${here.length} shifts`}</button>` : ''}
+        ${elsewhere.length ? `<p class="small">${here.length ? 'Also waiting' : 'Shifts waiting for you to confirm'}: ${elsewhere.map((w) => `<a href="#/rota${qs({ view: 'mine', week: w })}">w/c ${fmtDate(w, { day: 'numeric', month: 'short' })}</a>`).join(', ')}</p>` : ''}
+      </div>`;
+    })()}
     <p class="muted">Week commencing ${fmtDate(week, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
       · ${shifts.length ? `<strong>${shifts.length} shift${shifts.length === 1 ? '' : 's'}, ${hrs(total)}</strong>` : 'no shifts'}</p>
     <section class="card my-shifts">
@@ -1075,7 +1110,7 @@ async function renderMine(ctx, week) {
           <div class="my-date"><strong>${fmtDate(d, { weekday: 'long' })}</strong><span>${fmtDate(d, { day: 'numeric', month: 'short' })}${d === today ? ' · today' : ''}</span></div>
           <div class="my-list">${mine.length ? mine.map((s) => `
             <div class="my-shift">
-              <div class="my-time">${s.start_time}–${s.end_time}${s.sick ? ' <span class="badge badge-cancelled">Off sick</span>' : ''}</div>
+              <div class="my-time">${s.start_time}–${s.end_time}${s.sick ? ' <span class="badge badge-cancelled">Off sick</span>' : ''}${!s.ack_at && s.date >= today ? ' <span class="badge badge-in_progress">New or changed</span>' : ''}</div>
               <div class="my-where">${esc(s.location_name)}<small>${hrs(s.hours)}${s.break_minutes ? ` · ${s.break_minutes} min break` : ''}${s.notes ? ` · ${esc(s.notes)}` : ''}</small></div>
               ${s.drop_requested ? '<div class="my-drop"><span class="badge badge-sent">Drop asked – waiting for a manager</span></div>' : s.can_drop ? `<div class="my-drop"><button class="btn btn-small btn-ghost" data-drop-shift="${s.id}">Drop shift</button></div>` : ''}
               ${s.colleagues ? `<div class="my-with small muted">${s.colleagues.length ? `With ${s.colleagues.map((c) => `${esc(c.name)} <span class="nowrap">${c.start_time}–${c.end_time}</span>`).join(', ')}` : 'Nobody else on'}</div>` : ''}
@@ -1085,6 +1120,14 @@ async function renderMine(ctx, week) {
     </section>
     <p class="muted small">These are your published shifts. Can’t make one? Tap “Drop shift” – once a manager approves, it’s offered to everyone. If something looks wrong, speak to your manager.</p>`;
   el.querySelectorAll('[data-drop-shift]').forEach((b) => b.addEventListener('click', () => askToDrop(shifts.find((s) => s.id === Number(b.dataset.dropShift)), () => ctx.rerender())));
+  el.querySelector('#confirm-shifts')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      const r = await api('/my-shifts/confirm', { method: 'POST', body: { ids: e.target.dataset.ids.split(',').map(Number) } });
+      toast(`Thanks – ${r.confirmed === 1 ? 'shift' : `${r.confirmed} shifts`} confirmed`);
+      ctx.rerender();
+    } catch (err) { showError(err); e.target.disabled = false; }
+  });
 
   el.querySelectorAll('[data-week]').forEach((b) => b.addEventListener('click', () => {
     const offset = Number(b.dataset.week);
