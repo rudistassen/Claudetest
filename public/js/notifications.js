@@ -1,6 +1,6 @@
 import { api, esc, showError, toast } from './lib.js';
 
-// My Atlas → Phone notifications: turn them on for this phone, choose which kinds, send a test. On an iPhone they
+// My account → Phone notifications: turn them on for this phone, choose which kinds, send a test. On an iPhone they
 // only work once Atlas is added to the Home Screen and opened from there (an Apple rule).
 
 const standalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;

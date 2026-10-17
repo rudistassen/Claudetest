@@ -1,6 +1,7 @@
 import { loadLocations } from '../app.js';
 import { exportProducts, openProductImport } from './product-import.js';
 import { installCard, wireInstallCard } from '../install.js';
+import { renderNotifications } from '../notifications.js';
 import { api, confirmDialog, esc, isDemo, field, fmtDate, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast, siteScope, siteFilter } from '../lib.js';
 
 const yesNo = (v) => (v ? 'Yes' : 'No');
@@ -743,8 +744,11 @@ export async function renderAccount(ctx) {
         <button class="btn btn-primary" type="submit">Update password</button>
       </form>
     </section>
+    <section class="card narrow mb-push" id="mb-push"></section>
     ${installCard()}`;
   wireInstallCard(el);
+  // Phone notifications: turn them on for this phone and choose which kinds.
+  renderNotifications(el.querySelector('#mb-push'), { isAdmin: state.isAdmin });
   el.querySelector('#pw').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;

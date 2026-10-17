@@ -170,7 +170,7 @@ Forecasts and budgets are in gross sales (what the business talks in), as are th
 
 ## Phone notifications
 
-Staff turn notifications on themselves on **My Atlas → Phone notifications** (on an iPhone, Atlas must be added to the Home Screen and opened from there), and choose which they get: the rota published, their shifts changing, open shifts, shift drop, pick-up and holiday decisions, news and training; and for managers, holiday, shift drop and shift pick-up requests, training sign-offs, someone not clocked in 15 minutes after their shift starts (sites with Square clock-ins), new events enquiries and new job applications.
+Staff turn notifications on themselves on **My account → Phone notifications** (on an iPhone, Atlas must be added to the Home Screen and opened from there), and choose which they get: the rota published, their shifts changing, open shifts, shift drop, pick-up and holiday decisions, news and training; and for managers, holiday, shift drop and shift pick-up requests, training sign-offs, someone not clocked in 15 minutes after their shift starts (sites with Square clock-ins), new events enquiries and new job applications.
 
 Everything someone is notified about is also kept on their **Notifications** page (the 🔔 button on My Atlas, or the menu under their name) for 60 days. Tapping a notification on the phone opens that page, with a button to the page it's about.
 

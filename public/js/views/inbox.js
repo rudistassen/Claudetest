@@ -55,7 +55,7 @@ export async function render(ctx) {
     </form>` : ''}
     ${items.length ? `<ul class="inbox card">${items.map(item).join('')}</ul><p class="inbox-none card empty" hidden>Nothing matches these filters.</p>`
       : '<div class="card empty">No notifications yet. When your rota is published, a shift changes or a request is answered, it shows up here.</div>'}
-    <p class="muted small">Notifications are kept for 60 days. Choose which ones come to your phone in <a href="#/mybrew">My Atlas → Phone notifications</a>.</p>`;
+    <p class="muted small">Notifications are kept for 60 days. Choose which ones come to your phone in <a href="#/account">My account → Phone notifications</a>.</p>`;
 
   const form = el.querySelector('#inbox-filters');
   const apply = () => {
