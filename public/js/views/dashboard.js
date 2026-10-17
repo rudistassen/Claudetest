@@ -17,8 +17,6 @@ function progress(done, due) {
 const shown = { isToday: true, day: '', canSick: false, period: 'today' };
 // What the figures are compared with, in words: "last week" / "last month" / "last year", and the longer form.
 const cmpShort = () => shown.cmpShort ?? (shown.period === 'mtd' ? 'last month' : shown.period === 'ytd' ? 'last year' : 'last week');
-const cmpLong = () => (shown.cmpLong ?? null) ?? (shown.period === 'today' ? (shown.isToday ? 'by this time last week' : 'the same day last week')
-  : shown.period === 'mtd' ? 'over the same dates last month' : shown.period === 'ytd' ? 'over the same dates last year' : 'over the same time last week');
 const dayWord = () => (shown.isToday ? 'today' : fmtDate(shown.day, { weekday: 'short', day: 'numeric', month: 'short' }));
 
 // Names on the dashboard are shortened to first name and last initial: "Boudebza Sid Ali" → "Boudebza A.".
@@ -122,18 +120,16 @@ function labourVersus(now, then) {
   if (then === null || then === undefined) return `<span class="muted">of net sales · nothing to compare ${cmpShort()}</span>`;
   const d = Math.round((now - then) * 10) / 10;
   const tone = Math.abs(d) < 0.5 ? 'muted' : d > 0 ? 'tone-bad' : 'tone-good';
-  return `<span class="${tone}">${d === 0 ? '■ 0.0 pts' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)} pts`}</span> <span class="muted">on ${cmpShort()}</span><br>
-    <span class="muted">${then.toFixed(1)}% ${cmpLong()}</span>`;
+  return `<span class="${tone}">${d === 0 ? '■ 0.0 pts' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)} pts`}</span> <span class="muted">on ${cmpShort()}</span>`;
 }
 
-// For a tile: "▲ 4.2% on last week", then what last week had taken by the same time.
+// For a tile: "▲ 4.2% on last week".
 function versusLine(now, then) {
   if (now === null) return `<span class="muted">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}</span>`;
   if (!then) return `<span class="muted">Nothing to compare ${cmpShort()}</span>`;
   const change = ((now - then) / then) * 100;
   const tone = Math.abs(change) < 0.5 ? 'muted' : change > 0 ? 'tone-good' : 'tone-bad';
-  return `<span class="${tone}">${Math.abs(change) < 0.05 ? '■ 0.0%' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%`}</span> <span class="muted">on ${cmpShort()}</span><br>
-    <span class="muted">${money(then)} ${cmpLong()}</span>`;
+  return `<span class="${tone}">${Math.abs(change) < 0.05 ? '■ 0.0%' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}%`}</span> <span class="muted">on ${cmpShort()}</span>`;
 }
 
 const siteInitials = (name) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
@@ -568,7 +564,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         <button class="btn dash-pdf" id="dash-pdf">Download PDF</button>
       </div>
     </div>
-    ${timeframeBar(t, ranged ? `${fmtDate(range.from, { day: 'numeric', month: 'short', year: 'numeric' })} – ${fmtDate(range.to, { day: 'numeric', month: 'short', year: 'numeric' })}${seeSales ? `, compared with ${esc(t.compare)}` : ''}. Who’s in, clock-ins and rotas are ${shown.isToday ? 'today' : `for ${fmtDate(d0, { weekday: 'short', day: 'numeric', month: 'short' })}`}.` : '')}
+    ${timeframeBar(t)}
     <p class="print-only print-meta">Atlas dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
     ${hasSales ? `<div class="dash-hero">

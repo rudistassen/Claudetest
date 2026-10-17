@@ -237,7 +237,7 @@ export async function render(ctx) {
     <div class="page-head"><h1 class="hub-title">Manager Dashboard</h1>
       ${state.multiSite ? `<form class="filters" id="md-site"><select name="scope" aria-label="Site">${state.locations.filter((l) => l.active).map((l) => `<option value="${l.id}" ${l.id === site ? 'selected' : ''}>${esc(l.name)}${l.id === state.user.location_id ? ' (home)' : ''}</option>`).join('')}</select></form>` : ''}</div>
     <p class="md-hello">${esc(siteName)} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-    ${timeframeBar(t, ranged || !isToday ? `${ranged ? `${fmtDate(range.from, { day: 'numeric', month: 'short', year: 'numeric' })} – ${fmtDate(range.to, { day: 'numeric', month: 'short', year: 'numeric' })}` : fmtDate(d0, { weekday: 'long', day: 'numeric', month: 'long' })}${seeMoney ? `, compared with ${esc(ranged ? t.compare : 'the same day last week')}` : ''}. Needs you, who’s on and the rota are always now.` : '')}
+    ${timeframeBar(t)}
     ${tiles.length ? `<div class="md-tiles">${tiles.join('')}</div>` : ''}
     ${tracking}
     <div class="md-grid">
