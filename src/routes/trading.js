@@ -136,6 +136,32 @@ export function registerTradingRoutes(router, db, square) {
     });
   });
 
+  /**
+   * Net sales by Square category over ?from=&to= (default today) for the dashboard: each category's quantity sold
+   * and net sales, biggest first, with its top items. Categories come from the Items library; items not in one are
+   * "Uncategorised".
+   */
+  router.get('/trading/categories', requirePerm('sales.view', 'reports.trading'), (req, res) => {
+    const { from, to, ids } = reportScope(db, req, 1);
+    const inList = ids.map(() => '?').join(', ') || 'NULL';
+    const cats = new Map();
+    for (const r of db.prepare(`SELECT COALESCE(NULLIF(c.category_name, ''), 'Uncategorised') AS category, COALESCE(c.item_name, si.name) AS item,
+        SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net
+      FROM sales_items si LEFT JOIN square_catalog c ON c.variation_id = si.catalog_object_id
+      WHERE si.date BETWEEN ? AND ? AND si.location_id IN (${inList}) GROUP BY 1, 2`).all(from, to, ...ids)) {
+      const cat = cats.get(r.category) ?? { name: r.category, quantity: 0, net_sales: 0, items: [] };
+      cat.quantity += r.quantity;
+      cat.net_sales += r.net;
+      cat.items.push({ name: r.item, quantity: round2(r.quantity), net_sales: round2(r.net) });
+      cats.set(r.category, cat);
+    }
+    const categories = [...cats.values()].map((c) => ({
+      ...c, quantity: round2(c.quantity), net_sales: round2(c.net_sales),
+      items: c.items.sort((a, b) => b.net_sales - a.net_sales).slice(0, 10),
+    })).sort((a, b) => b.net_sales - a.net_sales);
+    res.json({ from, to, categories, net_sales: round2(categories.reduce((t, c) => t + c.net_sales, 0)) });
+  });
+
   router.get('/trading', requirePerm('sales.view', 'reports.trading', 'dashboard.sales'), (req, res) => {
     // Without "See sales", only one site at a time (the Manager Dashboard's figures over a period).
     if (!can(req.user, 'sales.view') && !can(req.user, 'reports.trading') && !req.query.location_id) throw forbidden('Choose a site');

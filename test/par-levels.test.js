@@ -123,3 +123,20 @@ test('the averages can come from any date range, which is kept with a saved repo
     lines: [{ item_key: 'V_CROISSANT', item_name: 'Croissant', pars: [2, 4, 6, 8, 10, 12, 14] }] } });
   assert.deepEqual([made.data.sales_from, made.data.sales_to], [lastMonday, lastSunday]);
 });
+
+test('dashboard sales by category: quantity and net sales per Square category, biggest first, with top items', async () => {
+  const d = today();
+  db.prepare('DELETE FROM sales_items WHERE date = ?').run(d);
+  const ins = db.prepare('INSERT INTO sales_items (location_id, date, item_key, catalog_object_id, name, variation_name, quantity, net_sales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  ins.run(site, d, 'V_LATTE_R', 'V_LATTE_R', 'Latte', 'Regular', 10, 30);
+  ins.run(site, d, 'V_LATTE_L', 'V_LATTE_L', 'Latte', 'Large', 5, 17.5);
+  ins.run(site, d, 'V_CROISSANT', 'V_CROISSANT', 'Croissant', 'Regular', 4, 10);
+  ins.run(site, d, 'adhoc:Custom', null, 'Custom amount', null, 1, 2.5);
+  const a = await login('admin@cafe.local');
+  const r = (await a(`/trading/categories?from=${d}&to=${d}&location_id=${site}`)).data;
+  assert.deepEqual(r.categories.map((c) => [c.name, c.quantity, c.net_sales]), [['Coffee', 15, 47.5], ['Bakery', 4, 10], ['Uncategorised', 1, 2.5]]);
+  assert.deepEqual(r.categories[0].items, [{ name: 'Latte', quantity: 15, net_sales: 47.5 }], 'sizes of one item add up');
+  assert.equal(r.net_sales, 60);
+  const staff = await login('staff1@cafe.local');
+  assert.equal((await staff(`/trading/categories?from=${d}&to=${d}`)).status, 403);
+});
