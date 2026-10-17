@@ -1,4 +1,6 @@
 import { api, esc, isDemo } from '../lib.js';
+import { logo } from '../logo.js';
+import { openForgot } from './password.js';
 
 const DEMO_ACCOUNTS = [
   ['admin@cafe.local', 'Owner', 'All 7 sites, sales, setup'],
@@ -10,12 +12,13 @@ export function render(root, onLogin) {
   root.innerHTML = `
     <div class="login-wrap">
       <form class="login card">
-        <h1>Cafe Ops</h1>
+        <h1 class="login-logo" aria-label="Atlas">${logo(40)}</h1>
         <p class="muted">Sign in to manage your site.</p>
         <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required></label>
         <label class="field"><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label>
         <p class="form-error" hidden></p>
         <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+        <p class="forgot-link"><button type="button" class="link-btn" data-forgot>Forgot password?</button></p>
         ${isDemo ? `
         <div class="demo-accounts">
           <p><strong>Demo</strong> – sign in as:</p>
@@ -27,6 +30,7 @@ export function render(root, onLogin) {
   const form = root.querySelector('form');
   const err = form.querySelector('.form-error');
   form.email.focus();
+  form.querySelector('[data-forgot]').addEventListener('click', () => openForgot(root, form.email.value.trim(), () => render(root, onLogin)));
   form.querySelectorAll('.demo-account').forEach((b) => b.addEventListener('click', () => {
     form.email.value = b.dataset.email;
     form.password.value = 'changeme123';
@@ -35,7 +39,7 @@ export function render(root, onLogin) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     err.hidden = true;
-    const btn = form.querySelector('button');
+    const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
       const { user } = await api('/auth/login', { method: 'POST', body: { email: form.email.value, password: form.password.value } });
