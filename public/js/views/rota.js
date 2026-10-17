@@ -734,7 +734,7 @@ export async function render(ctx) {
   el.querySelector('#print')?.addEventListener('click', () => window.print());
   if (!canEdit) return;
 
-  const staffOptions = data.staff.map((u) => [u.id, all && u.location_name ? `${u.name} (${u.location_name})` : u.name]);
+  const staffOptions = data.staff.map((u) => [u.id, u.name]);
   // Admins can put anyone on at any site; managers only run their own site.
   // Any site this person can access (admins: every site).
   const siteOptions = state.locations.filter((l) => l.active).map((l) => [l.id, l.name]);
@@ -757,7 +757,9 @@ export async function render(ctx) {
           <span class="sick-line-actions">${shift.state !== 'removed' && !shift.sick ? '<button type="button" class="btn btn-small" id="swap-btn" title="Swap this shift with someone else’s">⇄ Swap with…</button>' : ''}${data.can_publish && !shift.sick && shift.state !== 'removed' ? '<button type="button" class="btn btn-small" id="open-btn" title="Take it off their rota now and offer it to everyone">Drop to open</button>' : ''}
           <button type="button" class="btn btn-small" id="sick-btn">${shift.sick ? 'Change' : 'Mark as sick'}</button></span></p>` : ''}
         <div class="row">
-          ${field('Staff member', select('user_id', who, defaults.open ? 'open' : s.user_id, 'required'))}
+          <label class="field"><span>Staff member</span>
+            <input type="search" class="staff-search" placeholder="Search names" aria-label="Search staff names" autocomplete="off">
+            ${select('user_id', who, defaults.open ? 'open' : s.user_id, 'required')}</label>
           ${field('Site', select('location_id', siteOptions, site, `required ${siteOptions.length > 1 ? '' : 'disabled'}`))}
         </div>
         ${field('Date', input('date', s.date, 'type="date" required'))}
@@ -855,6 +857,16 @@ export async function render(ctx) {
     };
     ['user_id', 'date', 'start_time', 'end_time'].forEach((n) => form[n].addEventListener('change', check));
     check();
+    // Typing in the search box narrows the staff list to matching names (and picks the first if the chosen one drops out).
+    form.querySelector('.staff-search').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      const was = form.user_id.value;
+      const shown = who.filter(([id, name]) => !q || id === 'open' || name.toLowerCase().includes(q));
+      form.user_id.innerHTML = shown.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('') || '<option value="">Nobody matches</option>';
+      const keep = shown.some(([id]) => String(id) === was);
+      form.user_id.value = keep ? was : String(shown.find(([id]) => id !== 'open')?.[0] ?? shown[0]?.[0] ?? '');
+      if (!keep) form.user_id.dispatchEvent(new Event('change'));
+    });
     // Quick times: the site's most used shift times over the last 4 weeks; clicking one fills in the times and break.
     const presets = form.querySelector('.time-presets');
     const showPresets = async () => {
