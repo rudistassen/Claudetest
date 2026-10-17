@@ -175,3 +175,19 @@ test('subtotal group: set on a site under Setup → Locations and shown with eac
   assert.equal((await a(`/locations/${site}`, { method: 'PUT', body: { name: loc.name, active: true } })).data.subtotal_group, 'Brew & Barrel');
   assert.equal((await a(`/locations/${site}`, { method: 'PUT', body: { name: loc.name, active: true, subtotal_group: '' } })).data.subtotal_group, null);
 });
+
+test('site overview: its own permission opens one site’s trading figures, categories and day card – never every site', async () => {
+  db.prepare('UPDATE users SET custom_permissions = ? WHERE email = ?').run(JSON.stringify(['reports.site_overview']), 'staff1@cafe.local');
+  const lead = await login('staff1@cafe.local');
+  const home = db.prepare('SELECT location_id FROM users WHERE email = ?').get('staff1@cafe.local').location_id;
+  const d = today();
+  assert.equal((await lead(`/trading?from=${d}&to=${d}&location_id=${home}`)).status, 200);
+  assert.equal((await lead(`/trading?from=${d}&to=${d}`)).status, 403, 'not every site at once');
+  assert.equal((await lead(`/trading/categories?from=${d}&to=${d}&location_id=${home}`)).status, 200);
+  assert.equal((await lead(`/trading/hourly-compare?date=${d}&location_id=${home}`)).status, 200);
+  const card = await lead(`/dashboard?location_id=${home}&from=${d}`);
+  assert.equal(card.status, 200);
+  assert.ok('gross_today' in card.data.locations[0], 'with sales figures');
+  db.prepare('UPDATE users SET custom_permissions = NULL WHERE email = ?').run('staff1@cafe.local');
+  assert.equal((await (await login('staff1@cafe.local'))(`/trading?from=${d}&to=${d}&location_id=${home}`)).status, 403);
+});

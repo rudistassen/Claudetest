@@ -54,12 +54,12 @@ export function rotaByDay(db, locationIds, from, to, { toDate = false, asOf, dra
  * last day of a range at that hour (so "the same time last week" stops where today has got to).
  */
 export function hourWindow(q = {}) {
-  const m = /^(\d{1,2})-(\d{1,2})$/.exec(String(q.hours ?? ''));
-  if (!m) return null;
-  const from = Number(m[1]);
-  const to = Number(m[2]);
-  if (from < 0 || to > 24 || from >= to || (from === 0 && to === 24)) return null;
   const until = /^\d{1,2}$/.test(String(q.until ?? '')) ? Math.min(24, Number(q.until)) : null;
+  const m = /^(\d{1,2})-(\d{1,2})$/.exec(String(q.hours ?? ''));
+  const from = m ? Number(m[1]) : 0;
+  const to = m ? Number(m[2]) : 24;
+  // All day (no ?hours=, or a nonsense one) is no window – unless ?until= stops the last day early.
+  if (!m || from < 0 || to > 24 || from >= to || (from === 0 && to === 24)) return until === null ? null : { from: 0, to: 24, until };
   return { from, to, until };
 }
 // The hour a window ends on a date: its end, or ?until= on the last day of the range.

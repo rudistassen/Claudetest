@@ -67,6 +67,7 @@ export const PERMISSION_AREAS = [
   ]],
   ['Reporting', [
     ['reports.trading', 'Trading report – sales, labour and the trading heatmap for their sites'],
+    ['reports.site_overview', 'Site overview report – everything about one site: sales, labour, staff, categories and checks (and the dashboard’s “Open site” button)'],
     ['reports.sales', 'Sales report – sales by day and item from Square'],
     ['reports.open_orders', 'Open orders report – Square orders not yet paid'],
     ['reports.rota_costs', 'Rota costs report – rota cost against the labour budget'],

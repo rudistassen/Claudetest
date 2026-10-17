@@ -185,7 +185,7 @@ function card(loc, state, data, slice = null) {
     <section class="card site-card" style="--site: ${siteColour(loc.name, loc.id)}">
       <header class="card-head">
         <h2 data-initials="${esc(siteInitials(loc.name))}">${esc(loc.name)}</h2>
-        ${state.multiSite ? `<button class="btn btn-small" data-open="${loc.id}">Open site</button>` : ''}
+        ${state.multiSite && state.can('reports.site_overview') ? `<button class="btn btn-small" data-open="${loc.id}">Open site</button>` : ''}
       </header>
       ${state.can('sales.view') ? `
       <div class="site-money">
@@ -913,9 +913,10 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     if (state.multiSite) {
       chooseSite(state, id);
     }
+    // "Open site": the Site overview report for that site, over the same timeframe.
     if (b.dataset.open) {
       e.preventDefault();
-      navigate('safety');
+      navigate(`site-overview${qs({ site: id, tf: query.tf ?? tf, date: query.date, from: query.from })}`);
     }
   }));
 }

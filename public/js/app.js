@@ -4,6 +4,7 @@ import { maybeStartTour, startTour } from './tour.js';
 import { install, installState, setUpInstall } from './install.js';
 import * as admin from './views/admin.js';
 import * as breaks from './views/breaks.js';
+import * as siteoverview from './views/siteoverview.js';
 import * as rotalog from './views/rotalog.js';
 import * as inbox from './views/inbox.js';
 import * as salesbudget from './views/salesbudget.js';
@@ -107,6 +108,7 @@ const ROUTES = [
   [/^recipes\/prep\/(\d+)$/, recipes.renderRecipe, RECIPES],
   [/^sales$/, sales.render, ['reports.sales']],
   [/^trading$/, trading.render, ['reports.trading']],
+  [/^site-overview$/, siteoverview.render, ['reports.site_overview']],
   [/^trading\/heatmap$/, trading.renderHeatmap, ['reports.trading']],
   [/^breaks$/, breaks.render, ['reports.breaks']],
   [/^timecards$/, timecards.render, ['reports.timecards']],
@@ -245,6 +247,7 @@ function navGroups() {
     ]],
     ['Reporting', [
       ['trading', 'Trading', '◔', ['reports.trading']],
+      ['site-overview', 'Site overview', '⌂', ['reports.site_overview']],
       ['sales', 'Sales', '£', ['reports.sales']],
       ['open-orders', 'Open orders', '◌', ['reports.open_orders']],
       ['rota-costs', 'Rota costs', '⚖', ['reports.rota_costs']],

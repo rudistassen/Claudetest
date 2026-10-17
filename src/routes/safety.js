@@ -238,8 +238,11 @@ export function registerSafetyRoutes(router, db) {
   // ?date= shows a past day in full (default: today so far).
   // The HQ Dashboard (dashboard.view) loads every site they can access; the Manager Dashboard (dashboard.manager)
   // loads one site with ?location_id= – without the HQ permission, only ever one site (their home site by default).
-  router.get('/dashboard', requirePerm('dashboard.view', 'dashboard.manager'), (req, res) => {
+  // The Site overview report (reports.site_overview) loads one site's card the same way.
+  router.get('/dashboard', requirePerm('dashboard.view', 'dashboard.manager', 'reports.site_overview'), (req, res) => {
     const hq = can(req.user, 'dashboard.view');
+    const overview = can(req.user, 'reports.site_overview') && !!req.query.location_id;
+    if (!hq && !can(req.user, 'dashboard.manager') && !overview) throw forbidden('You do not have access to the dashboard');
     const site = req.query.location_id ?? (hq ? undefined : req.user.location_id ?? req.user.site_ids[0]);
     const day = date(req.query.date, 'date') ?? today();
     if (day > today()) throw badRequest('Choose today or an earlier day');
@@ -252,9 +255,9 @@ export function registerSafetyRoutes(router, db) {
       // ?location_id= for one site (the manager dashboard), otherwise every site they can see.
       locations: reportLocations(req, site),
       // Sales figures: "See sales", or for one site on the Manager Dashboard, "See sales on the Manager Dashboard".
-      seeSales: can(req.user, 'sales.view') || (can(req.user, 'dashboard.sales') && !!req.query.location_id),
+      seeSales: can(req.user, 'sales.view') || overview || (can(req.user, 'dashboard.sales') && !!req.query.location_id),
       seeOrders: can(req.user, 'orders.manage'),
-      seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage'),
+      seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage') || overview,
       periodFrom: from,
     }));
   });

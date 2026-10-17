@@ -3337,3 +3337,13 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .wind-warning.is-folded .wind-line strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .bs-subtotal { border-top: 1px solid var(--border); font-weight: 600; padding-top: 0.35rem; margin-bottom: 0.3rem; color: var(--muted); }
+
+/* Reporting → Site overview */
+.so-site { display: flex; align-items: center; gap: 0.45rem; margin: -0.4rem 0 0.6rem; font-size: 1.05rem; }
+.so-kpis { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.so-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1rem; align-items: start; }
+.so-facts { display: grid; gap: 0.35rem; margin: 0 0 0.6rem; }
+.so-facts div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--border); padding: 0.25rem 0; }
+.so-facts dt { color: var(--muted); }
+.so-facts dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.so-staff td.num, .so-staff th.num { font-variant-numeric: tabular-nums; }

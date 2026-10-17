@@ -1810,6 +1810,18 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 23');
   }
+  if (version < 24) {
+    // The Site overview report arrived: whoever could see the Trading report (the same figures) can see it.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        if (!perms.includes('reports.trading') || perms.includes('reports.site_overview')) continue;
+        db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify([...perms, 'reports.site_overview']), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 24');
+  }
   ensureDefaultSets(db);
   return db;
 }
