@@ -140,3 +140,27 @@ test('dashboard sales by category: quantity and net sales per Square category, b
   const staff = await login('staff1@cafe.local');
   assert.equal((await staff(`/trading/categories?from=${d}&to=${d}`)).status, 403);
 });
+
+test('time of day: trading figures and sales by category between set hours only', async () => {
+  const d = addDays(today(), -1);
+  for (const t of ['sales_hourly', 'sales_item_hours', 'sales_daily']) db.prepare(`DELETE FROM ${t} WHERE date = ?`).run(d);
+  db.prepare('INSERT INTO sales_daily (location_id, date, net_sales, gross_sales, orders) VALUES (?, ?, 100, 120, 10)').run(site, d);
+  const hour = db.prepare('INSERT INTO sales_hourly (location_id, date, hour, net_sales, gross_sales, orders) VALUES (?, ?, ?, ?, ?, ?)');
+  hour.run(site, d, 8, 30, 36, 3);
+  hour.run(site, d, 10, 20, null, 2); // synced before gross was kept per hour: estimated from the day's ratio (×1.2)
+  hour.run(site, d, 14, 50, 60, 5);
+  const item = db.prepare('INSERT INTO sales_item_hours (location_id, date, hour, item_key, catalog_object_id, name, quantity, net_sales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  item.run(site, d, 8, 'V_LATTE_R', 'V_LATTE_R', 'Latte', 6, 18);
+  item.run(site, d, 14, 'V_CROISSANT', 'V_CROISSANT', 'Croissant', 9, 22.5);
+  const a = await login('admin@cafe.local');
+  const all = (await a(`/trading?from=${d}&to=${d}&location_id=${site}`)).data.totals;
+  assert.equal(all.gross_sales, 120);
+  const morning = (await a(`/trading?from=${d}&to=${d}&location_id=${site}&hours=7-11`)).data.totals;
+  assert.deepEqual([morning.net_sales, morning.gross_sales, morning.orders], [50, 60, 5]);
+  // ?until= stops the last day at that hour.
+  assert.equal((await a(`/trading?from=${d}&to=${d}&location_id=${site}&hours=7-11&until=9`)).data.totals.net_sales, 30);
+  const cats = (await a(`/trading/categories?from=${d}&to=${d}&location_id=${site}&hours=7-11`)).data;
+  assert.deepEqual(cats.categories.map((c) => [c.name, c.quantity, c.net_sales]), [['Coffee', 6, 18]]);
+  // A nonsense time of day is all day.
+  assert.equal((await a(`/trading?from=${d}&to=${d}&location_id=${site}&hours=11-7`)).data.totals.gross_sales, 120);
+});

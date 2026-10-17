@@ -261,6 +261,19 @@ CREATE TABLE IF NOT EXISTS sales_hourly (
   PRIMARY KEY (location_id, date, hour)
 );
 
+-- Item sales by hour of the day too, so sales by category can be shown for a time of day (e.g. 7am–11am).
+CREATE TABLE IF NOT EXISTS sales_item_hours (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  hour INTEGER NOT NULL,
+  item_key TEXT NOT NULL,
+  catalog_object_id TEXT,
+  name TEXT NOT NULL,
+  quantity REAL NOT NULL DEFAULT 0,
+  net_sales REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (location_id, date, hour, item_key)
+);
+
 -- The Square catalogue: each item variation (what a till line's catalog_object_id points at) with its item and
 -- category, so item sales can be grouped by category.
 CREATE TABLE IF NOT EXISTS square_catalog (

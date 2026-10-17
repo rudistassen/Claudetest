@@ -3324,3 +3324,4 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .swap-people { width: 100%; margin-top: 0.35rem; }
 .swaps-card .drops-list small .badge { margin-right: 0.3rem; }
 .my-drop { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.tf-heading { font-size: 0.95rem; margin: 1rem 0 0.2rem; }

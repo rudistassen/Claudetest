@@ -395,15 +395,15 @@ export function categoryCard(locs = []) {
  * Fills the Sales by category card: net sales by Square category from..to, biggest first; tap one to see its top
  * items. site: a fixed site (otherwise the card's site picker, or every site).
  */
-export function wireCategories(el, { from, to, site = null, stale, empty = 'for this period' }) {
+export function wireCategories(el, { from, to, site = null, hours, stale, empty = 'for this period' }) {
   const box = el.querySelector('#cat-list');
   if (!box) return;
   const load = async () => {
     const where = site ?? (el.querySelector('#cat-site')?.value || undefined);
     let c;
-    try { c = await api(`/trading/categories${qs({ from, to, location_id: where })}`); } catch { box.innerHTML = '<p class="muted small">Couldn’t load categories.</p>'; return; }
+    try { c = await api(`/trading/categories${qs({ from, to, location_id: where, hours })}`); } catch { box.innerHTML = '<p class="muted small">Couldn’t load categories.</p>'; return; }
     if (stale() || !box.isConnected) return;
-    if (!c.categories.length) { box.innerHTML = `<p class="muted small">No item sales synced ${empty}.</p>`; return; }
+    if (!c.categories.length) { box.innerHTML = `<p class="muted small">No item sales synced ${empty}${hours ? ' between those times' : ''}.</p>`; return; }
     const top = c.categories[0].net_sales || 1;
     const row = (k) => `<details class="cat-row"><summary>
         <span class="cat-name">${esc(k.name)}</span><span class="cat-qty muted">${Math.round(k.quantity)}</span><strong class="cat-net">${money(k.net_sales)}</strong>
@@ -423,10 +423,12 @@ export function wireCategories(el, { from, to, site = null, stale, empty = 'for 
 
 /** The timeframe selector: ‹ This week · 13 – 19 Oct ›, and a note under it (HTML). */
 export function timeframeBar(t, note = '') {
+  // A time of day goes after the dates ("This week · 12 – 18 Oct · 7am–11am"); a single day says "All day" without one.
+  const sub = [t.tf === 'day' && t.hoursOn ? '' : t.sub, t.hours ? hoursLabel(t.hours) : t.tf === 'day' && t.hoursOn ? 'All day' : ''].filter(Boolean).join(' · ');
   return `<div class="tf-bar">
       <div class="tf-pick" role="group" aria-label="Timeframe">
         <button type="button" class="tf-arrow" data-tf-step="-1" aria-label="${esc(t.prevLabel)}" title="${esc(t.prevLabel)}">‹</button>
-        <button type="button" class="tf-label" id="tf-open" aria-haspopup="dialog" title="Choose the timeframe"><strong>${esc(t.title)}</strong>${t.sub ? `<span> · ${esc(t.sub)}</span>` : ''}</button>
+        <button type="button" class="tf-label" id="tf-open" aria-haspopup="dialog" title="Choose the timeframe"><strong>${esc(t.title)}</strong>${sub ? `<span> · ${esc(sub)}</span>` : ''}</button>
         <button type="button" class="tf-arrow" data-tf-step="1" aria-label="${esc(t.nextLabel)}" title="${esc(t.nextLabel)}" ${t.atEnd ? 'disabled' : ''}>›</button>
       </div>
       ${note ? `<p class="muted small dash-period-note">${note}</p>` : ''}
@@ -438,10 +440,15 @@ export function timeframeBar(t, note = '') {
  * page is where it goes (with keep: other query values to keep, e.g. the site); key remembers the choice.
  */
 export function wireTimeframe(el, { t, tf, today, navigate, page, key, keep = {} }) {
-  const goTo = (next) => {
-    try { if (next.tf !== 'custom') localStorage.setItem(key, next.tf); } catch { /* storage unavailable */ }
+  // t.hoursOn: the page can show a time of day too (t.hours, kept when stepping; "All day" when null).
+  const goTo = (next, hours = t.hours) => {
+    try {
+      if (next.tf !== 'custom') localStorage.setItem(key, next.tf);
+      if (t.hoursOn) localStorage.setItem(`${key}:hours`, hours ? `${hours.from}-${hours.to}` : 'all');
+    } catch { /* storage unavailable */ }
     const live = next.to >= today && next.tf !== 'custom';
-    navigate(`${page}${qs({ ...keep, tf: next.tf === 'day' && live ? undefined : next.tf, date: live ? undefined : next.to, from: next.tf === 'custom' ? next.from : undefined })}`);
+    navigate(`${page}${qs({ ...keep, tf: next.tf === 'day' && live ? undefined : next.tf, date: live ? undefined : next.to, from: next.tf === 'custom' ? next.from : undefined,
+      hours: t.hoursOn ? (hours ? `${hours.from}-${hours.to}` : 'all') : undefined })}`);
   };
   el.querySelectorAll('[data-tf-step]').forEach((b) => b.addEventListener('click', () => goTo(stepTimeframe(t, Number(b.dataset.tfStep), today))));
   el.querySelector('#tf-open').addEventListener('click', () => {
@@ -454,23 +461,50 @@ export function wireTimeframe(el, { t, tf, today, navigate, page, key, keep = {}
           <div class="row">${field('From', input('from', t.range.from, `type="date" max="${today}"`))}${field('To', input('to', t.range.to, `type="date" max="${today}"`))}</div>
           <p class="muted small">Up to a year. Compared with the same number of days just before.</p>
         </div>
-        <p class="muted small">Week runs Monday to Sunday. The arrows step back and forward a whole day, week, month or year.</p>`,
+        <p class="muted small">Week runs Monday to Sunday. The arrows step back and forward a whole day, week, month or year.</p>
+        ${t.hoursOn ? `<h3 class="tf-heading">Time of day</h3>
+        <div class="tf-options">
+          <label class="tf-option"><span>All day</span><input type="radio" name="tod" value="all" ${t.hours ? '' : 'checked'}></label>
+          <label class="tf-option"><span>Choose times</span><input type="radio" name="tod" value="pick" ${t.hours ? 'checked' : ''}></label></div>
+        <div class="row tf-hours" ${t.hours ? '' : 'hidden'}>
+          <label class="field"><span>From</span><select name="hfrom">${hourOptions(t.hours?.from ?? 7, false)}</select></label>
+          <label class="field"><span>To</span><select name="hto">${hourOptions(t.hours?.to ?? 11, true)}</select></label></div>
+        <p class="muted small tf-hours" ${t.hours ? '' : 'hidden'}>Sales, labour and categories between those times on each day, compared with the same times before.</p>` : ''}`,
       onSubmit: async (v, f) => {
         const choice = f.tf.value;
+        let hours = null;
+        if (t.hoursOn && f.tod.value === 'pick') {
+          hours = { from: Number(f.hfrom.value), to: Number(f.hto.value) };
+          if (hours.from >= hours.to) throw new Error('Choose a “to” time after the “from” time');
+        }
         if (choice === 'custom') {
           if (!v.from || !v.to) throw new Error('Choose both dates');
           const [from, to] = v.from <= v.to ? [v.from, v.to] : [v.to, v.from];
           if ((Date.parse(to) - Date.parse(from)) / 86400000 > 365) throw new Error('Choose up to a year');
-          goTo({ tf: 'custom', from, to: to > today ? today : to });
+          goTo({ tf: 'custom', from, to: to > today ? today : to }, hours);
           return;
         }
         // Switching timeframe keeps the day you're on (so a week picked from a day is that day's week).
-        goTo(timeframe(choice, { date: t.to }, today));
+        goTo(timeframe(choice, { date: t.to }, today), hours);
       },
     });
     form.querySelectorAll('[name=tf]').forEach((r) => r.addEventListener('change', () => { form.querySelector('.tf-custom').hidden = form.tf.value !== 'custom'; }));
+    form.querySelectorAll('[name=tod]').forEach((r) => r.addEventListener('change', () => form.querySelectorAll('.tf-hours').forEach((x) => { x.hidden = form.tod.value !== 'pick'; })));
   });
 }
+
+/** The time of day to show: ?hours=7-11, else the one remembered; null for all day. */
+export function chosenHours(query, key) {
+  let v = query.hours;
+  if (v === undefined) { try { v = localStorage.getItem(`${key}:hours`); } catch { /* storage unavailable */ } }
+  const m = /^(\d{1,2})-(\d{1,2})$/.exec(v ?? '');
+  if (!m) return null;
+  const [from, to] = [Number(m[1]), Number(m[2])];
+  return from >= 0 && to <= 24 && from < to && !(from === 0 && to === 24) ? { from, to } : null;
+}
+export const hoursLabel = (h) => `${hourWord(h.from)}–${hourWord(h.to)}`;
+const hourOptions = (sel, end) => Array.from({ length: 25 }, (_, h) => h).filter((h) => (end ? h > 0 : h < 24))
+  .map((h) => `<option value="${h}" ${h === sel ? 'selected' : ''}>${hourWord(h)}</option>`).join('');
 
 /** Which timeframe to show: ?tf=, else the one remembered (not custom dates), else a day. */
 export function chosenTimeframe(query, key, fallback = 'day') {
@@ -506,7 +540,7 @@ function bySite(t, period, prev, state) {
         ${rows.map((r) => line(r, r.name, prev.get(r.id))).join('')}
         ${rows.length > 1 ? line(t.totals, 'All sites', prevTotal, { total: true }) : ''}
       </div>
-      <p class="muted small bs-note">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`} · grey bar: ${CN(period)} · labour % of net sales (${t.labour_synced ? 'clocked' : 'rostered'}), target ${LABOUR_TARGET}%.${state.can('reports.trading') ? ' <a href="#/trading">Trading →</a>' : ''}</p>
+      <p class="muted small bs-note">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}${shown.hours ? `, ${hoursLabel(shown.hours)}` : ''} · grey bar: ${CN(period)} · labour % of net sales (${t.labour_synced ? 'clocked' : 'rostered'}), target ${LABOUR_TARGET}%.${state.can('reports.trading') ? ' <a href="#/trading">Trading →</a>' : ''}</p>
     </section>`;
 }
 
@@ -528,15 +562,27 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const range = t.range;
   // The chart goes by month over a year (or long custom dates), otherwise by day.
   const byMonth = period === 'ytd' || (period === 'custom' && days(range.from, range.to) > 62);
+  // A time of day (e.g. 7am–11am): sales, labour and categories only between those times on each day, compared with
+  // the same times over the span before (for today and this week, up to the hour it is now).
+  const hours = seeSales ? chosenHours(query, TF_KEY) : null;
+  Object.assign(t, { hours, hoursOn: seeSales });
+  shown.hours = hours;
+  const hq = hours ? `${hours.from}-${hours.to}` : undefined;
+  const untilNow = shown.isToday ? Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' }).format(new Date())) + 1 : undefined;
+  const prevSpan = !hours ? (range.prevTo ? { from: range.prevFrom, to: range.prevTo } : null)
+    : period === 'today' ? { from: addDays(d0, -7), to: addDays(d0, -7), until: untilNow }
+      : period === 'wtd' ? { from: range.prevFrom, to: addDays(d0, -7), until: untilNow }
+        : range.prevTo ? { from: range.prevFrom, to: range.prevTo } : null;
+  const tradeQ = (from, to, extra = {}) => api(`/trading${qs({ from, to, hours: hq, ...extra })}`);
   const [data, leave, security, fresh, tradeToday, tradeRange, tradePrev] = await Promise.all([
     api(`/dashboard${qs({ date: shown.isToday ? undefined : d0, from: ranged ? range.from : undefined })}`),
     state.can('leave.manage') ? api('/leave/pending-count') : { count: 0 },
     state.isAdmin && !isDemo ? api('/admin/security').catch(() => null) : null,
     seeSales || state.can('staff.manage') ? api('/square/freshness').catch(() => null) : null,
-    seeSales ? api(`/trading?from=${d0}&to=${d0}`) : null,
-    seeSales && period !== 'today' ? api(`/trading?from=${range.from}&to=${range.to}`) : null,
-    // What it's compared with (see periodRange).
-    seeSales && range.prevTo ? api(`/trading?from=${range.prevFrom}&to=${range.prevTo}`) : null,
+    seeSales ? tradeQ(d0, d0) : null,
+    seeSales && period !== 'today' ? tradeQ(range.from, range.to) : null,
+    // What it's compared with (see periodRange, and prevSpan for a time of day).
+    seeSales && prevSpan ? tradeQ(prevSpan.from, prevSpan.to, { until: hq ? prevSpan.until : undefined }) : null,
   ]);
   if (stale()) return;
   const trade = period === 'today' ? tradeToday : tradeRange;
@@ -595,6 +641,17 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     const prevCost = costOf(pt, synced) + (sameTimeToo ? locs.reduce((n, l) => n + (l.last_week?.labour_cost ?? 0), 0) : 0);
     labourThen = prevNet > 0 && prevCost > 0 ? Math.round((prevCost / prevNet) * 1000) / 10 : null;
   }
+  // A time of day: every figure comes from the trading figures for those hours (now and before).
+  if (hours) {
+    const cur = ranged ? tradeRange : tradeToday;
+    const labourOf = (x) => (x?.totals ? (x.labour_synced && x.totals.labour_pct !== null ? x.totals.labour_pct : x.totals.rostered_labour_pct) : null);
+    gross.now = cur ? cur.totals.gross_sales : null;
+    gross.then = tradePrev?.totals.gross_sales || null;
+    labourPct = labourOf(cur);
+    labourThen = labourOf(tradePrev);
+    prevSales.clear();
+    for (const l of locs) prevSales.set(l.id, tradePrev?.locations.find((x) => x.id === l.id)?.gross_sales || null);
+  }
   // Daily compliance checks over the period (or the day).
   const checks = ranged
     ? locs.reduce((t, l) => ({ done: t.done + (l.period?.daily.done ?? 0), due: t.due + (l.period?.daily.due ?? 0), fails: t.fails + (l.period?.daily.fails ?? 0) }), { done: 0, due: 0, fails: 0 })
@@ -625,7 +682,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     ${state.multiSite ? `
     ${hasSales ? `<div class="dash-hero">
       <div class="kpi kpi-feature" data-icon="£"><span>Gross sales ${word}</span><strong>${gross.now === null ? '–' : money(gross.now)}</strong>
-        <small class="kpi-vs">${versusLine(gross.now, gross.then)}${ranged ? '' : openNote(locs)}</small></div>
+        <small class="kpi-vs">${versusLine(gross.now, gross.then)}${ranged || hours ? '' : openNote(locs)}</small></div>
       <div class="kpi kpi-${labourTone(labourPct)} dash-hero-labour" data-icon="◷"><span>Labour ${word}</span><strong>${fmtPct(labourPct)}</strong>
         <small class="kpi-vs">${labourVersus(labourPct, labourThen)}</small></div>
       <section class="card dash-hourly">
@@ -681,7 +738,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       </li>`).join('')}</ol>`;
     weatherBox.hidden = false;
   }).catch(() => {});
-  wireCategories(el, { from: ranged ? range.from : d0, to: d0, stale, empty: ranged ? 'for this period' : shown.isToday ? 'yet today' : 'for this day' });
+  wireCategories(el, { from: ranged ? range.from : d0, to: d0, hours: hq, stale, empty: ranged ? 'for this period' : shown.isToday ? 'yet today' : 'for this day' });
   // Gross sales by hour: today next to the same weekday last week.
   const chartBox = el.querySelector('#hourly-chart');
   // A site can be picked for the chart (remembered in this browser); otherwise it's every site shown.
@@ -704,7 +761,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   const loadPeriodChart = async (seq, site) => {
     const pick = (x) => (site ? x?.locations.find((l) => String(l.id) === site) : x?.totals);
     const [cur, prev] = site
-      ? await Promise.all([api(`/trading?from=${range.from}&to=${range.to}&location_id=${site}`), range.prevTo ? api(`/trading?from=${range.prevFrom}&to=${range.prevTo}&location_id=${site}`) : null])
+      ? await Promise.all([tradeQ(range.from, range.to, { location_id: site }), prevSpan ? tradeQ(prevSpan.from, prevSpan.to, { location_id: site, until: hq ? prevSpan.until : undefined }) : null])
       : [tradeRange, tradePrev];
     if (stale() || !chartBox.isConnected || seq !== chartSeq) return;
     if (!cur?.days?.length || !pick(cur)?.gross_sales) { chartBox.innerHTML = `<p class="muted small">No sales synced for this period${site ? ' at this site' : ''}.</p>`; return; }
@@ -721,7 +778,8 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     } else {
       rows = cur.days.map((d, i) => {
         const pd = prev?.days?.[i];
-        const last = i === cur.days.length - 1 && sameTimeToo;
+        // (With a time of day, last week's matching day is already in prev, up to the same hour.)
+        const last = i === cur.days.length - 1 && sameTimeToo && !hours;
         return { label: period === 'mtd' ? String(Number(d.date.slice(8))) : period === 'custom' && cur.days.length > 7 ? fmtDate(d.date, { day: 'numeric', month: 'short' }) : fmtDate(d.date, { weekday: 'short' }), title: fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'long' }),
           now: d.gross_sales, then: last ? sameTimeNow : pd ? pd.gross_sales : null };
       });
@@ -755,6 +813,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     }
     api(`/trading/hourly-compare?date=${d0}${site ? `&location_id=${site}` : ''}`).then((h) => {
       if (stale() || !chartBox.isConnected || seq !== chartSeq) return;
+      if (hours) h.hours = h.hours.filter((x) => x.hour >= hours.from && x.hour < hours.to);
       if (!h.hours.length) { chartBox.innerHTML = `<p class="muted small">No sales synced ${shown.isToday ? 'yet today' : 'for this day'}${site ? ' at this site' : ''}.</p>`; return; }
       const hh = (n) => String(n).padStart(2, '0');
       const whole = (v) => (v >= 1000 ? `£${(v / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 })}k` : `£${Math.round(v)}`);

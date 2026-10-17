@@ -1,5 +1,5 @@
 import { can, reportLocations, requirePerm } from '../auth.js';
-import { clockedByDay, clockedByHour, clockedByWeekHour, dayKey, dayOfWeek, hoursWorkedBy, nowMinutes, pct, rotaByDay, rotaByWeekHour, salesByDay, timecardsFor } from '../metrics.js';
+import { cardsWithin, clockedByDay, clockedByHour, clockedByWeekHour, dayKey, dayOfWeek, hourWindow, hoursWorkedBy, nowMinutes, pct, rotaByDay, rotaByWeekHour, salesByDay, salesByDayWithin, timecardsFor, windowEnd } from '../metrics.js';
 import { addDays, badRequest, BUSINESS_TZ, date, forbidden, oneOf, round2, shiftHours, today } from '../util.js';
 
 const MAX_REPORT_DAYS = 366;
@@ -146,11 +146,14 @@ export function registerTradingRoutes(router, db, square) {
     if (!can(req.user, 'sales.view') && !can(req.user, 'reports.trading') && !req.query.location_id) throw forbidden('Choose a site');
     const { from, to, ids } = reportScope(db, req, 1);
     const inList = ids.map(() => '?').join(', ') || 'NULL';
+    // ?hours=7-11: only items sold between those times (from each item's sales by hour).
+    const win = hourWindow(req.query);
+    const within = win ? `AND si.hour >= ${win.from} AND si.hour < (CASE WHEN si.date = ? THEN ${windowEnd(win, to, to)} ELSE ${win.to} END)` : '';
     const cats = new Map();
     for (const r of db.prepare(`SELECT COALESCE(NULLIF(c.category_name, ''), 'Uncategorised') AS category, COALESCE(c.item_name, si.name) AS item,
         SUM(si.quantity) AS quantity, SUM(si.net_sales) AS net
-      FROM sales_items si LEFT JOIN square_catalog c ON c.variation_id = si.catalog_object_id
-      WHERE si.date BETWEEN ? AND ? AND si.location_id IN (${inList}) GROUP BY 1, 2`).all(from, to, ...ids)) {
+      FROM ${win ? 'sales_item_hours' : 'sales_items'} si LEFT JOIN square_catalog c ON c.variation_id = si.catalog_object_id
+      WHERE si.date BETWEEN ? AND ? AND si.location_id IN (${inList}) ${within} GROUP BY 1, 2`).all(from, to, ...ids, ...(win ? [to] : []))) {
       const cat = cats.get(r.category) ?? { name: r.category, quantity: 0, net_sales: 0, items: [] };
       cat.quantity += r.quantity;
       cat.net_sales += r.net;
@@ -171,10 +174,12 @@ export function registerTradingRoutes(router, db, square) {
     const days = [];
     for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
 
-    const sales = salesByDay(db, ids, from, to);
-    const rota = rotaByDay(db, ids, from, to, { toDate: true });
+    // ?hours=7-11: only sales and labour between those times of day (see hourWindow).
+    const win = hourWindow(req.query);
+    const sales = win ? salesByDayWithin(db, ids, from, to, win) : salesByDay(db, ids, from, to);
+    const rota = rotaByDay(db, ids, from, to, { toDate: true, window: win });
     const cards = timecardsFor(db, ids, from, to);
-    const clocked = clockedByDay(cards);
+    const clocked = clockedByDay(win ? cardsWithin(cards, win, to) : cards);
 
     const summary = (locIds, dates) => {
       const t = { net: 0, gross: 0, orders: 0, rotaHours: 0, rotaCost: 0, clockHours: 0, clockCost: 0 };

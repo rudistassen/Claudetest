@@ -1,4 +1,4 @@
-import { BUSINESS_TZ, localDate, localHour, round2, shiftHours, today } from './util.js';
+import { BUSINESS_TZ, localDate, localHour, round2, shiftHours, today, zonedMidnightUTC } from './util.js';
 
 const key = (locationId, date) => `${locationId}|${date}`;
 
@@ -10,12 +10,12 @@ export function nowMinutes(tz = BUSINESS_TZ) {
 }
 
 // Paid hours of a shift worked by minute `upTo` of its start day (break deducted pro rata).
-export function hoursWorkedBy(s, upTo) {
+export function hoursWorkedBy(s, upTo, from = 0) {
   const start = toMin(s.start_time);
   let end = toMin(s.end_time);
   if (end <= start) end += 24 * 60;
   const length = end - start;
-  const worked = Math.max(0, Math.min(end, upTo) - start);
+  const worked = Math.max(0, Math.min(end, upTo) - Math.max(start, from));
   return (worked * (1 - Math.min(1, (s.break_minutes || 0) / length))) / 60;
 }
 
@@ -25,7 +25,7 @@ export function hoursWorkedBy(s, upTo) {
  * Default: the full rota. With { toDate: true }, only hours worked so far count – today's shifts are cut off
  * at the current time and future days count nothing – so it can be compared fairly with sales so far.
  */
-export function rotaByDay(db, locationIds, from, to, { toDate = false, asOf, draft = false } = {}) {
+export function rotaByDay(db, locationIds, from, to, { toDate = false, asOf, draft = false, window = null } = {}) {
   const current = asOf ?? { date: today(), minutes: nowMinutes() };
   // The published rota, or with { draft: true } the one being edited.
   const rows = db.prepare(`SELECT s.location_id, s.date, s.start_time, s.end_time, s.break_minutes, u.hourly_rate
@@ -35,7 +35,11 @@ export function rotaByDay(db, locationIds, from, to, { toDate = false, asOf, dra
   for (const r of rows) {
     let hours = shiftHours(r.start_time, r.end_time, r.break_minutes);
     if (toDate && r.date > current.date) hours = 0;
-    else if (toDate && r.date === current.date) hours = hoursWorkedBy(r, current.minutes);
+    else if (window) {
+      // Only the part of the shift inside the time of day (see hourWindow), and today only up to now.
+      const upTo = Math.min(windowEnd(window, r.date, to) * 60, toDate && r.date === current.date ? current.minutes : Infinity);
+      hours = hoursWorkedBy(r, upTo, window.from * 60);
+    } else if (toDate && r.date === current.date) hours = hoursWorkedBy(r, current.minutes);
     const k = key(r.location_id, r.date);
     const v = out.get(k) ?? { hours: 0, cost: 0 };
     v.hours += hours;
@@ -43,6 +47,53 @@ export function rotaByDay(db, locationIds, from, to, { toDate = false, asOf, dra
     out.set(k, v);
   }
   return out;
+}
+
+/**
+ * A time of day from ?hours=7-11 (7am to 11am): { from, to } in whole hours, or null for all day. ?until= caps the
+ * last day of a range at that hour (so "the same time last week" stops where today has got to).
+ */
+export function hourWindow(q = {}) {
+  const m = /^(\d{1,2})-(\d{1,2})$/.exec(String(q.hours ?? ''));
+  if (!m) return null;
+  const from = Number(m[1]);
+  const to = Number(m[2]);
+  if (from < 0 || to > 24 || from >= to || (from === 0 && to === 24)) return null;
+  const until = /^\d{1,2}$/.test(String(q.until ?? '')) ? Math.min(24, Number(q.until)) : null;
+  return { from, to, until };
+}
+// The hour a window ends on a date: its end, or ?until= on the last day of the range.
+export const windowEnd = (w, date, lastDate) => (w.until !== null && date === lastDate ? Math.max(w.from, Math.min(w.to, w.until)) : w.to);
+
+/** Sales per site per day inside a time of day, from the hourly figures (keyed like salesByDay). */
+export function salesByDayWithin(db, locationIds, from, to, w) {
+  const inList = locationIds.map(() => '?').join(', ');
+  // Hours synced before gross was kept per hour are estimated from net, using that day's gross-to-net ratio.
+  const ratio = new Map(db.prepare(`SELECT location_id, date, gross_sales, net_sales FROM sales_daily WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`)
+    .all(from, to, ...locationIds).map((r) => [key(r.location_id, r.date), r.net_sales ? r.gross_sales / r.net_sales : 1]));
+  const out = new Map();
+  for (const r of db.prepare(`SELECT location_id, date, hour, net_sales, gross_sales, orders FROM sales_hourly
+    WHERE date BETWEEN ? AND ? AND location_id IN (${inList}) AND hour >= ?`).all(from, to, ...locationIds, w.from)) {
+    if (r.hour >= windowEnd(w, r.date, to)) continue;
+    const k = key(r.location_id, r.date);
+    const v = out.get(k) ?? { location_id: r.location_id, date: r.date, net_sales: 0, gross_sales: 0, orders: 0 };
+    v.net_sales += r.net_sales;
+    v.gross_sales += r.gross_sales ?? r.net_sales * (ratio.get(k) ?? 1);
+    v.orders += r.orders;
+    out.set(k, v);
+  }
+  return out;
+}
+
+/** Clock-ins cut down to the part inside a time of day: hours and cost in proportion (see timecardsFor). */
+export function cardsWithin(cards, w, lastDate, tz = BUSINESS_TZ) {
+  return cards.map((t) => {
+    const midnight = Date.parse(zonedMidnightUTC(t.date, tz));
+    const a = Math.max(t.start, midnight + w.from * 3600000);
+    const b = Math.min(t.end, midnight + windowEnd(w, t.date, lastDate) * 3600000);
+    const share = t.span > 0 ? Math.max(0, b - a) / 3600000 / t.span : 0;
+    return { ...t, hours: t.hours * share, cost: t.cost * share };
+  });
 }
 
 /** Rostered labour cost per site per day, keyed "locationId|date" (see rotaByDay for { toDate }). */

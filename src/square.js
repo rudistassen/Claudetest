@@ -383,6 +383,7 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
     const daily = new Map();
     const hourly = new Map();
     const items = new Map();
+    const itemHours = new Map();
     let orderCount = 0;
     const window = { locationIds: [...bySquareId.keys()], startAt: zonedMidnightUTC(from, tz), endAt: zonedMidnightUTC(addDays(to, 1), tz) };
     for await (const order of client.searchOrders(window)) {
@@ -410,6 +411,11 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
         it.quantity += l.quantity;
         it.net += l.net;
         items.set(ik, it);
+        const ihk = `${hk}|${l.key}`;
+        const ih = itemHours.get(ihk) ?? { location_id: locationId, date: s.date, hour: s.hour, key: l.key, catalog_object_id: l.catalog_object_id, name: l.name, quantity: 0, net: 0 };
+        ih.quantity += l.quantity;
+        ih.net += l.net;
+        itemHours.set(ihk, ih);
       }
       daily.set(dk, d);
     }
@@ -467,6 +473,9 @@ async function doSync(db, client, { from, to, tz, triggeredBy }) {
       for (const d of daily.values()) insDay.run(d.location_id, d.date, round2(d.net), round2(d.gross), round2(d.tax), round2(d.discounts), round2(d.tips), d.orders, round2(d.open_gross ?? 0), d.open_orders ?? 0);
       const insItem = db.prepare(`INSERT INTO sales_items (location_id, date, item_key, catalog_object_id, name, variation_name, quantity, net_sales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
       for (const it of items.values()) insItem.run(it.location_id, it.date, it.key, it.catalog_object_id, it.name, it.variation_name, round2(it.quantity), round2(it.net));
+      db.prepare(`DELETE FROM sales_item_hours WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`).run(from, to, ...ids);
+      const insItemHour = db.prepare('INSERT INTO sales_item_hours (location_id, date, hour, item_key, catalog_object_id, name, quantity, net_sales) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      for (const it of itemHours.values()) insItemHour.run(it.location_id, it.date, it.hour, it.key, it.catalog_object_id, it.name, round2(it.quantity), round2(it.net));
       db.prepare(`DELETE FROM sales_hourly WHERE date BETWEEN ? AND ? AND location_id IN (${inList})`).run(from, to, ...ids);
       const insHour = db.prepare(`INSERT INTO sales_hourly (location_id, date, hour, net_sales, gross_sales, orders, open_gross) VALUES (?, ?, ?, ?, ?, ?, ?)`);
       for (const h of hourly.values()) insHour.run(h.location_id, h.date, h.hour, round2(h.net), round2(h.gross), h.orders, round2(h.open_gross ?? 0));
