@@ -141,7 +141,9 @@ export function registerTradingRoutes(router, db, square) {
    * and net sales, biggest first, with its top items. Categories come from the Items library; items not in one are
    * "Uncategorised".
    */
-  router.get('/trading/categories', requirePerm('sales.view', 'reports.trading'), (req, res) => {
+  router.get('/trading/categories', requirePerm('sales.view', 'reports.trading', 'dashboard.sales'), (req, res) => {
+    // Without "See sales", only one site at a time (the Manager Dashboard).
+    if (!can(req.user, 'sales.view') && !can(req.user, 'reports.trading') && !req.query.location_id) throw forbidden('Choose a site');
     const { from, to, ids } = reportScope(db, req, 1);
     const inList = ids.map(() => '?').join(', ') || 'NULL';
     const cats = new Map();

@@ -1,5 +1,5 @@
 import { addDays, api, esc, fmtDate, money, openModal, qs, siteScope, todayISO } from '../lib.js';
-import { chosenTimeframe, ROSTER, shortName, timeframe, timeframeBar, windWarning, wireTimeframe } from './dashboard.js';
+import { categoryCard, chosenTimeframe, ROSTER, shortName, timeframe, timeframeBar, windWarning, wireCategories, wireTimeframe } from './dashboard.js';
 
 // Manager Dashboard: one site's day at a glance for the person running it – how today's trading and labour are
 // going, who's in, and a "Needs you" list of everything waiting on them (requests, checks, the rota, orders, stock,
@@ -250,6 +250,7 @@ export async function render(ctx) {
       <section class="card md-today"><h2>On today</h2>${onToday}
         ${card ? `<p class="muted small md-more">Wastage ${ranged && fig?.period ? `${word}: ${money(fig.period.wastage)}` : `this week: ${money(card.wastage_7d)}`}${card.orders_sent ? ` · ${plural(card.orders_sent, 'order')} waiting for delivery` : ''}</p>` : ''}</section>
     </div>
+    ${seeMoney ? categoryCard() : ''}
     ${weekRow}
     ${state.can('dashboard.view') ? '<p class="muted small">Want every site side by side? <a href="#/dashboard">Open the HQ Dashboard</a>.</p>' : ''}
   </div>`;
@@ -263,6 +264,7 @@ export async function render(ctx) {
       </li>`).join('')}</ul>` : '<p class="muted">Nobody is clocked in right now.</p>',
   }));
   wireTimeframe(el, { t, tf, today, navigate, page: 'manager', key: TF_KEY, keep: { scope: query.scope } });
+  wireCategories(el, { from: ranged ? range.from : d0, to: d0, site, stale, empty: ranged ? 'for this period' : isToday ? 'yet today' : 'for this day' });
   // A wind warning at the top if today's forecast is windy (loaded after the page; left out if the weather can't be had).
   api('/weather').then((w) => {
     const box = el.querySelector('#wind-warning');

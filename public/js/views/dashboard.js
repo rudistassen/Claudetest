@@ -383,6 +383,44 @@ export function windWarning(w) {
     Be careful with umbrellas outside: close them or tie them down.</span></p>`;
 }
 
+/** The Sales by category card (filled by wireCategories). locs: sites to pick from (none for one site). */
+export function categoryCard(locs = []) {
+  return `<section class="card cat-sales" id="cat-sales">
+    <header class="cat-head"><h2>Sales by category</h2>
+      ${locs.length > 1 ? `<select id="cat-site" class="hourly-site" aria-label="Site for sales by category"><option value="">All sites</option>${locs.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select>` : ''}</header>
+    <div id="cat-list"><div class="loading">Loading…</div></div></section>`;
+}
+
+/**
+ * Fills the Sales by category card: net sales by Square category from..to, biggest first; tap one to see its top
+ * items. site: a fixed site (otherwise the card's site picker, or every site).
+ */
+export function wireCategories(el, { from, to, site = null, stale, empty = 'for this period' }) {
+  const box = el.querySelector('#cat-list');
+  if (!box) return;
+  const load = async () => {
+    const where = site ?? (el.querySelector('#cat-site')?.value || undefined);
+    let c;
+    try { c = await api(`/trading/categories${qs({ from, to, location_id: where })}`); } catch { box.innerHTML = '<p class="muted small">Couldn’t load categories.</p>'; return; }
+    if (stale() || !box.isConnected) return;
+    if (!c.categories.length) { box.innerHTML = `<p class="muted small">No item sales synced ${empty}.</p>`; return; }
+    const top = c.categories[0].net_sales || 1;
+    const row = (k) => `<details class="cat-row"><summary>
+        <span class="cat-name">${esc(k.name)}</span><span class="cat-qty muted">${Math.round(k.quantity)}</span><strong class="cat-net">${money(k.net_sales)}</strong>
+        <i class="cat-bar" style="width:${Math.max(2, Math.round((k.net_sales / top) * 100))}%"></i></summary>
+        <ul class="cat-items">${k.items.map((i) => `<li><span>${esc(i.name)}</span><span class="muted">${Math.round(i.quantity)}</span><span>${money(i.net_sales)}</span></li>`).join('')}</ul></details>`;
+    const SHOW = 8;
+    box.innerHTML = `<div class="cat-cols muted small"><span>Category</span><span>Qty</span><span>Net sales</span></div>
+      ${c.categories.slice(0, SHOW).map(row).join('')}
+      ${c.categories.length > SHOW ? `<div class="cat-more" hidden>${c.categories.slice(SHOW).map(row).join('')}</div>
+        <button type="button" class="link-btn small" id="cat-all">Show all ${c.categories.length}</button>` : ''}
+      <div class="cat-total"><span>Total</span><strong>${money(c.net_sales)}</strong></div>`;
+    box.querySelector('#cat-all')?.addEventListener('click', (e) => { box.querySelector('.cat-more').hidden = false; e.target.remove(); });
+  };
+  load();
+  el.querySelector('#cat-site')?.addEventListener('change', load);
+}
+
 /** The timeframe selector: ‹ This week · 13 – 19 Oct ›, and a note under it (HTML). */
 export function timeframeBar(t, note = '') {
   return `<div class="tf-bar">
@@ -606,10 +644,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     <section class="card weather" id="weather" hidden></section>
     ${trade?.square_connected ? bySite(trade, period, prevSales, state) : ''}
     ${locs.some((l) => l.roster) ? whosIn(locs, data, fresh) : ''}
-    ${seeSales && trade?.square_connected ? `<section class="card cat-sales" id="cat-sales">
-      <header class="cat-head"><h2>Sales by category</h2>
-        ${locs.length > 1 ? `<select id="cat-site" class="hourly-site" aria-label="Site for sales by category"><option value="">All sites</option>${locs.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select>` : ''}</header>
-      <div id="cat-list"><div class="loading">Loading…</div></div></section>` : ''}
+    ${seeSales && trade?.square_connected ? categoryCard(locs) : ''}
     ${security?.demo_password_accounts?.length ? `<p class="notice security-warning"><strong>⚠ Security: ${security.demo_password_accounts.length} account${security.demo_password_accounts.length === 1 ? '' : 's'} can still sign in with the demo password</strong> (${esc(security.demo_password_accounts.slice(0, 4).map((u) => u.email).join(', '))}${security.demo_password_accounts.length > 4 ? ', …' : ''}). Anyone who knows it could get in. Add <code>SEED_DEMO</code> = <code>false</code> in Railway → Variables to switch them all off, or give each a new password under People → Staff.</p>` : ''}
     ${leave.count ? `<p class="notice"><strong>${leave.count} holiday request${leave.count === 1 ? '' : 's'}</strong> waiting for approval. <a href="#/timeoff?tab=requests">Review ${leave.count === 1 ? 'it' : 'them'}</a></p>` : ''}
     <div class="site-cards">${locs.map((l) => card(l, state, data, siteSlice(l))).join('')}</div></div>`;
@@ -646,30 +681,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
       </li>`).join('')}</ol>`;
     weatherBox.hidden = false;
   }).catch(() => {});
-  // Net sales by Square category for the timeframe, biggest first; tap one to see its top items.
-  const catBox = el.querySelector('#cat-list');
-  const loadCategories = async () => {
-    if (!catBox) return;
-    const site = el.querySelector('#cat-site')?.value;
-    let c;
-    try { c = await api(`/trading/categories${qs({ from: ranged ? range.from : d0, to: d0, location_id: site || undefined })}`); } catch { catBox.innerHTML = '<p class="muted small">Couldn’t load categories.</p>'; return; }
-    if (stale() || !catBox.isConnected) return;
-    if (!c.categories.length) { catBox.innerHTML = `<p class="muted small">No item sales synced ${ranged ? 'for this period' : shown.isToday ? 'yet today' : 'for this day'}.</p>`; return; }
-    const top = c.categories[0].net_sales || 1;
-    const row = (k) => `<details class="cat-row"><summary>
-        <span class="cat-name">${esc(k.name)}</span><span class="cat-qty muted">${Math.round(k.quantity)}</span><strong class="cat-net">${money(k.net_sales)}</strong>
-        <i class="cat-bar" style="width:${Math.max(2, Math.round((k.net_sales / top) * 100))}%"></i></summary>
-        <ul class="cat-items">${k.items.map((i) => `<li><span>${esc(i.name)}</span><span class="muted">${Math.round(i.quantity)}</span><span>${money(i.net_sales)}</span></li>`).join('')}</ul></details>`;
-    const SHOW = 8;
-    catBox.innerHTML = `<div class="cat-cols muted small"><span>Category</span><span>Qty</span><span>Net sales</span></div>
-      ${c.categories.slice(0, SHOW).map(row).join('')}
-      ${c.categories.length > SHOW ? `<div class="cat-more" hidden>${c.categories.slice(SHOW).map(row).join('')}</div>
-        <button type="button" class="link-btn small" id="cat-all">Show all ${c.categories.length}</button>` : ''}
-      <div class="cat-total"><span>Total</span><strong>${money(c.net_sales)}</strong></div>`;
-    catBox.querySelector('#cat-all')?.addEventListener('click', (e) => { catBox.querySelector('.cat-more').hidden = false; e.target.remove(); });
-  };
-  loadCategories();
-  el.querySelector('#cat-site')?.addEventListener('change', loadCategories);
+  wireCategories(el, { from: ranged ? range.from : d0, to: d0, stale, empty: ranged ? 'for this period' : shown.isToday ? 'yet today' : 'for this day' });
   // Gross sales by hour: today next to the same weekday last week.
   const chartBox = el.querySelector('#hourly-chart');
   // A site can be picked for the chart (remembered in this browser); otherwise it's every site shown.
