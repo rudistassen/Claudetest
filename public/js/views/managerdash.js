@@ -1,5 +1,5 @@
 import { addDays, api, esc, fmtDate, money, openModal, qs, siteScope, todayISO } from '../lib.js';
-import { chosenTimeframe, ROSTER, shortName, timeframe, timeframeBar, wireTimeframe } from './dashboard.js';
+import { chosenTimeframe, ROSTER, shortName, timeframe, timeframeBar, windWarning, wireTimeframe } from './dashboard.js';
 
 // Manager Dashboard: one site's day at a glance for the person running it – how today's trading and labour are
 // going, who's in, and a "Needs you" list of everything waiting on them (requests, checks, the rota, orders, stock,
@@ -237,6 +237,7 @@ export async function render(ctx) {
     <div class="page-head"><h1 class="hub-title">Manager Dashboard</h1>
       ${state.multiSite ? `<form class="filters" id="md-site"><select name="scope" aria-label="Site">${state.locations.filter((l) => l.active).map((l) => `<option value="${l.id}" ${l.id === site ? 'selected' : ''}>${esc(l.name)}${l.id === state.user.location_id ? ' (home)' : ''}</option>`).join('')}</select></form>` : ''}</div>
     <p class="md-hello">${esc(siteName)} · ${fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+    <div id="wind-warning"></div>
     ${timeframeBar(t)}
     ${tiles.length ? `<div class="md-tiles">${tiles.join('')}</div>` : ''}
     ${tracking}
@@ -262,6 +263,11 @@ export async function render(ctx) {
       </li>`).join('')}</ul>` : '<p class="muted">Nobody is clocked in right now.</p>',
   }));
   wireTimeframe(el, { t, tf, today, navigate, page: 'manager', key: TF_KEY, keep: { scope: query.scope } });
+  // A wind warning at the top if today's forecast is windy (loaded after the page; left out if the weather can't be had).
+  api('/weather').then((w) => {
+    const box = el.querySelector('#wind-warning');
+    if (!stale() && box?.isConnected) box.innerHTML = windWarning(w);
+  }).catch(() => {});
   const form = el.querySelector('#md-site');
   form?.addEventListener('change', () => navigate(`manager${qs({ scope: form.scope.value })}`));
   form?.addEventListener('submit', (e) => { e.preventDefault(); navigate(`manager${qs({ scope: form.scope.value })}`); });

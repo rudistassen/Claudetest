@@ -366,6 +366,23 @@ export function stepTimeframe(t, dir, today) {
   const next = timeframe(t.tf, { date: anchor }, today);
   return next;
 }
+const hourWord = (h) => (h === 0 || h === 24 ? 'midnight' : h === 12 ? 'midday' : h < 12 ? `${h}am` : `${h - 12}pm`);
+
+/**
+ * The wind warning at the top of the dashboards: when today's forecast (from /weather) has wind over 20 km/h during
+ * opening hours, say when, and to take care with outside umbrellas. Empty when it's calmer than that.
+ */
+export function windWarning(w) {
+  const day = w?.days?.find((d) => d.date === todayISO());
+  if (!day?.wind?.spans?.length) return '';
+  const { max, gust, spans } = day.wind;
+  const times = spans.map(([a, b]) => `${hourWord(a)} to ${hourWord(b)}`);
+  const when = times.length > 1 ? `${times.slice(0, -1).join(', ')} and ${times.at(-1)}` : times[0];
+  return `<p class="notice wind-warning" role="alert"><span class="wind-icon" aria-hidden="true">💨</span>
+    <span><strong>Windy today from ${when}</strong> – winds up to ${max} km/h${gust ? `, gusts to ${gust} km/h` : ''}${w.place ? ` in ${esc(w.place)}` : ''}.
+    Be careful with umbrellas outside: close them or tie them down.</span></p>`;
+}
+
 /** The timeframe selector: ‹ This week · 13 – 19 Oct ›, and a note under it (HTML). */
 export function timeframeBar(t, note = '') {
   return `<div class="tf-bar">
@@ -564,6 +581,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
         <button class="btn dash-pdf" id="dash-pdf">Download PDF</button>
       </div>
     </div>
+    <div id="wind-warning"></div>
     ${timeframeBar(t)}
     <p class="print-only print-meta">Atlas dashboard · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · printed at ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
     ${state.multiSite ? `
@@ -610,10 +628,11 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     });
     document.querySelectorAll('#modal-root [data-timecard]').forEach((b) => b.addEventListener('click', () => openTimecard(b.dataset.timecard)));
   });
-  // London's 7-day forecast (loaded after the page, and simply left out if the weather service is unavailable).
+  // London's 7-day forecast, and a wind warning at the top if today's windy (loaded after the page, and simply left out if the weather service is unavailable).
   const weatherBox = el.querySelector('#weather');
   api('/weather').then((w) => {
     if (stale() || !weatherBox.isConnected || !w.days?.length) return;
+    el.querySelector('#wind-warning').innerHTML = windWarning(w);
     weatherBox.innerHTML = `<h2 class="weather-title">${esc(w.place)} weather</h2>
       <ol class="weather-days">${w.days.map((d, i) => `<li title="${esc(`${d.label}${d.rain !== null ? ` · ${d.rain}% chance of rain` : ''}`)}">
         <span class="wd-day">${i === 0 ? 'Today' : fmtDate(d.date, { weekday: 'short' })}</span>

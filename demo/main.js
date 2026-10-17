@@ -263,6 +263,7 @@ async function boot() {
   // A made-up London week, so the dashboard's forecast has something to show.
   registerWeatherRoutes(api, async () => [3, 61, 2, 0, 80, 1, 63].map((code, i) => ({
     date: addDays(today(), i), ...weatherWords(code), max: [16, 14, 15, 18, 13, 17, 12][i], min: [9, 8, 7, 10, 8, 9, 6][i], rain: [20, 80, 10, 0, 70, 5, 90][i],
+    wind: i === 0 ? { max: 34, gust: 52, spans: [[11, 16]] } : null,
   })));
   // Pretend Google Maps listings: every site but one is linked, with a rating from a month ago to compare against.
   const reviewSites = db.prepare('SELECT id, name FROM locations WHERE active = 1 ORDER BY id').all();
