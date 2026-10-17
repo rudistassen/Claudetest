@@ -1,5 +1,5 @@
 import { addDays, api, esc, fmtDate, money, openModal, qs, siteScope, todayISO } from '../lib.js';
-import { categoryCard, chosenTimeframe, ROSTER, shortName, timeframe, timeframeBar, windWarning, wireCategories, wireTimeframe } from './dashboard.js';
+import { categoryCard, chosenTimeframe, ROSTER, shortName, timeframe, timeframeBar, windWarning, wireCategories, wireWindWarning, wireTimeframe } from './dashboard.js';
 
 // Manager Dashboard: one site's day at a glance for the person running it – how today's trading and labour are
 // going, who's in, and a "Needs you" list of everything waiting on them (requests, checks, the rota, orders, stock,
@@ -268,7 +268,7 @@ export async function render(ctx) {
   // A wind warning at the top if today's forecast is windy (loaded after the page; left out if the weather can't be had).
   api('/weather').then((w) => {
     const box = el.querySelector('#wind-warning');
-    if (!stale() && box?.isConnected) box.innerHTML = windWarning(w);
+    if (!stale() && box?.isConnected) { box.innerHTML = windWarning(w); wireWindWarning(box); }
   }).catch(() => {});
   const form = el.querySelector('#md-site');
   form?.addEventListener('change', () => navigate(`manager${qs({ scope: form.scope.value })}`));

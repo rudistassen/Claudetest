@@ -378,9 +378,29 @@ export function windWarning(w) {
   const { max, gust, spans } = day.wind;
   const times = spans.map(([a, b]) => `${hourWord(a)} to ${hourWord(b)}`);
   const when = times.length > 1 ? `${times.slice(0, -1).join(', ')} and ${times.at(-1)}` : times[0];
-  return `<p class="notice wind-warning" role="alert"><span class="wind-icon" aria-hidden="true">💨</span>
-    <span><strong>Windy today from ${when}</strong> – winds up to ${max} km/h${gust ? `, gusts to ${gust} km/h` : ''}${w.place ? ` in ${esc(w.place)}` : ''}.
-    Be careful with umbrellas outside: close them or tie them down.</span></p>`;
+  // The × folds it to one line (remembered for the day in this browser); tapping the line opens it again.
+  let folded = false;
+  try { folded = localStorage.getItem(WIND_KEY) === todayISO(); } catch { /* storage unavailable */ }
+  return `<div class="notice wind-warning ${folded ? 'is-folded' : ''}" role="alert">
+    <button type="button" class="wind-line" aria-expanded="${!folded}" title="Show or hide the details"><span class="wind-icon" aria-hidden="true">💨</span>
+      <strong>Windy today from ${when}</strong><span class="wind-more" aria-hidden="true">⌄</span></button>
+    <p class="wind-detail">Winds up to ${max} km/h${gust ? `, gusts to ${gust} km/h` : ''}${w.place ? ` in ${esc(w.place)}` : ''}.
+      Be careful with umbrellas outside: close them or tie them down.</p>
+    <button type="button" class="wind-close" aria-label="Fold the wind warning to one line" title="Fold to one line">×</button></div>`;
+}
+const WIND_KEY = 'atlas:wind-folded';
+
+/** Wires the wind warning's × (fold to one line) and the line itself (open it again) inside box. */
+export function wireWindWarning(box) {
+  const w = box?.querySelector('.wind-warning');
+  if (!w) return;
+  const fold = (on) => {
+    w.classList.toggle('is-folded', on);
+    w.querySelector('.wind-line').setAttribute('aria-expanded', String(!on));
+    try { if (on) localStorage.setItem(WIND_KEY, todayISO()); else localStorage.removeItem(WIND_KEY); } catch { /* storage unavailable */ }
+  };
+  w.querySelector('.wind-close').addEventListener('click', () => fold(true));
+  w.querySelector('.wind-line').addEventListener('click', () => fold(!w.classList.contains('is-folded')));
 }
 
 /** The Sales by category card (filled by wireCategories). locs: sites to pick from (none for one site). */
@@ -729,6 +749,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
   api('/weather').then((w) => {
     if (stale() || !weatherBox.isConnected || !w.days?.length) return;
     el.querySelector('#wind-warning').innerHTML = windWarning(w);
+    wireWindWarning(el.querySelector('#wind-warning'));
     weatherBox.innerHTML = `<h2 class="weather-title">${esc(w.place)} weather</h2>
       <ol class="weather-days">${w.days.map((d, i) => `<li title="${esc(`${d.label}${d.rain !== null ? ` · ${d.rain}% chance of rain` : ''}`)}">
         <span class="wd-day">${i === 0 ? 'Today' : fmtDate(d.date, { weekday: 'short' })}</span>
