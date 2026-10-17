@@ -434,38 +434,28 @@ function bySite(t, period, prev, state) {
   const rows = [...t.locations].sort((a, b) => b.gross_sales - a.gross_sales);
   const maxSales = Math.max(1, ...rows.map((r) => Math.max(r.gross_sales, prev.get(r.id) ?? 0)));
   const prevTotal = rows.some((r) => prev.get(r.id) !== null && prev.get(r.id) !== undefined) ? rows.reduce((n, r) => n + (prev.get(r.id) ?? 0), 0) : null;
-  // Gross sales (blue) over the same period last week (grey), with the change.
-  const salesCell = (now, then, { bars = true } = {}) => `<td class="dash-sales">
-    ${bars ? `<span class="dash-bars"><span class="dash-bar"><span class="fill" style="width:${(now / maxSales) * 100}%"></span></span>
-      ${then !== null && then !== undefined ? `<span class="dash-bar dash-bar-prev" title="${CN(period)[0].toUpperCase()}${CN(period).slice(1)}: ${money(then)}"><span class="fill" style="width:${(then / maxSales) * 100}%"></span></span>` : ''}</span>` : ''}
-    <strong>${money(now)}</strong> ${change(now, then)}</td>`;
-  // Labour bars run to at least twice the target, so the target line sits in a sensible place.
-  const scale = Math.max(LABOUR_TARGET * 2, ...rows.map((r) => Math.min(labour(r) ?? 0, 150)));
   const icon = (p) => (p === null || p === undefined ? '' : labourTone(p) === 'good' ? '✓ ' : '⚠ ');
-  const labourCell = (p) => `<td class="dash-labour">
-    <span class="dash-bar dash-bar-labour"><span class="fill tone-bg-${labourTone(p) || 'none'}" style="width:${p === null ? 0 : Math.min(100, (p / scale) * 100)}%"></span>
-      <i class="dash-target" style="left:${(LABOUR_TARGET / scale) * 100}%" title="Target ${LABOUR_TARGET}%"></i></span>
-    <strong class="tone-${labourTone(p)}">${icon(p)}${fmtPct(p)}</strong></td>`;
-  const total = t.totals;
+  // One line a site: gross sales and the change, orders, and labour % (coloured against the target), with a thin
+  // bar underneath – its sales (site colour) over the period it's compared with (grey).
+  const line = (r, name, then, { total = false } = {}) => `<div class="bs-row ${total ? 'bs-total' : ''}" ${total ? '' : `data-site-row="${r.id}" tabindex="0" style="--site: ${siteColour(r.name, r.id)}"`}>
+      <span class="bs-name">${total ? '' : '<i class="bs-dot" aria-hidden="true"></i>'}${esc(name)}${!total && !r.linked ? ' <small class="muted">not on Square</small>' : ''}</span>
+      <span class="bs-sales"><strong>${money(r.gross_sales)}</strong> ${change(r.gross_sales, then)}</span>
+      <span class="bs-orders">${r.orders}<small> orders</small></span>
+      <span class="bs-labour tone-${labourTone(labour(r))}">${icon(labour(r))}${fmtPct(labour(r))}</span>
+      ${total ? '' : `<span class="bs-bar" aria-hidden="true"><i style="width:${(r.gross_sales / maxSales) * 100}%"></i>${then !== null && then !== undefined ? `<i class="bs-prev" style="width:${(then / maxSales) * 100}%"></i>` : ''}</span>`}
+    </div>`;
   return `
     <section class="card dash-sites">
       <header class="card-head">
         <h2>Sales &amp; labour by site<span class="print-only"> · ${(period === 'today' ? dayWord() : PL(period).toLowerCase())}</span></h2>
         <span class="muted small">${PL(period) === 'Today' ? (shown.isToday ? 'Today' : dayWord()) : PL(period)}</span>
       </header>
-      <div class="table-wrap"><table class="dash-table">
-        <thead><tr><th>Site</th><th>Gross sales</th><th class="num">Orders</th><th>Labour % of net sales <small class="inline">(${t.labour_synced ? 'clocked' : 'rostered'} · target ${LABOUR_TARGET}%)</small></th></tr></thead>
-        <tbody>${rows.map((r) => `<tr data-site-row="${r.id}" tabindex="0" style="--site: ${siteColour(r.name, r.id)}">
-          <th>${esc(r.name)}${r.linked ? '' : ' <small class="inline muted">not on Square</small>'}</th>
-          ${salesCell(r.gross_sales, prev.get(r.id))}
-          <td class="num">${r.orders}</td>
-          ${labourCell(labour(r))}
-        </tr>`).join('')}</tbody>
-        ${rows.length > 1 ? `<tfoot><tr><th>All sites</th>${salesCell(total.gross_sales, prevTotal, { bars: false })}<td class="num">${total.orders}</td>
-          <td><strong class="tone-${labourTone(labour(total))}">${icon(labour(total))}${fmtPct(labour(total))}</strong></td></tr></tfoot>` : ''}
-      </table></div>
-      <p class="muted small">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}.
-        Grey bars are ${CN(period)}. Labour % is labour cost ÷ net sales (ex VAT), and only counts days with both sales and labour.${state.can('reports.trading') ? ' <a href="#/trading">More on the Trading page →</a>' : ''}</p>
+      <div class="bs-list">
+        <div class="bs-row bs-head"><span class="bs-name">Site</span><span class="bs-sales">Gross sales</span><span class="bs-orders">Orders</span><span class="bs-labour">Labour</span><span class="bs-bar-head"></span></div>
+        ${rows.map((r) => line(r, r.name, prev.get(r.id))).join('')}
+        ${rows.length > 1 ? line(t.totals, 'All sites', prevTotal, { total: true }) : ''}
+      </div>
+      <p class="muted small bs-note">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`} · grey bar: ${CN(period)} · labour % of net sales (${t.labour_synced ? 'clocked' : 'rostered'}), target ${LABOUR_TARGET}%.${state.can('reports.trading') ? ' <a href="#/trading">Trading →</a>' : ''}</p>
     </section>`;
 }
 
