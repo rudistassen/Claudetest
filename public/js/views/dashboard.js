@@ -628,7 +628,7 @@ export async function render({ el, state, navigate, stale, rerender, query = {} 
     });
     document.querySelectorAll('#modal-root [data-timecard]').forEach((b) => b.addEventListener('click', () => openTimecard(b.dataset.timecard)));
   });
-  // London's 7-day forecast, and a wind warning at the top if today's windy (loaded after the page, and simply left out if the weather service is unavailable).
+  // The 7-day forecast (Clapham, SW4), and a wind warning at the top if today's windy (loaded after the page, and simply left out if the weather service is unavailable).
   const weatherBox = el.querySelector('#weather');
   api('/weather').then((w) => {
     if (stale() || !weatherBox.isConnected || !w.days?.length) return;

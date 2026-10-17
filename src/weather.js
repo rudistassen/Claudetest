@@ -1,7 +1,7 @@
-// A simple 7-day forecast for London on the dashboard, from Open-Meteo (free, no account or key). Fetched on the
+// A simple 7-day forecast for Clapham (SW4) on the dashboard, from Open-Meteo (free, no account or key). Fetched on the
 // server and kept for an hour, so opening the dashboard doesn't call the weather service each time. Each day also
 // says when it's windy (over WINDY_KMH) during opening hours, so the dashboard can warn about outside umbrellas.
-const URL = 'https://api.open-meteo.com/v1/forecast?latitude=51.5072&longitude=-0.1276'
+const URL = 'https://api.open-meteo.com/v1/forecast?latitude=51.4626&longitude=-0.1380'
   + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe%2FLondon&forecast_days=7'
   + '&hourly=wind_speed_10m,wind_gusts_10m&wind_speed_unit=kmh';
 export const WINDY_KMH = 15;
@@ -70,6 +70,6 @@ export function registerWeatherRoutes(router, getWeather) {
   router.get('/weather', async (_req, res) => {
     const days = getWeather ? await getWeather() : null;
     res.setHeader('Cache-Control', 'private, max-age=900');
-    res.json({ place: 'London', days });
+    res.json({ place: 'Clapham (SW4)', days });
   });
 }
