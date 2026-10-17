@@ -136,12 +136,13 @@ export async function renderMyBrew(ctx) {
   const checkSite = state.can('safety.complete') ? (todayShift?.location_id ?? (state.can('safety.manage') ? state.locationId : null)) : null;
   // Checklists (opening, closing…) where they're working today, and tasks given to them.
   const listSite = state.can('checklists.complete') ? (todayShift?.location_id ?? (state.can('checklists.manage') ? state.locationId : null)) : null;
-  const [checklist, leaveCount, myTasks, lists, toConfirm] = await Promise.all([
+  const [checklist, leaveCount, myTasks, lists, toConfirm, swaps] = await Promise.all([
     checkSite ? api(`/safety/checklist?location_id=${checkSite}`).catch(() => null) : null,
     state.can('leave.manage') ? api('/leave/pending-count').catch(() => ({ count: 0 })) : { count: 0 },
     api('/tasks/mine').catch(() => []),
     listSite ? api(`/checklists?location_id=${listSite}`).catch(() => null) : null,
     api('/my-shifts/unconfirmed').catch(() => ({ count: 0, weeks: [] })),
+    api('/swaps').catch(() => ({ mine: [], for_me: [], to_approve: [] })),
   ]);
   if (stale()) return;
   const u = state.user;
@@ -194,8 +195,10 @@ export async function renderMyBrew(ctx) {
   const weeklyLeft = checklist ? checklist.tasks.filter((t) => !t.check && t.frequency !== 'daily').length : 0;
   const checkSiteName = state.locations.find((l) => l.id === checkSite)?.name ?? '';
   const claimable = drops.open.filter((d) => d.can_claim).length;
-  const toReview = leaveCount.count + drops.to_approve.length;
+  const toReview = leaveCount.count + drops.to_approve.length + swaps.to_approve.length;
+  const swapAsks = swaps.for_me.filter((w) => w.status === 'asked');
   const tasks = [
+    swapAsks.length ? { icon: '⇄', title: swapAsks.length === 1 ? `${swapAsks[0].from_name} wants to swap a shift with you` : `${swapAsks.length} shift swaps asked of you`, detail: 'Agree or say no – a manager approves it after', action: 'Answer', href: `#/rota?view=mine&week=${swapAsks[0].give.date}`, primary: true } : null,
     toConfirm.count ? { icon: '📅', title: `Confirm ${toConfirm.count} shift${toConfirm.count === 1 ? '' : 's'}`, detail: 'New or changed shifts on your rota – let your manager know you’ve seen them', action: 'See and confirm', href: `#/rota?view=mine&week=${toConfirm.weeks[0]}`, primary: true } : null,
     toRead ? { icon: '📌', title: `Confirm you’ve read ${toRead} update${toRead === 1 ? '' : 's'}`, detail: 'In the newsfeed below', action: 'Read', go: 'news', primary: true } : null,
     checksLeft || weeklyLeft ? { icon: '✅', title: `${checksLeft ? `${checksLeft} compliance check${checksLeft === 1 ? '' : 's'} left today` : `${weeklyLeft} weekly check${weeklyLeft === 1 ? '' : 's'} left`}`, detail: `${checkSiteName}${checksLeft && weeklyLeft ? ` · plus ${weeklyLeft} weekly` : ''}`, action: 'Do checks', href: '#/safety/checks', primary: true } : null,
@@ -204,7 +207,7 @@ export async function renderMyBrew(ctx) {
       const left = lists.checklists.reduce((n, c) => n + c.total - c.done, 0);
       return { icon: '☑', title: `${left} checklist item${left === 1 ? '' : 's'} left today`, detail: lists.checklists.filter((c) => c.done < c.total).map((c) => c.name).join(' · '), action: 'Checklists', href: '#/checklists' };
     })() : null,
-    toReview ? { icon: '✉', title: `${toReview} request${toReview === 1 ? '' : 's'} to review`, detail: [leaveCount.count ? `${leaveCount.count} holiday` : '', drops.to_approve.length ? `${drops.to_approve.length} shift request${drops.to_approve.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), action: 'Review', href: '#/rota/requests', primary: true } : null,
+    toReview ? { icon: '✉', title: `${toReview} request${toReview === 1 ? '' : 's'} to review`, detail: [leaveCount.count ? `${leaveCount.count} holiday` : '', drops.to_approve.length ? `${drops.to_approve.length} shift request${drops.to_approve.length === 1 ? '' : 's'}` : '', swaps.to_approve.length ? `${swaps.to_approve.length} swap${swaps.to_approve.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '), action: 'Review', href: '#/rota/requests', primary: true } : null,
     ...(training?.records ?? []).filter((r) => r.status !== 'done').map((r) => ({ icon: '🎓', title: r.status === 'expired' ? `Your ${r.course_name} has run out` : `Your ${r.course_name} runs out soon`, detail: `${r.status === 'expired' ? 'Ran out' : 'Runs out'} ${fmtDate(r.expires_on, { day: 'numeric', month: 'short', year: 'numeric' })} – speak to your manager about redoing it`, action: 'See training', go: 'training' })),
     ...coursesToDo.map((c) => ({ icon: '🎓', title: `Do your ${c.name} training`, detail: c.due_on ? `${c.due_on < today ? 'Overdue – was due' : 'Due'} ${fmtDate(c.due_on, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Your manager has given you this course', action: 'Start', href: `#/learn/${c.id}`, primary: true })),
     claimable ? { icon: '🙋', title: `${claimable} open shift${claimable === 1 ? '' : 's'} you could pick up`, detail: 'Extra hours, if you want them', action: 'See shifts', go: 'open' } : null,

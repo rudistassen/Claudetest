@@ -1,8 +1,9 @@
 import { api, esc, field, fmtDate, openModal, showError, siteColour, textarea, toast } from '../lib.js';
 import { dropsPanel, wireDrops } from './shiftdrops.js';
+import { swapsPanel, wireSwaps } from './swaps.js';
 import { teamAvailabilityCard } from './availability.js';
 
-// Rota → Requests: everything waiting for a manager in one place – holiday requests, shift drop requests and pick-up requests – and
+// Rota → Requests: everything waiting for a manager in one place – holiday requests, shift drop, pick-up and swap requests – and
 // the team's availability for the next two weeks.
 
 const day = (d) => fmtDate(d, { weekday: 'short', day: 'numeric', month: 'short' });
@@ -12,13 +13,14 @@ export async function render(ctx) {
   const { el, state, stale, rerender } = ctx;
   const canLeave = state.can('leave.manage');
   const canDrops = state.can('rota.approve');
-  const [leave, drops, team] = await Promise.all([
+  const [leave, drops, team, swaps] = await Promise.all([
     canLeave ? api('/leave?status=pending') : Promise.resolve([]),
     canDrops ? api('/shift-drops') : Promise.resolve({ open: [], to_approve: [], mine: [] }),
     canLeave ? api('/availability') : Promise.resolve(null),
+    canDrops ? api('/swaps') : Promise.resolve({ mine: [], for_me: [], to_approve: [] }),
   ]);
   if (stale()) return;
-  const total = leave.length + drops.to_approve.length;
+  const total = leave.length + drops.to_approve.length + swaps.to_approve.length;
 
   el.innerHTML = `
     <div class="page-head"><h1>Requests</h1></div>
@@ -36,11 +38,13 @@ export async function render(ctx) {
     </section>` : ''}
     ${canDrops ? `<section class="req-section">
       ${drops.to_approve.length ? dropsPanel({ ...drops, open: [], mine: [], my_claims: [] }) : '<section class="card"><h2>Shift requests <span class="badge">0</span></h2><p class="muted small">No shifts waiting to be dropped or picked up.</p></section>'}
+      ${swaps.to_approve.length ? swapsPanel(swaps, { manage: true, own: false }) : ''}
       ${drops.open.length ? `<p class="small muted">${drops.open.length} open shift${drops.open.length === 1 ? '' : 's'} waiting for someone to pick up – see the rota.</p>` : ''}
     </section>` : ''}
     ${team ? teamAvailabilityCard(team) : ''}`;
 
   wireDrops(el, drops, () => { window.dispatchEvent(new Event('requests:changed')); rerender(); });
+  wireSwaps(el, swaps, () => { window.dispatchEvent(new Event('requests:changed')); rerender(); });
   el.querySelectorAll('[data-leave-approve]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true;
     try {

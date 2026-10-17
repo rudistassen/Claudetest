@@ -236,6 +236,12 @@ const ACTIONS = [
   ['POST', '/compliance-docs', 'Compliance', 'Uploaded a compliance document', (db, p, b) => b.title],
   ['PUT', '/compliance-docs/:id', 'Compliance', 'Changed a compliance document', (db, p) => nameOf(db, 'compliance_documents', 'title', p.id)],
   ['DELETE', '/compliance-docs/:id', 'Compliance', 'Deleted a compliance document', (db, p) => nameOf(db, 'compliance_documents', 'title', p.id)],
+  ['POST', '/swaps', 'Rota', 'Asked to swap a shift'],
+  ['POST', '/swaps/:id/accept', 'Rota', 'Agreed to swap a shift'],
+  ['POST', '/swaps/:id/refuse', 'Rota', 'Said no to a shift swap'],
+  ['POST', '/swaps/:id/cancel', 'Rota', 'Called off a shift swap'],
+  ['POST', '/swaps/:id/approve', 'Rota', 'Approved a shift swap'],
+  ['POST', '/swaps/:id/decline', 'Rota', 'Declined a shift swap'],
   // Chat: what was done, never what was said.
   ['POST', '/chat/direct', 'Chat', 'Started a direct message', (db, p, b) => person(db, b.user_id)],
   ['POST', '/chat/:id/messages', 'Chat', 'Sent a chat message', (db, p) => chatName(db, p.id)],

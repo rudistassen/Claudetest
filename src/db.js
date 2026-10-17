@@ -479,6 +479,33 @@ CREATE TABLE IF NOT EXISTS shift_drops (
 );
 CREATE INDEX IF NOT EXISTS idx_shift_drops_status ON shift_drops(status, location_id, date);
 
+-- Shift swaps: someone asks a colleague to swap a published shift (for one of theirs, or for nothing – a cover).
+-- asked (waiting for the colleague) → pending (waiting for a manager) → approved; or refused, declined, cancelled.
+-- The shifts' details are kept as asked, so a change on the rota since stops the swap.
+CREATE TABLE IF NOT EXISTS shift_swaps (
+  id INTEGER PRIMARY KEY,
+  from_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  from_shift_id INTEGER NOT NULL,
+  from_date TEXT NOT NULL,
+  from_start TEXT NOT NULL,
+  from_end TEXT NOT NULL,
+  from_location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  to_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_shift_id INTEGER,
+  to_date TEXT,
+  to_start TEXT,
+  to_end TEXT,
+  to_location_id INTEGER REFERENCES locations(id) ON DELETE CASCADE,
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'asked' CHECK (status IN ('asked', 'pending', 'approved', 'refused', 'declined', 'cancelled')),
+  answered_at TEXT,
+  decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  decided_at TEXT,
+  decision_note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_shift_swaps_status ON shift_swaps(status);
+
 -- Breaks taken during a clock-in (from Square). A break still running has no end_at.
 CREATE TABLE IF NOT EXISTS timecard_breaks (
   id INTEGER PRIMARY KEY,

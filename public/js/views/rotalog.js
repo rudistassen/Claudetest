@@ -21,6 +21,7 @@ export const ACTIONS = {
   sick: ['Sickness', 'log-change'],
   open: ['Open shift added', 'log-add'],
   claim: ['Open shift picked up', 'log-add'],
+  swap: ['Shifts swapped', 'log-change'],
   claim_decline: ['Pick-up declined', 'log-change'],
   withdraw: ['Open shift withdrawn', 'log-remove'],
 };

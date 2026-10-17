@@ -285,8 +285,9 @@ async function showRequestBadge(force = false) {
   if (!leave && !drops) return;
   if (force || pendingRequests.user !== state.user?.id || Date.now() - pendingRequests.at > 60000) {
     try {
-      const [l, d] = await Promise.all([leave ? api('/leave/pending-count') : { count: 0 }, drops ? api('/shift-drops') : { to_approve: [] }]);
-      pendingRequests = { count: l.count + d.to_approve.length, at: Date.now(), user: state.user?.id };
+      const [l, d, w] = await Promise.all([leave ? api('/leave/pending-count') : { count: 0 }, drops ? api('/shift-drops') : { to_approve: [] },
+        drops ? api('/swaps').catch(() => ({ to_approve: [] })) : { to_approve: [] }]);
+      pendingRequests = { count: l.count + d.to_approve.length + w.to_approve.length, at: Date.now(), user: state.user?.id };
     } catch { return; }
   }
   document.querySelectorAll('[data-req-badge]').forEach((b) => {

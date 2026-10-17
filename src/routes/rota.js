@@ -8,6 +8,7 @@ import { dayKey, labourByDay, pct, rotaByDay, salesBudgets, salesByDay } from '.
 import { bankHoliday } from '../bank-holidays.js';
 import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
 import { notStarted, registerShiftDropRoutes, rotaDrops } from './shift-drops.js';
+import { registerShiftSwapRoutes } from './shift-swaps.js';
 import { addDays, badRequest, date, forbidden, id, notFound, num, oneOf, round2, shiftHours, str, time, today, weekStart, zonedMidnightUTC } from '../util.js';
 
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -216,6 +217,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
   }
 
   registerShiftDropRoutes(router, db, { findClash, clearUndo: (req) => clearUndo(req) });
+  registerShiftSwapRoutes(router, db, { findClash, clearUndo: (req) => clearUndo(req) });
 
   // --- Undo: each editor's last unpublished change, until their next change or a publish (rota_undo) ---
   const rowsById = (ids) => (ids.length ? db.prepare(`SELECT * FROM shifts WHERE id IN (${ids.map(() => '?').join(', ')})`).all(...ids).map((r) => ({ ...r })) : []);

@@ -52,6 +52,7 @@ export async function render(ctx) {
     rotaNext: can('rota.edit') ? api(`/rota${qs({ ...loc, week: nextWeek })}`) : null,
     leave: can('leave.manage') ? api('/leave/pending-count') : null,
     drops: can('rota.approve') ? api('/shift-drops') : null,
+    swaps: can('rota.approve') ? api('/swaps') : null,
     designs: can('people.training') ? api('/training/designs') : null,
     assigned: can('people.training') ? api(`/training/assignments${qs(loc)}`) : null,
     reviews: can('people.performance') ? api(`/performance${qs(loc)}`) : null,
@@ -95,6 +96,8 @@ export async function render(ctx) {
   const pickUps = drops.filter((d) => d.kind === 'claim' || d.status === 'claim_pending').length;
   if (drops.length - pickUps) add('warn', '⇄', `${plural(drops.length - pickUps, 'shift drop request')} to decide`, '#/rota/requests');
   if (pickUps) add('warn', '✋', `${plural(pickUps, 'shift pick-up')} to approve`, '#/rota/requests');
+  const swapsHere = (got.swaps?.to_approve ?? []).filter((w) => w.give.location_id === site || w.take?.location_id === site).length;
+  if (swapsHere) add('warn', '⇄', `${plural(swapsHere, 'shift swap')} to approve`, '#/rota/requests');
   if (got.rota?.unpublished) add('warn', '◷', `${plural(got.rota.unpublished, 'rota change')} this week not published yet`, `#/rota${qs({ week })}`);
   if (got.rotaNext) {
     if (!got.rotaNext.shifts.length) add(new Date().getDay() >= 4 || new Date().getDay() === 0 ? 'bad' : 'warn', '◷', 'Next week’s rota hasn’t been started', `#/rota${qs({ week: nextWeek })}`);

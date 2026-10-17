@@ -3300,3 +3300,8 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 }
 .dash-sites .bs-head, .dash-sites .bs-head span { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .bs-head .bs-labour { text-align: right; }
+
+/* Shift swaps */
+.swap-people { width: 100%; margin-top: 0.35rem; }
+.swaps-card .drops-list small .badge { margin-right: 0.3rem; }
+.my-drop { display: flex; gap: 0.4rem; flex-wrap: wrap; }
