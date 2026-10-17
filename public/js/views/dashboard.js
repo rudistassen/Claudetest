@@ -369,7 +369,7 @@ export function stepTimeframe(t, dir, today) {
 const hourWord = (h) => (h === 0 || h === 24 ? 'midnight' : h === 12 ? 'midday' : h < 12 ? `${h}am` : `${h - 12}pm`);
 
 /**
- * The wind warning at the top of the dashboards: when today's forecast (from /weather) has wind over 20 km/h during
+ * The wind warning at the top of the dashboards: when today's forecast (from /weather) has wind over 15 km/h during
  * opening hours, say when, and to take care with outside umbrellas. Empty when it's calmer than that.
  */
 export function windWarning(w) {

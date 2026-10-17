@@ -4,7 +4,7 @@
 const URL = 'https://api.open-meteo.com/v1/forecast?latitude=51.5072&longitude=-0.1276'
   + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe%2FLondon&forecast_days=7'
   + '&hourly=wind_speed_10m,wind_gusts_10m&wind_speed_unit=kmh';
-export const WINDY_KMH = 20;
+export const WINDY_KMH = 15;
 const OPEN_FROM = 6; // only hours from 6am…
 const OPEN_TO = 22; // …to 10pm count
 const KEEP_MS = 60 * 60 * 1000;
