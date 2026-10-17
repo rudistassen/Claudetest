@@ -982,6 +982,33 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     res.json(db.prepare(`${shiftSelect} WHERE s.id = ?`).get(existing.id));
   });
 
+  // Swaps two shifts' people, as a manager editing the rota: { with_shift_id }. Each takes the other's shift (dates,
+  // times and sites stay with the shifts). A draft change like any other – staff see it once the rota is published –
+  // and it can be undone.
+  router.post('/shifts/:id/swap', requirePerm('rota.edit'), (req, res) => {
+    const a = loadShift(req);
+    const b = db.prepare('SELECT * FROM shifts WHERE id = ?').get(Number(req.body?.with_shift_id));
+    if (!b) throw notFound('Shift');
+    assertLocation(req, b.location_id);
+    if (a.id === b.id) throw badRequest('Choose a different shift to swap with');
+    if (a.removed || b.removed) throw badRequest('One of these shifts has been removed');
+    if (a.user_id === b.user_id) throw badRequest('Both shifts are already the same person’s');
+    for (const [who, slot, own] of [[a.user_id, b, a.id], [b.user_id, a, b.id]]) {
+      if (onHoliday(db, who, slot.date)) throw badRequest(`${personName(who)} is on holiday on ${fmtDay(slot.date)}`);
+      const clash = findClash({ user_id: who, date: slot.date, start_time: slot.start_time, end_time: slot.end_time }, own);
+      if (clash && clash.id !== slot.id) throw badRequest(`${personName(who)} already has a shift ${clash.start_time}–${clash.end_time} at ${clash.location_name} on ${fmtDay(slot.date)}`);
+    }
+    tx(db, () => {
+      const before = rowsById([a.id, b.id]);
+      db.prepare('UPDATE shifts SET user_id = ? WHERE id = ?').run(b.user_id, a.id);
+      db.prepare('UPDATE shifts SET user_id = ? WHERE id = ?').run(a.user_id, b.id);
+      rememberUndo(req, `Swapped ${personName(a.user_id)}’s and ${personName(b.user_id)}’s shifts`, a.location_id, before);
+      logRota(db, req, { action: 'swap', location_id: a.location_id, shift: { ...a, user_id: b.user_id }, details: `${shiftText(a)} — swapped from ${personName(a.user_id)} to ${personName(b.user_id)}` });
+      logRota(db, req, { action: 'swap', location_id: b.location_id, shift: { ...b, user_id: a.user_id }, details: `${shiftText(b)} — swapped from ${personName(b.user_id)} to ${personName(a.user_id)}` });
+    });
+    res.json({ ok: true, shifts: [a.id, b.id].map((x) => db.prepare(`${shiftSelect} WHERE s.id = ?`).get(x)) });
+  });
+
   // A shift staff have never seen is deleted; a published one is marked removed until the rota is published.
   // Deleting a shift takes it off straight away – including from what staff see – for anyone who can publish that
   // site's rota (Undo puts it back). For people who can only edit, a published shift is marked removed until someone

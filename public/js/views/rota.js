@@ -754,7 +754,7 @@ export async function render(ctx) {
         ${unpublished ? `<p class="notice publish-one">${shift.state === 'new' ? 'Staff can’t see this shift yet.' : 'Staff still see the old version of this shift.'}
           ${data.can_publish ? '<button type="button" class="btn btn-small btn-primary" id="publish-one">Publish just this shift</button>' : ''}</p>` : ''}
         ${shift ? `<p class="sick-line ${shift.sick ? 'is-sick' : ''}">${shift.sick ? `<span><strong>Off sick</strong>${shift.sick_note ? ` – ${esc(shift.sick_note)}` : ''}</span>` : '<span class="muted">Not coming in?</span>'}
-          <span class="sick-line-actions">${data.can_publish && !shift.sick && shift.state !== 'removed' ? '<button type="button" class="btn btn-small" id="open-btn" title="Take it off their rota now and offer it to everyone">Drop to open</button>' : ''}
+          <span class="sick-line-actions">${shift.state !== 'removed' && !shift.sick ? '<button type="button" class="btn btn-small" id="swap-btn" title="Swap this shift with someone else’s">⇄ Swap with…</button>' : ''}${data.can_publish && !shift.sick && shift.state !== 'removed' ? '<button type="button" class="btn btn-small" id="open-btn" title="Take it off their rota now and offer it to everyone">Drop to open</button>' : ''}
           <button type="button" class="btn btn-small" id="sick-btn">${shift.sick ? 'Change' : 'Mark as sick'}</button></span></p>` : ''}
         <div class="row">
           ${field('Staff member', select('user_id', who, defaults.open ? 'open' : s.user_id, 'required'))}
@@ -791,6 +791,38 @@ export async function render(ctx) {
         toast('Shift saved');
         ctx.rerender();
       },
+    });
+    // Swap with someone else's shift this week: each takes the other's (a draft change, published with the rest).
+    form.querySelector('#swap-btn')?.addEventListener('click', () => {
+      const others = data.shifts.filter((x) => x.id !== shift.id && x.user_id !== shift.user_id && x.state !== 'removed' && !x.sick && !x.away && x.date >= todayISO())
+        .sort((x, y) => x.date.localeCompare(y.date) || x.start_time.localeCompare(y.start_time) || x.user_name.localeCompare(y.user_name));
+      const days = [...new Set(others.map((x) => x.date))];
+      // Swaps that would double-book someone (they already work then) are shown but can't be picked.
+      const live = data.shifts.filter((x) => x.state !== 'removed' && !x.away);
+      const overlap = (p, q) => p.start_time < q.end_time && q.start_time < p.end_time;
+      const busy = (userId, slot, except) => live.some((y) => y.user_id === userId && y.id !== except && y.id !== slot.id && y.date === slot.date && overlap(y, slot));
+      const clashes = (x) => busy(shift.user_id, x, shift.id) || busy(x.user_id, shift, x.id);
+      const { form: f } = openModal({
+        title: `Swap ${shift.user_name}’s shift`,
+        submitLabel: 'Swap shifts',
+        body: `<p><strong>${esc(shift.user_name)}</strong> · ${fmtDate(shift.date)} · ${shift.start_time}–${shift.end_time}${all ? ` · ${esc(siteName(shift.location_id))}` : ''}</p>
+          ${others.length ? `<label class="field"><span>Swap with</span>
+            <input type="search" class="swap-search" placeholder="Search names" aria-label="Search names" autocomplete="off">
+            <select name="with_shift_id" required size="8" class="swap-people">${days.map((d) => `<optgroup label="${esc(fmtDate(d, { weekday: 'long', day: 'numeric', month: 'short' }))}">${others.filter((x) => x.date === d).map((x) => `<option value="${x.id}" ${clashes(x) ? 'disabled' : ''}>${esc(x.user_name)} · ${x.start_time}–${x.end_time}${all ? ` · ${esc(siteName(x.location_id))}` : ''}${clashes(x) ? ' – would double-book' : ''}</option>`).join('')}</optgroup>`).join('')}</select></label>
+            <p class="muted small">${esc(shift.user_name)} takes the shift you pick, and its person takes this one. It’s a change to the rota like any other – staff see it once it’s published – and you can undo it.</p>`
+            : '<p class="muted">There are no other shifts this week to swap with.</p>'}`,
+        onSubmit: others.length ? async (v) => {
+          if (!v.with_shift_id) throw new Error('Choose the shift to swap with');
+          await api(`/shifts/${shift.id}/swap`, { method: 'POST', body: { with_shift_id: Number(v.with_shift_id) } });
+          const other = others.find((x) => x.id === Number(v.with_shift_id));
+          toast(`Swapped ${shift.user_name}’s and ${other.user_name}’s shifts – publish to let them know`);
+          ctx.rerender();
+        } : null,
+      });
+      f.querySelector('.swap-search')?.addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        f.querySelectorAll('.swap-people option').forEach((o) => { o.hidden = !!q && !o.textContent.toLowerCase().includes(q); });
+      });
     });
     form.querySelector('#open-btn')?.addEventListener('click', () => openModal({
       title: 'Drop to open?',

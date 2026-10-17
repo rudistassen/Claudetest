@@ -121,3 +121,30 @@ test('shift swap: a manager can’t approve a swap they’re part of', async () 
   const admin = await login('admin@cafe.local');
   assert.equal((await admin(`/swaps/${w.id}/approve`, { method: 'POST' })).data.status, 'approved');
 });
+
+test('managers can swap two shifts directly on the rota (a draft change, with undo)', async () => {
+  const a = user('staff1@cafe.local');
+  const b = user('staff1-2@cafe.local');
+  const s1 = shiftFor(a, 12, '07:00', '11:00');
+  const s2 = shiftFor(b, 13, '12:00', '16:00');
+  db.prepare('DELETE FROM shifts WHERE user_id = ? AND date = ? AND id != ?').run(b.id, addDays(today(), 12), s2);
+  db.prepare('DELETE FROM shifts WHERE user_id = ? AND date = ? AND id != ?').run(a.id, addDays(today(), 13), s1);
+  const manager = await login('manager1@cafe.local');
+  const staff = await login('staff1@cafe.local');
+  assert.equal((await staff(`/shifts/${s1}/swap`, { method: 'POST', body: { with_shift_id: s2 } })).status, 403);
+  const r = await manager(`/shifts/${s1}/swap`, { method: 'POST', body: { with_shift_id: s2 } });
+  assert.equal(r.status, 200);
+  const row = (id) => db.prepare('SELECT user_id, pub_user_id FROM shifts WHERE id = ?').get(id);
+  // Swapped in the draft; staff still see the old rota until it's published.
+  assert.deepEqual([row(s1).user_id, row(s2).user_id], [b.id, a.id]);
+  assert.deepEqual([row(s1).pub_user_id, row(s2).pub_user_id], [a.id, b.id]);
+  assert.ok(db.prepare(`SELECT 1 FROM rota_log WHERE action = 'swap' AND details LIKE '%swapped from%'`).get());
+  // Undo puts it back.
+  assert.equal((await manager('/rota/undo', { method: 'POST' })).status, 200);
+  assert.deepEqual([row(s1).user_id, row(s2).user_id], [a.id, b.id]);
+  // Not with yourself, and not if it would double-book someone.
+  assert.equal((await manager(`/shifts/${s1}/swap`, { method: 'POST', body: { with_shift_id: s1 } })).status, 400);
+  const clash = shiftFor(b, 12, '08:00', '10:00');
+  assert.equal((await manager(`/shifts/${s1}/swap`, { method: 'POST', body: { with_shift_id: s2 } })).status, 400);
+  db.prepare('DELETE FROM shifts WHERE id = ?').run(clash);
+});
