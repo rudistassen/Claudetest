@@ -3335,3 +3335,5 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .wind-warning.is-folded .wind-detail, .wind-warning.is-folded .wind-close { display: none; }
 .wind-warning.is-folded .wind-more { display: inline; }
 .wind-warning.is-folded .wind-line strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.bs-subtotal { border-top: 1px solid var(--border); font-weight: 600; padding-top: 0.35rem; margin-bottom: 0.3rem; color: var(--muted); }

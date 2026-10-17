@@ -259,7 +259,7 @@ export function registerTradingRoutes(router, db, square) {
       days: days.map((d) => ({ date: d, ...summary(ids, [d]) })),
       hours,
       trading_days: tradingDays,
-      locations: locations.map((l) => ({ id: l.id, name: l.name, linked: !!l.square_location_id, ...summary([l.id], days) })),
+      locations: locations.map((l) => ({ id: l.id, name: l.name, linked: !!l.square_location_id, subtotal_group: l.subtotal_group ?? null, ...summary([l.id], days) })),
       staff: staffComparison(db, ids, from, to, cards, locations),
       clocked_in: cards.filter((c) => !c.end_at).map((c) => ({
         name: c.name,

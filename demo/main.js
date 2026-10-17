@@ -260,6 +260,8 @@ async function boot() {
   registerBreakRoutes(api, db);
   registerTimecardRoutes(api, db, square);
   registerPaymentLinkRoutes(api, db, square, demoMailer);
+  // Two sites run together, so the dashboard's sales by site shows a subtotal for them.
+  db.prepare("UPDATE locations SET subtotal_group = 'Waterfront' WHERE name IN ('Harbour', 'Riverside')").run();
   // A made-up London week, so the dashboard's forecast has something to show.
   registerWeatherRoutes(api, async () => [3, 61, 2, 0, 80, 1, 63].map((code, i) => ({
     date: addDays(today(), i), ...weatherWords(code), max: [16, 14, 15, 18, 13, 17, 12][i], min: [9, 8, 7, 10, 8, 9, 6][i], rain: [20, 80, 10, 0, 70, 5, 90][i],

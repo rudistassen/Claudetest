@@ -584,10 +584,14 @@ export async function renderLocations(ctx) {
       { label: 'Address', key: 'address' },
       { label: 'Phone', key: 'phone' },
       { label: 'Opening hours', value: (r) => (r.opening_hours ? 'Set' : 'Not set') },
+      { label: 'Subtotal group', key: 'subtotal_group' },
       { label: 'Active', value: (r) => yesNo(r.active) },
     ],
     form: (l) => `${field('Name', input('name', l.name, 'required'))}${field('Address', textarea('address', l.address))}${field('Phone', input('phone', l.phone))}
-      ${openingHoursField(l)}${activeBox(l.active)}`,
+      ${openingHoursField(l)}
+      ${field('Subtotal group (optional)', input('subtotal_group', l.subtotal_group, 'maxlength="60" placeholder="e.g. Brew &amp; Barrel"'))}
+      <p class="muted small">Give two or more sites the same name here and the dashboard’s Sales &amp; labour by site adds them up together, with a subtotal line.</p>
+      ${activeBox(l.active)}`,
     save: async (v, row, form) => {
       for (const k of Object.keys(v)) if (k.startsWith('oh_')) delete v[k];
       v.opening_hours = readOpeningHours(form);

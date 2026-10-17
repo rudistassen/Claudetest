@@ -1326,6 +1326,8 @@ const MIGRATIONS = [
   ['locations', 'square_location_id', 'ALTER TABLE locations ADD COLUMN square_location_id TEXT'],
   // Opening hours for each day of the week, Monday first: a JSON list of { open, close } or null when closed.
   ['locations', 'opening_hours', 'ALTER TABLE locations ADD COLUMN opening_hours TEXT'],
+  // Sites with the same subtotal group (e.g. two sites run as one) get a subtotal in the dashboard's sales by site.
+  ['locations', 'subtotal_group', 'ALTER TABLE locations ADD COLUMN subtotal_group TEXT'],
   // How a product is measured in recipes, e.g. a 4L bottle of milk = 4000 ml.
   ['products', 'recipe_unit', 'ALTER TABLE products ADD COLUMN recipe_unit TEXT'],
   ['products', 'units_per_pack', 'ALTER TABLE products ADD COLUMN units_per_pack REAL NOT NULL DEFAULT 1'],

@@ -537,12 +537,27 @@ const hrs = (h) => `${Number(h).toLocaleString('en-GB', { maximumFractionDigits:
 function bySite(t, period, prev, state) {
   const labour = (r) => (t.labour_synced && r.labour_pct !== null ? r.labour_pct : r.rostered_labour_pct);
   const rows = [...t.locations].sort((a, b) => b.gross_sales - a.gross_sales);
+  // Sites in the same subtotal group (Setup → Locations) sit together, biggest group first, with a subtotal line.
+  const groups = new Map();
+  for (const r of rows) {
+    const k = r.subtotal_group?.trim() ? `g:${r.subtotal_group.trim().toLowerCase()}` : `s:${r.id}`;
+    if (!groups.has(k)) groups.set(k, { name: r.subtotal_group?.trim(), rows: [] });
+    groups.get(k).rows.push(r);
+  }
+  const units = [...groups.values()].sort((a, b) => b.rows.reduce((n, r) => n + r.gross_sales, 0) - a.rows.reduce((n, r) => n + r.gross_sales, 0));
+  const sumOf = (list) => {
+    const add = (k) => list.reduce((n, r) => n + (r[k] ?? 0), 0);
+    const net = add('net_sales');
+    const pctOf = (cost) => (net > 0 && cost > 0 ? Math.round((cost / net) * 1000) / 10 : null);
+    return { gross_sales: add('gross_sales'), orders: add('orders'), labour_pct: pctOf(add('clocked_cost')), rostered_labour_pct: pctOf(add('rostered_cost')) };
+  };
+  const prevOf = (list) => (list.some((r) => prev.get(r.id) !== null && prev.get(r.id) !== undefined) ? list.reduce((n, r) => n + (prev.get(r.id) ?? 0), 0) : null);
   const maxSales = Math.max(1, ...rows.map((r) => Math.max(r.gross_sales, prev.get(r.id) ?? 0)));
   const prevTotal = rows.some((r) => prev.get(r.id) !== null && prev.get(r.id) !== undefined) ? rows.reduce((n, r) => n + (prev.get(r.id) ?? 0), 0) : null;
   const icon = (p) => (p === null || p === undefined ? '' : labourTone(p) === 'good' ? '✓ ' : '⚠ ');
   // One line a site: gross sales and the change, orders, and labour % (coloured against the target), with a thin
   // bar underneath – its sales (site colour) over the period it's compared with (grey).
-  const line = (r, name, then, { total = false } = {}) => `<div class="bs-row ${total ? 'bs-total' : ''}" ${total ? '' : `data-site-row="${r.id}" tabindex="0" style="--site: ${siteColour(r.name, r.id)}"`}>
+  const line = (r, name, then, { total = false, sub = false } = {}) => `<div class="bs-row ${total ? 'bs-total' : ''} ${sub ? 'bs-subtotal' : ''}" ${total ? '' : `data-site-row="${r.id}" tabindex="0" style="--site: ${siteColour(r.name, r.id)}"`}>
       <span class="bs-name">${total ? '' : '<i class="bs-dot" aria-hidden="true"></i>'}${esc(name)}${!total && !r.linked ? ' <small class="muted">not on Square</small>' : ''}</span>
       <span class="bs-sales"><strong>${money(r.gross_sales)}</strong> ${change(r.gross_sales, then)}</span>
       <span class="bs-orders">${r.orders}<small> orders</small></span>
@@ -557,7 +572,8 @@ function bySite(t, period, prev, state) {
       </header>
       <div class="bs-list">
         <div class="bs-row bs-head"><span class="bs-name">Site</span><span class="bs-sales">Gross sales</span><span class="bs-orders">Orders</span><span class="bs-labour">Labour</span><span class="bs-bar-head"></span></div>
-        ${rows.map((r) => line(r, r.name, prev.get(r.id))).join('')}
+        ${units.map((u) => u.rows.map((r) => line(r, r.name, prev.get(r.id))).join('')
+          + (u.rows.length > 1 ? line(sumOf(u.rows), `${u.name} subtotal`, prevOf(u.rows), { total: true, sub: true }) : '')).join('')}
         ${rows.length > 1 ? line(t.totals, 'All sites', prevTotal, { total: true }) : ''}
       </div>
       <p class="muted small bs-note">${period === 'today' ? (shown.isToday ? 'So far today' : `All of ${dayWord()}`) : `${fmtDate(t.from, { day: 'numeric', month: 'short' })} – ${fmtDate(t.to, { day: 'numeric', month: 'short' })}`}${shown.hours ? `, ${hoursLabel(shown.hours)}` : ''} · grey bar: ${CN(period)} · labour % of net sales (${t.labour_synced ? 'clocked' : 'rostered'}), target ${LABOUR_TARGET}%.${state.can('reports.trading') ? ' <a href="#/trading">Trading →</a>' : ''}</p>

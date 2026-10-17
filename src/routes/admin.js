@@ -49,12 +49,13 @@ export function registerAdminRoutes(router, db, square = null) {
     phone: str(b.phone, 'phone', { max: 50 }),
     active: b.active === undefined ? 1 : bool(b.active),
     opening_hours: b.opening_hours === undefined ? existing?.opening_hours ?? null : openingHours(b.opening_hours),
+    subtotal_group: b.subtotal_group === undefined ? existing?.subtotal_group ?? null : str(b.subtotal_group, 'subtotal_group', { max: 60 }) || null,
   });
 
   router.post('/locations', requireAdmin, (req, res) => {
     const l = locationBody(req.body);
-    const r = db.prepare('INSERT INTO locations (name, address, phone, active, opening_hours) VALUES (?, ?, ?, ?, ?)')
-      .run(l.name, l.address, l.phone, l.active, l.opening_hours);
+    const r = db.prepare('INSERT INTO locations (name, address, phone, active, opening_hours, subtotal_group) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(l.name, l.address, l.phone, l.active, l.opening_hours, l.subtotal_group);
     res.status(201).json(db.prepare('SELECT * FROM locations WHERE id = ?').get(r.lastInsertRowid));
   });
 
@@ -62,8 +63,8 @@ export function registerAdminRoutes(router, db, square = null) {
     const existing = db.prepare('SELECT * FROM locations WHERE id = ?').get(Number(req.params.id));
     if (!existing) throw notFound('Location');
     const l = locationBody(req.body, existing);
-    db.prepare('UPDATE locations SET name = ?, address = ?, phone = ?, active = ?, opening_hours = ? WHERE id = ?')
-      .run(l.name, l.address, l.phone, l.active, l.opening_hours, existing.id);
+    db.prepare('UPDATE locations SET name = ?, address = ?, phone = ?, active = ?, opening_hours = ?, subtotal_group = ? WHERE id = ?')
+      .run(l.name, l.address, l.phone, l.active, l.opening_hours, l.subtotal_group, existing.id);
     res.json(db.prepare('SELECT * FROM locations WHERE id = ?').get(Number(req.params.id)));
   });
 

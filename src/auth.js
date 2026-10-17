@@ -138,10 +138,10 @@ export function resolveLocation(req, raw) {
 export function reportLocations(req, raw) {
   const db = req.db;
   if (raw !== undefined && raw !== null && raw !== '') {
-    return [db.prepare('SELECT id, name, square_location_id FROM locations WHERE id = ?').get(resolveLocation(req, raw))];
+    return [db.prepare('SELECT id, name, square_location_id, subtotal_group FROM locations WHERE id = ?').get(resolveLocation(req, raw))];
   }
   const ids = new Set(req.user.site_ids);
-  const rows = db.prepare('SELECT id, name, square_location_id FROM locations WHERE active = 1 ORDER BY name').all().filter((l) => ids.has(l.id));
+  const rows = db.prepare('SELECT id, name, square_location_id, subtotal_group FROM locations WHERE active = 1 ORDER BY name').all().filter((l) => ids.has(l.id));
   if (!rows.length) throw forbidden('You do not have access to any sites');
   return rows;
 }

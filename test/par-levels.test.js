@@ -164,3 +164,14 @@ test('time of day: trading figures and sales by category between set hours only'
   // A nonsense time of day is all day.
   assert.equal((await a(`/trading?from=${d}&to=${d}&location_id=${site}&hours=11-7`)).data.totals.gross_sales, 120);
 });
+
+test('subtotal group: set on a site under Setup → Locations and shown with each site in the trading figures', async () => {
+  const a = await login('admin@cafe.local');
+  const loc = (await a('/locations')).data.find((l) => l.id === site);
+  assert.equal((await a(`/locations/${site}`, { method: 'PUT', body: { name: loc.name, address: loc.address, phone: loc.phone, active: true, subtotal_group: ' Brew & Barrel ' } })).data.subtotal_group, 'Brew & Barrel');
+  const r = (await a(`/trading?from=${today()}&to=${today()}`)).data;
+  assert.equal(r.locations.find((l) => l.id === site).subtotal_group, 'Brew & Barrel');
+  // Saving without it keeps it; blank clears it.
+  assert.equal((await a(`/locations/${site}`, { method: 'PUT', body: { name: loc.name, active: true } })).data.subtotal_group, 'Brew & Barrel');
+  assert.equal((await a(`/locations/${site}`, { method: 'PUT', body: { name: loc.name, active: true, subtotal_group: '' } })).data.subtotal_group, null);
+});
