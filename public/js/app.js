@@ -171,6 +171,7 @@ const ROUTES = [
   [/^admin\/email-reports$/, reports.renderEmailReports, 'admin'],
   [/^admin\/email$/, emailsettings.render, 'admin'],
   [/^account$/, admin.renderAccount],
+  [/^notification-settings$/, admin.renderNotificationSettings],
   [/^hub\/([\w-]+)$/, renderHub],
   [/^documents$/, mybrew.renderDocuments],
 ];
@@ -567,6 +568,7 @@ function renderShell() {
             <a href="#/documents" class="${path === 'documents' ? 'active' : ''}"><span class="nav-icon">❐</span><span class="nav-label">Company documents</span></a>
             <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span><span class="nav-badge" data-inbox-badge hidden></span></a>
             <a href="#" data-tour><span class="nav-icon">✦</span><span class="nav-label">Take the tour</span></a>
+            <a href="#/notification-settings" class="${path === 'notification-settings' ? 'active' : ''}"><span class="nav-icon">⚙</span><span class="nav-label">Notification settings</span></a>
             <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
             <a href="#" id="logout" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
           </div>
@@ -597,6 +599,7 @@ function renderShell() {
           <a href="#/notifications" class="${path === 'notifications' ? 'active' : ''}"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span><span class="nav-badge" data-inbox-badge hidden></span></a>
           <a href="#" data-install ${['prompt', 'ios'].includes(installState()) ? '' : 'hidden'}><span class="nav-icon">⤓</span><span class="nav-label">Install app</span></a>
           <a href="#" data-tour><span class="nav-icon">✦</span><span class="nav-label">Take the tour</span></a>
+          <a href="#/notification-settings" class="${path === 'notification-settings' ? 'active' : ''}"><span class="nav-icon">⚙</span><span class="nav-label">Notification settings</span></a>
           <a href="#" data-logout><span class="nav-icon">⎋</span><span class="nav-label">Sign out</span></a>
         </div>
       </nav>

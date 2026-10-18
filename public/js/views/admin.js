@@ -734,6 +734,18 @@ export async function renderProducts(ctx) {
   }));
 }
 
+// Notification settings (in the main menu, under Take the tour): turn phone notifications on for this phone and
+// choose which kinds.
+export async function renderNotificationSettings({ el, state, stale }) {
+  el.innerHTML = `<div class="page-head"><h1>Notification settings</h1></div>
+    <section class="card narrow mb-push" id="mb-push"><p class="muted">Loading…</p></section>`;
+  const box = el.querySelector('#mb-push');
+  await renderNotifications(box, { isAdmin: state.isAdmin });
+  if (stale() || !box.isConnected || !box.hidden) return;
+  box.hidden = false;
+  box.innerHTML = '<p class="muted">Phone notifications aren’t switched on for Atlas yet. Your notifications are still on the <a href="#/notifications">Notifications</a> page.</p>';
+}
+
 export async function renderAccount(ctx) {
   const { el, state } = ctx;
   el.innerHTML = `
@@ -748,11 +760,9 @@ export async function renderAccount(ctx) {
         <button class="btn btn-primary" type="submit">Update password</button>
       </form>
     </section>
-    <section class="card narrow mb-push" id="mb-push"></section>
+    <p class="narrow muted small">Phone notifications are under <a href="#/notification-settings">Notification settings</a> in the menu.</p>
     ${installCard()}`;
   wireInstallCard(el);
-  // Phone notifications: turn them on for this phone and choose which kinds.
-  renderNotifications(el.querySelector('#mb-push'), { isAdmin: state.isAdmin });
   el.querySelector('#pw').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;
