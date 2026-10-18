@@ -187,7 +187,7 @@ function card(loc, state, data, slice = null) {
         <h2 data-initials="${esc(siteInitials(loc.name))}">${esc(loc.name)}</h2>
         ${state.multiSite && state.can('reports.site_overview') ? `<button class="btn btn-small" data-open="${loc.id}">Open site</button>` : ''}
       </header>
-      ${state.can('sales.view') ? `
+      ${state.can('sales.view') || state.can('dashboard.view') ? `
       <div class="site-money">
         <div>
           <h3>Gross sales</h3>
@@ -581,7 +581,8 @@ function bySite(t, period, prev, state) {
 }
 
 export async function render({ el, state, navigate, stale, rerender, query = {} }) {
-  const seeSales = state.can('sales.view');
+  // The HQ Dashboard shows its own sales and labour figures (the Sales and Trading pages still need "See sales").
+  const seeSales = state.can('sales.view') || state.can('dashboard.view');
   const today = todayISO();
   // One timeframe – a day, a Monday–Sunday week, a month, a year, or dates picked – stepped back and forward with
   // the arrows. A week, month or year still going runs up to today. Remembered in this browser (not custom dates).

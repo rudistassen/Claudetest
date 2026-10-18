@@ -255,9 +255,10 @@ export function registerSafetyRoutes(router, db) {
       // ?location_id= for one site (the manager dashboard), otherwise every site they can see.
       locations: reportLocations(req, site),
       // Sales figures: "See sales", or for one site on the Manager Dashboard, "See sales on the Manager Dashboard".
-      seeSales: can(req.user, 'sales.view') || overview || (can(req.user, 'dashboard.sales') && !!req.query.location_id),
+      // Sales figures: "See sales", the HQ Dashboard itself, or for one site (Manager Dashboard / Site overview) their own permission.
+      seeSales: can(req.user, 'sales.view') || hq || overview || (can(req.user, 'dashboard.sales') && !!req.query.location_id),
       seeOrders: can(req.user, 'orders.manage'),
-      seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage') || overview,
+      seeClockIns: can(req.user, 'sales.view') || can(req.user, 'staff.manage') || hq || overview,
       periodFrom: from,
     }));
   });

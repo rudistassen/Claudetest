@@ -108,7 +108,7 @@ export function registerSalesRoutes(router, db, square) {
   });
 
   // The dashboard's "Updated from Square at 10:02".
-  router.get('/square/freshness', requirePerm('sales.view', 'staff.manage'), (_req, res) => res.json({
+  router.get('/square/freshness', requirePerm('sales.view', 'staff.manage', 'dashboard.view'), (_req, res) => res.json({
     connected: !!square,
     last_sync: db.prepare(`SELECT finished_at FROM square_sync_log WHERE status = 'ok' ORDER BY id DESC LIMIT 1`).get()?.finished_at ?? null,
   }));

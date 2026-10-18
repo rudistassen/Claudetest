@@ -191,3 +191,16 @@ test('site overview: its own permission opens one site’s trading figures, cate
   db.prepare('UPDATE users SET custom_permissions = NULL WHERE email = ?').run('staff1@cafe.local');
   assert.equal((await (await login('staff1@cafe.local'))(`/trading?from=${d}&to=${d}&location_id=${home}`)).status, 403);
 });
+
+test('HQ Dashboard access includes its sales and labour figures – but not the Sales page', async () => {
+  db.prepare('UPDATE users SET custom_permissions = ? WHERE email = ?').run(JSON.stringify(['dashboard.view']), 'staff1@cafe.local');
+  const hq = await login('staff1@cafe.local');
+  const d = today();
+  const card = (await hq('/dashboard')).data.locations[0];
+  assert.ok('gross_today' in card && 'last_week' in card, 'figures on the site cards');
+  assert.equal((await hq(`/trading?from=${d}&to=${d}`)).status, 200, 'every site at once, like the dashboard shows');
+  assert.equal((await hq(`/trading/categories?from=${d}&to=${d}`)).status, 200);
+  assert.equal((await hq(`/trading/hourly-compare?date=${d}`)).status, 200);
+  assert.equal((await hq(`/sales?from=${d}&to=${d}`)).status, 403, 'the Sales page still needs “See sales”');
+  db.prepare('UPDATE users SET custom_permissions = NULL WHERE email = ?').run('staff1@cafe.local');
+});

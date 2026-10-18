@@ -12,7 +12,7 @@ export const PERMISSION_AREAS = [
     ['chat.manage', 'Start group chats and choose who’s in them'],
   ]],
   ['Dashboards', [
-    ['dashboard.view', 'See the HQ Dashboard (every site they can access, side by side; sales and labour figures also need “See sales”)'],
+    ['dashboard.view', 'See the HQ Dashboard – every site they can access side by side, with its sales and labour figures (the Sales, Trading and Rota costs pages still need “See sales”)'],
     ['dashboard.manager', 'See the Manager Dashboard (their site’s day and everything waiting on them; opens on their home site)'],
     ['dashboard.sales', 'See sales and labour figures on the Manager Dashboard (their own site only – without the Sales and Trading pages)'],
   ]],

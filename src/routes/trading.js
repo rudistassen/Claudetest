@@ -25,14 +25,17 @@ export function reportScope(db, req, defaultDays) {
   return { from, to, locations, ids: locations.map((l) => l.id) };
 }
 
+// Who can see sales for all their sites at once: "See sales", the Trading report, or the HQ Dashboard (its own figures).
+const allSites = (user) => can(user, 'sales.view') || can(user, 'reports.trading') || can(user, 'dashboard.view');
+
 export function registerTradingRoutes(router, db, square) {
   /**
    * Gross sales by hour for one day (default today) next to the same weekday the week before, for the
    * dashboard's chart. Hours synced before gross was kept per hour are estimated from net, using that day's
    * gross-to-net ratio. `open` is the part of today's figure still in open (unpaid) orders.
    */
-  router.get('/trading/hourly-compare', requirePerm('sales.view', 'reports.trading', 'reports.site_overview'), (req, res) => {
-    if (!can(req.user, 'sales.view') && !can(req.user, 'reports.trading') && !req.query.location_id) throw forbidden('Choose a site');
+  router.get('/trading/hourly-compare', requirePerm('sales.view', 'reports.trading', 'dashboard.view', 'reports.site_overview'), (req, res) => {
+    if (!allSites(req.user) && !req.query.location_id) throw forbidden('Choose a site');
     const day = date(req.query.date, 'date') ?? today();
     const before = addDays(day, -7);
     const ids = reportLocations(req, req.query.location_id).map((l) => l.id);
@@ -142,9 +145,9 @@ export function registerTradingRoutes(router, db, square) {
    * and net sales, biggest first, with its top items. Categories come from the Items library; items not in one are
    * "Uncategorised".
    */
-  router.get('/trading/categories', requirePerm('sales.view', 'reports.trading', 'dashboard.sales', 'reports.site_overview'), (req, res) => {
-    // Without "See sales", only one site at a time (the Manager Dashboard).
-    if (!can(req.user, 'sales.view') && !can(req.user, 'reports.trading') && !req.query.location_id) throw forbidden('Choose a site');
+  router.get('/trading/categories', requirePerm('sales.view', 'reports.trading', 'dashboard.view', 'dashboard.sales', 'reports.site_overview'), (req, res) => {
+    // Without "See sales" (or the HQ Dashboard), only one site at a time (the Manager Dashboard).
+    if (!allSites(req.user) && !req.query.location_id) throw forbidden('Choose a site');
     const { from, to, ids } = reportScope(db, req, 1);
     const inList = ids.map(() => '?').join(', ') || 'NULL';
     // ?hours=7-11: only items sold between those times (from each item's sales by hour).
@@ -168,9 +171,9 @@ export function registerTradingRoutes(router, db, square) {
     res.json({ from, to, categories, net_sales: round2(categories.reduce((t, c) => t + c.net_sales, 0)) });
   });
 
-  router.get('/trading', requirePerm('sales.view', 'reports.trading', 'dashboard.sales', 'reports.site_overview'), (req, res) => {
+  router.get('/trading', requirePerm('sales.view', 'reports.trading', 'dashboard.view', 'dashboard.sales', 'reports.site_overview'), (req, res) => {
     // Without "See sales", only one site at a time (the Manager Dashboard's figures, or the Site overview report).
-    if (!can(req.user, 'sales.view') && !can(req.user, 'reports.trading') && !req.query.location_id) throw forbidden('Choose a site');
+    if (!allSites(req.user) && !req.query.location_id) throw forbidden('Choose a site');
     const { from, to, locations, ids } = reportScope(db, req, 7);
     const days = [];
     for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
