@@ -179,7 +179,7 @@ function card(loc, state, data, slice = null) {
   // Over a period (week / month / year to date) the money and checks are for the period; who's in stays the day.
   const per = loc.period ?? null;
   const g = slice ? { now: slice.gross, then: slice.grossThen, cost: slice.cost, costThen: slice.costThen, pct: slice.labourPct, rota: slice.basis === 'rota' }
-    : { now: loc.gross_today, then: lw.gross, cost: loc.labour_cost_today, costThen: lw.labour_cost, pct: loc.labour_pct_today, rota: loc.labour_basis === 'rostered' };
+    : { now: loc.gross_today, then: lw?.gross ?? null, cost: loc.labour_cost_today, costThen: lw?.labour_cost ?? null, pct: loc.labour_pct_today, rota: loc.labour_basis === 'rostered' };
   const clocked = loc.clock_ins && data.labour_synced;
   return `
     <section class="card site-card" style="--site: ${siteColour(loc.name, loc.id)}">
