@@ -260,6 +260,8 @@ async function boot() {
   registerBreakRoutes(api, db);
   registerTimecardRoutes(api, db, square);
   registerPaymentLinkRoutes(api, db, square, demoMailer);
+  // Someone answers each chat team, so staff can chat with Payroll, HR and the rest.
+  db.prepare("INSERT OR IGNORE INTO chat_team_members (team_id, user_id) SELECT t.id, u.id FROM chat_teams t, users u WHERE u.email = 'admin@cafe.local'").run();
   // Two sites run together, so the dashboard's sales by site shows a subtotal for them.
   db.prepare("UPDATE locations SET subtotal_group = 'Waterfront' WHERE name IN ('Harbour', 'Riverside')").run();
   // A made-up London week, so the dashboard's forecast has something to show.

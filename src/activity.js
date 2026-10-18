@@ -69,6 +69,7 @@ const leave = (db, leaveId) => {
 const chatName = (db, groupId) => {
   const g = db.prepare('SELECT kind, name FROM chat_groups WHERE id = ?').get(Number(groupId));
   if (!g) return null;
+  if (g.kind === 'team') return `${g.name}: ${db.prepare('SELECT u.name FROM chat_group_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ?').get(Number(groupId))?.name ?? 'someone'}`;
   if (g.kind !== 'direct') return g.name;
   return `Direct message: ${db.prepare('SELECT u.name FROM chat_group_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY u.name').all(Number(groupId)).map((r) => r.name).join(' and ')}`;
 };
@@ -244,6 +245,10 @@ const ACTIONS = [
   ['POST', '/swaps/:id/decline', 'Rota', 'Declined a shift swap'],
   // Chat: what was done, never what was said.
   ['POST', '/chat/direct', 'Chat', 'Started a direct message', (db, p, b) => person(db, b.user_id)],
+  ['POST', '/chat/team', 'Chat', 'Started a chat with a team', (db, p, b) => nameOf(db, 'chat_teams', 'name', b.team_id)],
+  ['POST', '/chat-teams', 'Chat', 'Added a chat team', (db, p, b) => b.name],
+  ['PUT', '/chat-teams/:id', 'Chat', 'Changed a chat team (who answers it)', (db, p, b) => b.name],
+  ['DELETE', '/chat-teams/:id', 'Chat', 'Deleted a chat team', (db, p) => nameOf(db, 'chat_teams', 'name', p.id)],
   ['POST', '/chat/:id/messages', 'Chat', 'Sent a chat message', (db, p) => chatName(db, p.id)],
   ['DELETE', '/chat/:id/messages/:messageId', 'Chat', 'Deleted a chat message', (db, p) => chatName(db, p.id)],
   ['POST', '/chat', 'Chat', 'Started a group chat', (db, p, b) => b.name],

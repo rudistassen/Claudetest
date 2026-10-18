@@ -1,6 +1,8 @@
 // Staff chat: group chats that managers set up, choosing who's in each one – particular people, everyone at chosen
 // sites, or everyone. Members read and reply (with a photo if they like); each person sees only their own groups.
 // Direct messages are private one-to-one chats between two people who share a site; admins can read them.
+// Team chats: anyone can start a private chat with a team (Payroll, HR, support…); the people an admin names for that
+// team (Setup → Chat teams) see every one of its chats and reply as the team.
 import { ACCESS_FIELDS, ACCESS_JOIN, can, PUBLIC_USER_FIELDS, requireAdmin, requirePerm, siteIdsFor, withPermissions } from '../auth.js';
 import { logActivity } from '../activity.js';
 import { tx } from '../db.js';
@@ -38,20 +40,28 @@ export function registerChatRoutes(router, db) {
     const extra = db.prepare('SELECT location_id FROM user_sites WHERE user_id = ?').all(u.id).map((r) => r.location_id);
     return u.location_id ? [u.location_id, ...extra] : extra;
   };
+  // Teams and who answers each.
+  const teamById = (teamId) => db.prepare('SELECT * FROM chat_teams WHERE id = ?').get(teamId);
+  const answers = (teamId, userId) => !!db.prepare('SELECT 1 FROM chat_team_members WHERE team_id = ? AND user_id = ?').get(teamId, userId);
+  const answererIds = (teamId) => db.prepare('SELECT user_id FROM chat_team_members WHERE team_id = ?').all(teamId).map((r) => r.user_id);
   const inGroup = (g, u) => (g.kind === 'direct' ? g.member_ids.includes(u.id) && can(u, 'chat.direct')
-    : g.all_sites || g.member_ids.includes(u.id) || ownSites(u).some((s) => g.site_ids.includes(s)));
+    : g.kind === 'team' ? g.member_ids.includes(u.id) || answers(g.team_id, u.id)
+      : g.all_sites || g.member_ids.includes(u.id) || ownSites(u).some((s) => g.site_ids.includes(s)));
+  // In a team chat: the person asking sees the team's name; the team's people see who's asking.
+  const asking = (g, userId) => g.kind === 'team' && g.member_ids.includes(userId);
   // The sites that count for direct messages: where someone is based or has been added (or, for people with no
   // home site such as head office, every site they can work with).
   const dmSites = (u) => { const own = ownSites(u); return own.length ? own : siteIdsFor(db, u); };
   // A direct message is shown under the other person's name.
   const otherIn = (g, userId) => g.member_ids.find((m) => m !== userId);
   const nameOf = (userId) => db.prepare('SELECT name FROM users WHERE id = ?').get(userId)?.name ?? 'Someone who has left';
-  const titleFor = (g, userId) => (g.kind === 'direct' ? nameOf(otherIn(g, userId)) : g.name);
+  const titleFor = (g, userId) => (g.kind === 'direct' ? nameOf(otherIn(g, userId))
+    : g.kind === 'team' ? (asking(g, userId) ? teamById(g.team_id)?.name ?? g.name : nameOf(g.member_ids[0])) : g.name);
   const members = (g) => chatters().filter((u) => inGroup(g, u));
 
   // The group's creator, admins, and members who can set up chats can change it.
   // (Nobody changes a direct message.)
-  const canEdit = (req, g) => g.kind !== 'direct' && (req.user.role === 'admin' || g.created_by === req.user.id || (can(req.user, 'chat.manage') && inGroup(g, req.user)));
+  const canEdit = (req, g) => g.kind === 'group' && (req.user.role === 'admin' || g.created_by === req.user.id || (can(req.user, 'chat.manage') && inGroup(g, req.user)));
 
   // A group this person is in (or, for managing it, can edit).
   const mine = (req) => {
@@ -65,11 +75,13 @@ export function registerChatRoutes(router, db) {
       AND (user_id IS NULL OR user_id != ?)`).get(groupId, lastRead(groupId, userId)?.last_read_id ?? 0, userId).n;
   const myGroups = (req) => (can(req.user, 'chat.use') ? db.prepare('SELECT id FROM chat_groups').all().map((r) => group(r.id)).filter((g) => inGroup(g, req.user)) : []);
 
-  const MESSAGE_SELECT = `SELECT m.id, m.group_id, m.user_id, m.body, m.created_at, m.deleted_at, u.name AS author,
+  const MESSAGE_SELECT = `SELECT m.id, m.group_id, m.user_id, m.body, m.created_at, m.deleted_at, u.name AS author, t.name AS as_team,
       EXISTS (SELECT 1 FROM chat_photos p WHERE p.message_id = m.id) AS has_photo
-    FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id`;
+    FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_teams t ON t.id = m.as_team`;
+  // A team's reply shows as the team to the person asking ("Payroll"), and as the team and who sent it to the team.
   const shapeMessage = (req, g, m) => ({
     ...m,
+    author: m.as_team ? (asking(g, req.user.id) ? m.as_team : `${m.as_team} · ${m.author ?? 'someone who has left'}`) : m.author,
     body: m.deleted_at ? '' : m.body,
     has_photo: !m.deleted_at && !!m.has_photo,
     mine: m.user_id === req.user.id,
@@ -82,14 +94,86 @@ export function registerChatRoutes(router, db) {
       const last = db.prepare(`${MESSAGE_SELECT} WHERE m.group_id = ? ORDER BY m.id DESC LIMIT 1`).get(g.id);
       return {
         id: g.id, kind: g.kind, name: titleFor(g, req.user.id), description: g.kind === 'direct' ? null : g.description,
-        last: last ? { author: last.author, body: last.deleted_at ? 'Message deleted' : last.body || (last.has_photo ? '📷 Photo' : ''), created_at: last.created_at, mine: last.user_id === req.user.id } : null,
+        team: g.kind === 'team' ? teamById(g.team_id)?.name ?? null : null, answering: g.kind === 'team' && !asking(g, req.user.id),
+        last: last ? { author: last.as_team && asking(g, req.user.id) ? last.as_team : last.author, body: last.deleted_at ? 'Message deleted' : last.body || (last.has_photo ? '📷 Photo' : ''), created_at: last.created_at, mine: last.user_id === req.user.id } : null,
         unread: unreadIn(g.id, req.user.id),
         muted: !!lastRead(g.id, req.user.id)?.muted,
         can_edit: canEdit(req, g),
         sort: last?.created_at ?? g.created_at,
       };
     }).sort((a, b) => (a.sort < b.sort ? 1 : a.sort > b.sort ? -1 : b.id - a.id));
-    res.json({ groups: list, can_create: can(req.user, 'chat.manage'), can_direct: can(req.user, 'chat.direct') });
+    // The teams they can start a chat with: active ones with someone to answer.
+    const teams = can(req.user, 'chat.use') ? db.prepare(`SELECT t.id, t.name, t.description FROM chat_teams t WHERE t.active = 1
+      AND EXISTS (SELECT 1 FROM chat_team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = t.id AND u.active = 1) ORDER BY t.sort_order, t.name`).all() : [];
+    res.json({ groups: list, teams, can_create: can(req.user, 'chat.manage'), can_direct: can(req.user, 'chat.direct') });
+  });
+
+  // --- Team chats ---
+
+  // Opens this person's chat with a team: the one they already have, or a new one. { team_id } → { id }
+  router.post('/chat/team', requirePerm('chat.use'), (req, res) => {
+    const team = teamById(id(req.body.team_id, 'team_id', { required: true }));
+    if (!team || !team.active) throw notFound('Team');
+    const existing = db.prepare(`SELECT g.id FROM chat_groups g JOIN chat_group_members m ON m.group_id = g.id
+      WHERE g.kind = 'team' AND g.team_id = ? AND m.user_id = ?`).get(team.id, req.user.id);
+    if (existing) return res.json({ id: existing.id });
+    const newId = tx(db, () => {
+      const r = db.prepare(`INSERT INTO chat_groups (kind, team_id, name, created_by) VALUES ('team', ?, ?, ?)`).run(team.id, team.name, req.user.id);
+      db.prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)').run(r.lastInsertRowid, req.user.id);
+      return Number(r.lastInsertRowid);
+    });
+    res.status(201).json({ id: newId });
+  });
+
+  // Setup → Chat teams (admins): each team, what it's for and who answers it.
+  const teamList = () => db.prepare('SELECT * FROM chat_teams ORDER BY sort_order, name').all().map((t) => ({
+    ...t, active: !!t.active,
+    answerers: db.prepare(`SELECT u.id, u.name FROM chat_team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = ? ORDER BY u.name`).all(t.id),
+    chats: db.prepare(`SELECT COUNT(*) AS n FROM chat_groups WHERE kind = 'team' AND team_id = ?`).get(t.id).n,
+  }));
+  router.get('/chat-teams', requireAdmin, (req, res) => {
+    res.json({ teams: teamList(), people: chatters().map((u) => ({ id: u.id, name: u.name, location_name: u.location_name })) });
+  });
+  const readTeam = (b) => {
+    const t = { name: str(b.name, 'name', { required: true, max: 60 }), description: str(b.description, 'description', { max: 200 }), active: b.active === undefined ? 1 : bool(b.active),
+      answerer_ids: [...new Set((Array.isArray(b.answerer_ids) ? b.answerer_ids : []).map((x) => id(x, 'answerer_ids')))] };
+    for (const u of t.answerer_ids) if (!db.prepare('SELECT 1 FROM users WHERE id = ?').get(u)) throw notFound('Person');
+    return t;
+  };
+  const saveAnswerers = (teamId, ids) => {
+    db.prepare('DELETE FROM chat_team_members WHERE team_id = ?').run(teamId);
+    for (const u of ids) db.prepare('INSERT INTO chat_team_members (team_id, user_id) VALUES (?, ?)').run(teamId, u);
+  };
+  router.post('/chat-teams', requireAdmin, (req, res) => {
+    const t = readTeam(req.body);
+    const newId = tx(db, () => {
+      const next = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM chat_teams').get().n;
+      const r = db.prepare('INSERT INTO chat_teams (name, description, active, sort_order) VALUES (?, ?, ?, ?)').run(t.name, t.description, t.active, next);
+      saveAnswerers(r.lastInsertRowid, t.answerer_ids);
+      return Number(r.lastInsertRowid);
+    });
+    res.status(201).json({ id: newId });
+  });
+  router.put('/chat-teams/:id', requireAdmin, (req, res) => {
+    const existing = teamById(Number(req.params.id));
+    if (!existing) throw notFound('Team');
+    const t = readTeam(req.body);
+    tx(db, () => {
+      db.prepare('UPDATE chat_teams SET name = ?, description = ?, active = ? WHERE id = ?').run(t.name, t.description, t.active, existing.id);
+      db.prepare(`UPDATE chat_groups SET name = ? WHERE kind = 'team' AND team_id = ?`).run(t.name, existing.id);
+      saveAnswerers(existing.id, t.answerer_ids);
+    });
+    res.json({ id: existing.id });
+  });
+  // Deleting a team deletes its chats too.
+  router.delete('/chat-teams/:id', requireAdmin, (req, res) => {
+    const existing = teamById(Number(req.params.id));
+    if (!existing) throw notFound('Team');
+    tx(db, () => {
+      db.prepare(`DELETE FROM chat_groups WHERE kind = 'team' AND team_id = ?`).run(existing.id);
+      db.prepare('DELETE FROM chat_teams WHERE id = ?').run(existing.id);
+    });
+    res.json({ ok: true });
   });
 
   // Unread messages across all their chats (for the menu badge).
@@ -169,9 +253,12 @@ export function registerChatRoutes(router, db) {
       ? db.prepare(`${MESSAGE_SELECT} WHERE m.group_id = ? AND m.id > ? ORDER BY m.id LIMIT 500`).all(g.id, after)
       : db.prepare(`${MESSAGE_SELECT} WHERE m.group_id = ? ${before ? 'AND m.id < ?' : ''} ORDER BY m.id DESC LIMIT ${PAGE}`).all(...(before ? [g.id, before] : [g.id])).reverse();
     const people = members(g);
+    const team = g.kind === 'team' ? teamById(g.team_id) : null;
     res.json({
-      group: { id: g.id, kind: g.kind, name: titleFor(g, req.user.id), description: g.kind === 'direct' ? null : g.description, all_sites: !!g.all_sites, site_ids: g.site_ids, member_ids: g.member_ids, can_edit: canEdit(req, g), muted: !!lastRead(g.id, req.user.id)?.muted },
-      members: people.map((u) => ({ id: u.id, name: u.name, location_name: u.location_name })),
+      group: { id: g.id, kind: g.kind, name: titleFor(g, req.user.id), description: g.kind === 'direct' ? null : team ? team.description : g.description,
+        team: team?.name ?? null, answering: !!team && !asking(g, req.user.id), all_sites: !!g.all_sites, site_ids: g.site_ids, member_ids: g.member_ids, can_edit: canEdit(req, g), muted: !!lastRead(g.id, req.user.id)?.muted },
+      // The person asking a team doesn't see who's on it – just the team.
+      members: (team && asking(g, req.user.id) ? people.filter((u) => u.id === req.user.id) : people).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name, answers: !!team && u.id !== g.member_ids[0] })),
       messages: rows.map((m) => shapeMessage(req, g, m)),
       more: !after && rows.length === PAGE,
       // Messages edited away since (deleted ones) are re-sent with each poll of the latest ones.
@@ -211,8 +298,10 @@ export function registerChatRoutes(router, db) {
       photo = { type, bytes };
     }
     if (!body.trim() && !photo) throw badRequest('Write a message');
+    // In a team chat, the team's people reply as the team.
+    const asTeam = g.kind === 'team' && !asking(g, req.user.id) ? g.team_id : null;
     const msgId = tx(db, () => {
-      const r = db.prepare('INSERT INTO chat_messages (group_id, user_id, body) VALUES (?, ?, ?)').run(g.id, req.user.id, body.trim());
+      const r = db.prepare('INSERT INTO chat_messages (group_id, user_id, body, as_team) VALUES (?, ?, ?, ?)').run(g.id, req.user.id, body.trim(), asTeam);
       if (photo) db.prepare('INSERT INTO chat_photos (message_id, file_type, data) VALUES (?, ?, ?)').run(r.lastInsertRowid, photo.type, photo.bytes);
       db.prepare(`INSERT INTO chat_reads (group_id, user_id, last_read_id) VALUES (?, ?, ?)
         ON CONFLICT (group_id, user_id) DO UPDATE SET last_read_id = MAX(last_read_id, excluded.last_read_id)`).run(g.id, req.user.id, r.lastInsertRowid);
@@ -220,8 +309,9 @@ export function registerChatRoutes(router, db) {
     });
     // Everyone else in the chat who hasn't muted it gets a phone notification (not kept on the Notifications page).
     const muted = new Set(db.prepare('SELECT user_id FROM chat_reads WHERE group_id = ? AND muted = 1').all(g.id).map((r) => r.user_id));
+    const teamName = g.kind === 'team' ? teamById(g.team_id)?.name ?? g.name : null;
     notify(db, members(g).map((u) => u.id).filter((u) => u !== req.user.id && !muted.has(u)), 'chat', {
-      title: g.kind === 'direct' ? req.user.name : `${req.user.name} · ${g.name}`,
+      title: g.kind === 'direct' ? req.user.name : g.kind === 'team' ? (asTeam ? teamName : `${req.user.name} · to ${teamName}`) : `${req.user.name} · ${g.name}`,
       body: body.trim() ? body.trim().replace(/\s+/g, ' ').slice(0, 140) : '📷 Photo',
       url: `/#/chat/${g.id}`,
       tag: `chat-${g.id}`,

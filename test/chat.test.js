@@ -216,3 +216,49 @@ test('direct messages: one-to-one with people at your own sites, private to the 
   assert.equal((await staff12('/chat/direct/people')).status, 403);
   assert.ok(!(await staff1('/chat/direct/people')).body.some((u) => u.id === userId('staff1-2@cafe.local')));
 });
+
+test('team chats: an admin chooses who answers Payroll; staff chat privately with it; answers come back as Payroll', async () => {
+  const admin = await login('admin@cafe.local');
+  const setup = (await admin('/chat-teams')).body;
+  assert.deepEqual(setup.teams.map((t) => t.name), ['Payroll', 'Ask Ange', 'Atlas Support', 'HR'], 'the four teams to start with');
+  const payroll = setup.teams.find((t) => t.name === 'Payroll');
+  const staff = await login('staff1@cafe.local');
+  assert.ok(!(await staff('/chat')).body.teams.some((t) => t.id === payroll.id), 'not shown until someone answers it');
+  assert.equal((await staff('/chat-teams')).status, 403, 'only admins set teams up');
+
+  const answerer = userId('manager1@cafe.local');
+  db.prepare(`INSERT OR IGNORE INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, 'https://push.example/m1', 'k', 'a')`).run(answerer);
+  assert.equal((await admin(`/chat-teams/${payroll.id}`, { method: 'PUT', body: { name: 'Payroll', description: 'Pay and payslips', answerer_ids: [answerer] } })).status, 200);
+  assert.ok((await staff('/chat')).body.teams.some((t) => t.name === 'Payroll'));
+
+  // Staff start (or reopen) their own chat with Payroll.
+  const chat = (await staff('/chat/team', { method: 'POST', body: { team_id: payroll.id } })).body.id;
+  assert.equal((await staff('/chat/team', { method: 'POST', body: { team_id: payroll.id } })).body.id, chat, 'the same chat again');
+  pushed.length = 0;
+  await staff(`/chat/${chat}/messages`, { method: 'POST', body: { body: 'When is payday?' } });
+  assert.ok(pushed.some((p) => /· to Payroll/.test(p.title)), 'the team hears about it');
+
+  // The answerer sees it under the person's name and replies as Payroll.
+  const mgr = await login('manager1@cafe.local');
+  const row = (await mgr('/chat')).body.groups.find((g) => g.id === chat);
+  assert.equal(row.team, 'Payroll');
+  assert.ok(row.answering);
+  pushed.length = 0;
+  const reply = (await mgr(`/chat/${chat}/messages`, { method: 'POST', body: { body: 'The last Friday of the month.' } })).body;
+  assert.equal(reply.as_team, 'Payroll');
+  assert.match(reply.author, /^Payroll · /, 'the team sees who replied');
+  assert.ok(pushed.some((p) => p.title === 'Payroll'));
+
+  // The person asking sees the reply as Payroll, and not who's on the team.
+  const seen = (await staff(`/chat/${chat}`)).body;
+  assert.equal(seen.group.name, 'Payroll');
+  assert.equal(seen.messages.at(-1).author, 'Payroll');
+  assert.deepEqual(seen.members.map((m) => m.id), [userId('staff1@cafe.local')]);
+
+  // Someone else (not asking, not on the team) can't open it.
+  assert.equal((await (await login('staff1-2@cafe.local'))(`/chat/${chat}`)).status, 404);
+
+  // Taking someone off the team takes the chat away from them.
+  await admin(`/chat-teams/${payroll.id}`, { method: 'PUT', body: { name: 'Payroll', answerer_ids: [] } });
+  assert.equal((await mgr(`/chat/${chat}`)).status, 404);
+});

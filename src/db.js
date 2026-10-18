@@ -682,6 +682,20 @@ CREATE TABLE IF NOT EXISTS chat_photos (
   file_type TEXT NOT NULL,
   data BLOB NOT NULL
 );
+-- Chat teams (Setup → Chat teams): Payroll, HR, support… Anyone can start a private chat with a team; the people
+-- named here answer it, replying as the team.
+CREATE TABLE IF NOT EXISTS chat_teams (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS chat_team_members (
+  team_id INTEGER NOT NULL REFERENCES chat_teams(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (team_id, user_id)
+);
 -- How far each person has read in each chat, and whether they've muted its phone notifications.
 CREATE TABLE IF NOT EXISTS chat_reads (
   group_id INTEGER NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
@@ -1463,6 +1477,10 @@ const MIGRATIONS = [
   }],
   // Chats are group chats or direct (one-to-one) messages.
   ['chat_groups', 'kind', `ALTER TABLE chat_groups ADD COLUMN kind TEXT NOT NULL DEFAULT 'group'`],
+  // A chat with a team ('team' kind): which team. Its one member is the person asking; the team's people answer.
+  ['chat_groups', 'team_id', 'ALTER TABLE chat_groups ADD COLUMN team_id INTEGER REFERENCES chat_teams(id) ON DELETE CASCADE'],
+  // A reply sent on behalf of a team (shown as the team, e.g. "Payroll").
+  ['chat_messages', 'as_team', 'ALTER TABLE chat_messages ADD COLUMN as_team INTEGER REFERENCES chat_teams(id) ON DELETE SET NULL'],
   // When the person confirmed they've seen the shift as published (cleared when a change to it is published).
   ['shifts', 'ack_at', 'ALTER TABLE shifts ADD COLUMN ack_at TEXT'],
   // Whether an admin has let Atlas read bank accounts in Xero (Reporting → Bank).
@@ -1821,6 +1839,15 @@ export function openDb(file = ':memory:') {
       }
     }
     db.exec('PRAGMA user_version = 24');
+  }
+  if (version < 25) {
+    // Chat teams arrived, starting with these (nobody answers them until they're set up under Setup → Chat teams).
+    if (!db.prepare('SELECT 1 FROM chat_teams LIMIT 1').get()) {
+      const add = db.prepare('INSERT INTO chat_teams (name, description, sort_order) VALUES (?, ?, ?)');
+      [['Payroll', 'Pay, payslips, hours and tax'], ['Ask Ange', 'Ask Ange anything'], ['Atlas Support', 'Help with using Atlas'], ['HR', 'Contracts, holiday, policies and anything personal']]
+        .forEach(([n, d], i) => add.run(n, d, i));
+    }
+    db.exec('PRAGMA user_version = 25');
   }
   ensureDefaultSets(db);
   return db;

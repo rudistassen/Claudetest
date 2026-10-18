@@ -37,10 +37,10 @@ export async function renderList({ el, stale }) {
   const data = await api('/chat');
   if (stale()) return;
   const row = (g) => `<a class="chat-row ${g.unread ? 'is-unread' : ''}" href="#/chat/${g.id}">
-      <span class="chat-avatar ${g.kind === 'direct' ? 'is-person' : ''}" aria-hidden="true">${esc(initials(g.name))}</span>
+      <span class="chat-avatar ${g.kind === 'direct' || g.answering ? 'is-person' : g.kind === 'team' ? 'is-team' : ''}" aria-hidden="true">${esc(initials(g.name))}</span>
       <span class="chat-row-text">
-        <span class="chat-row-top"><strong>${esc(g.name)}</strong>${g.last ? `<small>${esc(when(g.last.created_at))}</small>` : ''}</span>
-        <span class="chat-row-last">${g.last ? `${g.last.mine ? 'You: ' : g.kind === 'direct' ? '' : `${esc(g.last.author ?? 'Someone')}: `}${esc(g.last.body)}` : `<em>${esc(g.description || 'No messages yet – say hello')}</em>`}</span>
+        <span class="chat-row-top"><strong>${esc(g.name)}${g.answering ? ` <span class="chat-team-tag">to ${esc(g.team)}</span>` : ''}</strong>${g.last ? `<small>${esc(when(g.last.created_at))}</small>` : ''}</span>
+        <span class="chat-row-last">${g.last ? `${g.last.mine ? 'You: ' : g.kind === 'direct' || (g.kind === 'team' && !g.answering) ? '' : `${esc(g.last.author ?? 'Someone')}: `}${esc(g.last.body)}` : `<em>${esc(g.description || 'No messages yet – say hello')}</em>`}</span>
       </span>
       ${g.muted ? '<span class="chat-muted" title="Notifications muted">🔕</span>' : ''}
       ${g.unread ? `<span class="nav-badge">${g.unread}</span>` : ''}
@@ -48,11 +48,18 @@ export async function renderList({ el, stale }) {
   el.innerHTML = `<div class="chat-page">
     <div class="page-head"><h1>Chat</h1>
       <div class="actions">${data.can_direct ? `<button type="button" class="btn ${data.can_create ? '' : 'btn-primary'}" id="chat-direct">✉ Message someone</button>` : ''}${data.can_create ? '<button type="button" class="btn btn-primary" id="chat-new">+ New group chat</button>' : ''}</div></div>
+    ${data.teams?.length ? `<section class="chat-teams"><h2>Chat with</h2><div class="chat-team-picks">${data.teams.map((t) => `<button type="button" class="chat-team-pick" data-team="${t.id}" title="${esc(t.description ?? '')}">
+        <span class="chat-avatar small is-team" aria-hidden="true">${esc(initials(t.name))}</span><span><strong>${esc(t.name)}</strong>${t.description ? `<small>${esc(t.description)}</small>` : ''}</span></button>`).join('')}</div>
+      <p class="muted small">A private chat – only you and that team see it.</p></section>` : ''}
     ${data.groups.length ? `<div class="card chat-list">${data.groups.map(row).join('')}</div>`
       : `<div class="card empty">${data.can_create ? 'No chats yet. Start a group with <strong>+ New group chat</strong> and choose who’s in it.' : 'You’re not in any chats yet. When a manager adds you to a group chat, it shows up here.'}${data.can_direct ? ' To talk to one person, use <strong>✉ Message someone</strong>.' : ''}</div>`}
   </div>`;
   el.querySelector('#chat-new')?.addEventListener('click', () => editChat(null));
   el.querySelector('#chat-direct')?.addEventListener('click', startDirect);
+  el.querySelectorAll('[data-team]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { location.hash = `#/chat/${(await api('/chat/team', { method: 'POST', body: { team_id: Number(b.dataset.team) } })).id}`; } catch (err) { showError(err); b.disabled = false; }
+  }));
 }
 
 // --- One chat ---
@@ -63,6 +70,7 @@ export async function renderChat({ el, params, stale, navigate }) {
   if (stale()) return;
   let { group } = data;
   const direct = group.kind === 'direct';
+  const team = group.kind === 'team';
   const messages = new Map(data.messages.map((m) => [m.id, m]));
   let more = data.more;
   const lastId = () => Math.max(0, ...messages.keys());
@@ -71,7 +79,7 @@ export async function renderChat({ el, params, stale, navigate }) {
     <div class="chat-head">
       <a class="btn btn-small" href="#/chat" aria-label="All chats">‹ Chats</a>
       <button type="button" class="chat-title" id="chat-members" title="Who’s in this chat">
-        <strong>${esc(group.name)}</strong><small>${direct ? 'Direct message · admins can read direct messages' : `${data.members.length} ${data.members.length === 1 ? 'person' : 'people'}${group.description ? ` · ${esc(group.description)}` : ''}`}</small>
+        <strong>${esc(group.name)}</strong><small>${team ? (group.answering ? `To ${esc(group.team)} · you reply as ${esc(group.team)}` : `Private chat with ${esc(group.team)}${group.description ? ` · ${esc(group.description)}` : ''}`) : direct ? 'Direct message · admins can read direct messages' : `${data.members.length} ${data.members.length === 1 ? 'person' : 'people'}${group.description ? ` · ${esc(group.description)}` : ''}`}</small>
       </button>
       <button type="button" class="btn btn-small" id="chat-mute" title="Phone notifications for this chat">${group.muted ? '🔕 Unmute' : '🔔 Mute'}</button>
       ${group.can_edit ? '<button type="button" class="btn btn-small" id="chat-edit">Edit</button>' : ''}
@@ -81,7 +89,7 @@ export async function renderChat({ el, params, stale, navigate }) {
       <label class="chat-photo-btn" title="Add a photo"><input type="file" accept="image/*" id="chat-photo" hidden><span aria-hidden="true">📷</span><span class="sr-only">Add a photo</span></label>
       <div class="chat-input">
         <div class="chat-photo-preview" id="chat-photo-preview" hidden></div>
-        <textarea name="body" rows="1" maxlength="4000" placeholder="Message ${esc(group.name)}" aria-label="Message"></textarea>
+        <textarea name="body" rows="1" maxlength="4000" placeholder="${team && group.answering ? `Reply as ${esc(group.team)}` : `Message ${esc(group.name)}`}" aria-label="Message"></textarea>
       </div>
       <button type="submit" class="btn btn-primary chat-send">Send</button>
     </form>
@@ -97,13 +105,13 @@ export async function renderChat({ el, params, stale, navigate }) {
   const bubble = (m, prev) => {
     const day = dayOf(m.created_at);
     const newDay = !prev || dayOf(prev.created_at) !== day;
-    const sameAuthor = !newDay && prev && prev.user_id === m.user_id && london(m.created_at) - london(prev.created_at) < 5 * 60000;
+    const sameAuthor = !newDay && prev && prev.user_id === m.user_id && prev.author === m.author && london(m.created_at) - london(prev.created_at) < 5 * 60000;
     return `${newDay ? `<div class="chat-day"><span>${esc(dayLabel(day))}</span></div>` : ''}
       <div class="chat-msg ${m.mine ? 'is-mine' : ''} ${sameAuthor ? 'is-cont' : ''} ${m.deleted_at ? 'is-deleted' : ''}" data-id="${m.id}">
         ${!m.mine && !sameAuthor && !direct ? `<span class="chat-author">${esc(m.author ?? 'Someone who has left')}</span>` : ''}
         <div class="chat-bubble">
           ${m.deleted_at ? '<em>Message deleted</em>' : `${m.has_photo ? `<button type="button" class="chat-img" data-photo="${m.id}" aria-label="Open photo"><img ${photoSrc(groupId, m.id)} alt="Photo" loading="lazy"></button>` : ''}${m.body ? `<p>${linkify(m.body)}</p>` : ''}`}
-          <span class="chat-meta">${esc(timeOf(m.created_at))}${m.can_delete ? ` · <button type="button" class="link-btn" data-delete="${m.id}">Delete</button>` : ''}</span>
+          <span class="chat-meta">${m.mine && m.as_team ? `as ${esc(m.as_team)} · ` : ''}${esc(timeOf(m.created_at))}${m.can_delete ? ` · <button type="button" class="link-btn" data-delete="${m.id}">Delete</button>` : ''}</span>
         </div>
       </div>`;
   };
@@ -221,7 +229,12 @@ export async function renderChat({ el, params, stale, navigate }) {
     }
   });
 
-  el.querySelector('#chat-members').addEventListener('click', () => openModal({
+  el.querySelector('#chat-members').addEventListener('click', () => openModal(team ? {
+    title: group.answering ? `${group.name} · to ${group.team}` : `Chat with ${group.team}`,
+    body: group.answering ? `<p class="muted small">${esc(group.name)} started this chat with ${esc(group.team)}. Everyone who answers for ${esc(group.team)} sees it, and your replies show as ${esc(group.team)}.</p>
+      <p><strong>Answering for ${esc(group.team)}:</strong></p><ul class="chat-people">${data.members.filter((u) => u.answers).map((u) => `<li><span class="chat-avatar small" aria-hidden="true">${esc(initials(u.name))}</span>${esc(u.name)}</li>`).join('')}</ul>`
+      : `<p>Only you and the ${esc(group.team)} team can see this chat. Their replies show as ${esc(group.team)}.</p>`,
+  } : {
     title: direct ? `Direct message with ${group.name}` : `Who’s in ${group.name}`,
     body: `${direct ? '<p class="muted small">Only the two of you can see these messages – and Atlas admins, who can read direct messages if they need to.</p>' : ''}${group.all_sites ? '<p class="muted small">Everyone at every site is in this chat.</p>' : group.site_ids.length ? '<p class="muted small">Everyone at the chat’s sites is in it, as well as anyone added by name.</p>' : ''}
       <ul class="chat-people">${data.members.map((u) => `<li><span class="chat-avatar small" aria-hidden="true">${esc(initials(u.name))}</span>${esc(u.name)}${u.location_name ? ` <small class="muted">${esc(u.location_name)}</small>` : ''}</li>`).join('')}</ul>`,
@@ -380,4 +393,56 @@ export async function renderDirectAdminView({ el, params, stale }) {
     const img = e.target.closest('.chat-img');
     if (img) openModal({ title: 'Photo', wide: true, body: `<img class="news-full" src="${img.querySelector('img').src}" alt="">` });
   });
+}
+
+// --- Setup → Chat teams (admins): the teams people can chat with, and who answers for each ---
+
+export async function renderTeams({ el, stale, rerender }) {
+  const data = await api('/chat-teams');
+  if (stale()) return;
+  el.innerHTML = `<div class="chat-page">
+    <div class="page-head"><h1>Chat teams</h1><div class="actions"><button type="button" class="btn btn-primary" id="team-add">+ Add team</button></div></div>
+    <p class="muted">Anyone can start a private chat with these teams from <a href="#/chat">Chat</a>. The people you choose for a team see every chat with it and reply as the team. A team only shows in Chat once someone answers for it.</p>
+    <div class="card chat-list">${data.teams.map((t) => `<button type="button" class="chat-row chat-team-row" data-edit="${t.id}">
+        <span class="chat-avatar is-team" aria-hidden="true">${esc(initials(t.name))}</span>
+        <span class="chat-row-text">
+          <span class="chat-row-top"><strong>${esc(t.name)}${t.active ? '' : ' <span class="badge badge-cancelled">Hidden</span>'}</strong><small>${t.chats} chat${t.chats === 1 ? '' : 's'}</small></span>
+          <span class="chat-row-last">${t.answerers.length ? `Answered by ${t.answerers.map((a) => esc(a.name)).join(', ')}` : '<span class="tone-warn">Nobody answers yet – not shown in Chat</span>'}</span>
+        </span></button>`).join('') || '<p class="empty">No teams yet.</p>'}</div>
+  </div>`;
+  const edit = (t) => {
+    const picked = new Set((t?.answerers ?? []).map((a) => a.id));
+    const { form } = openModal({
+      title: t ? `Edit ${t.name}` : 'Add a chat team',
+      wide: true,
+      submitLabel: 'Save',
+      body: `${field('Name', input('name', t?.name ?? '', 'required maxlength="60" placeholder="e.g. Payroll"'))}
+        ${field('What it’s for (optional)', input('description', t?.description ?? '', 'maxlength="200" placeholder="Shown under the name in Chat"'))}
+        <fieldset class="chat-who"><legend>Who answers for this team</legend>
+          <p class="muted small">They see every chat with this team and reply as “${esc(t?.name ?? 'the team')}”.</p>
+          <input type="search" class="chat-people-search" placeholder="Search people" aria-label="Search people">
+          <div class="chat-people-picks">${data.people.map((u) => `<label class="check" data-name="${esc(`${u.name} ${u.location_name ?? ''}`.toLowerCase())}"><input type="checkbox" data-person="${u.id}" ${picked.has(u.id) ? 'checked' : ''}> <span>${esc(u.name)} <small class="muted">${esc(u.location_name ?? '')}</small></span></label>`).join('')}</div>
+        </fieldset>
+        <label class="check"><input type="checkbox" name="active" ${!t || t.active ? 'checked' : ''}> <span>Show this team in Chat</span></label>`,
+      danger: t ? 'Delete team' : null,
+      onDanger: async () => {
+        if (!(await confirmDialog(`Delete ${t.name} and its ${t.chats} chat${t.chats === 1 ? '' : 's'} for everyone? This can’t be undone. To stop new chats but keep the old ones, untick “Show this team in Chat” instead.`, { confirmLabel: 'Delete team', title: 'Delete team' }))) return;
+        await api(`/chat-teams/${t.id}`, { method: 'DELETE' });
+        toast('Team deleted');
+        rerender();
+      },
+      onSubmit: async (v, f) => {
+        const body = { name: v.name, description: v.description, active: !!v.active, answerer_ids: [...f.querySelectorAll('[data-person]:checked')].map((c) => Number(c.dataset.person)) };
+        await api(t ? `/chat-teams/${t.id}` : '/chat-teams', { method: t ? 'PUT' : 'POST', body });
+        toast('Team saved');
+        rerender();
+      },
+    });
+    form.querySelector('.chat-people-search').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      form.querySelectorAll('.chat-people-picks [data-name]').forEach((l) => { l.hidden = !!q && !l.dataset.name.includes(q); });
+    });
+  };
+  el.querySelector('#team-add').addEventListener('click', () => edit(null));
+  el.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => edit(data.teams.find((t) => t.id === Number(b.dataset.edit)))));
 }

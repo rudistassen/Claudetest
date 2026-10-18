@@ -3356,3 +3356,19 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .so-staff td.num, .so-staff th.num { font-variant-numeric: tabular-nums; }
 .field > label { font-size: 0.85rem; font-weight: 600; }
 .staff-pick select[hidden] { display: none !important; }
+
+/* Chat: teams (Payroll, HR…) to start a private chat with */
+.chat-teams { margin: 0 0 1rem; }
+.chat-teams h2 { font-size: 1rem; margin: 0 0 0.4rem; }
+.chat-team-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.5rem; }
+.chat-team-pick { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.chat-team-pick:hover { background: var(--surface-2); }
+.chat-team-pick small { display: block; color: var(--muted); font-size: 0.78rem; line-height: 1.25; }
+.chat-avatar.is-team { background: var(--warn-soft); color: var(--warn); }
+.chat-team-tag { font-weight: 500; font-size: 0.75rem; color: var(--muted); }
+.chat-team-row { width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+@media (max-width: 600px) {
+  .chat-team-picks { grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .chat-team-pick { padding: 0.45rem 0.55rem; gap: 0.45rem; }
+  .chat-team-pick small { display: none; }
+}
