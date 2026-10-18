@@ -3369,6 +3369,6 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .chat-team-row { width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 @media (max-width: 600px) {
   .chat-team-picks { grid-template-columns: 1fr 1fr; gap: 0.4rem; }
-  .chat-team-pick { padding: 0.45rem 0.55rem; gap: 0.45rem; }
-  .chat-team-pick small { display: none; }
+  .chat-team-pick { padding: 0.45rem 0.55rem; gap: 0.45rem; align-items: flex-start; }
+  .chat-team-pick small { font-size: 0.72rem; }
 }
