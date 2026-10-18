@@ -3372,3 +3372,5 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
   .chat-team-pick { padding: 0.45rem 0.55rem; gap: 0.45rem; align-items: flex-start; }
   .chat-team-pick small { font-size: 0.72rem; }
 }
+.nav-hub .nav-badge { margin-left: auto; margin-right: 0.35rem; }
+.nav-hub .nav-badge:not([hidden]) + .nav-caret { margin-left: 0; }

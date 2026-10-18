@@ -279,6 +279,7 @@ function navGroups() {
 }
 
 // Each menu section's colour.
+const SOLO_TONES = { mybrew: 'reporting', chat: 'trail' };
 const NAV_TONES = { Rota: 'team', 'Checklists & Tasks': 'menu', Compliance: 'trail', Events: 'events', People: 'people', Menu: 'menu', 'Stock and Ordering': 'stock', Reporting: 'reporting' };
 
 // A little red bell beside Rota in the menus while requests are waiting.
@@ -579,7 +580,10 @@ function renderShell() {
       <nav class="sidebar" aria-label="Menu">
         ${groups.map(([heading, items]) => {
           const links = items.map(link).join('');
-          if (!heading) return links;
+          // My Atlas and Chat: tiles like the menu sections below them, each opening its page.
+          if (!heading) {
+            return items.map(([p, label]) => `<div class="nav-group" data-tone="${SOLO_TONES[p] ?? ''}"><a href="#/${p}" class="nav-hub ${active === p ? 'active' : ''}"><span class="nav-icon">▦</span><span class="nav-label">${esc(label)}</span>${p === 'mybrew' ? '<span class="nav-badge" data-news-badge hidden></span>' : ''}${p === 'chat' ? '<span class="nav-badge" data-chat-badge hidden></span>' : ''}<span class="nav-caret" aria-hidden="true">›</span></a></div>`).join('');
+          }
           if (HUBS[heading]) {
             const here = items.some(([p]) => p === active) || path === `hub/${HUBS[heading]}`;
             return `<div class="nav-group" data-tone="${NAV_TONES[heading] ?? ''}"><a href="#/hub/${HUBS[heading]}" class="nav-hub ${here ? 'active' : ''}"><span class="nav-icon">▦</span><span class="nav-label">${esc(TOP_LABELS[heading] ?? heading)}</span>${heading === 'Rota' ? BELL : ''}<span class="nav-caret" aria-hidden="true">›</span></a></div>`;
