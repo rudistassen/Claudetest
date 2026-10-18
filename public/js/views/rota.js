@@ -757,9 +757,11 @@ export async function render(ctx) {
           <span class="sick-line-actions">${shift.state !== 'removed' && !shift.sick ? '<button type="button" class="btn btn-small" id="swap-btn" title="Swap this shift with someone else’s">⇄ Swap with…</button>' : ''}${data.can_publish && !shift.sick && shift.state !== 'removed' ? '<button type="button" class="btn btn-small" id="open-btn" title="Take it off their rota now and offer it to everyone">Drop to open</button>' : ''}
           <button type="button" class="btn btn-small" id="sick-btn">${shift.sick ? 'Change' : 'Mark as sick'}</button></span></p>` : ''}
         <div class="row">
-          <label class="field"><span>Staff member</span>
-            <input type="search" class="staff-search" placeholder="Search names" aria-label="Search staff names" autocomplete="off">
-            ${select('user_id', who, defaults.open ? 'open' : s.user_id, 'required')}</label>
+          <div class="field staff-pick"><label for="staff-search">Staff member</label>
+            <input type="text" id="staff-search" class="staff-search" placeholder="Type a name…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="staff-results"
+              value="${esc(who.find(([id]) => String(id) === String(defaults.open ? 'open' : s.user_id))?.[1] ?? '')}">
+            <ul class="staff-results" id="staff-results" role="listbox" hidden></ul>
+            ${select('user_id', who, defaults.open ? 'open' : s.user_id, 'required hidden tabindex="-1" aria-hidden="true"')}</div>
           ${field('Site', select('location_id', siteOptions, site, `required ${siteOptions.length > 1 ? '' : 'disabled'}`))}
         </div>
         ${field('Date', input('date', s.date, 'type="date" required'))}
@@ -857,16 +859,44 @@ export async function render(ctx) {
     };
     ['user_id', 'date', 'start_time', 'end_time'].forEach((n) => form[n].addEventListener('change', check));
     check();
-    // Typing in the search box narrows the staff list to matching names (and picks the first if the chosen one drops out).
-    form.querySelector('.staff-search').addEventListener('input', (e) => {
-      const q = e.target.value.trim().toLowerCase();
-      const was = form.user_id.value;
-      const shown = who.filter(([id, name]) => !q || id === 'open' || name.toLowerCase().includes(q));
-      form.user_id.innerHTML = shown.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('') || '<option value="">Nobody matches</option>';
-      const keep = shown.some(([id]) => String(id) === was);
-      form.user_id.value = keep ? was : String(shown.find(([id]) => id !== 'open')?.[0] ?? shown[0]?.[0] ?? '');
-      if (!keep) form.user_id.dispatchEvent(new Event('change'));
+    // The staff member: type and pick from the names that match (first names starting with what's typed come first).
+    const search = form.querySelector('.staff-search');
+    const results = form.querySelector('.staff-results');
+    const nameOf = (id) => who.find(([v]) => String(v) === String(id))?.[1] ?? '';
+    let matches = [];
+    let active = 0;
+    const show = (open) => { results.hidden = !open; search.setAttribute('aria-expanded', String(open)); };
+    const draw = () => {
+      const q = search.value.trim().toLowerCase();
+      const starts = (n) => n.toLowerCase().split(/[\s(–-]+/).some((w) => w.startsWith(q));
+      matches = !q ? who : [...who.filter(([, n]) => starts(n)), ...who.filter(([, n]) => !starts(n) && n.toLowerCase().includes(q))];
+      active = Math.min(active, Math.max(0, matches.length - 1));
+      results.innerHTML = matches.length ? matches.map(([id, n], i) => `<li role="option" data-pick="${esc(id)}" class="${i === active ? 'is-active' : ''} ${String(id) === form.user_id.value ? 'is-picked' : ''}" aria-selected="${i === active}">${esc(n)}</li>`).join('')
+        : '<li class="muted staff-none">Nobody matches</li>';
+      show(true);
+    };
+    const pick = (id) => {
+      form.user_id.value = String(id);
+      search.value = nameOf(id);
+      show(false);
+      form.user_id.dispatchEvent(new Event('change'));
+    };
+    search.value = nameOf(form.user_id.value);
+    // The window puts the cursor here when it opens: the first key typed replaces the name shown, rather than adding to it.
+    let fresh = true;
+    search.addEventListener('focus', () => { fresh = true; });
+    search.addEventListener('beforeinput', () => { if (fresh && search.value === nameOf(form.user_id.value)) search.value = ''; fresh = false; });
+    search.addEventListener('click', () => { if (results.hidden) { search.select(); active = 0; matches = who; draw(); } });
+    search.addEventListener('input', () => { active = 0; draw(); });
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (results.hidden) draw(); active = (active + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % Math.max(1, matches.length); draw(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (matches[active]) pick(matches[active][0]); }
+      else if (e.key === 'Escape' && !results.hidden) { e.preventDefault(); e.stopPropagation(); show(false); }
     });
+    // pointerdown (not click) so the choice lands before the box loses focus.
+    results.addEventListener('pointerdown', (e) => { const li = e.target.closest('[data-pick]'); if (li) { e.preventDefault(); pick(li.dataset.pick); } });
+    // Leaving the box puts back the chosen name, so it never shows a half-typed one.
+    search.addEventListener('blur', () => setTimeout(() => { if (!search.isConnected) return; show(false); search.value = nameOf(form.user_id.value); }, 150));
     // Quick times: the site's most used shift times over the last 4 weeks; clicking one fills in the times and break.
     const presets = form.querySelector('.time-presets');
     const showPresets = async () => {
