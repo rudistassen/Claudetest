@@ -1,4 +1,4 @@
-import { assertLocation, can, reportLocations, requirePerm, resolveLocation } from '../auth.js';
+import { assertLocation, can, reportLocations, requireAdmin, requirePerm, resolveLocation } from '../auth.js';
 import { PUBLISH_COLUMNS, publishShifts, tx, UNPUBLISHED } from '../db.js';
 import { availabilityOn } from '../availability.js';
 import { leaveFor, onHoliday } from './leave.js';
@@ -841,6 +841,25 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     emailRotaChanges(db, mailer, [...new Set([s.user_id, s.pub_user_id].filter(Boolean))], weekStart(s.date), { demo })
       .catch((err) => console.error(`Rota emails: ${err.message}`));
     res.json({ published: 1, removed: !!s.removed });
+  });
+
+  // Admins: delete the week's shifts that have never been published (new ones nobody has seen). Published shifts – and
+  // changes to them – stay. Undo puts them back.
+  router.post('/rota/delete-unpublished', requireAdmin, (req, res) => {
+    const ids = rotaSites(req, req.body.location_id);
+    const ws = weekStart(date(req.body.week, 'week', { required: true }));
+    const rows = db.prepare(`SELECT * FROM shifts WHERE location_id IN (${ids.map(() => '?').join(', ')}) AND date BETWEEN ? AND ? AND pub_date IS NULL`)
+      .all(...ids, ws, addDays(ws, 6)).map((r) => ({ ...r }));
+    if (!rows.length) return res.json({ deleted: 0 });
+    tx(db, () => {
+      db.prepare(`DELETE FROM shifts WHERE id IN (${rows.map(() => '?').join(', ')})`).run(...rows.map((r) => r.id));
+      for (const id of ids) {
+        const n = rows.filter((r) => r.location_id === id).length;
+        if (n) logRota(db, req, { action: 'discard', location_id: id, details: `Deleted ${plural(n, 'unpublished shift')} for the week of ${fmtDay(ws)}` });
+      }
+      rememberUndo(req, `Deleted ${plural(rows.length, 'unpublished shift')}`, ids.length === 1 ? ids[0] : null, rows);
+    });
+    res.json({ deleted: rows.length });
   });
 
   // Throws away draft changes for the week: new shifts go, changed ones go back to what's published, removed come back.

@@ -148,3 +148,21 @@ test('managers can swap two shifts directly on the rota (a draft change, with un
   assert.equal((await manager(`/shifts/${s1}/swap`, { method: 'POST', body: { with_shift_id: s2 } })).status, 400);
   db.prepare('DELETE FROM shifts WHERE id = ?').run(clash);
 });
+
+test('admins can delete the week’s unpublished shifts – published ones stay – and undo it', async () => {
+  const u = user('staff1@cafe.local');
+  const week = addDays(today(), 70);
+  const ws = week; // any day in the week will do
+  const published = shiftFor(u, 70, '09:00', '13:00');
+  const fresh = Number(db.prepare(`INSERT INTO shifts (location_id, user_id, date, start_time, end_time, break_minutes) VALUES (?, ?, ?, '14:00', '18:00', 0)`)
+    .run(u.location_id, u.id, week).lastInsertRowid);
+  const m = await login('manager1@cafe.local');
+  assert.equal((await m('/rota/delete-unpublished', { method: 'POST', body: { location_id: u.location_id, week: ws } })).status, 403, 'admins only');
+  const a = await login('admin@cafe.local');
+  const r = await a('/rota/delete-unpublished', { method: 'POST', body: { location_id: u.location_id, week: ws } });
+  assert.ok(r.data.deleted >= 1);
+  assert.ok(!db.prepare('SELECT 1 FROM shifts WHERE id = ?').get(fresh), 'the unpublished shift is gone');
+  assert.ok(db.prepare('SELECT 1 FROM shifts WHERE id = ?').get(published), 'the published one stays');
+  assert.equal((await a('/rota/undo', { method: 'POST' })).status, 200);
+  assert.ok(db.prepare('SELECT 1 FROM shifts WHERE id = ?').get(fresh), 'undo puts it back');
+});

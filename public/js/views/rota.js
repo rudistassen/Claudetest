@@ -250,6 +250,8 @@ export async function render(ctx) {
       : s.state === 'changed' ? `Changed – staff still see ${fmtDate(s.published.date)} ${s.published.start_time}–${s.published.end_time}${s.published.moved ? ' for someone else' : ''} at ${s.published.location_name} until you publish` : '');
   const dayHours = data.days.map((d) => counted.filter((s) => s.date === d).reduce((t, s) => t + s.hours, 0));
   const pending = data.unpublished ?? 0;
+  // Shifts added this week that have never been published (admins can delete them all at once).
+  const newShifts = data.shifts.filter((s) => s.state === 'new').length;
 
   // Expected sales (each weekday's average over recent weeks, bank holidays left out) and the rota's labour % against
   // them – for people who can see sales. Worked out from the draft, so it changes as shifts are added.
@@ -614,6 +616,7 @@ export async function render(ctx) {
       <span><strong>${pending} unpublished change${pending === 1 ? '' : 's'}</strong> – staff can’t see ${pending === 1 ? 'it' : 'them'} yet.
         ${data.can_publish ? '' : 'Ask someone who can publish the rota to publish it.'}</span>
       <span class="publish-actions">
+        ${state.isAdmin && newShifts ? `<button class="btn btn-danger" id="delete-unpublished" title="Delete the ${newShifts} shift${newShifts === 1 ? '' : 's'} added this week that ${newShifts === 1 ? 'hasn’t' : 'haven’t'} been published">Delete unpublished shifts</button>` : ''}
         ${data.can_publish ? `<button class="btn btn-primary" id="publish">Publish ${all ? 'all sites' : 'this week'}</button>` : ''}
       </span>
     </div>` : '<p class="publish-ok">✓ Published – staff see this week as shown.</p>') : ''}
@@ -1078,6 +1081,14 @@ export async function render(ctx) {
     try {
       const r = await api('/rota/publish', { method: 'POST', body: scopeBody });
       toast(`Published ${r.published} change${r.published === 1 ? '' : 's'}`);
+      ctx.rerender();
+    } catch (err) { showError(err); }
+  });
+  el.querySelector('#delete-unpublished')?.addEventListener('click', async () => {
+    if (!(await confirmDialog(`Delete the ${newShifts} unpublished shift${newShifts === 1 ? '' : 's'} for the week of ${fmtDate(week, { day: 'numeric', month: 'short' })}${all ? ' at every site' : ''}? These are shifts added since the last publish, which staff haven’t seen. Published shifts stay as they are. You can undo this straight after.`, { confirmLabel: 'Delete shifts', title: 'Delete unpublished shifts' }))) return;
+    try {
+      const r = await api('/rota/delete-unpublished', { method: 'POST', body: { location_id: all ? 'all' : siteId, week } });
+      toast(`Deleted ${r.deleted} unpublished shift${r.deleted === 1 ? '' : 's'}`);
       ctx.rerender();
     } catch (err) { showError(err); }
   });
