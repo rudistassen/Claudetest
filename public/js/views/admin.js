@@ -258,10 +258,15 @@ function staffEditor(state, rows, perms, settings = {}) {
       ${u.role === 'admin' ? '<p class="small muted">Admins can work with every site.</p>' : sitesField(u)}
       <div class="row">
         <input type="hidden" name="position" value="${esc(u.position ?? '')}">
-        ${field('Role', input('rota_group', u.rota_group, 'list="rota-groups" maxlength="50" placeholder="e.g. Kitchen, Front of house"'), { hint: 'What they do – groups people together on the rota' })}
+        ${field('Role', `<select name="rota_group">
+            <option value="">— No role —</option>
+            ${rotaGroups.map((g) => `<option value="${esc(g)}" ${g === u.rota_group ? 'selected' : ''}>${esc(g)}</option>`).join('')}
+            <option value="__new">✎ New role…</option>
+          </select>
+          <input name="rota_group_new" placeholder="Type the new role, e.g. Barista" maxlength="50" hidden>`, { hint: 'What they do – groups people together on the rota' })}
         ${state.can('staff.pay') ? field('Hourly rate (£)', input('hourly_rate', u.hourly_rate, 'type="number" min="0" step="0.01"')) : ''}
       </div>
-      <datalist id="rota-groups">${rotaGroups.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
+
       ${squareBox(u, settings)}
       ${u.id ? inviteBox(u) : ''}
       ${u.id && state.isAdmin && u.active && u.id !== state.user.id ? `<div class="view-as-box"><button type="button" class="btn btn-small" data-view-as="${u.id}">👁 View Atlas as ${esc(u.name.split(' ')[0])}</button>
@@ -273,6 +278,12 @@ function staffEditor(state, rows, perms, settings = {}) {
       </div>
       <div data-staff-panel="perms" hidden>${permsPanel(u)}</div>`;
   const save = async (v, row, formEl) => {
+    // Role: one from the list, or a new one typed in.
+    if (v.rota_group === '__new') {
+      v.rota_group = (v.rota_group_new ?? '').trim();
+      if (!v.rota_group) throw new Error('Type the new role');
+    }
+    delete v.rota_group_new;
     const template = formEl.querySelector('[name=use_template]');
     delete v.use_template;
     delete v.perm;
@@ -310,6 +321,14 @@ document.addEventListener('click', (e) => {
   const form = tab.closest('form');
   form.querySelectorAll('[data-staff-tab]').forEach((t) => { t.classList.toggle('is-on', t === tab); t.setAttribute('aria-selected', String(t === tab)); });
   form.querySelectorAll('[data-staff-panel]').forEach((p) => { p.hidden = p.dataset.staffPanel !== tab.dataset.staffTab; });
+});
+// Role: “✎ New role…” shows a box to type it in.
+document.addEventListener('change', (e) => {
+  if (!e.target.matches?.('select[name=rota_group]')) return;
+  const box = e.target.closest('form')?.querySelector('[name=rota_group_new]');
+  if (!box) return;
+  box.hidden = e.target.value !== '__new';
+  if (!box.hidden) box.focus();
 });
 // “Only the sites ticked below” shows the sites to tick (inline handlers are blocked by the page's security rules).
 document.addEventListener('change', (e) => {

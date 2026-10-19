@@ -3374,3 +3374,5 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 }
 .nav-hub .nav-badge { margin-left: auto; margin-right: 0.35rem; }
 .nav-hub .nav-badge:not([hidden]) + .nav-caret { margin-left: 0; }
+.field [name=rota_group_new] { margin-top: 0.35rem; }
+.field [name=rota_group_new][hidden] { display: none; }
