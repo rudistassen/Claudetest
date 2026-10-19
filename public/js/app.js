@@ -90,6 +90,7 @@ const ROUTES = [
   [/^rota\/log$/, rotalog.render, ['rota.edit', 'rota.publish']],
   [/^rota\/budget$/, salesbudget.render, ['rota.budget']],
   [/^timeoff$/, timeoff.render, ['leave.request', 'leave.manage', 'leave.edit']],
+  [/^timeoff\/add$/, (ctx) => ctx.navigate('timeoff?tab=requests&add=1'), ['leave.edit']],
   [/^availability$/, (ctx) => availability.renderAvailability(ctx), ['availability.own', 'availability.view']],
   [/^wastage$/, wastage.render, WASTAGE],
   [/^stock$/, stock.renderList, STOCK],
@@ -201,6 +202,7 @@ function navGroups() {
       ['availability', 'My availability', '⏱', ['availability.own', 'availability.view']],
       ['rota/budget', 'Sales budget', '£', ['rota.budget']],
       ['rota/requests', 'Requests', '✉', ['rota.approve', 'leave.manage']],
+      ['timeoff/add', 'Add holiday', '☀', ['leave.edit']],
       ['rota/log', 'Rota changes', '⟲', ['rota.edit', 'rota.publish']],
     ]],
     ['Checklists & Tasks', [
@@ -399,6 +401,7 @@ const TILE_NOTES = {
   'rota/requests': 'Holiday and shift drops waiting for you, and team availability',
   availability: 'When you can and can’t work, day by day or repeating',
   'rota/log': 'Every change to the rota, and who made it',
+  'timeoff/add': 'Book holiday in for anyone on your team – approved straight away',
   checklists: 'Opening, closing and cleaning lists to tick off today',
   tasks: 'Jobs given to you – and, for managers, to your team',
   todo: 'Your own private to-do list',
@@ -450,7 +453,7 @@ function hubOf(path) {
 // Tiles shown under a "Set up" heading at the end of their section's tiles.
 // Tiles shown under an "Admin" heading after the rest of their section's tiles (for managers).
 const SETUP_TILES = new Set(['admin/suppliers', 'admin/products', 'admin/product-categories', 'checklists/setup', 'invoices']);
-const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'rota/log', 'admin/staff', 'compliance/documents', 'compliance/reporting', 'safety/setup']);
+const ADMIN_TILES = new Set(['rota/budget', 'rota/requests', 'timeoff/add', 'rota/log', 'admin/staff', 'compliance/documents', 'compliance/reporting', 'safety/setup']);
 // Headed groups of tiles within a section (shown first, in this order), e.g. Stock & Ordering's Purchasing.
 const TILE_GROUPS = {
   'orders/new': 'Purchasing', 'orders/receive': 'Purchasing', orders: 'Purchasing', 'prep-orders': 'Purchasing', 'prep-orders/list': 'Purchasing',

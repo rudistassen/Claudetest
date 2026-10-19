@@ -3376,3 +3376,10 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .nav-hub .nav-badge:not([hidden]) + .nav-caret { margin-left: 0; }
 .field [name=rota_group_new] { margin-top: 0.35rem; }
 .field [name=rota_group_new][hidden] { display: none; }
+
+/* Time off → Add holiday: who it's for */
+.leave-who { max-height: 14rem; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.25rem 0.5rem; margin-top: 0.35rem; }
+.leave-who .check { display: flex; gap: 0.5rem; padding: 0.35rem 0; }
+.leave-who .check[hidden] { display: none; }
+.leave-who input[type=radio] { width: auto; flex: none; margin-top: 0.2rem; }
+.leave-who .check span { flex: 1; }

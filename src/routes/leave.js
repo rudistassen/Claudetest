@@ -23,12 +23,20 @@ export function onHoliday(db, userId, day) {
 
 export function registerLeaveRoutes(router, db) {
   // People whose holiday and availability this person looks after: staff based at their sites (admins: everyone).
+  // Everyone whose holiday this person looks after: admins and people with every site – everyone; otherwise anyone
+  // based at, or added to, one of their sites (not admins).
   const manageable = (req) => {
     const sites = new Set(req.user.site_ids);
+    const extra = new Map();
+    for (const r of db.prepare('SELECT user_id, location_id FROM user_sites').all()) extra.set(r.user_id, [...(extra.get(r.user_id) ?? []), r.location_id]);
+    const everyone = req.user.role === 'admin' || !!req.user.all_sites;
     return db.prepare(`SELECT u.id, u.name, u.role, u.location_id, l.name AS location_name FROM users u
       LEFT JOIN locations l ON l.id = u.location_id WHERE u.active = 1 ORDER BY l.name, u.name`).all()
-      .filter((u) => u.id !== req.user.id && (req.user.role === 'admin' || (u.role !== 'admin' && sites.has(u.location_id))));
+      .filter((u) => u.id !== req.user.id && (req.user.role === 'admin' || (u.role !== 'admin'
+        && (everyone || sites.has(u.location_id) || (extra.get(u.id) ?? []).some((s) => sites.has(s))))));
   };
+  // Who can be given holiday by this person: those, and admins themselves too.
+  const addable = (req) => (req.user.role === 'admin' ? [{ id: req.user.id, name: req.user.name, location_name: null, you: true }, ...manageable(req)] : manageable(req));
   const withNames = `SELECT r.*, u.name AS user_name, l.name AS location_name, d.name AS decided_by_name FROM leave_requests r
     JOIN users u ON u.id = r.user_id LEFT JOIN locations l ON l.id = u.location_id LEFT JOIN users d ON d.id = r.decided_by`;
   const withDays = (r) => ({ ...r, days: daysBetween(r.start_date, r.end_date) });
@@ -147,13 +155,13 @@ export function registerLeaveRoutes(router, db) {
 
   // Who this manager can add holiday for.
   router.get('/leave/people', requirePerm('leave.edit'), (req, res) => {
-    res.json(manageable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name })));
+    res.json(addable(req).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name, you: !!u.you })));
   });
 
   // Add holiday for someone: { user_id, start_date, end_date, note }. It's approved straight away.
   router.post('/leave/add', requirePerm('leave.edit'), (req, res) => {
     const userId = id(req.body?.user_id, 'Person', { required: true });
-    const person = manageable(req).find((u) => u.id === userId);
+    const person = addable(req).find((u) => u.id === userId);
     if (!person) throw userId === req.user.id ? forbidden('Someone else needs to add your own holiday') : notFound('Person');
     const { start, end } = holidayDates(req.body ?? {}, userId);
     const note = str(req.body?.note, 'note', { max: 500 });

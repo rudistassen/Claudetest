@@ -74,3 +74,19 @@ test('past holiday can be recorded; staff can’t change anyone else’s; manage
   const other = await login('manager2@cafe.local');
   assert.equal((await other(`/leave/${past.data.id}`, { method: 'PUT', body: { start_date: addDays(today(), -10) } })).status, 404);
 });
+
+test('adding holiday reaches anyone working at your sites – people added to one too – and admins can add their own', async () => {
+  const m = await login('manager1@cafe.local');
+  const mine = db.prepare('SELECT location_id FROM users WHERE email = ?').get('manager1@cafe.local').location_id;
+  // Someone based elsewhere, but added to this manager's site.
+  const helper = db.prepare('SELECT id, name FROM users WHERE active = 1 AND role != ? AND location_id != ? ORDER BY id').get('admin', mine);
+  assert.ok(!(await m('/leave/people')).data.some((p) => p.id === helper.id), 'not before they work here');
+  db.prepare('INSERT OR IGNORE INTO user_sites (user_id, location_id) VALUES (?, ?)').run(helper.id, mine);
+  assert.ok((await m('/leave/people')).data.some((p) => p.id === helper.id));
+  assert.equal((await m('/leave/add', { method: 'POST', body: { user_id: helper.id, start_date: addDays(today(), 60) } })).status, 201);
+  // An admin can add anyone's holiday, their own included.
+  const a = await login('admin@cafe.local');
+  const people = (await a('/leave/people')).data;
+  assert.ok(people.find((p) => p.you));
+  assert.equal((await a('/leave/add', { method: 'POST', body: { user_id: user('admin@cafe.local').id, start_date: addDays(today(), 70) } })).status, 201);
+});

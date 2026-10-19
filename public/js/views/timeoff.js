@@ -36,7 +36,7 @@ async function renderMine(ctx) {
 
   el.innerHTML = `
     <div class="page-head"><h1>Time off</h1>
-      <div class="actions"><button class="btn btn-primary" id="request">+ Request holiday</button></div></div>
+      <div class="actions">${state.can('leave.edit') ? '<a class="btn" href="#/timeoff?tab=requests&add=1">+ Add holiday for someone</a>' : ''}<button class="btn btn-primary" id="request">+ Request holiday</button></div></div>
     ${tabs(state, 'mine')}
     <div class="kpis">
       <div class="kpi"><span>Holiday booked in ${data.year}</span><strong>${days(data.booked_this_year)}</strong></div>
@@ -124,17 +124,30 @@ async function renderRequests(ctx) {
       const people = await api('/leave/people');
       const { form } = openModal({
         title: 'Add holiday',
-        body: `${field('Who', `<select name="user_id" required><option value="">Choose who…</option>${people.map((p) => `<option value="${p.id}">${esc(p.name)}${p.location_name ? ` – ${esc(p.location_name)}` : ''}</option>`).join('')}</select>`)}
+        body: `${field('Who', `<input type="search" class="leave-who-search" placeholder="Search names" aria-label="Search names" autocomplete="off">
+            <div class="leave-who">${people.map((p) => `<label class="check" data-name="${esc(`${p.name} ${p.location_name ?? ''}`.toLowerCase())}"><input type="radio" name="who" value="${p.id}">
+              <span>${esc(p.name)}${p.you ? ' (you)' : ''}${p.location_name ? ` <small class="muted">${esc(p.location_name)}</small>` : ''}</span></label>`).join('')}</div>`)}
           ${datesFields(null)}
           ${field('Note (optional, they’ll see it)', textarea('note', '', 'maxlength="500" placeholder="e.g. Booked by phone"'))}
           <p class="muted small">It’s approved straight away and they get a notification. Past dates are fine, to record holiday already taken.</p>`,
         submitLabel: 'Add holiday',
-        onSubmit: async (v) => afterSave(await api('/leave/add', { method: 'POST', body: v }), 'Holiday added'),
+        onSubmit: async (v, f) => {
+          const who = f.querySelector('input[name=who]:checked');
+          if (!who) throw new Error('Choose who the holiday is for');
+          delete v.who;
+          afterSave(await api('/leave/add', { method: 'POST', body: { ...v, user_id: Number(who.value) } }), 'Holiday added');
+        },
+      });
+      form.querySelector('.leave-who-search').addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        form.querySelectorAll('.leave-who [data-name]').forEach((l) => { l.hidden = !!q && !l.dataset.name.includes(q); });
       });
       const [start, end] = [form.querySelector('[name=start_date]'), form.querySelector('[name=end_date]')];
       start.addEventListener('change', () => { if (!end.value || end.value < start.value) end.value = start.value; });
     } catch (err) { showError(err); }
   });
+  // From My holiday's "+ Add holiday for someone": open the form straight away.
+  if (ctx.query.add) { history.replaceState(null, '', '#/timeoff?tab=requests'); el.querySelector('#leave-add')?.click(); }
   el.querySelectorAll('[data-edit-leave]').forEach((b) => b.addEventListener('click', () => {
     const r = rows.find((x) => x.id === Number(b.dataset.editLeave));
     openModal({
