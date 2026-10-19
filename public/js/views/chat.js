@@ -47,7 +47,7 @@ export async function renderList({ el, stale }) {
     </a>`;
   el.innerHTML = `<div class="chat-page">
     <div class="page-head"><h1>Chat</h1>
-      <div class="actions">${data.can_direct ? `<button type="button" class="btn ${data.can_create ? '' : 'btn-primary'}" id="chat-direct">✉ Message someone</button>` : ''}${data.can_create ? '<button type="button" class="btn btn-primary" id="chat-new">+ New group chat</button>' : ''}</div></div>
+      <div class="actions">${data.answering?.length ? `<button type="button" class="btn" id="chat-as-team">✉ Start a chat as ${data.answering.length === 1 ? esc(data.answering[0].name) : 'a team'}</button>` : ''}${data.can_direct ? `<button type="button" class="btn ${data.can_create ? '' : 'btn-primary'}" id="chat-direct">✉ Message someone</button>` : ''}${data.can_create ? '<button type="button" class="btn btn-primary" id="chat-new">+ New group chat</button>' : ''}</div></div>
     ${data.teams?.length ? `<section class="chat-teams"><h2>Chat with</h2><div class="chat-team-picks">${data.teams.map((t) => `<button type="button" class="chat-team-pick" data-team="${t.id}" title="${esc(t.description ?? '')}">
         <span class="chat-avatar small is-team" aria-hidden="true">${esc(initials(t.name))}</span><span><strong>${esc(t.name)}</strong>${t.description ? `<small>${esc(t.description)}</small>` : ''}</span></button>`).join('')}</div>
       <p class="muted small">A private chat – only you and that team see it.</p></section>` : ''}
@@ -56,6 +56,7 @@ export async function renderList({ el, stale }) {
   </div>`;
   el.querySelector('#chat-new')?.addEventListener('click', () => editChat(null));
   el.querySelector('#chat-direct')?.addEventListener('click', startDirect);
+  el.querySelector('#chat-as-team')?.addEventListener('click', () => startAsTeam(data.answering));
   el.querySelectorAll('[data-team]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true;
     try { location.hash = `#/chat/${(await api('/chat/team', { method: 'POST', body: { team_id: Number(b.dataset.team) } })).id}`; } catch (err) { showError(err); b.disabled = false; }
@@ -312,6 +313,44 @@ async function editChat(groupId, navigate) {
     const q = e.target.value.trim().toLowerCase();
     form.querySelectorAll('.chat-people-picks [data-name]').forEach((l) => { l.hidden = !!q && !l.dataset.name.includes(q); });
   });
+}
+
+// --- The team's side: start a chat with someone as a team you answer for (e.g. HR) ---
+
+async function startAsTeam(teams) {
+  let team = teams[0];
+  if (teams.length > 1) {
+    team = await new Promise((resolve) => {
+      const { form, close } = openModal({
+        title: 'Start a chat as…',
+        body: `<div class="chat-dm-picks">${teams.map((t) => `<button type="button" class="chat-dm-pick" data-pick-team="${t.id}"><span class="chat-avatar small is-team" aria-hidden="true">${esc(initials(t.name))}</span><span>${esc(t.name)}</span></button>`).join('')}</div>`,
+      });
+      form.querySelectorAll('[data-pick-team]').forEach((b) => b.addEventListener('click', () => { close(); resolve(teams.find((t) => t.id === Number(b.dataset.pickTeam))); }));
+    });
+    if (!team) return;
+  }
+  let people;
+  try { people = await api(`/chat/team/${team.id}/people`); } catch (err) { showError(err); return; }
+  const { form, close } = openModal({
+    title: `Start a chat as ${team.name}`,
+    body: `<input type="search" class="chat-people-search" placeholder="Search people" aria-label="Search people">
+      <div class="chat-dm-picks">${people.map((u) => `<button type="button" class="chat-dm-pick" data-person="${u.id}" data-name="${esc(`${u.name} ${u.location_name ?? ''} ${u.rota_group ?? ''}`.toLowerCase())}">
+        <span class="chat-avatar small is-person" aria-hidden="true">${esc(initials(u.name))}</span>
+        <span>${esc(u.name)} <small class="muted">${esc(u.location_name ?? '')}${u.rota_group ? ` · ${esc(u.rota_group)}` : ''}</small></span></button>`).join('')}</div>
+      <p class="muted small">It opens their private chat with ${esc(team.name)} (or the one they already have). Your messages go to them as ${esc(team.name)}, and everyone who answers for ${esc(team.name)} sees the chat.</p>`,
+  });
+  form.querySelector('.chat-people-search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    form.querySelectorAll('.chat-dm-pick').forEach((b) => { b.hidden = !!q && !b.dataset.name.includes(q); });
+  });
+  form.querySelectorAll('[data-person]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      const chat = await api('/chat/team/start', { method: 'POST', body: { team_id: team.id, user_id: Number(b.dataset.person) } });
+      close();
+      location.hash = `#/chat/${chat.id}`;
+    } catch (err) { showError(err); b.disabled = false; }
+  }));
 }
 
 // --- Direct messages: pick someone at your sites ---

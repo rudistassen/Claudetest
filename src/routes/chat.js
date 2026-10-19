@@ -105,7 +105,10 @@ export function registerChatRoutes(router, db) {
     // The teams they can start a chat with: active ones with someone to answer.
     const teams = can(req.user, 'chat.use') ? db.prepare(`SELECT t.id, t.name, t.description FROM chat_teams t WHERE t.active = 1
       AND EXISTS (SELECT 1 FROM chat_team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = t.id AND u.active = 1) ORDER BY t.sort_order, t.name`).all() : [];
-    res.json({ groups: list, teams, can_create: can(req.user, 'chat.manage'), can_direct: can(req.user, 'chat.direct') });
+    // The teams this person answers for – they can start a chat with someone as that team.
+    const answering = db.prepare(`SELECT t.id, t.name FROM chat_teams t JOIN chat_team_members m ON m.team_id = t.id
+      WHERE m.user_id = ? AND t.active = 1 ORDER BY t.sort_order, t.name`).all(req.user.id);
+    res.json({ groups: list, teams, answering, can_create: can(req.user, 'chat.manage'), can_direct: can(req.user, 'chat.direct') });
   });
 
   // --- Team chats ---
@@ -120,6 +123,33 @@ export function registerChatRoutes(router, db) {
     const newId = tx(db, () => {
       const r = db.prepare(`INSERT INTO chat_groups (kind, team_id, name, created_by) VALUES ('team', ?, ?, ?)`).run(team.id, team.name, req.user.id);
       db.prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)').run(r.lastInsertRowid, req.user.id);
+      return Number(r.lastInsertRowid);
+    });
+    res.status(201).json({ id: newId });
+  });
+
+  // The team's side: someone who answers for a team starts a chat with a person as the team (or opens the one they
+  // already have with it). { team_id, user_id } → { id }. Their messages there go out as the team.
+  const teamOf = (req, teamId) => {
+    const team = teamById(teamId);
+    if (!team || !team.active || !answers(team.id, req.user.id)) throw forbidden('Only the people who answer for this team can start a chat as it');
+    return team;
+  };
+  router.get('/chat/team/:teamId/people', requirePerm('chat.use'), (req, res) => {
+    teamOf(req, Number(req.params.teamId));
+    res.json(chatters().filter((u) => u.id !== req.user.id).map((u) => ({ id: u.id, name: u.name, location_name: u.location_name, rota_group: u.rota_group })));
+  });
+  router.post('/chat/team/start', requirePerm('chat.use'), (req, res) => {
+    const team = teamOf(req, id(req.body.team_id, 'team_id', { required: true }));
+    const who = id(req.body.user_id, 'user_id', { required: true });
+    if (who === req.user.id) throw badRequest('Choose someone else');
+    if (!chatters().some((u) => u.id === who)) throw notFound('Person');
+    const existing = db.prepare(`SELECT g.id FROM chat_groups g JOIN chat_group_members m ON m.group_id = g.id
+      WHERE g.kind = 'team' AND g.team_id = ? AND m.user_id = ?`).get(team.id, who);
+    if (existing) return res.json({ id: existing.id });
+    const newId = tx(db, () => {
+      const r = db.prepare(`INSERT INTO chat_groups (kind, team_id, name, created_by) VALUES ('team', ?, ?, ?)`).run(team.id, team.name, req.user.id);
+      db.prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)').run(r.lastInsertRowid, who);
       return Number(r.lastInsertRowid);
     });
     res.status(201).json({ id: newId });

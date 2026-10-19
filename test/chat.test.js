@@ -262,3 +262,26 @@ test('team chats: an admin chooses who answers Payroll; staff chat privately wit
   await admin(`/chat-teams/${payroll.id}`, { method: 'PUT', body: { name: 'Payroll', answerer_ids: [] } });
   assert.equal((await mgr(`/chat/${chat}`)).status, 404);
 });
+
+test('team chats from the team’s side: someone who answers HR starts a chat with a person, as HR', async () => {
+  const admin = await login('admin@cafe.local');
+  const hr = (await admin('/chat-teams')).body.teams.find((t) => t.name === 'HR');
+  const answerer = userId('manager1@cafe.local');
+  await admin(`/chat-teams/${hr.id}`, { method: 'PUT', body: { name: 'HR', answerer_ids: [answerer] } });
+  const mgr = await login('manager1@cafe.local');
+  assert.deepEqual((await mgr('/chat')).body.answering.map((t) => t.name), ['HR']);
+  const target = userId('staff1-2@cafe.local');
+  assert.ok((await mgr(`/chat/team/${hr.id}/people`)).body.some((p) => p.id === target));
+  const chat = (await mgr('/chat/team/start', { method: 'POST', body: { team_id: hr.id, user_id: target } })).body.id;
+  assert.equal((await mgr('/chat/team/start', { method: 'POST', body: { team_id: hr.id, user_id: target } })).body.id, chat, 'the same chat again');
+  const sent = (await mgr(`/chat/${chat}/messages`, { method: 'POST', body: { body: 'Could you pop in about your contract?' } })).body;
+  assert.equal(sent.as_team, 'HR');
+  // They see it as HR, in their own HR chat (the one they'd open themselves).
+  const them = await login('staff1-2@cafe.local');
+  const seen = (await them(`/chat/${chat}`)).body;
+  assert.equal(seen.group.name, 'HR');
+  assert.equal(seen.messages.at(-1).author, 'HR');
+  assert.equal((await them('/chat/team', { method: 'POST', body: { team_id: hr.id } })).body.id, chat);
+  // Only people who answer for HR can start one as HR.
+  assert.equal((await them('/chat/team/start', { method: 'POST', body: { team_id: hr.id, user_id: answerer } })).status, 403);
+});
