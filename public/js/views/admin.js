@@ -175,6 +175,7 @@ function openBulkStaff(ctx, people, { roles, locOptions, access }) {
         ${field('Access', select('permission_set_id', [[KEEP, '— Leave as it is —'], ...access], KEEP))}
         ${ctx.state.can('staff.pay') ? field('Hourly rate (£)', input('hourly_rate', '', 'type="number" min="0" step="0.01" placeholder="Leave as it is"')) : ''}
         ${field('Active', select('active', [[KEEP, '— Leave as it is —'], ['1', 'Active'], ['0', 'Deactivated (can’t sign in or be rostered)']], KEEP))}
+        ${field('On the rota', select('on_rota', [[KEEP, '— Leave as it is —'], ['1', 'Include on rota'], ['0', 'Not on the rota']], KEEP))}
       </div>`,
     onSubmit: async (v) => {
       const changes = {};
@@ -184,6 +185,7 @@ function openBulkStaff(ctx, people, { roles, locOptions, access }) {
       if (v.permission_set_id !== KEEP) changes.permission_set_id = v.permission_set_id;
       if (v.hourly_rate !== undefined && v.hourly_rate !== null && v.hourly_rate !== '') changes.hourly_rate = Number(v.hourly_rate);
       if (v.active !== KEEP) changes.active = v.active === '1';
+      if (v.on_rota !== KEEP) changes.on_rota = v.on_rota === '1';
       if (!Object.keys(changes).length) throw new Error('Choose at least one thing to change');
       const r = await api('/users/bulk', { method: 'POST', body: { ids: people.map((p) => p.id), changes } });
       toast(`Updated ${r.updated} ${r.updated === 1 ? 'person' : 'people'}${r.square_updated ? ` – ${r.square_updated} also updated in Square` : ''}`);
@@ -273,6 +275,8 @@ function staffEditor(state, rows, perms, settings = {}) {
         <small class="muted">See exactly what they see – their menus, shifts and tasks. Look only: nothing can be changed while you’re viewing.</small></div>` : ''}
       ${field(u.id ? 'New password (leave blank to keep)' : 'Password (optional)', input('password', '', 'type="password" minlength="8" autocomplete="new-password"'), { hint: u.id ? 'At least 8 characters' : 'Leave blank and send them an invite, so they choose their own' })}
       ${activeBox(u.active)}
+      <label class="check-row"><input type="checkbox" name="on_rota" ${u.on_rota === 0 ? '' : 'checked'}>
+        <span><strong>Include on rota</strong><small>Untick for people who don’t work shifts (e.g. head office) – they won’t be listed on the rota or offered when adding a shift</small></span></label>
       <label class="check-row"><input type="checkbox" name="paid_breaks" ${u.paid_breaks ? 'checked' : ''}>
         <span><strong>Paid breaks</strong><small>They don’t clock their breaks in Square, so no missed or short break warnings show for them on any report</small></span></label>
       </div>
@@ -411,6 +415,7 @@ export async function renderStaff(ctx) {
       { label: 'Sites', value: sitesLabel },
       { label: 'Site', value: (r) => r.location_name ?? 'All (admin)' },
       { label: 'Role', value: (r) => r.rota_group ?? '' },
+      { label: 'On rota', value: (r) => (r.on_rota === 0 ? 'No' : 'Yes') },
       ...(state.can('staff.pay') ? [{ label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) }] : []),
       { label: 'Active', value: (r) => yesNo(r.active) },
       { label: 'Atlas', value: (r) => joinStatus(r).label, html: (r) => joinBadge(r) },

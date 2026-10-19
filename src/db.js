@@ -1314,6 +1314,8 @@ const MIGRATIONS = [
   ['users', 'tour_done_at', 'ALTER TABLE users ADD COLUMN tour_done_at TEXT'],
   // Staff on paid breaks don't clock breaks in Square, so they're never flagged for a missed or short break.
   ['users', 'paid_breaks', 'ALTER TABLE users ADD COLUMN paid_breaks INTEGER NOT NULL DEFAULT 0'],
+  // Whether they're listed on the rota (untick for people who never work shifts, e.g. head office). Everyone starts ticked.
+  ['users', 'on_rota', 'ALTER TABLE users ADD COLUMN on_rota INTEGER NOT NULL DEFAULT 1'],
   // Square catalogue SKUs and prices (to fill in a sold item linked to Square), and a sold item's SKU.
   ['square_catalog', 'sku', 'ALTER TABLE square_catalog ADD COLUMN sku TEXT'],
   ['square_catalog', 'price', 'ALTER TABLE square_catalog ADD COLUMN price REAL'],

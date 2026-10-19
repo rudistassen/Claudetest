@@ -41,3 +41,21 @@ test('skills areas: people come with their rota role, and the rota shows what ea
   const staffRota = await (await fetch(`${base}/rota?location_id=${me.location_id}`, { headers: { cookie: staffCookie } })).json();
   assert.ok(staffRota.staff.every((u) => !u.skills.length), 'no skills for staff');
 });
+
+test('include on rota: everyone starts on it; untick someone and they drop off the rota (unless they have a shift that week)', async () => {
+  const res = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@cafe.local', password: DEMO_PASSWORD }) });
+  const cookie = res.headers.get('set-cookie').split(';')[0];
+  const call = async (path, method = 'GET', body) => (await fetch(`${base}${path}`, { method, headers: { cookie, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })).json();
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users WHERE on_rota = 0').get().n, 0, 'everyone ticked to start with');
+  const u = db.prepare(`SELECT * FROM users WHERE email = 'staff1@cafe.local'`).get();
+  const week = '2030-01-07'; // a week with no shifts
+  const before = await call(`/rota?location_id=${u.location_id}&week=${week}`);
+  assert.ok(before.staff.some((s) => s.id === u.id));
+  const saved = await call(`/users/${u.id}`, 'PUT', { name: u.name, email: u.email, location_id: u.location_id, permission_set_id: u.permission_set_id, on_rota: false });
+  assert.equal(saved.on_rota, 0);
+  const after = await call(`/rota?location_id=${u.location_id}&week=${week}`);
+  assert.ok(!after.staff.some((s) => s.id === u.id), 'off the rota');
+  // Saving the form without the tick (older screens) leaves it as it is.
+  await call(`/users/${u.id}`, 'PUT', { name: u.name, email: u.email, location_id: u.location_id, permission_set_id: u.permission_set_id });
+  assert.equal(db.prepare('SELECT on_rota FROM users WHERE id = ?').get(u.id).on_rota, 0);
+});

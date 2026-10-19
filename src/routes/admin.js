@@ -124,6 +124,8 @@ export function registerAdminRoutes(router, db, square = null) {
       active: b.active === undefined ? 1 : bool(b.active),
       // Paid breaks: they don't clock breaks in Square, so no break warnings for them. Left as it is when not sent.
       paid_breaks: b.paid_breaks === undefined ? existing?.paid_breaks ?? 0 : bool(b.paid_breaks),
+      // On the rota: left as it is when not sent; new people start on it.
+      on_rota: b.on_rota === undefined ? existing?.on_rota ?? 1 : bool(b.on_rota),
     };
     const access = b.permission_set_id ?? null;
     let set = null;
@@ -213,9 +215,9 @@ export function registerAdminRoutes(router, db, square = null) {
     // No password: they choose their own from an invite.
     const password = req.body.password ? validatePassword(req.body.password) : randomBytes(24).toString('hex');
     const userId = tx(db, () => {
-      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, rota_group, hourly_rate, active, permission_set_id, custom_permissions, all_sites, paid_breaks)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, u.paid_breaks);
+      const r = db.prepare(`INSERT INTO users (name, email, password_hash, role, location_id, position, rota_group, hourly_rate, active, permission_set_id, custom_permissions, all_sites, paid_breaks, on_rota)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(u.name, u.email, hashPassword(password), u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, u.paid_breaks, u.on_rota);
       saveSites(r.lastInsertRowid, u);
       return r.lastInsertRowid;
     });
@@ -232,8 +234,8 @@ export function registerAdminRoutes(router, db, square = null) {
       throw badRequest('You cannot change your own access or deactivate yourself');
     }
     tx(db, () => {
-      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, custom_permissions = ?, all_sites = ?, paid_breaks = ? WHERE id = ?`)
-        .run(u.name, u.email, u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, u.paid_breaks, userId);
+      db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, location_id = ?, position = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, custom_permissions = ?, all_sites = ?, paid_breaks = ?, on_rota = ? WHERE id = ?`)
+        .run(u.name, u.email, u.role, u.location_id, u.position, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, u.paid_breaks, u.on_rota, userId);
       saveSites(userId, u);
     });
     if (req.body.password) {
@@ -253,7 +255,7 @@ export function registerAdminRoutes(router, db, square = null) {
     if (!ids.length) throw badRequest('Choose at least one person');
     if (ids.length > 500) throw badRequest('Edit at most 500 people at a time');
     const c = req.body.changes ?? {};
-    const keys = ['rota_group', 'location_id', 'permission_set_id', 'hourly_rate', 'active'].filter((k) => c[k] !== undefined);
+    const keys = ['rota_group', 'location_id', 'permission_set_id', 'hourly_rate', 'active', 'on_rota'].filter((k) => c[k] !== undefined);
     if (!keys.length) throw badRequest('Choose something to change');
     const updated = tx(db, () => ids.map((userId) => {
       const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
@@ -276,8 +278,8 @@ export function registerAdminRoutes(router, db, square = null) {
         err.message = `${existing.name}: ${err.message}`;
         throw err;
       }
-      db.prepare(`UPDATE users SET role = ?, location_id = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, custom_permissions = ?, all_sites = ? WHERE id = ?`)
-        .run(u.role, u.location_id, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, userId);
+      db.prepare(`UPDATE users SET role = ?, location_id = ?, rota_group = ?, hourly_rate = ?, active = ?, permission_set_id = ?, custom_permissions = ?, all_sites = ?, on_rota = ? WHERE id = ?`)
+        .run(u.role, u.location_id, u.rota_group, u.hourly_rate, u.active, u.permission_set_id, u.custom_permissions, u.all_sites, u.on_rota, userId);
       saveSites(userId, u);
       if (!u.active) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
       return userId;
