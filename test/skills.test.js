@@ -34,4 +34,10 @@ test('skills areas: people come with their rota role, and the rota shows what ea
   const row = rota.staff.find((u) => u.id === me.id);
   // Only what they're trained in (not still learning).
   assert.deepEqual(row.skills, ['Barista']);
+
+  // Staff don't see skills on the rota (rota.skills is for whoever sets it).
+  const res2 = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'staff1@cafe.local', password: DEMO_PASSWORD }) });
+  const staffCookie = res2.headers.get('set-cookie').split(';')[0];
+  const staffRota = await (await fetch(`${base}/rota?location_id=${me.location_id}`, { headers: { cookie: staffCookie } })).json();
+  assert.ok(staffRota.staff.every((u) => !u.skills.length), 'no skills for staff');
 });

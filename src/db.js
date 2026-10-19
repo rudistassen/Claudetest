@@ -1849,6 +1849,18 @@ export function openDb(file = ':memory:') {
     }
     db.exec('PRAGMA user_version = 25');
   }
+  if (version < 26) {
+    // Skills on the rota became a permission: whoever sets the rota (rota.edit) keeps seeing them; staff don't.
+    for (const table of ['permission_sets', 'users']) {
+      const col = table === 'users' ? 'custom_permissions' : 'permissions';
+      for (const row of db.prepare(`SELECT id, ${col} AS perms FROM ${table} WHERE ${col} IS NOT NULL`).all()) {
+        const perms = JSON.parse(row.perms || '[]');
+        if (!perms.includes('rota.edit') || perms.includes('rota.skills')) continue;
+        db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`).run(JSON.stringify([...perms, 'rota.skills']), row.id);
+      }
+    }
+    db.exec('PRAGMA user_version = 26');
+  }
   ensureDefaultSets(db);
   return db;
 }
