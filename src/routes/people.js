@@ -314,7 +314,7 @@ export function registerPeopleRoutes(router, db, { careers = null } = {}) {
   });
 
   // My Atlas: the training the signed-in person has done (anyone can see their own), and the courses they haven't.
-  router.get('/training/mine', (req, res) => {
+  router.get('/training/mine', requirePerm('training.take'), (req, res) => {
     const records = latestFor([req.user.id]);
     const done = new Set(records.map((r) => r.course_id));
     const courses = activeCourses();

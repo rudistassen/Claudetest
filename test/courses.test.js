@@ -13,6 +13,9 @@ before(async () => {
   db = openDb(':memory:');
   seedAdmin(db, { email: 'admin@cafe.local', password: DEMO_PASSWORD });
   seedDemo(db);
+  // Training is rolled out here: staff can take it (training.take is off by default).
+  const staffSet = db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in = 'staff'`).get();
+  db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...JSON.parse(staffSet.permissions), 'training.take']), staffSet.id);
   server = createApp(db).listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}/api`;

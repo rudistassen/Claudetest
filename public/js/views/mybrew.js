@@ -128,7 +128,7 @@ const quipFor = (iso) => QUIPS.at(Math.floor(Date.parse(`${iso}T00:00:00Z`) / 86
 
 export async function renderMyBrew(ctx) {
   const { el, state, stale } = ctx;
-  const [shifts, news, drops, training, learn] = await Promise.all([api('/my-shifts'), api('/news'), api('/shift-drops'), api('/training/mine').catch(() => null), api('/learn').catch(() => [])]);
+  const [shifts, news, drops, training, learn] = await Promise.all([api('/my-shifts'), api('/news'), api('/shift-drops'), state.can('training.take') ? api('/training/mine').catch(() => null) : null, state.can('training.take') ? api('/learn').catch(() => []) : []]);
   if (stale()) return;
   // For My tasks: today's compliance checks where they're working (their shift today, or for a manager their site),
   // and requests waiting for managers.

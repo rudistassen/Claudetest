@@ -194,6 +194,11 @@ test('staff see their own training (and only theirs) for My Atlas', async () => 
   const allergens = (await a('/training/courses', { method: 'POST', body: { name: 'Allergens', renew_months: 12 } })).data.id;
   await a('/training/records', { method: 'POST', body: { course_id: fire, user_ids: [u.id], completed_on: addDays(today(), -400) } });
   if (other) await a('/training/records', { method: 'POST', body: { course_id: allergens, user_ids: [other.id], completed_on: today() } });
+  // Off until training is rolled out (training.take), then on.
+  assert.equal((await s('/training/mine')).status, 403);
+  assert.equal((await s('/learn')).status, 403);
+  const staffSet = db.prepare(`SELECT id, permissions FROM permission_sets WHERE built_in = 'staff'`).get();
+  db.prepare('UPDATE permission_sets SET permissions = ? WHERE id = ?').run(JSON.stringify([...JSON.parse(staffSet.permissions), 'training.take']), staffSet.id);
   const mine = await s('/training/mine');
   assert.equal(mine.status, 200);
   const f = mine.data.records.find((r) => r.course_id === fire);

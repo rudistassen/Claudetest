@@ -275,7 +275,9 @@ export function registerCourseRoutes(router, db) {
         ON CONFLICT (course_id, user_id) DO UPDATE SET due_on = excluded.due_on, assigned_by = excluded.assigned_by, created_at = datetime('now')`);
       for (const u of ids) put.run(c.id, u, due, req.user.id);
     });
-    notify(db, ids, 'training', {
+    // Only people who can take training yet hear about it (see training.take).
+    const takers = new Set(peopleWith(db, ['training.take']));
+    notify(db, ids.filter((u) => takers.has(u)), 'training', {
       title: `Training: ${c.name}`,
       body: due ? `You’ve been given a course to do by ${due.split('-').reverse().join('/')}` : 'You’ve been given a course to do',
       url: `/#/learn/${c.id}`,
@@ -317,7 +319,7 @@ export function registerCourseRoutes(router, db) {
   // ---- Taking a course (everyone) ----
 
   // The courses someone can take: the ones given to them, and ones open to everyone.
-  router.get('/learn', (req, res) => {
+  router.get('/learn', requirePerm('training.take'), (req, res) => {
     const courses = db.prepare(`SELECT c.* FROM training_courses c WHERE c.active = 1 AND c.published = 1
       AND (c.open_to_all = 1 OR EXISTS (SELECT 1 FROM training_assignments a WHERE a.course_id = c.id AND a.user_id = ?)) ORDER BY c.name`).all(req.user.id);
     res.json(courses.map((c) => ({ ...summary(c), ...progress(c, req.user.id) })));
@@ -327,7 +329,7 @@ export function registerCourseRoutes(router, db) {
   router.get('/learn/:id', (req, res) => {
     const c = course(req.params.id);
     const preview = can(req.user, 'people.training');
-    if (!canTake(c, req.user) && !preview) throw notFound('Course');
+    if ((!can(req.user, 'training.take') || !canTake(c, req.user)) && !preview) throw notFound('Course');
     res.json({
       course: summary(c),
       preview: !canTake(c, req.user),
@@ -340,7 +342,7 @@ export function registerCourseRoutes(router, db) {
   });
 
   // Hands in the answers: { answers: { stepId: optionIndex } }. Marks them, and records the training on a pass.
-  router.post('/learn/:id/submit', (req, res) => {
+  router.post('/learn/:id/submit', requirePerm('training.take'), (req, res) => {
     const c = course(req.params.id);
     if (!canTake(c, req.user)) throw notFound('Course');
     if (progress(c, req.user.id).status === 'awaiting_signoff') throw badRequest('You’ve already passed – a manager just needs to sign it off');

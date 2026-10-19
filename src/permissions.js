@@ -5,6 +5,7 @@
 export const PERMISSION_AREAS = [
   ['My Atlas', [
     ['mybrew.view', 'See My Atlas – their home page with their shifts, tasks, training and news'],
+    ['training.take', 'Training – take online courses and see their own training records on My Atlas (off for everyone until training is rolled out)'],
   ]],
   ['Chat', [
     ['chat.use', 'Chat – read and reply in the group chats they’re in'],
@@ -135,7 +136,7 @@ export const DEFAULT_SETS = [
     built_in: 'manager',
     name: 'Manager',
     description: 'Runs a site: rota, orders, stock, staff and sales for their own site.',
-    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products', 'payments.send', 'rota.ai', 'staff.log', 'bank.view'].includes(p)),
+    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products', 'payments.send', 'rota.ai', 'staff.log', 'bank.view', 'training.take'].includes(p)),
   },
   {
     built_in: 'staff',
