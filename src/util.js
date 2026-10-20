@@ -48,6 +48,9 @@ export function date(v, name, { required = false } = {}) {
   return s;
 }
 
+/** A shift's end must be after its start (finishing at midnight, 00:00, is fine). */
+export const endsBeforeStart = (start, end) => end <= start && end !== '00:00';
+
 export function time(v, name, { required = false } = {}) {
   if (isBlank(v)) {
     if (required) throw badRequest(`${name} is required`);

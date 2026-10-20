@@ -166,3 +166,14 @@ test('admins can delete the week’s unpublished shifts – published ones stay 
   assert.equal((await a('/rota/undo', { method: 'POST' })).status, 200);
   assert.ok(db.prepare('SELECT 1 FROM shifts WHERE id = ?').get(fresh), 'undo puts it back');
 });
+
+test('a shift’s end can’t be before its start (finishing at midnight is fine)', async () => {
+  const a = await login('admin@cafe.local');
+  const u = user('staff1@cafe.local');
+  const d = addDays(today(), 90);
+  const add = (start, end) => a('/shifts', { method: 'POST', body: { user_id: u.id, location_id: u.location_id, date: d, start_time: start, end_time: end, break_minutes: 0 } });
+  const bad = await add('17:00', '09:00');
+  assert.equal(bad.status, 400);
+  assert.match(bad.data.error, /end time must be after the start/);
+  assert.equal((await add('18:00', '00:00')).status, 201, 'until midnight');
+});

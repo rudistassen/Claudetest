@@ -8,6 +8,9 @@ import { justImported, openRotaImport } from './rotaimport.js';
 import { flaggedShifts, openRotaAnalysis, openSavedAnalysis } from './rotaanalyse.js';
 import { sickDialog } from './sickness.js';
 
+// A shift's end must be after its start (finishing at midnight, 00:00, is fine).
+const endsBeforeStart = (start, end) => end <= start && end !== '00:00';
+
 // A shift copied with Ctrl/⌘+click: its times stay here (across weeks and sites) until it's pasted somewhere with a
 // click or Ctrl/⌘+V, or Esc clears it. Pasting opens the Add shift window filled in, to check before saving.
 let copiedShift = null;
@@ -773,6 +776,7 @@ export async function render(ctx) {
           ${field('Start', input('start_time', s.start_time, 'type="time" required'))}
           ${field('End', input('end_time', s.end_time, 'type="time" required'))}
         </div>
+        <p class="alert-text" id="time-warn" hidden>The end time must be after the start time.</p>
         <div class="time-presets" hidden><span class="muted small">Most used here:</span></div>
         ${field('Unpaid break (mins)', input('break_minutes', s.break_minutes, 'type="number" min="0" step="5"'))}
         <input type="hidden" name="position" value="${esc(s.position ?? person?.position ?? '')}">
@@ -785,6 +789,7 @@ export async function render(ctx) {
         ctx.rerender();
       },
       onSubmit: async (v) => {
+        if (endsBeforeStart(v.start_time, v.end_time)) throw new Error('The end time must be after the start time');
         const body = { ...v, location_id: Number(v.location_id ?? site) };
         if (canOpen && v.user_id === 'open') {
           delete body.user_id;
@@ -929,6 +934,15 @@ export async function render(ctx) {
     });
     form.start_time.addEventListener('input', mark);
     form.end_time.addEventListener('input', mark);
+    // The end can't be before the start (finishing at midnight, 00:00, is fine).
+    const timeWarn = form.querySelector('#time-warn');
+    const checkTimes = () => {
+      const bad = !!form.start_time.value && !!form.end_time.value && endsBeforeStart(form.start_time.value, form.end_time.value);
+      timeWarn.hidden = !bad;
+      form.end_time.setCustomValidity(bad ? 'The end time must be after the start time' : '');
+    };
+    ['input', 'change'].forEach((ev) => { form.start_time.addEventListener(ev, checkTimes); form.end_time.addEventListener(ev, checkTimes); });
+    presets.addEventListener('click', checkTimes);
     form.location_id.addEventListener('change', showPresets);
     showPresets();
     form.querySelector('#publish-one')?.addEventListener('click', () => publishOne(shift));

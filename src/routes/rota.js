@@ -9,7 +9,7 @@ import { bankHoliday } from '../bank-holidays.js';
 import { fmtDay, logRota, shiftChanges, shiftText } from '../rota-log.js';
 import { notStarted, registerShiftDropRoutes, rotaDrops } from './shift-drops.js';
 import { registerShiftSwapRoutes } from './shift-swaps.js';
-import { addDays, badRequest, date, forbidden, id, notFound, num, oneOf, round2, shiftHours, str, time, today, weekStart, zonedMidnightUTC } from '../util.js';
+import { addDays, badRequest, date, endsBeforeStart, forbidden, id, notFound, num, oneOf, round2, shiftHours, str, time, today, weekStart, zonedMidnightUTC } from '../util.js';
 
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 
@@ -271,6 +271,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
       notes: str(b.notes, 'notes'),
     };
     if (s.start_time === s.end_time) throw badRequest('Shift start and end cannot be the same');
+    if (endsBeforeStart(s.start_time, s.end_time)) throw badRequest('The end time must be after the start time');
     const person = db.prepare('SELECT name FROM users WHERE id = ? AND active = 1').get(s.user_id);
     if (!person) throw notFound('Staff member');
     const holiday = onHoliday(db, s.user_id, s.date);
@@ -560,6 +561,7 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
             notes: str(b.notes, 'Notes'),
           };
           if (s.start_time === s.end_time) throw badRequest('Start and end are the same');
+          if (endsBeforeStart(s.start_time, s.end_time)) throw badRequest('The end time must be after the start time');
           const person = db.prepare('SELECT name FROM users WHERE id = ? AND active = 1').get(s.user_id);
           if (!person) throw badRequest('That person isn’t on the team');
           if (onHoliday(db, s.user_id, s.date)) throw badRequest(`${person.name} is on holiday`);
