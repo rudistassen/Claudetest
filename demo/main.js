@@ -254,6 +254,8 @@ async function boot() {
   registerNewsRoutes(api, db);
   registerCourseRoutes(api, db);
   registerChatRoutes(api, db);
+  // Setup → Backups: the demo has no database file to back up.
+  api.get('/admin/backups', (req, res) => res.json({ available: false, backups: [] }));
   registerChecklistRoutes(api, db);
   registerActivityRoutes(api, db);
   registerDocumentRoutes(api, db);

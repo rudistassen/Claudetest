@@ -196,6 +196,12 @@ The Square tests run against a local mock of Square's Locations, Orders, Team an
 
 ## Deploying
 
+### Backups and releases
+
+**Backups** (Setup → Backups, admins): Atlas copies its database into a `backups` folder next to it (on Railway, the same volume) before each update – when new code first starts, before anything stored is changed – and every night, keeping the last 5 before updates, 7 nightly and 5 made by hand. Admins can make one there and download any of them (each download goes in the Staff log). To restore one, stop the app, replace `cafe.db` on the volume with the backup (renamed to `cafe.db`), and start it again.
+
+**Releasing**: the staff app deploys from the `live` branch. Changes are built and checked on the working branch first (deployed to a separate **Atlas Test** service with demo data and no real Square, Xero or email keys), then copied to `live` when they're ready.
+
 The app is one Node process plus one SQLite file, so it runs on any platform with a persistent disk (Railway, Render, Fly.io, a small VPS). For example on **Railway**:
 
 1. New project → **Deploy from GitHub repo** → pick this repository (and the branch to run, under the service's Settings → Source).

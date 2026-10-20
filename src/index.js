@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
 import { cleanEnv, DEMO_PASSWORD, ensureAdmin, isEmpty, lockDemoAccounts, seedAdmin, seedDemo, seedSafetyTasks } from './seed.js';
 import { createApp, publicDir } from './server.js';
 import { xeroConfig } from './xero.js';
 import { appVersion } from './app-version.js';
+import { backUpBeforeUpdate, startNightlyBackups } from './backups.js';
 import { brevoMailer, emailConfig, withSenders } from './email.js';
 import { invoiceReaderFromEnv } from './invoice-reader.js';
 import { careersMailboxConfig, eventsMailboxConfig, graphMailbox, graphMailer, mailboxConfig, mailboxSetup, microsoftMailConfig, ordersMailboxConfig } from './mailbox.js';
@@ -28,6 +30,12 @@ if (args.has('--reset') && fs.existsSync(dbPath)) {
   for (const suffix of ['', '-wal', '-shm']) fs.rmSync(dbPath + suffix, { force: true });
 }
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+// A copy of the database before new code first runs against it (updates can change how things are stored).
+const codeVersion = `${appVersion(path.dirname(fileURLToPath(import.meta.url)))}-${appVersion(publicDir)}`;
+try {
+  const saved = backUpBeforeUpdate(dbPath, codeVersion);
+  if (saved) console.log(`Backed up the database before this update: ${saved}`);
+} catch (err) { console.error(`Couldn't back up the database before this update: ${err.message}`); }
 const db = openDb(dbPath);
 
 const adminEmail = cleanEnv(process.env.ADMIN_EMAIL);
@@ -148,4 +156,5 @@ try {
 const version = appVersion(publicDir);
 const xeroSettings = xeroConfig();
 if (xeroSettings) console.log('Xero: set up – connect it under Setup → Xero.');
-createApp(db, { square, mailer, invoiceReader, rotaReader, rotaAnalyst, mailbox, careers, events, enquiryReader, places, version, orders, xero: xeroSettings ? { config: xeroSettings } : null }).listen(port, () => console.log(`Atlas running at http://localhost:${port}`));
+startNightlyBackups(db, dbPath);
+createApp(db, { square, mailer, invoiceReader, rotaReader, rotaAnalyst, mailbox, careers, events, enquiryReader, places, version, orders, xero: xeroSettings ? { config: xeroSettings } : null, backups: { dbPath } }).listen(port, () => console.log(`Atlas running at http://localhost:${port}`));

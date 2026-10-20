@@ -13,6 +13,7 @@ import { registerSafetyRoutes } from './routes/safety.js';
 import { registerStockRoutes } from './routes/stock.js';
 import { registerPrepOrderRoutes } from './routes/prep-orders.js';
 import { registerLeaveRoutes } from './routes/leave.js';
+import { registerBackupRoutes } from './routes/backups.js';
 import { registerTradingRoutes } from './routes/trading.js';
 import { registerOpenOrderRoutes } from './routes/open-orders.js';
 import { registerReportRoutes } from './reports.js';
@@ -59,7 +60,7 @@ export function trustProxy(env) {
 // places: Google Maps, for each site's rating and reviews (see google-reviews.js), or null when it isn't set up.
 // version: the app's version (see app-version.js), so open copies can tell when there's a newer one.
 // xero: { config, fetch? } when Xero is set up (see xero.js), otherwise null.
-export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, events = null, enquiryReader = null, rotaReader = null, rotaAnalyst = null, places = null, version = null, weather = londonWeather(), xero = null, orders = null } = {}) {
+export function createApp(db, { square = null, mailer = null, invoiceReader = null, mailbox = null, careers = null, events = null, enquiryReader = null, rotaReader = null, rotaAnalyst = null, places = null, version = null, weather = londonWeather(), xero = null, orders = null, backups = null } = {}) {
   // Each kind of email comes from the address set up for it in Setup → Email.
   mailer = withSenders(db, mailer);
   const xeroClient = xero ? new Xero(db, xero.config, xero.fetch) : null;
@@ -140,6 +141,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerNewsRoutes(api, db);
   registerCourseRoutes(api, db);
   registerChatRoutes(api, db);
+  registerBackupRoutes(api, db, backups);
   registerChecklistRoutes(api, db);
   registerActivityRoutes(api, db);
   registerDocumentRoutes(api, db);

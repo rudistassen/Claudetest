@@ -2,7 +2,7 @@ import { loadLocations } from '../app.js';
 import { exportProducts, openProductImport } from './product-import.js';
 import { installCard, wireInstallCard } from '../install.js';
 import { renderNotifications } from '../notifications.js';
-import { api, confirmDialog, esc, isDemo, field, fmtDate, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast, siteScope, siteFilter } from '../lib.js';
+import { api, confirmDialog, esc, isDemo, showError, field, fmtDate, fmtDateTime, input, money, openModal, qs, select, statusBadge, textarea, toast, siteScope, siteFilter } from '../lib.js';
 
 const yesNo = (v) => (v ? 'Yes' : 'No');
 const activeBox = (v) => field('Active', `<input type="checkbox" name="active" ${v === undefined || v ? 'checked' : ''}>`, { className: 'field-inline' });
@@ -1016,4 +1016,30 @@ export async function renderPermissions(ctx) {
   };
   el.querySelector('#add').addEventListener('click', () => open(null));
   el.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => open(sets.find((s) => s.id === Number(b.dataset.edit)))));
+}
+
+// Setup → Backups (admins): the copies of the database Atlas keeps, making one now, and downloading any of them.
+export async function renderBackups({ el, stale, rerender }) {
+  const data = await api('/admin/backups');
+  if (stale()) return;
+  const KIND = { update: 'Before an update', daily: 'Nightly', manual: 'Made by hand' };
+  const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
+  const when = (iso) => new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+  el.innerHTML = `<div class="page-head"><h1>Backups</h1>
+      <div class="actions">${data.available ? '<button class="btn btn-primary" id="backup-now">Back up now</button>' : ''}</div></div>
+    <section class="card narrow">
+      <p>Atlas keeps copies of all its data (rotas, holiday, checks, chats and everything else) on the server: <strong>one before each update</strong>,
+        <strong>one every night</strong>, and any you make here. It keeps the last 5 before updates, 7 nightly and 5 made by hand.</p>
+      <p class="muted small">Download one now and then to keep somewhere safe too, e.g. your OneDrive. It holds personal details, so keep it private.</p>
+    </section>
+    ${!data.available ? '<div class="card empty">Backups only work on the real server (not in the demo).</div>'
+      : data.backups.length ? `<div class="table-wrap card"><table><thead><tr><th>When</th><th>Kind</th><th class="num">Size</th><th></th></tr></thead>
+        <tbody>${data.backups.map((b) => `<tr><td>${esc(when(b.at))}</td><td>${KIND[b.kind] ?? esc(b.kind)}</td><td class="num">${size(b.size)}</td>
+          <td><a class="btn btn-small" href="/api/admin/backups/${encodeURIComponent(b.name)}" download>Download</a></td></tr>`).join('')}</tbody></table></div>`
+        : '<div class="card empty">No backups yet. The first is made tonight, before the next update, or when you press <strong>Back up now</strong>.</div>'}`;
+  el.querySelector('#backup-now')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = 'Backing up…';
+    try { await api('/admin/backups', { method: 'POST' }); toast('Backed up'); rerender(); } catch (err) { showError(err); e.target.disabled = false; e.target.textContent = 'Back up now'; }
+  });
 }
