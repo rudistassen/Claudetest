@@ -776,7 +776,9 @@ export async function render(ctx) {
           ${field('Start', input('start_time', s.start_time, 'type="time" required'))}
           ${field('End', input('end_time', s.end_time, 'type="time" required'))}
         </div>
-        <p class="alert-text" id="time-warn" hidden>The end time must be after the start time.</p>
+        <label class="check-row next-day"><input type="checkbox" name="next_day" ${s.start_time && s.end_time && endsBeforeStart(s.start_time, s.end_time) ? 'checked' : ''}>
+          <span><strong>Finishes the next day</strong><small>For a shift that goes past midnight, e.g. 18:00 – 01:00</small></span></label>
+        <p class="alert-text" id="time-warn" hidden>The end time must be after the start time – or tick “Finishes the next day”.</p>
         <div class="time-presets" hidden><span class="muted small">Most used here:</span></div>
         ${field('Unpaid break (mins)', input('break_minutes', s.break_minutes, 'type="number" min="0" step="5"'))}
         <input type="hidden" name="position" value="${esc(s.position ?? person?.position ?? '')}">
@@ -789,7 +791,7 @@ export async function render(ctx) {
         ctx.rerender();
       },
       onSubmit: async (v) => {
-        if (endsBeforeStart(v.start_time, v.end_time)) throw new Error('The end time must be after the start time');
+        if (endsBeforeStart(v.start_time, v.end_time) && !v.next_day) throw new Error('The end time must be after the start time – or tick “Finishes the next day”');
         const body = { ...v, location_id: Number(v.location_id ?? site) };
         if (canOpen && v.user_id === 'open') {
           delete body.user_id;
@@ -937,11 +939,12 @@ export async function render(ctx) {
     // The end can't be before the start (finishing at midnight, 00:00, is fine).
     const timeWarn = form.querySelector('#time-warn');
     const checkTimes = () => {
-      const bad = !!form.start_time.value && !!form.end_time.value && endsBeforeStart(form.start_time.value, form.end_time.value);
+      const bad = !!form.start_time.value && !!form.end_time.value && endsBeforeStart(form.start_time.value, form.end_time.value) && !form.next_day.checked;
       timeWarn.hidden = !bad;
       form.end_time.setCustomValidity(bad ? 'The end time must be after the start time' : '');
     };
     ['input', 'change'].forEach((ev) => { form.start_time.addEventListener(ev, checkTimes); form.end_time.addEventListener(ev, checkTimes); });
+    form.next_day.addEventListener('change', checkTimes);
     presets.addEventListener('click', checkTimes);
     form.location_id.addEventListener('change', showPresets);
     showPresets();

@@ -9,7 +9,7 @@ import { logRota, shiftText } from '../rota-log.js';
 import { onHoliday } from './leave.js';
 import { notify, peopleWith } from '../push.js';
 import { fmtDay } from '../rota-log.js';
-import { badRequest, date, endsBeforeStart, forbidden, notFound, num, round2, shiftHours, str, time, today } from '../util.js';
+import { badRequest, bool, date, endsBeforeStart, forbidden, notFound, num, round2, shiftHours, str, time, today } from '../util.js';
 
 const nowTime = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
 // A shift that hasn't started yet (today's only once its start time has passed).
@@ -248,7 +248,7 @@ export function registerShiftDropRoutes(router, db, { findClash, clearUndo = () 
     };
     assertLocation(req, s.location_id);
     if (s.start_time === s.end_time) throw badRequest('Shift start and end cannot be the same');
-    if (endsBeforeStart(s.start_time, s.end_time)) throw badRequest('The end time must be after the start time');
+    if (endsBeforeStart(s.start_time, s.end_time) && !bool(b.next_day)) throw badRequest('The end time must be after the start time – or tick “Finishes the next day”');
     if (!notStarted(s)) throw badRequest('That time has already passed – pick a later day or time');
     const id = tx(db, () => {
       const r = db.prepare(`INSERT INTO shift_drops (shift_id, location_id, date, start_time, end_time, break_minutes, position, notes, dropped_by, reason,

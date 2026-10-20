@@ -176,4 +176,8 @@ test('a shift’s end can’t be before its start (finishing at midnight is fine
   assert.equal(bad.status, 400);
   assert.match(bad.data.error, /end time must be after the start/);
   assert.equal((await add('18:00', '00:00')).status, 201, 'until midnight');
+  // Past midnight: allowed when ticked "Finishes the next day", and counted as 7 hours.
+  const late = await a('/shifts', { method: 'POST', body: { user_id: u.id, location_id: u.location_id, date: addDays(d, 1), start_time: '18:00', end_time: '01:00', break_minutes: 0, next_day: true } });
+  assert.equal(late.status, 201);
+  assert.equal(late.data.end_time, '01:00');
 });
