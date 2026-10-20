@@ -59,3 +59,21 @@ test('include on rota: everyone starts on it; untick someone and they drop off t
   await call(`/users/${u.id}`, 'PUT', { name: u.name, email: u.email, location_id: u.location_id, permission_set_id: u.permission_set_id });
   assert.equal(db.prepare('SELECT on_rota FROM users WHERE id = ?').get(u.id).on_rota, 0);
 });
+
+test('forecast sales and labour % on the rota have their own permission (rota.costs)', async () => {
+  const login = async (email) => {
+    const res = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: DEMO_PASSWORD }) });
+    const cookie = res.headers.get('set-cookie').split(';')[0];
+    return async (path) => (await fetch(`${base}${path}`, { headers: { cookie } })).json();
+  };
+  const u = db.prepare(`SELECT id, location_id FROM users WHERE email = 'staff1@cafe.local'`).get();
+  db.prepare('UPDATE users SET custom_permissions = ? WHERE id = ?').run(JSON.stringify(['rota.view']), u.id);
+  let rota = await (await login('staff1@cafe.local'))(`/rota?location_id=${u.location_id}`);
+  assert.equal(rota.forecast, undefined, 'not without it');
+  assert.equal(rota.labour_cost, undefined);
+  db.prepare('UPDATE users SET custom_permissions = ? WHERE id = ?').run(JSON.stringify(['rota.view', 'rota.costs']), u.id);
+  rota = await (await login('staff1@cafe.local'))(`/rota?location_id=${u.location_id}`);
+  assert.ok(rota.forecast, 'forecast sales with it');
+  assert.equal(typeof rota.labour_cost, 'number');
+  db.prepare('UPDATE users SET custom_permissions = NULL WHERE id = ?').run(u.id);
+});

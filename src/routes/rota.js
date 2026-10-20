@@ -614,8 +614,9 @@ export function registerRotaRoutes(router, db, { rotaReader = null, rotaAnalyst 
     const ids = rotaSites(req, req.query.location_id);
     const ws = weekStart(date(req.query.week, 'week') ?? today());
     const we = addDays(ws, 6);
-    // Labour costs and pay rates only for people who can see sales or manage staff.
-    const manager = can(req.user, 'sales.view') || can(req.user, 'staff.pay');
+    // Forecast sales, labour costs and the pay rates they're worked out from: for people who can see them on the rota
+    // (rota.costs), see sales, or see pay rates.
+    const manager = can(req.user, 'rota.costs') || can(req.user, 'sales.view') || can(req.user, 'staff.pay');
     // Editors see the draft, with each shift marked new, changed or removed; everyone else sees the published rota.
     const editor = can(req.user, 'rota.edit');
     const table = editor ? 'shifts' : 'published_shifts';

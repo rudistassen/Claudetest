@@ -39,6 +39,7 @@ export const PERMISSION_AREAS = [
     ['availability.own', 'My availability – say when they can and can’t work'],
     ['rota.edit', 'Add, change and copy shifts, and mark people as sick'],
     ['rota.skills', 'See each person’s skills (the areas they’re trained in) under their name on the rota'],
+    ['rota.costs', 'See forecast sales, labour cost and labour % on the rota while planning it (worked out from pay rates)'],
     ['rota.publish', 'Publish the rota so staff can see it, and open shifts up for anyone to pick up'],
     ['rota.approve', 'Approve or decline shift drops and pick-ups'],
     ['rota.budget', 'Set the sales budget each site’s rota is planned against'],
