@@ -3456,3 +3456,52 @@ li.po-row:not(:has(> a)) { padding: 0.55rem 0.15rem; }
 .sfbb-contacts .card { margin: 0; }
 .sfbb-contacts p { margin: 0.15rem 0; }
 .sub-tabs { margin-top: -0.5rem; }
+
+/* SFBB: the whole pack as one document (Download pack) */
+.sfbb-doc-bar { margin-bottom: 1rem; }
+.sfbb-doc-bar h1 { margin: 0.25rem 0; }
+.sfbb-doc-actions { justify-content: flex-start; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.sfbb-doc-opt { display: inline-flex; align-items: center; gap: 0.4rem; }
+.sfbb-doc-opt input { width: auto; margin: 0; }
+.sfbb-doc { background: #fff; color: #111; border: 1px solid var(--border); border-radius: 12px; padding: 2rem; max-width: 60rem; font-size: 0.95rem; line-height: 1.45; }
+.sfbb-doc h1 { font-size: 2rem; margin: 0.25rem 0 0.5rem; }
+.sfbb-doc h2 { font-size: 1.35rem; margin: 0 0 0.6rem; padding-bottom: 0.3rem; border-bottom: 3px solid #1e5631; color: #1e5631; }
+.sfbb-doc h3 { font-size: 1.15rem; margin: 1.1rem 0 0.4rem; text-transform: none; letter-spacing: normal; color: #111; font-weight: 700; }
+.sfbb-doc h4 { font-size: 0.95rem; margin: 0.8rem 0 0.3rem; text-transform: none; letter-spacing: normal; color: #111; }
+.sfbb-doc ul { margin: 0.2rem 0 0.5rem; padding-left: 1.2rem; }
+.doc-page { margin-top: 2.5rem; }
+.doc-kicker { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: #1e5631; margin: 0; }
+.doc-lead { color: #444; }
+.doc-table { width: 100%; border-collapse: collapse; margin: 0.4rem 0 0.8rem; font-size: 0.88rem; }
+.doc-table th, .doc-table td { border: 1px solid #c9c9c9; padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+.doc-table thead th { background: #eef3ef; }
+.doc-table tr.doc-group th { background: #f5f5f5; }
+.doc-qa th { width: 55%; font-weight: 600; }
+.doc-facts th { width: 12rem; }
+.doc-box { border-left: 4px solid #b45309; background: #fdf6ec; padding: 0.45rem 0.7rem; margin: 0.5rem 0; }
+.doc-sign { font-weight: 600; color: #1e5631; margin-top: 0.6rem; }
+.doc-blank { color: #888; }
+.doc-method { break-inside: avoid-page; border-top: 1px solid #ddd; padding-top: 0.2rem; }
+.doc-ticks { list-style: none; padding: 0 !important; }
+.doc-ticks li::before { content: '☐'; margin-right: 0.5rem; }
+.doc-credit { font-size: 0.8rem; color: #666; margin-top: 1.5rem; }
+.doc-diary td:nth-child(2), .doc-diary td:nth-child(3) { white-space: nowrap; }
+@media (max-width: 700px) {
+  .sfbb-doc { padding: 1rem; }
+  .sfbb-doc .doc-table { display: block; overflow-x: auto; }
+}
+@media print {
+  body.print-doc { background: #fff; }
+  body.print-doc .brand-band, body.print-doc .topbar, body.print-doc .topnav, body.print-doc .sidebar, body.print-doc .tabbar,
+  body.print-doc .hub-rail, body.print-doc .sfbb-doc-bar, body.print-doc #toasts { display: none !important; }
+  body.print-doc .hub-layout { display: block !important; }
+  body.print-doc main, body.print-doc .hub-main { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+  .sfbb-doc { border: 0; border-radius: 0; padding: 0; max-width: none; font-size: 10.5pt; }
+  .doc-page { break-before: page; margin-top: 0; }
+  .doc-table { display: table !important; }
+  .doc-table thead { display: table-header-group; }
+  .doc-table tr { break-inside: avoid; }
+  .sfbb-doc h2, .sfbb-doc h3, .sfbb-doc h4 { break-after: avoid; }
+  .doc-box, .doc-table thead th, .sfbb-doc h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+@page { margin: 14mm 12mm; }

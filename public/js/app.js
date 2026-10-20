@@ -88,6 +88,7 @@ const ROUTES = [
   [/^compliance\/documents$/, compliance.renderDocuments, ['compliance.documents']],
   [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
   [/^safety\/sfbb$/, sfbb.renderPack, SAFETY],
+  [/^safety\/sfbb\/download$/, sfbb.renderDownload, SAFETY],
   [/^safety\/sfbb\/([a-z-]+)$/, sfbb.renderMethod, SAFETY],
   [/^safety\/diary$/, sfbb.renderDiary, SAFETY],
   [/^safety\/review$/, sfbb.renderReview, SAFETY],

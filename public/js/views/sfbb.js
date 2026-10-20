@@ -44,7 +44,7 @@ export async function renderPack(ctx) {
   const overdue = data.review_due <= todayISO();
 
   el.innerHTML = `
-    ${head(state, 'Safer Food, Better Business')}
+    ${head(state, 'Safer Food, Better Business', '<a class="btn btn-primary" href="#/safety/sfbb/download">⬇ Download pack</a>')}
     ${sfbbTabs(state, 'safety/sfbb')}
     <section class="card sfbb-summary">
       <div class="sfbb-progress">
@@ -533,4 +533,180 @@ export async function renderRecords(ctx) {
   };
   el.querySelector('#add')?.addEventListener('click', () => edit(null));
   el.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => edit(rows.find((r) => r.id === Number(b.dataset.edit)))));
+}
+
+// --- The whole pack for a site as one document, to save as a PDF or print ---
+
+export async function renderDownload(ctx) {
+  const { el, state, query, stale } = ctx;
+  const withDiary = query.diary !== '0';
+  const loc = state.location ?? {};
+  const weeks = [0, 1, 2, 3].map((n) => addDays(weekStart(todayISO()), -7 * n)).reverse();
+  const [pack, records, training, reviews, checklist, suppliers, ...diary] = await Promise.all([
+    api(`/sfbb/pack${qs({ location_id: state.locationId })}`),
+    api(`/sfbb/records${qs({ location_id: state.locationId })}`),
+    api(`/sfbb/training${qs({ location_id: state.locationId })}`),
+    api(`/sfbb/reviews${qs({ location_id: state.locationId })}`),
+    api(`/safety/checklist${qs({ location_id: state.locationId })}`),
+    api('/suppliers').catch(() => []),
+    ...(withDiary ? weeks.map((w) => api(`/sfbb/diary${qs({ location_id: state.locationId, week: w })}`)) : []),
+  ]);
+  if (stale()) return;
+  const m = pack.methods;
+  const daily = checklist.tasks.filter((t) => t.frequency === 'daily');
+  const opening = daily.filter((t) => /open/i.test(t.category));
+  const closing = daily.filter((t) => /clos/i.test(t.category));
+  const otherDaily = daily.filter((t) => !opening.includes(t) && !closing.includes(t));
+  const weekly = checklist.tasks.filter((t) => t.frequency === 'weekly');
+  const range = (t) => (t.requires_reading ? ` (${[t.min_value !== null ? `${t.min_value}${t.reading_unit ?? ''} or above` : null, t.max_value !== null ? `${t.max_value}${t.reading_unit ?? ''} or below` : null].filter(Boolean).join(', ')})` : '');
+  const checkList = (title, tasks) => (tasks.length ? `<h3>${esc(title)}</h3><ul class="doc-ticks">${tasks.map((t) => `<li>${esc(t.title)}${esc(range(t))}</li>`).join('')}</ul>` : '');
+  const answer = (q, i, a) => {
+    if (!a || (!a.answer && !a.note)) return '<em class="doc-blank">Not answered</em>';
+    return `${a.answer ? `<strong>${a.answer === 'yes' ? 'Yes' : 'No'}</strong>` : ''}${a.answer && a.note ? ' – ' : ''}${esc(a.note ?? '')}`;
+  };
+  const relevant = SFBB_METHODS.filter((x) => !m[x.key]?.not_relevant);
+  const done = relevant.filter((x) => m[x.key]?.completed_at).length;
+  const latest = new Map();
+  for (const r of training.records) if (!latest.has(`${r.user_id}:${r.topic}`)) latest.set(`${r.user_id}:${r.topic}`, r);
+  const topics = [...SFBB_TRAINING_EXTRAS, ...SFBB_METHODS.map((x) => [x.key, x.title])];
+  const title = `Safer Food Better Business – ${loc.name ?? 'site'} – ${todayISO()}`;
+
+  el.innerHTML = `
+    <div class="sfbb-doc-bar">
+      <p><a href="#/safety/sfbb">‹ Back to safe methods</a></p>
+      <h1>Download the pack · ${esc(loc.name ?? '')}</h1>
+      <p>Everything for this site in one document: the safe methods with your answers, the completion record, checks, ${withDiary ? 'the last 4 weeks of the diary, ' : ''}reviews, training and records.</p>
+      <div class="actions sfbb-doc-actions">
+        ${sitePicker(state)}
+        <label class="sfbb-doc-opt"><input type="checkbox" id="with-diary" ${withDiary ? 'checked' : ''}> Include the last 4 weeks of the diary</label>
+        <button class="btn btn-primary" id="save-pdf">⬇ Download as PDF</button>
+      </div>
+      <p class="muted small">In the window that opens, choose <strong>Save as PDF</strong> as the printer (on an iPhone, tap Share → Save to Files). Or pick a printer to print it.</p>
+    </div>
+    <article class="sfbb-doc">
+      <section class="doc-cover">
+        <p class="doc-kicker">Safer Food, Better Business for caterers</p>
+        <h1>${esc(loc.name ?? '')}</h1>
+        ${loc.address ? `<p>${esc(loc.address)}</p>` : ''}
+        <table class="doc-table doc-facts"><tbody>
+          <tr><th>Produced</th><td>${fmtWhen(todayISO())} by ${esc(state.user?.name ?? '')}</td></tr>
+          <tr><th>Safe methods</th><td>${done} of ${relevant.length} worked through${SFBB_METHODS.length - relevant.length ? ` (${SFBB_METHODS.length - relevant.length} not relevant)` : ''}</td></tr>
+          <tr><th>Last 4-weekly review</th><td>${pack.last_review ? `${fmtWhen(pack.last_review.date)} by ${esc(pack.last_review.signed_by_name ?? '')}` : 'Not done yet'}</td></tr>
+        </tbody></table>
+        <h2>Contents</h2>
+        <ol class="doc-contents">
+          <li>Safe method completion record</li>
+          ${SFBB_SECTIONS.map((s) => `<li>${esc(s.title)}</li>`).join('')}
+          <li>Opening, closing and extra checks</li>
+          ${withDiary ? '<li>Diary – the last 4 weeks</li>' : ''}
+          <li>4-weekly reviews</li><li>Staff training record</li><li>Suppliers’ list and contacts</li><li>Cleaning schedule</li><li>Prove it records</li>
+        </ol>
+        <p class="doc-credit">${esc(SFBB_CREDIT)}</p>
+      </section>
+
+      <section class="doc-page">
+        <h2>Safe method completion record</h2>
+        <table class="doc-table"><thead><tr><th>Safe method</th><th>Date</th><th>Signed by</th><th>Not relevant</th></tr></thead>
+          <tbody>${SFBB_SECTIONS.map((s) => `<tr class="doc-group"><th colspan="4">${esc(s.title)}</th></tr>${s.methods.map((x) => {
+            const r = m[x.key];
+            return `<tr><td>${esc(x.title)}</td><td>${r?.completed_at && !r.not_relevant ? fmtWhen(r.completed_at) : ''}</td><td>${r?.completed_at ? esc(r.completed_by_name ?? '') : ''}</td><td>${r?.not_relevant ? '✓' : ''}</td></tr>`;
+          }).join('')}`).join('')}</tbody></table>
+      </section>
+
+      ${SFBB_SECTIONS.map((s) => `<section class="doc-page">
+        <h2>${esc(s.title)}</h2>
+        <p class="doc-lead">${esc(s.intro)}</p>
+        ${s.methods.map((x) => {
+          const r = m[x.key];
+          if (r?.not_relevant) return `<div class="doc-method"><h3>${esc(x.title)}</h3><p><em>Not relevant to this site${r.completed_by_name ? ` (${esc(r.completed_by_name)}, ${fmtWhen(r.completed_at)})` : ''}.</em></p></div>`;
+          return `<div class="doc-method">
+            <h3>${esc(x.title)}</h3>
+            <p class="doc-lead">${esc(x.intro)}</p>
+            ${x.points.length ? `<table class="doc-table"><thead><tr><th>What to do</th>${x.points.some(([, w]) => w) ? '<th>Why</th>' : ''}</tr></thead>
+              <tbody>${x.points.map(([what, why]) => `<tr><td>${esc(what)}</td>${x.points.some(([, w]) => w) ? `<td>${esc(why)}</td>` : ''}</tr>`).join('')}</tbody></table>` : ''}
+            ${(x.notes ?? []).map(([h, t]) => `<p class="doc-box"><strong>${esc(h)}:</strong> ${esc(t)}</p>`).join('')}
+            ${x.checks ? `${checkList('Opening checks', opening)}${checkList('Closing checks', closing)}` : ''}
+            ${x.questions.length ? `<h4>How do you do this?</h4><table class="doc-table doc-qa"><tbody>${x.questions.map(([q], i) => `<tr><th>${esc(q)}</th><td>${answer(q, i, r?.answers?.[i])}</td></tr>`).join('')}</tbody></table>` : ''}
+            ${x.wrong.length ? `<h4>What to do if things go wrong</h4><ul>${x.wrong.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+            ${x.stop.length ? `<h4>How to stop this happening again</h4><ul>${x.stop.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+            <p class="doc-sign">${r?.completed_at ? `Signed off by ${esc(r.completed_by_name ?? '')} on ${fmtWhen(r.completed_at)}` : 'Not signed off yet'}</p>
+          </div>`;
+        }).join('')}
+      </section>`).join('')}
+
+      <section class="doc-page">
+        <h2>Opening, closing and extra checks</h2>
+        <p class="doc-lead">The checks done at this site, recorded each day in Atlas’s Food Safety Checks.</p>
+        ${checkList('Opening checks', opening)}${checkList('During the day', otherDaily)}${checkList('Closing checks', closing)}${checkList('Weekly (extra) checks', weekly)}
+      </section>
+
+      ${withDiary ? `<section class="doc-page">
+        <h2>Diary – the last 4 weeks</h2>
+        ${diary.map((w) => `<h3>Week commencing ${fmtWhen(w.week_start)}</h3>
+          <table class="doc-table doc-diary"><thead><tr><th>Day</th><th>Opening</th><th>Closing</th><th>Any problems or changes – what did you do?</th><th>Signed</th></tr></thead>
+          <tbody>${w.days.filter((d) => d.date <= w.today).map((d) => `<tr>
+            <td>${fmtDate(d.date, { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+            <td>${d.opening.total ? `${d.opening.done}/${d.opening.total}` : '–'}</td><td>${d.closing.total ? `${d.closing.done}/${d.closing.total}` : '–'}</td>
+            <td>${[...d.problems.map((p) => `${esc(p.title)}: ${esc(p.corrective_action ?? '')}`), d.notes ? esc(d.notes) : null].filter(Boolean).join('<br>')}</td>
+            <td>${d.signed_at ? esc(d.signed_by_name ?? '') : '<em class="doc-blank">Not signed</em>'}</td></tr>`).join('')}</tbody></table>
+          <p class="doc-box"><strong>Extra checks:</strong> ${esc(w.extra_checks ?? 'None recorded')}</p>`).join('')}
+        <p class="muted">Signing confirms: “Our safe methods were followed and effectively supervised today.”</p>
+      </section>` : ''}
+
+      <section class="doc-page">
+        <h2>4-weekly reviews</h2>
+        ${reviews.reviews.length ? reviews.reviews.slice(0, 6).map((r) => `<div class="doc-method">
+          <h3>${fmtWhen(r.date)} – ${esc(r.signed_by_name ?? '')}</h3>
+          <p><strong>Problems observed, or the same issue three times or more:</strong> ${r.problems ? 'Yes' : 'No'}</p>
+          ${r.details ? `<p><strong>Details:</strong> ${esc(r.details)}</p>` : ''}
+          ${r.action ? `<p><strong>What we did about it:</strong> ${esc(r.action)}</p>` : ''}
+          <table class="doc-table doc-qa"><tbody>${SFBB_REVIEW_CHECKS.map((q, i) => `<tr><th>${esc(q)}</th><td>${r.checklist[i] === 'yes' ? 'Yes' : r.checklist[i] === 'no' ? 'No' : '–'}</td></tr>`).join('')}</tbody></table>
+          ${r.additional ? `<p><strong>Additional details:</strong> ${esc(r.additional)}</p>` : ''}
+        </div>`).join('') : '<p><em class="doc-blank">No reviews yet.</em></p>'}
+      </section>
+
+      <section class="doc-page">
+        <h2>Staff training record</h2>
+        ${training.people.map((p) => {
+          const rows = topics.map(([k, l]) => [l, latest.get(`${p.id}:${k}`)]).filter(([, r]) => r);
+          return `<div class="doc-method"><h3>${esc(p.name)}</h3>${rows.length ? `<table class="doc-table"><thead><tr><th>Safe method or training</th><th>Date</th><th>Recorded by</th></tr></thead>
+            <tbody>${rows.map(([l, r]) => `<tr><td>${esc(l)}</td><td>${fmtWhen(r.date)}</td><td>${esc(r.recorded_by_name ?? '')}</td></tr>`).join('')}</tbody></table>` : '<p><em class="doc-blank">No training recorded yet.</em></p>'}</div>`;
+        }).join('') || '<p><em class="doc-blank">Nobody works at this site yet.</em></p>'}
+      </section>
+
+      <section class="doc-page">
+        <h2>Suppliers’ list</h2>
+        ${suppliers.length ? `<table class="doc-table"><thead><tr><th>Business</th><th>Contact</th><th>Telephone</th><th>Email</th><th>Ordering</th></tr></thead>
+          <tbody>${suppliers.filter((x) => x.active !== 0).map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.contact_name ?? '')}</td><td>${esc(x.phone ?? '')}</td><td>${esc(x.email ?? '')}</td><td>${esc([x.order_days, x.lead_time_days ? `${x.lead_time_days} day${x.lead_time_days === 1 ? '' : 's'} lead time` : null].filter(Boolean).join(' · '))}</td></tr>`).join('')}</tbody></table>`
+          : '<p><em class="doc-blank">No suppliers recorded.</em></p>'}
+        <h2>Contacts</h2>
+        ${records.contacts.length ? `<table class="doc-table"><thead><tr><th>Who</th><th>Name</th><th>Telephone</th><th>Email</th><th>Notes</th></tr></thead>
+          <tbody>${records.contacts.map((c) => `<tr><td>${esc(c.role)}</td><td>${esc(c.name ?? '')}</td><td>${esc(c.phone ?? '')}</td><td>${esc(c.email ?? '')}</td><td>${esc([c.address, c.notes].filter(Boolean).join(' · '))}</td></tr>`).join('')}</tbody></table>`
+          : '<p><em class="doc-blank">No contacts recorded.</em></p>'}
+      </section>
+
+      <section class="doc-page">
+        <h2>Cleaning schedule</h2>
+        ${records.cleaning.length ? `<table class="doc-table"><thead><tr><th>Item</th><th>How often</th><th>Precautions</th><th>Method of cleaning</th></tr></thead>
+          <tbody>${records.cleaning.map((c) => `<tr><td>${esc(c.item)}</td><td>${esc(c.frequency)}</td><td>${esc(c.precautions ?? '')}</td><td class="sfbb-method">${esc(c.method ?? '')}</td></tr>`).join('')}</tbody></table>`
+          : '<p><em class="doc-blank">No cleaning schedule yet.</em></p>'}
+        <h2>Prove it records</h2>
+        ${records.prove_it.length ? `<table class="doc-table"><thead><tr><th>Date</th><th>Safe method</th><th>How did you prove it?</th><th>By</th></tr></thead>
+          <tbody>${records.prove_it.map((p) => `<tr><td>${fmtWhen(p.date)}</td><td>${esc(methodByKey(p.method_key)?.title ?? p.method_key)}</td><td>${esc(p.how)}</td><td>${esc(p.recorded_by_name ?? '')}</td></tr>`).join('')}</tbody></table>`
+          : '<p><em class="doc-blank">None recorded yet.</em></p>'}
+        <p class="doc-credit">${esc(SFBB_CREDIT)}</p>
+      </section>
+    </article>`;
+
+  // While this page is open, printing shows just the document (and the PDF is named after the site and date).
+  document.body.classList.add('print-doc');
+  const leave = () => { document.body.classList.remove('print-doc'); window.removeEventListener('hashchange', leave); };
+  window.addEventListener('hashchange', leave);
+  el.querySelector('#with-diary').addEventListener('change', (e) => ctx.navigate(`safety/sfbb/download${e.target.checked ? '' : '?diary=0'}`));
+  el.querySelector('#save-pdf').addEventListener('click', () => {
+    const before = document.title;
+    document.title = title;
+    window.addEventListener('afterprint', () => { document.title = before; }, { once: true });
+    window.print();
+  });
 }
