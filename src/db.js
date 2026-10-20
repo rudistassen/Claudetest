@@ -537,6 +537,89 @@ CREATE TABLE IF NOT EXISTS safety_task_exclusions (
   PRIMARY KEY (task_id, location_id)
 );
 
+-- Safer Food, Better Business (the Food Standards Agency's pack), per site. Each safe method's answers (JSON of
+-- question number → { answer: 'yes' | 'no' | null, note }), and who signed it off or marked it not relevant.
+CREATE TABLE IF NOT EXISTS sfbb_methods (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  method_key TEXT NOT NULL,
+  answers TEXT NOT NULL DEFAULT '{}',
+  not_relevant INTEGER NOT NULL DEFAULT 0,
+  completed_by INTEGER REFERENCES users(id),
+  completed_at TEXT,
+  updated_by INTEGER REFERENCES users(id),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (location_id, method_key)
+);
+-- The diary: each day's note of problems or changes and what was done, and the manager's sign-off.
+CREATE TABLE IF NOT EXISTS sfbb_diary (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  notes TEXT,
+  signed_by INTEGER REFERENCES users(id),
+  signed_at TEXT,
+  PRIMARY KEY (location_id, date)
+);
+-- The diary's weekly extra checks box (week_start is the Monday).
+CREATE TABLE IF NOT EXISTS sfbb_weeks (
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  week_start TEXT NOT NULL,
+  extra_checks TEXT,
+  updated_by INTEGER REFERENCES users(id),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (location_id, week_start)
+);
+CREATE TABLE IF NOT EXISTS sfbb_reviews (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  problems INTEGER NOT NULL DEFAULT 0,
+  details TEXT,
+  action TEXT,
+  checklist TEXT NOT NULL DEFAULT '{}',
+  additional TEXT,
+  signed_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Staff training record: who was trained on which safe method (or other training) and when.
+CREATE TABLE IF NOT EXISTS sfbb_training (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  topic TEXT NOT NULL,
+  date TEXT NOT NULL,
+  recorded_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (user_id, topic, date)
+);
+-- Records kept with the pack: cleaning schedule items, 'Prove it' checks and useful contacts.
+CREATE TABLE IF NOT EXISTS sfbb_cleaning (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  item TEXT NOT NULL,
+  frequency TEXT NOT NULL,
+  precautions TEXT,
+  method TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS sfbb_prove_it (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  method_key TEXT NOT NULL,
+  how TEXT NOT NULL,
+  date TEXT NOT NULL,
+  recorded_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS sfbb_contacts (
+  id INTEGER PRIMARY KEY,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  name TEXT,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  notes TEXT
+);
+
 -- Supplier invoices, read from an uploaded PDF or photo, checked by a person and then confirmed.
 CREATE TABLE IF NOT EXISTS invoices (
   id INTEGER PRIMARY KEY,

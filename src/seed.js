@@ -1,6 +1,7 @@
 import { hashPassword, verifyPassword } from './auth.js';
 import { publishAllShifts, syncProductCategories, tx } from './db.js';
 import { addDays, today, weekStart } from './util.js';
+import { SFBB_CLOSING, SFBB_OPENING } from '../public/js/sfbb-content.js';
 
 export const DEMO_PASSWORD = 'changeme123';
 
@@ -10,25 +11,22 @@ export const DEFAULT_SAFETY_TASKS = [
   { title: 'Display fridge temperature (opening)', category: 'Opening checks', frequency: 'daily', reading: ['°C', null, 5] },
   { title: 'Kitchen fridge temperature (opening)', category: 'Opening checks', frequency: 'daily', reading: ['°C', null, 5] },
   { title: 'Freezer temperature (opening)', category: 'Opening checks', frequency: 'daily', reading: ['°C', null, -18] },
-  { title: 'Hand-wash basins stocked (soap, paper towels, hot water)', category: 'Opening checks', frequency: 'daily' },
-  { title: 'Food preparation surfaces cleaned and sanitised', category: 'Opening checks', frequency: 'daily' },
-  { title: 'All staff fit for work – no sickness or diarrhoea reported', category: 'Opening checks', frequency: 'daily' },
-  { title: 'Allergen information available at the till', category: 'Opening checks', frequency: 'daily' },
+  // The rest are Safer Food, Better Business's opening checks (food.gov.uk/sfbb); the temperatures above cover the first.
+  ...SFBB_OPENING.slice(1).map((title) => ({ title, category: 'Opening checks', frequency: 'daily' })),
   // Daily – during service
   { title: 'Cooked food core temperature', category: 'During service', frequency: 'daily', reading: ['°C', 75, null], description: 'Probe the thickest part of the food. Must reach 75°C or above.' },
   { title: 'Hot holding temperature', category: 'During service', frequency: 'daily', reading: ['°C', 63, null] },
   { title: 'Dishwasher final rinse temperature', category: 'During service', frequency: 'daily', reading: ['°C', 82, null] },
   // Daily – closing
   { title: 'Display fridge temperature (closing)', category: 'Closing checks', frequency: 'daily', reading: ['°C', null, 5] },
-  { title: 'Use-by dates checked and out-of-date food removed', category: 'Closing checks', frequency: 'daily' },
-  { title: 'Food covered, labelled and stored correctly', category: 'Closing checks', frequency: 'daily' },
-  { title: 'Daily cleaning schedule completed', category: 'Closing checks', frequency: 'daily' },
-  { title: 'Bins emptied and bin area clean', category: 'Closing checks', frequency: 'daily' },
+  ...SFBB_CLOSING.map((title) => ({ title, category: 'Closing checks', frequency: 'daily' })),
   // Weekly
   { title: 'Probe thermometer check – iced water', category: 'Equipment', frequency: 'weekly', reading: ['°C', -1, 1] },
   { title: 'Probe thermometer check – boiling water', category: 'Equipment', frequency: 'weekly', reading: ['°C', 99, 101] },
   { title: 'Deep clean fridges, freezers and door seals', category: 'Cleaning', frequency: 'weekly' },
   { title: 'Clean extraction canopy and filters', category: 'Cleaning', frequency: 'weekly' },
+  { title: 'Dishwasher: clear jets, filters and drains and clean the door seals', category: 'Cleaning', frequency: 'weekly' },
+  { title: 'Maintenance: check for damaged equipment or surfaces, follow up repairs', category: 'Premises', frequency: 'weekly' },
   { title: 'Pest control inspection (droppings, gnaw marks, insects)', category: 'Premises', frequency: 'weekly' },
   { title: 'Allergen matrix reviewed against current menu and recipes', category: 'Allergens', frequency: 'weekly' },
   { title: 'First aid kit checked and restocked', category: 'Premises', frequency: 'weekly' },

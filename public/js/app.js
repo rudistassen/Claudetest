@@ -37,6 +37,7 @@ import * as prepOrders from './views/prep-orders.js';
 import * as availability from './views/availability.js';
 import * as rota from './views/rota.js';
 import * as safety from './views/safety.js';
+import * as sfbb from './views/sfbb.js';
 import * as reports from './views/reports.js';
 import * as emailsettings from './views/emailsettings.js';
 import * as invoices from './views/invoices.js';
@@ -86,6 +87,12 @@ const ROUTES = [
   [/^compliance\/incidents\/(\d+)$/, compliance.renderIncident, ['incidents.report', 'incidents.manage']],
   [/^compliance\/documents$/, compliance.renderDocuments, ['compliance.documents']],
   [/^safety\/setup$/, safety.renderSetup, ['safety.manage']],
+  [/^safety\/sfbb$/, sfbb.renderPack, SAFETY],
+  [/^safety\/sfbb\/([a-z-]+)$/, sfbb.renderMethod, SAFETY],
+  [/^safety\/diary$/, sfbb.renderDiary, SAFETY],
+  [/^safety\/review$/, sfbb.renderReview, SAFETY],
+  [/^safety\/training$/, sfbb.renderTraining, SAFETY],
+  [/^safety\/records$/, sfbb.renderRecords, SAFETY],
   [/^rota$/, rota.render, ROTA],
   [/^rota\/log$/, rotalog.render, ['rota.edit', 'rota.publish']],
   [/^rota\/budget$/, salesbudget.render, ['rota.budget']],
@@ -214,6 +221,8 @@ function navGroups() {
     ]],
     ['Compliance', [
       ['safety', 'Food Safety Checks', '✓', SAFETY],
+      ['safety/diary', 'Food Safety Diary', '✎', SAFETY],
+      ['safety/sfbb', 'Safer Food, Better Business', '❖', SAFETY],
       ['compliance/risks', 'Risk Management', '⚠', ['risk.view', 'risk.manage']],
       ['compliance/incidents', 'Incident Management', '✚', ['incidents.report', 'incidents.manage']],
       ['compliance/documents', 'Documents', '❐', ['compliance.documents']],
@@ -394,6 +403,8 @@ const HUBS = { Rota: 'rota-menu', 'Checklists & Tasks': 'checklists-tasks', Comp
 // The line under each page's name on its tile.
 const TILE_NOTES = {
   safety: 'Each site’s food safety checks for today',
+  'safety/diary': 'Sign off each day, note problems and what you did, and the weekly extra checks',
+  'safety/sfbb': 'The FSA’s food safety pack: safe methods, 4-weekly review, training and records',
   'compliance/risks': 'Risk assessments for each site, and when they’re due a review',
   'compliance/incidents': 'Report accidents, near misses and complaints, and follow them up',
   'compliance/documents': 'Certificates, inspections, insurance and licences – and when they run out',

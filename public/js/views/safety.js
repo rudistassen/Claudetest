@@ -2,7 +2,7 @@ import { addDays, api, chooseSite, siteColour, confirmDialog, esc, field, fmtDat
 
 // Compliance (once called Trail): food safety checks, the compliance report and setting up checks for each site.
 function trailTabs(state, active) {
-  const items = [['safety/checks', 'Food Safety Checks', true], ['compliance/reporting/food-safety', 'Compliance report', state.can('safety.report')], ['safety/setup', 'Set up Checks', state.can('safety.manage')]]
+  const items = [['safety/checks', 'Food Safety Checks', true], ['safety/diary', 'Diary', true], ['safety/sfbb', 'SFBB pack', true], ['compliance/reporting/food-safety', 'Compliance report', state.can('safety.report')], ['safety/setup', 'Set up Checks', state.can('safety.manage')]]
     .filter(([, , ok]) => ok);
   return items.length > 1 ? `<div class="tabs trail-tabs">${items.map(([p, l]) => `<a href="#/${p}" class="${active === p ? 'active' : ''}">${l}</a>`).join('')}</div>` : '';
 }
