@@ -46,8 +46,6 @@ export async function render(ctx) {
     trade: seeMoney && ranged ? api(`/trading${qs({ ...loc, from: range.from, to: range.to })}`) : null,
     tradePrev: seeMoney && ranged && range.prevTo ? api(`/trading${qs({ ...loc, from: range.prevFrom, to: range.prevTo })}`) : null,
     costs: can('sales.view', 'dashboard.sales') ? api(`/reports/rota-costs${qs({ ...loc, week })}`) : null,
-    // Monday up to yesterday, for how the week is tracking (from Tuesday on).
-    weekSoFar: seeMoney && today > week ? api(`/trading${qs({ ...loc, from: week, to: addDays(today, -1) })}`) : null,
     rota: can('rota.edit') ? api(`/rota${qs({ ...loc, week })}`) : null,
     rotaNext: can('rota.edit') ? api(`/rota${qs({ ...loc, week: nextWeek })}`) : null,
     leave: can('leave.manage') ? api('/leave/pending-count') : null,
@@ -172,49 +170,6 @@ export async function render(ctx) {
       <small>of ${card.shifts_today?.length ?? 0} on today’s rota · <u>see who</u></small></button>`);
   }
 
-  // ---- This week so far: sales against the budget, and labour % against the target ----
-  // Whole days so far (Monday to yesterday); on a Monday, today so far against today's budget.
-  let tracking = '';
-  if (got.costs && seeMoney && card) {
-    const days = got.costs.days;
-    const past = days.filter((d) => d.date < today);
-    const plan = got.costs.totals.budgeted ? 'budget' : 'forecast';
-    const sum = (list, k) => list.reduce((n, d) => n + (d[k] ?? 0), 0);
-    const actual = past.length ? sum(past, 'actual_sales') : card.gross_today ?? 0;
-    const planToDate = past.length ? sum(past, 'sales_budget') : days[0]?.sales_budget ?? 0;
-    const weekPlan = got.costs.totals.sales_budget ?? 0;
-    const onCourse = sum(past, 'actual_sales') + sum(days.filter((d) => d.date >= today), 'sales_budget');
-    const when = past.length ? (past.length === 1 ? 'Monday' : `Mon–${fmtDate(past.at(-1).date, { weekday: 'short' })}`) : 'today so far';
-    const salesPct = planToDate ? Math.round((actual / planToDate) * 100) : null;
-    const salesTone = salesPct === null ? '' : salesPct >= 100 ? 'md-good' : salesPct >= 90 ? 'md-warn' : 'md-bad';
-    const diff = actual - planToDate;
-    const bar = (fill, mark, tone) => `<div class="md-track" aria-hidden="true"><span class="md-track-fill ${tone}" style="width:${Math.max(0, Math.min(100, fill))}%"></span>${mark === null ? '' : `<span class="md-track-mark" style="left:${Math.max(0, Math.min(100, mark))}%"></span>`}</div>`;
-    const salesBox = `<div class="md-gauge">
-        <span class="md-gauge-label">Sales vs ${plan}</span>
-        <strong class="${salesTone}">${salesPct === null ? '–' : `${salesPct}%`}</strong>
-        <small>${planToDate ? `${money(actual)} vs ${money(planToDate)} ${plan} · ${when} · ${diff >= 0 ? '▲' : '▼'} ${money(Math.abs(diff))} ${diff >= 0 ? 'ahead' : 'behind'}` : `No ${plan} for ${when}`}</small>
-        ${weekPlan ? bar((actual / weekPlan) * 100, (planToDate / weekPlan) * 100, salesTone) : ''}
-        ${weekPlan ? `<small class="muted">Week ${plan} ${money(weekPlan)}${past.length ? ` · on course for ${money(onCourse)} if the rest of the week hits ${plan}` : ''}</small>` : ''}
-      </div>`;
-    const t = got.weekSoFar?.totals;
-    const synced = got.weekSoFar?.labour_synced;
-    const labour = t ? (synced && t.labour_pct !== null ? t.labour_pct : t.rostered_labour_pct) : card.labour_pct_today;
-    const labourCost = t ? (synced ? t.clocked_cost : t.rostered_cost) : card.labour_cost_today;
-    const basis = t ? (synced ? 'clocked' : 'rostered') : card.labour_basis === 'clocked' ? 'clocked' : 'rostered';
-    const [lTone, lWord] = labourTone(labour);
-    const planned = got.costs.totals.labour_pct;
-    const labourBox = `<div class="md-gauge">
-        <span class="md-gauge-label">Labour %</span>
-        <strong class="${lTone}">${pctText(labour)}</strong>
-        <small>${labour === null ? `No sales yet ${past.length ? 'this week' : 'today'}` : `${lWord} (${TARGET}%) · ${money(labourCost ?? 0)} ${basis} · ${when}`}</small>
-        ${labour === null ? '' : bar((labour / 50) * 100, (TARGET / 50) * 100, lTone)}
-        ${planned === null ? '' : `<small class="muted">Rota for the whole week: ${pctText(planned)} of ${plan}</small>`}
-      </div>`;
-    tracking = `<section class="card md-tracking"><h2>This week so far</h2>
-      <p class="muted small">How the week is going against the sales ${plan}${plan === 'forecast' ? ' (no sales budget set – using the forecast)' : ''} and the ${TARGET}% labour target. The line on each bar is where you should be.</p>
-      <div class="md-gauges">${salesBox}${labourBox}</div></section>`;
-  }
-
   // ---- This week, day by day (labour % of forecast on the rota) ----
   const weekRow = got.costs ? `<section class="card md-week"><h2>This week on the rota</h2>
       <p class="muted small">Rota cost as a share of each day’s forecast sales (target ${TARGET}%).</p>
@@ -240,7 +195,6 @@ export async function render(ctx) {
     <div id="wind-warning"></div>
     ${timeframeBar(t)}
     ${tiles.length ? `<div class="md-tiles">${tiles.join('')}</div>` : ''}
-    ${tracking}
     <div class="md-grid">
       <section class="card md-needs"><h2>Needs you ${needs.length ? `<span class="badge">${needs.length}</span>` : ''}</h2>
         ${needs.length ? `<ul class="md-list">${needs.map((n) => `<li class="md-row-${n.tone}"><a href="${n.href}"><span class="md-icon" aria-hidden="true">${n.icon}</span>
