@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { openDb } from '../src/db.js';
-import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
+import { DEFAULT_SAFETY_TASKS, DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { createApp } from '../src/server.js';
 import { addDays, shiftHours, today, weekStart } from '../src/util.js';
 
@@ -366,7 +366,7 @@ describe('food safety', () => {
     assert.equal(report.locations.length, 1);
     const todayRow = report.locations[0].days.find((d) => d.date === today());
     assert.equal(todayRow.done, 1);
-    assert.equal(todayRow.due, 15);
+    assert.equal(todayRow.due, DEFAULT_SAFETY_TASKS.filter((t) => t.frequency === 'daily').length);
     assert.equal(report.failures.length, 0, 'the failed reading was corrected');
   });
 

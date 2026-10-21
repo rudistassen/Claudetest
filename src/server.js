@@ -10,6 +10,7 @@ import { registerRecipeRoutes } from './routes/recipes.js';
 import { registerRotaRoutes } from './routes/rota.js';
 import { registerSalesRoutes } from './routes/sales.js';
 import { registerSafetyRoutes } from './routes/safety.js';
+import { registerSfbbRoutes } from './routes/sfbb.js';
 import { registerStockRoutes } from './routes/stock.js';
 import { registerPrepOrderRoutes } from './routes/prep-orders.js';
 import { registerLeaveRoutes } from './routes/leave.js';
@@ -124,6 +125,7 @@ export function createApp(db, { square = null, mailer = null, invoiceReader = nu
   registerPrepOrderRoutes(api, db);
   registerParLevelRoutes(api, db);
   registerSafetyRoutes(api, db);
+  registerSfbbRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db, square);
   registerTradingRoutes(api, db, square);

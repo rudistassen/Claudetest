@@ -3,6 +3,7 @@
 // something and records it once the request succeeds.
 import { requirePerm } from './auth.js';
 import { badRequest, date, id } from './util.js';
+import { methodByKey } from '../public/js/sfbb-content.js';
 
 const KEEP_DAYS = 365;
 // The same action on the same thing by the same person within this many minutes is one entry (e.g. counting stock).
@@ -136,6 +137,18 @@ const ACTIONS = [
   ['PUT', '/safety/tasks/:id', 'Compliance', 'Changed a compliance check', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
   ['DELETE', '/safety/tasks/:id', 'Compliance', 'Deleted a compliance check', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
   ['POST', '/safety/tasks/:id/:what', 'Compliance', 'Changed a compliance check for a site', (db, p) => nameOf(db, 'safety_tasks', 'title', p.id)],
+  ['PUT', '/sfbb/methods/:key', 'Compliance', 'Updated a Safer Food Better Business safe method', (db, p, b) => join(methodByKey(p.key)?.title ?? p.key, site(db, b.location_id))],
+  ['POST', '/sfbb/checks', 'Compliance', 'Added the SFBB opening and closing checks', (db, p, b) => site(db, b.location_id)],
+  ['POST', '/sfbb/diary/:date/sign', 'Compliance', 'Signed the food safety diary', (db, p, b) => join(fmtDay(p.date), site(db, b.location_id))],
+  ['PUT', '/sfbb/diary/:date', 'Compliance', 'Wrote in the food safety diary', (db, p, b) => join(fmtDay(p.date), site(db, b.location_id))],
+  ['PUT', '/sfbb/weeks/:week', 'Compliance', 'Recorded the week’s extra checks', (db, p, b) => site(db, b.location_id)],
+  ['POST', '/sfbb/reviews', 'Compliance', 'Completed a 4-weekly food safety review', (db, p, b) => site(db, b.location_id)],
+  ['POST', '/sfbb/training', 'Compliance', 'Recorded food safety training'],
+  ['DELETE', '/sfbb/training/:id', 'Compliance', 'Removed a food safety training record'],
+  ['POST', '/sfbb/:what', 'Compliance', 'Added a food safety record', (db, p, b) => site(db, b.location_id)],
+  ['PUT', '/sfbb/:what/:id', 'Compliance', 'Changed a food safety record'],
+  ['DELETE', '/sfbb/:what/:id', 'Compliance', 'Deleted a food safety record'],
+  ['POST', '/sfbb/starter/:what', 'Compliance', 'Started a food safety list', (db, p, b) => join(p.what, site(db, b.location_id))],
   // Stock and ordering
   ['POST', '/wastage', 'Stock', 'Recorded wastage'],
   ['DELETE', '/wastage/:id', 'Stock', 'Deleted a wastage entry'],

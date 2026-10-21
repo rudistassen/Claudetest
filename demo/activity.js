@@ -243,3 +243,56 @@ export function seedCompliance(db) {
   doc.run(site, 'PAT testing certificate', 'certificate', 'pat.txt', ...file('PAT test (sample)'), day(-380), day(-15), null, manager);
   doc.run(null, 'Public and employer’s liability insurance', 'insurance', 'insurance.txt', ...file('Insurance schedule (sample)'), day(-100), day(265), 'Policy no. ABC123', manager);
 }
+
+// Safer Food, Better Business at the first site: most of the pack worked through, the diary signed most days,
+// a 4-weekly review, training records and the records kept with the pack.
+export function seedSfbb(db) {
+  const site = db.prepare('SELECT id FROM locations ORDER BY id LIMIT 1').get().id;
+  const manager = db.prepare(`SELECT id FROM users WHERE email = 'manager1@cafe.local'`).get()?.id ?? null;
+  const people = db.prepare('SELECT id FROM users WHERE location_id = ? AND active = 1 ORDER BY id').all(site).map((u) => u.id);
+  const d0 = today();
+  const at = (n) => `${addDays(d0, n)}T16:30:00.000Z`;
+
+  const method = db.prepare(`INSERT INTO sfbb_methods (location_id, method_key, answers, not_relevant, completed_by, completed_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const yes = (n) => JSON.stringify(Object.fromEntries(Array.from({ length: n }, (_, i) => [i, { answer: 'yes', note: null }])));
+  [['personal-hygiene', 13], ['cloths', 4], ['separating-foods', 11], ['food-allergies', 3], ['contamination', 1], ['pest-control', 4], ['maintenance', 1],
+    ['handwashing', 5], ['cleaning-effectively', 8], ['clear-and-clean', 6], ['cleaning-schedule', 1], ['chilled-storage', 5], ['chilling-down', 1],
+    ['defrosting', 4], ['freezing', 3], ['cooking-safely', 1], ['reheating', 1], ['ready-to-eat', 5], ['opening-closing', 0], ['extra-checks', 1], ['prove-it', 1],
+    ['allergen-info', 14], ['training', 1]].forEach(([key, n], i) => method.run(site, key, yes(n), 0, manager, at(-40 + i), manager));
+  method.run(site, 'acrylamide', '{}', 1, manager, at(-20), manager);
+  method.run(site, 'hot-holding', yes(2), 0, null, null, manager);
+
+  const diary = db.prepare('INSERT INTO sfbb_diary (location_id, date, notes, signed_by, signed_at) VALUES (?, ?, ?, ?, ?)');
+  const NOTES = { 3: 'Dairy delivery arrived at 9°C – rejected and supplier called. Replacement came at 2pm.', 6: 'New starter Mo trained on handwashing and personal hygiene.', 9: 'Display fridge seal replaced by engineer.' };
+  for (let back = 27; back >= 1; back--) {
+    if (back === 2 || back === 11) continue;
+    diary.run(site, addDays(d0, -back), NOTES[back] ?? null, manager, at(-back));
+  }
+  db.prepare('INSERT INTO sfbb_weeks (location_id, week_start, extra_checks, updated_by) VALUES (?, ?, ?, ?)')
+    .run(site, addDays(weekStart(d0), -7), 'Probe checked in iced water (0.2°C) and boiling water (99.8°C). Deep cleaned behind the fridges. Dishwasher filters cleaned.', manager);
+  db.prepare(`INSERT INTO sfbb_reviews (location_id, date, problems, details, action, checklist, signed_by) VALUES (?, ?, 1, ?, ?, ?, ?)`)
+    .run(site, addDays(d0, -24), 'Display fridge over 8°C three mornings in a row.', 'Engineer replaced the door seal; added a mid-morning temperature check for two weeks.',
+      JSON.stringify(Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, i === 4 ? 'no' : 'yes']))), manager);
+
+  const train = db.prepare('INSERT OR IGNORE INTO sfbb_training (user_id, topic, date, recorded_by) VALUES (?, ?, ?, ?)');
+  people.forEach((u, i) => {
+    for (const t of ['factsheet', 'opening-closing', 'personal-hygiene', 'handwashing', 'food-allergies', 'cleaning-effectively', 'chilled-storage'].slice(0, 7 - (i % 4))) train.run(u, t, addDays(d0, -60 + i * 3), manager);
+    if (i % 2 === 0) train.run(u, 'level2', addDays(d0, -200 + i), manager);
+  });
+
+  const prove = db.prepare('INSERT INTO sfbb_prove_it (location_id, method_key, how, date, recorded_by) VALUES (?, ?, ?, ?, ?)');
+  prove.run(site, 'cooking-safely', 'Toasted ham and cheese sandwich probed at 12:35 – 82.7°C in the centre', addDays(d0, -2), manager);
+  prove.run(site, 'chilled-storage', 'Probed between packs in the display fridge – 4.1°C', addDays(d0, -5), manager);
+  prove.run(site, 'prove-it', 'Probe check: iced water 0.2°C, boiling water 99.8°C', addDays(d0, -8), manager);
+
+  const clean = db.prepare('INSERT INTO sfbb_cleaning (location_id, item, frequency, precautions, method, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+  [['Work surfaces', 'After use', 'Wear gloves', 'Remove food and dirt, wash with hot soapy water, rinse, apply sanitiser for 30 seconds, rinse and air dry.'],
+    ['Coffee machine and steam wands', 'Every shift', null, 'Purge and wipe wands after every drink; back-flush with cleaner at close and soak the wand tips.'],
+    ['Display fridge', 'Weekly', 'Wear gloves', 'Move food to the kitchen fridge, wash shelves and inside, sanitise, dry and restock. Clean the door seals.'],
+    ['Floors', 'Daily', null, 'Sweep, then mop with hot water and floor cleaner. Wet floor sign out.']].forEach((c, i) => clean.run(site, ...c, i));
+
+  const contact = db.prepare('INSERT INTO sfbb_contacts (location_id, role, name, phone, email, notes) VALUES (?, ?, ?, ?, ?, ?)');
+  contact.run(site, 'Environmental Health team', 'Lambeth Council – Food Safety', '020 7926 6000', null, 'Food hygiene, pest control, drainage, recalls');
+  contact.run(site, 'Pest control contractor', 'Pestaway Ltd', '0800 000 111', 'service@pestaway.example', 'Visits monthly');
+  contact.run(site, 'Refrigeration engineer', 'CoolFix', '020 7000 2222', null, null);
+}

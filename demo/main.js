@@ -10,6 +10,7 @@ import { checkOrderReplies, registerOrderEmailRoutes } from '../src/order-inbox.
 import { registerRecipeRoutes } from '../src/routes/recipes.js';
 import { registerRotaRoutes } from '../src/routes/rota.js';
 import { registerSafetyRoutes } from '../src/routes/safety.js';
+import { registerSfbbRoutes } from '../src/routes/sfbb.js';
 import { registerSalesRoutes } from '../src/routes/sales.js';
 import { registerStockRoutes } from '../src/routes/stock.js';
 import { registerPrepOrderRoutes } from '../src/routes/prep-orders.js';
@@ -44,7 +45,7 @@ import { registerReviewRoutes, syncReviews } from '../src/google-reviews.js';
 import { demoPlaces } from './google-reviews.js';
 import { registerInviteRoutes, registerPasswordRoutes } from '../src/invites.js';
 import { HttpError, addDays, today } from '../src/util.js';
-import { seedActivity, seedChat, seedCompliance, seedCourse, seedChecklists, seedSkills } from './activity.js';
+import { seedActivity, seedChat, seedCompliance, seedCourse, seedChecklists, seedSfbb, seedSkills } from './activity.js';
 import { SQUARE_LOCATIONS, fakeSquareFetch, setFakeRota } from './fake-square.js';
 import { registerPushRoutes } from '../src/push.js';
 import { activityLogger, registerActivityRoutes } from '../src/activity.js';
@@ -114,6 +115,7 @@ async function boot() {
   seedChat(db);
   seedSkills(db);
   seedCompliance(db);
+  seedSfbb(db);
   seedChecklists(db);
   publishAllShifts(db);
   // Most people have confirmed their shifts; a few haven't yet (staff1 – the demo's staff login – has some to confirm).
@@ -167,6 +169,7 @@ async function boot() {
   registerPrepOrderRoutes(api, db);
   registerParLevelRoutes(api, db);
   registerSafetyRoutes(api, db);
+  registerSfbbRoutes(api, db);
   registerSalesRoutes(api, db, square);
   registerRecipeRoutes(api, db, square);
   registerTradingRoutes(api, db, square);
