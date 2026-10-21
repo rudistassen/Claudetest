@@ -4,8 +4,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { HttpError } from './util.js';
 
-const KEEP = { update: 5, daily: 7, manual: 5 };
+const KEEP = { update: 3, daily: 3, manual: 3 };
+// Copies never take the disk past this: older ones are cleared out first, and if there still isn't room the
+// copy is skipped (the newest copy is always kept).
+const MAX_USED = 0.7;
 const NAME = /^cafe-(update|daily|manual)-(\d{8})-(\d{6})(\d{3})?\.db$/;
 const stamp = () => new Date().toISOString().slice(0, 23).replace(/[-:.]/g, '').replace('T', '-');
 
@@ -34,13 +38,54 @@ function prune(dbPath, kind) {
   for (const b of listBackups(dbPath).filter((x) => x.kind === kind).slice(KEEP[kind])) fs.rmSync(path.join(backupDir(dbPath), b.name), { force: true });
 }
 
+// How the disk's size and free space are read (swapped out in tests).
+export const disk = { statfs: (dir) => fs.statfsSync(dir) };
+
+const fileSize = (f) => { try { return fs.statSync(f).size; } catch { return 0; } };
+
+/** How full the disk is, and what the database and its copies take up (bytes). */
+export function diskUsage(dbPath) {
+  const dbSize = fileSize(dbPath) + fileSize(`${dbPath}-wal`);
+  const backupsSize = listBackups(dbPath).reduce((n, b) => n + b.size, 0);
+  let total = null;
+  let free = null;
+  try {
+    const s = disk.statfs(path.dirname(dbPath));
+    total = s.blocks * s.bsize;
+    free = s.bavail * s.bsize;
+  } catch { /* not available on this system */ }
+  return { total, free, used: total === null ? null : total - free, db: dbSize, backups: backupsSize };
+}
+
+// Would a copy of size `extra` take the disk past MAX_USED?
+const tooFull = (dbPath, extra = 0) => {
+  const d = diskUsage(dbPath);
+  return d.total ? (d.used + extra) / d.total > MAX_USED : false;
+};
+
+/** Clears out the oldest copies (keeping the newest) while the disk is too full for `extra` more bytes. */
+function makeRoom(dbPath, extra = 0) {
+  while (tooFull(dbPath, extra)) {
+    const all = listBackups(dbPath);
+    if (all.length <= 1) return false;
+    fs.rmSync(path.join(backupDir(dbPath), all.at(-1).name), { force: true });
+  }
+  return true;
+}
+
 /** Copies the database (a consistent copy, even while it's in use). db: an open database, or null to open the file. */
 export function backUp(dbPath, kind, db = null) {
   fs.mkdirSync(backupDir(dbPath), { recursive: true });
+  // A copy is about the size of the last one (or, for the first, of the database file and its write-ahead log).
+  const estimate = listBackups(dbPath)[0]?.size ?? fileSize(dbPath) + fileSize(`${dbPath}-wal`);
+  if (!makeRoom(dbPath, estimate)) {
+    throw new HttpError(507, 'There isn’t enough space on the server for another backup. Make the volume bigger in Railway.');
+  }
   const name = `cafe-${kind}-${stamp()}.db`;
   const source = db ?? new DatabaseSync(dbPath);
   try { source.prepare('VACUUM INTO ?').run(path.join(backupDir(dbPath), name)); } finally { if (!db) source.close(); }
   prune(dbPath, kind);
+  makeRoom(dbPath);
   return name;
 }
 
@@ -53,7 +98,8 @@ export function backUpBeforeUpdate(dbPath, fingerprint) {
   const marker = path.join(backupDir(dbPath), 'last-version.txt');
   const last = fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim() : null;
   if (last === fingerprint) return null;
-  const name = backUp(dbPath, 'update');
+  let name = null;
+  try { name = backUp(dbPath, 'update'); } catch (err) { console.error(`Backup before update skipped: ${err.message}`); }
   fs.writeFileSync(marker, fingerprint);
   return name;
 }

@@ -2,12 +2,12 @@
 import fs from 'node:fs';
 import { requireAdmin } from '../auth.js';
 import { logActivity } from '../activity.js';
-import { backUp, backupPath, listBackups } from '../backups.js';
+import { backUp, backupPath, diskUsage, listBackups } from '../backups.js';
 import { notFound } from '../util.js';
 
 export function registerBackupRoutes(router, db, backups) {
   router.get('/admin/backups', requireAdmin, (req, res) => {
-    res.json(backups ? { available: true, backups: listBackups(backups.dbPath) } : { available: false, backups: [] });
+    res.json(backups ? { available: true, backups: listBackups(backups.dbPath), disk: diskUsage(backups.dbPath) } : { available: false, backups: [] });
   });
   router.post('/admin/backups', requireAdmin, (req, res) => {
     if (!backups) throw notFound('Backups');

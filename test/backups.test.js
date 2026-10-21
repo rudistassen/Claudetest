@@ -5,7 +5,7 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../src/db.js';
-import { backUpBeforeUpdate, listBackups } from '../src/backups.js';
+import { backUp, backUpBeforeUpdate, disk, diskUsage, listBackups } from '../src/backups.js';
 import { DEMO_PASSWORD, seedAdmin, seedDemo } from '../src/seed.js';
 import { createApp } from '../src/server.js';
 
@@ -15,6 +15,8 @@ let db;
 let dir;
 let dbPath;
 before(async () => {
+  // A roomy pretend disk, so these don't depend on how full the machine running them is.
+  disk.statfs = () => ({ bsize: 1, blocks: 1e12, bavail: 9e11 });
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-backups-'));
   dbPath = path.join(dir, 'cafe.db');
   db = openDb(dbPath);
@@ -57,4 +59,29 @@ test('a copy is made before new code first runs, once per version', () => {
   assert.equal(backUpBeforeUpdate(dbPath, 'v1'), null, 'not again for the same version');
   assert.ok(backUpBeforeUpdate(dbPath, 'v2'));
   assert.equal(listBackups(dbPath).filter((b) => b.kind === 'update').length, 2);
+});
+
+test('backups keep the disk under 70% full: older copies go first, and a copy is skipped when there’s no room', () => {
+  const real = disk.statfs;
+  const size = () => listBackups(dbPath)[0].size;
+  const base = () => ['', '-wal'].reduce((n, x) => n + (fs.existsSync(dbPath + x) ? fs.statSync(dbPath + x).size : 0), 0);
+  try {
+    // Room for about three copies within 70% of the disk.
+    const fake = (blocks) => () => {
+      const used = fs.readdirSync(path.join(dir, 'backups')).filter((n) => n.endsWith('.db')).reduce((n, f) => n + fs.statSync(path.join(dir, 'backups', f)).size, 0) + base();
+      return { bsize: 1, blocks, bavail: blocks - used };
+    };
+    disk.statfs = fake(Math.round((base() + size() * 3.2) / 0.7));
+    for (let i = 0; i < 4; i++) backUp(dbPath, ['manual', 'daily', 'update', 'manual'][i]);
+    const d = diskUsage(dbPath);
+    assert.ok(d.used / d.total <= 0.7, `kept under 70% (${Math.round((d.used / d.total) * 100)}%)`);
+    assert.ok(listBackups(dbPath).length >= 1 && listBackups(dbPath).length <= 3);
+    assert.equal(listBackups(dbPath)[0].kind, 'manual', 'the newest copy is kept');
+    // No room at all: nothing is made, and it says why.
+    disk.statfs = fake(base() + size());
+    assert.throws(() => backUp(dbPath, 'manual'), /enough space/);
+    assert.equal(backUpBeforeUpdate(dbPath, 'v3'), null, 'an update still starts without one');
+  } finally {
+    disk.statfs = real;
+  }
 });
