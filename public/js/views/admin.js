@@ -1029,9 +1029,14 @@ export async function renderBackups({ el, stale, rerender }) {
       <div class="actions">${data.available ? '<button class="btn btn-primary" id="backup-now">Back up now</button>' : ''}</div></div>
     <section class="card narrow">
       <p>Atlas keeps copies of all its data (rotas, holiday, checks, chats and everything else) on the server: <strong>one before each update</strong>,
-        <strong>one every night</strong>, and any you make here. It keeps the last 5 before updates, 7 nightly and 5 made by hand.</p>
+        <strong>one every night</strong>, and any you make here. It keeps the last 3 of each, and clears out older ones if the server’s disk gets over 70% full.</p>
       <p class="muted small">Download one now and then to keep somewhere safe too, e.g. your OneDrive. It holds personal details, so keep it private.</p>
     </section>
+    ${data.disk?.total ? `<section class="card narrow"><h2>Space on the server</h2>
+      <p><strong>${Math.round((data.disk.used / data.disk.total) * 100)}% full</strong> – ${size(data.disk.used)} of ${size(data.disk.total)} used.
+        The data itself is ${size(data.disk.db)}; backups take ${size(data.disk.backups)}.</p>
+      ${data.disk.used / data.disk.total > 0.8 ? '<p class="notice">The disk is getting full. Make the volume bigger in Railway (the service’s Volume → Settings).</p>' : ''}
+    </section>` : ''}
     ${!data.available ? '<div class="card empty">Backups only work on the real server (not in the demo).</div>'
       : data.backups.length ? `<div class="table-wrap card"><table><thead><tr><th>When</th><th>Kind</th><th class="num">Size</th><th></th></tr></thead>
         <tbody>${data.backups.map((b) => `<tr><td>${esc(when(b.at))}</td><td>${KIND[b.kind] ?? esc(b.kind)}</td><td class="num">${size(b.size)}</td>
