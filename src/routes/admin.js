@@ -84,7 +84,7 @@ export function registerAdminRoutes(router, db, square = null) {
     return m;
   };
 
-  router.get('/users', requirePerm('staff.manage'), (req, res) => {
+  router.get('/users', requirePerm('staff.manage', 'staff.view'), (req, res) => {
     const locationId = id(req.query.location_id, 'location_id');
     if (locationId) assertLocation(req, locationId);
     const sql = `SELECT ${PUBLIC_USER_FIELDS}, ${ACCESS_FIELDS}, l.name AS location_name, u.last_login_at, u.invited_at,
@@ -100,8 +100,12 @@ export function registerAdminRoutes(router, db, square = null) {
     }
     const extra = extraSites();
     const pay = can(req.user, 'staff.pay');
+    const manage = can(req.user, 'staff.manage');
+    // Viewing only (staff.view): just the basics – no access, sign-in or Square details.
+    const BASIC = ['id', 'name', 'email', 'role', 'location_id', 'location_name', 'position', 'rota_group', 'on_rota', 'active', 'all_sites', 'site_ids', 'hourly_rate'];
     res.json(rows.map((u) => {
-      const out = { ...withPermissions(u), site_ids: extra.get(u.id) ?? [] };
+      let out = { ...withPermissions(u), site_ids: extra.get(u.id) ?? [] };
+      if (!manage) out = Object.fromEntries(BASIC.filter((k) => k in out).map((k) => [k, out[k]]));
       if (!pay) delete out.hourly_rate;
       return out;
     }));

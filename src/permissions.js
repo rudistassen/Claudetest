@@ -90,6 +90,7 @@ export const PERMISSION_AREAS = [
     ['payments.send', 'Create and send Square payment links to customers (e.g. deposits)'],
   ]],
   ['Staff', [
+    ['staff.view', 'See basic staff details at their site (name, email, site, role) – no pay, and can’t change anything'],
     ['staff.manage', 'Add and edit staff at their site'],
     ['staff.pay', 'See and change pay rates'],
     ['timecards.move', 'Move a clock-in to another site they manage (changes the timecard in Square too)'],

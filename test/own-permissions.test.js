@@ -75,3 +75,22 @@ test('picking new access for several people replaces their own permissions', asy
   await a('/users/bulk', { method: 'POST', body: { ids: [s.id], changes: { hourly_rate: 12.5 } } });
   assert.ok(userByEmail('staff1@cafe.local').custom_permissions);
 });
+
+test('staff.view: sees the basics of staff at their site – no pay or access details – and can’t change anyone', async () => {
+  const a = await login('admin@cafe.local');
+  const s = userByEmail('staff2@cafe.local');
+  await a(`/users/${s.id}`, { method: 'PUT', body: { name: s.name, email: s.email, location_id: s.location_id, custom_permissions: ['rota.view', 'staff.view'] } });
+  const v = await login('staff2@cafe.local');
+  const list = await v('/users');
+  assert.equal(list.status, 200);
+  assert.ok(list.data.length > 1);
+  assert.ok(list.data.every((u) => u.location_id === s.location_id && u.role !== 'admin'), 'only their site, no admins');
+  for (const u of list.data) {
+    assert.ok(u.name && 'email' in u);
+    for (const hidden of ['hourly_rate', 'permissions', 'permissions_json', 'access_name', 'last_login_at', 'invited_at', 'square_member_id']) assert.ok(!(hidden in u), `no ${hidden}`);
+  }
+  const other = list.data.find((u) => u.id !== s.id);
+  assert.equal((await v(`/users/${other.id}`, { method: 'PUT', body: { name: 'Changed', email: other.email, location_id: other.location_id } })).status, 403);
+  assert.equal((await v('/users', { method: 'POST', body: { name: 'New', email: 'new@x.example', location_id: s.location_id } })).status, 403);
+  assert.equal((await v('/permissions')).status, 403);
+});

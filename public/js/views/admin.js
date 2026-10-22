@@ -378,13 +378,35 @@ export async function renderStaff(ctx) {
   const { state } = ctx;
   // Admins see every site's staff by default, so moving someone to another home site doesn't hide them.
   const scope = siteScope(state, ctx.query.scope);
+  // People who can only see staff (staff.view) get a read-only list of the basics.
+  const manage = state.can('staff.manage');
   const [everyone, square, perms, invites] = await Promise.all([
     api(`/users${qs({ location_id: scope === 'all' ? undefined : state.locationId })}`),
     state.isAdmin ? api('/square/status') : null,
-    api('/permissions'),
-    api('/invites/settings'),
+    manage ? api('/permissions') : null,
+    manage ? api('/invites/settings') : {},
   ]);
   if (ctx.stale()) return;
+  if (!manage) {
+    const siteOf = (id) => state.locations.find((l) => l.id === id)?.name ?? '';
+    listPage(ctx, {
+      title: state.multiSite ? 'Staff' : `Staff · ${state.location?.name ?? ''}`,
+      rows: everyone,
+      search: true,
+      canEdit: false,
+      extraActions: siteFilter(state, scope),
+      columns: [
+        { label: 'Name', key: 'name' },
+        { label: 'Email', key: 'email' },
+        { label: 'Site', value: (r) => r.location_name ?? siteOf(r.location_id) },
+        { label: 'Role', value: (r) => r.rota_group ?? r.position ?? '' },
+        { label: 'On rota', value: (r) => (r.on_rota === 0 ? 'No' : 'Yes') },
+        ...(state.can('staff.pay') ? [{ label: 'Hourly rate', num: true, value: (r) => money(r.hourly_rate) }] : []),
+        { label: 'Active', value: (r) => yesNo(r.active) },
+      ],
+    });
+    return;
+  }
   const status = JOIN_STATUS.some(([k]) => k === ctx.query.status) ? ctx.query.status : '';
   const rows = status ? everyone.filter((u) => u.active && joinStatus(u).key === status) : everyone;
   const editor = staffEditor(state, everyone, perms, invites);
