@@ -1,5 +1,6 @@
 // Ready-made courses a manager can add to People → Learning & development in one tap, then change in the designer
 // before publishing. Each is added as a draft, so nothing reaches staff until someone has checked it fits their sites.
+import { SFBB_CLOSING, SFBB_CREDIT, SFBB_OPENING, SFBB_SECTIONS } from '../public/js/sfbb-content.js';
 
 const page = (title, body) => ({ kind: 'page', title, body });
 const question = (title, options, answer, body = '') => ({ kind: 'question', title, options, answer, body });
@@ -880,3 +881,85 @@ export const templateSummaries = () => COURSE_TEMPLATES.map((t) => ({
   pages: t.steps.filter((s) => s.kind === 'page').length,
   questions: t.steps.filter((s) => s.kind === 'question').length,
 }));
+
+// ---- Safer Food, Better Business: the FSA pack's 31 safe methods, as five courses (one for each section) ----
+// Each safe method is a page (what to do and why, what to do if things go wrong) and a question. Passing a course
+// records its safe methods on the person's SFBB staff training record (see sfbb_topics).
+
+const SFBB_QUESTIONS = {
+  'personal-hygiene': ['Someone has had diarrhoea and vomiting. How long must they be free of symptoms before working with food again?', ['24 hours', '48 hours', 'As soon as they feel better', 'A week'], 1, 'They can still carry harmful bacteria for 48 hours after the symptoms stop.'],
+  cloths: ['Which cloth should you use to wipe a surface before preparing ready-to-eat food?', ['A tea towel', 'A new disposable cloth, or one that has been washed and disinfected', 'The washing-up cloth', 'Any cloth that looks clean'], 1, 'Dirty cloths spread bacteria and allergens very easily.'],
+  'separating-foods': ['Raw meat has to go in the same fridge as ready-to-eat food. Where should it go?', ['On the top shelf', 'Covered, below the ready-to-eat food', 'Next to the salad', 'Anywhere, as long as it’s covered'], 1, 'So nothing can drip from raw meat onto food that won’t be cooked.'],
+  'food-allergies': ['You’ve made a dish for a customer with an allergy and spot an ingredient they’re allergic to. What do you do?', ['Pick the ingredient out', 'Start again with fresh ingredients and clean equipment', 'Cook it for longer to destroy the allergen', 'Serve it and warn them'], 1, 'Allergens can’t be removed or destroyed by cooking – even a trace can be fatal.'],
+  contamination: ['A piece of glass may have fallen into a tub of sauce. What do you do?', ['Sieve the sauce', 'Throw the food away', 'Use it for staff food', 'Leave a note for the next shift'], 1, 'If objects or chemicals may have got into food, throw it away.'],
+  'pest-control': ['You find mouse droppings in the dry store. What should happen?', ['Sweep them up and carry on', 'Tell the manager, call the pest contractor, throw away anything pests may have touched, and clean and disinfect', 'Put down some poison yourself', 'Nothing, if they look old'], 1, 'Pests carry harmful bacteria – act straight away and note it in the diary.'],
+  maintenance: ['A chopping board is deeply scratched and scored. What should you do?', ['Keep using it', 'Replace it', 'Turn it over', 'Only use it for raw meat'], 1, 'Dirt and bacteria collect in scratches where the board can’t be cleaned properly.'],
+  handwashing: ['When must you wash your hands?', ['Only at the start of a shift', 'After touching raw meat and before touching ready-to-eat food (and after breaks, bins, cleaning and your face)', 'Only when they look dirty', 'Never if you wear gloves'], 1, 'Gloves and hand gels are never a replacement for washing your hands.'],
+  'cleaning-effectively': ['What is a “two-stage clean”?', ['Wiping a surface twice', 'Cleaning off dirt and grease first, then disinfecting and leaving it for the contact time', 'Disinfecting, then rinsing', 'Spraying and wiping straight away'], 1, 'Disinfectants only work on surfaces that have been cleaned first.'],
+  'clear-and-clean': ['Raw chicken packaging has touched the worktop. What do you do?', ['Wipe it with a tea towel', 'Throw the packaging away, then clean and disinfect the worktop', 'Nothing, if it’s dry', 'Cover it with kitchen roll'], 1, 'Packaging from raw food can spread bacteria to surfaces and other food.'],
+  'cleaning-schedule': ['What does the cleaning schedule tell staff?', ['What to clean, how, how often, and which chemicals and precautions to use', 'Who is on shift', 'When deliveries come', 'What’s on the menu'], 0, 'Put it on the wall so everyone can check how to clean things.'],
+  'chilled-storage': ['What temperature should fridges be set at?', ['8°C or below', '5°C or below', '10°C', 'Exactly 0°C'], 1, 'Set at 5°C or below so chilled food stays at 8°C or below – the legal limit.'],
+  'chilling-down': ['How should you chill a large pot of cooked chilli quickly?', ['Leave it on the side overnight', 'Divide it into small portions or spread it in shallow trays, then put it in the fridge', 'Put the whole hot pot straight in the fridge', 'Put a lid on and leave it on the hob'], 1, 'Smaller, spread-out portions chill much faster, so bacteria don’t get the chance to grow.'],
+  defrosting: ['How do you check a whole chicken has fully defrosted?', ['The outside feels soft', 'There are no ice crystals inside and the joints move freely', 'It has been out for an hour', 'It floats in water'], 1, 'The outside may look defrosted while the middle is still frozen.'],
+  freezing: ['What temperature should frozen food be kept at?', ['-18°C or below', '-5°C', '0°C', '-10°C'], 0, 'Check it as part of your opening checks.'],
+  'cooking-safely': ['Which of these is a safe cooking time and temperature (in the centre of the food)?', ['60°C for 1 minute', '75°C for 30 seconds', '63°C for 5 seconds', '50°C for 10 minutes'], 1, 'Other safe combinations: 80°C for 6 seconds, 70°C for 2 minutes, 65°C for 10 minutes, 60°C for 45 minutes.'],
+  'extra-care': ['How should you handle cooked rice?', ['Keep it at room temperature until it’s needed', 'Keep it hot, or chill it quickly and use it within 1 day', 'Reheat it as often as you need', 'Keep it for 3 days'], 1, 'Rice spores survive cooking and make toxins at room temperature that reheating won’t remove.'],
+  reheating: ['How many times can food be reheated?', ['Once', 'Twice', 'As many times as needed', 'Never'], 0, 'Reheat it thoroughly, once, until it’s steaming hot all the way through.'],
+  'checking-menu': ['How do you check a lasagne is properly cooked?', ['Look at the top', 'Probe it in the centre in several places', 'Go by the cooking time only', 'Check the edges are bubbling'], 1, 'Large dishes can have cold spots – check in several places.'],
+  'hot-holding': ['What temperature must hot food be kept at?', ['50°C or above', '63°C or above', 'Exactly 75°C', 'Warm to the touch'], 1, 'Below 63°C bacteria can grow. Hot food can be out of hot holding for up to 2 hours, once.'],
+  'ready-to-eat': ['Unless you have evidence it’s safe for longer, how long can high-risk ready-to-eat food be kept once cooked or opened?', ['1 day', '3 days in total – the day of cooking or opening plus 2', 'A week', 'Until the original pack’s use-by date'], 1, 'Label it so everyone knows when to use it by. Cooked rice only 1 day.'],
+  acrylamide: ['How should chips be cooked to keep acrylamide low?', ['Dark brown and extra crispy', 'Golden yellow or lighter', 'At 200°C or hotter', 'Fried twice'], 1, 'Over-cooking or burning starchy food raises acrylamide. Fry below 175°C.'],
+  'opening-closing': ['Which of these is an opening check?', ['Floors swept and clean', 'Staff are fit for work and wearing clean work clothes', 'Waste removed and new bags in the bins', 'All the washing up finished'], 1, 'The others are closing checks.'],
+  'extra-checks': ['When you check a probe thermometer in boiling water, what should it read?', ['90–95°C', '99–101°C', '105°C', 'Anything above 95°C'], 1, 'In iced water it should read -1°C to 1°C. If not, replace it or have it calibrated.'],
+  'prove-it': ['What is a “Prove it” check?', ['Using a clean probe to show a method keeps food safe, and writing it down', 'Proving staff turned up for their shift', 'Checking the delivery note', 'Asking customers for feedback'], 0, 'Record them under Records → Prove it.'],
+  'allergen-info': ['A customer asks what allergens are in today’s special. What do you do?', ['Make your best guess', 'Check the recipe and allergen information – if you’re not sure, say you can’t guarantee it', 'Say it’s fine', 'Ask another customer'], 1, 'Wrong information can cause a serious reaction. Never guess.'],
+  training: ['When the manager signs the diary each day, what are they confirming?', ['The till balanced', 'Our safe methods were followed and staff were supervised', 'Everyone arrived on time', 'All deliveries arrived'], 1, 'If something went wrong, it should be written in the diary with what was done.'],
+  customers: ['A customer says your food made them ill. What should happen?', ['Ignore it', 'Take it seriously, record it, investigate (the diary, Prove it records, staff illness) and fix the cause', 'Argue with them', 'Give a refund and forget it'], 1, 'Complaints can point to a problem that needs fixing – record them in Incident Management.'],
+  suppliers: ['A chilled delivery arrives warm. What do you do?', ['Accept it and put it in the fridge', 'Reject it, contact the supplier and note it in the diary', 'Freeze it', 'Use it first'], 1, 'If food hasn’t been kept cold enough, it may not be safe.'],
+  'stock-control': ['What does “first in, first out” mean?', ['Older stock is used before newer stock', 'The newest stock is used first', 'Stock is used in any order', 'The cheapest stock is used first'], 0, 'It stops food going past its use-by date.'],
+  recall: ['You hear that a product you use has been recalled. What do you do?', ['Use it up quickly', 'Stop using or selling it, take it out and label it, and tell your staff', 'Wait for a letter', 'Sell it at a discount'], 1, 'Also check whether it was used as an ingredient in food you’ve stored.'],
+};
+
+// A safe method as a lesson page.
+function sfbbPage(m) {
+  const lines = [m.intro, ''];
+  if (m.points.length) {
+    lines.push('**What to do**');
+    for (const [what, why] of m.points) lines.push(`- ${what}${why ? ` **Why:** ${why}` : ''}`);
+    lines.push('');
+  }
+  for (const [h, t] of m.notes ?? []) lines.push(`**${h}:** ${t}`, '');
+  if (m.checks) {
+    lines.push('**Opening checks**', ...SFBB_OPENING.map((t) => `- ${t}`), '', '**Closing checks**', ...SFBB_CLOSING.map((t) => `- ${t}`), '');
+  }
+  if (m.wrong.length) lines.push('**If things go wrong**', ...m.wrong.map((t) => `- ${t}`), '');
+  if (m.stop.length) lines.push('**How to stop it happening again**', ...m.stop.map((t) => `- ${t}`), '');
+  return page(m.title, lines.join('\n').trim());
+}
+
+SFBB_SECTIONS.forEach((s, i) => {
+  const q = s.methods.length;
+  COURSE_TEMPLATES.push({
+    key: `sfbb-${s.key}`,
+    name: `Safer Food, Better Business ${i + 1}: ${s.title}`,
+    description: `Part ${i + 1} of 5 of the Food Standards Agency’s Safer Food, Better Business pack: the ${q} safe method${q === 1 ? '' : 's'} for ${s.title.toLowerCase()} (${s.methods.map((m) => m.title).join(', ')}). Passing it records them on the person’s SFBB training record.`,
+    renew_months: 12,
+    pass_mark: 80,
+    needs_signoff: false,
+    sfbb: s.methods.map((m) => m.key),
+    steps: [
+      page(`${s.title} – Safer Food, Better Business`, `${s.intro}
+
+This part covers ${q} safe method${q === 1 ? '' : 's'}:
+${s.methods.map((m) => `- ${m.title}`).join('\n')}
+
+Read each page, then answer a question on it. You need 80% to pass.
+
+${SFBB_CREDIT}`),
+      ...s.methods.flatMap((m) => {
+        const [title, options, answer, why] = SFBB_QUESTIONS[m.key];
+        return [sfbbPage(m), question(title, options, answer, why)];
+      }),
+    ],
+  });
+});

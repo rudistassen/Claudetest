@@ -1393,6 +1393,8 @@ const MIGRATIONS = [
   ['training_courses', 'open_to_all', 'ALTER TABLE training_courses ADD COLUMN open_to_all INTEGER NOT NULL DEFAULT 0'],
   ['training_courses', 'pass_mark', 'ALTER TABLE training_courses ADD COLUMN pass_mark INTEGER NOT NULL DEFAULT 80'],
   ['training_courses', 'needs_signoff', 'ALTER TABLE training_courses ADD COLUMN needs_signoff INTEGER NOT NULL DEFAULT 0'],
+  // Safer Food, Better Business safe methods a course covers (JSON list of keys): passing it fills in the SFBB training record.
+  ['training_courses', 'sfbb_topics', 'ALTER TABLE training_courses ADD COLUMN sfbb_topics TEXT'],
   // When someone finished (or skipped) the guided tour shown the first time they sign in.
   ['users', 'tour_done_at', 'ALTER TABLE users ADD COLUMN tour_done_at TEXT'],
   // Staff on paid breaks don't clock breaks in Square, so they're never flagged for a missed or short break.

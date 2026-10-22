@@ -140,3 +140,34 @@ test('SFBB 4-weekly review, training record and records', async () => {
   assert.equal(records.contacts[0].name, 'Pestaway');
   assert.equal((await manager(`/sfbb/contacts/${added.data.id}`, { method: 'DELETE' })).status, 200);
 });
+
+test('SFBB courses: the 31 safe methods as five ready-made courses; passing one fills in the SFBB training record', async () => {
+  const admin = await login('admin@cafe.local');
+  // Taking courses is its own permission (training.take).
+  const s1 = (await admin('/users')).data.find((u) => u.email === 'staff1@cafe.local');
+  await admin(`/users/${s1.id}`, { method: 'PUT', body: { name: s1.name, email: s1.email, location_id: s1.location_id, custom_permissions: [...s1.permissions, 'training.take'] } });
+  const staff = await login('staff1@cafe.local');
+  const site = staff.me.location_id;
+  const templates = (await admin('/training/templates')).data.templates.filter((t) => t.key.startsWith('sfbb-'));
+  assert.equal(templates.length, 5);
+  assert.equal(templates.reduce((n, t) => n + t.questions, 0), 31, 'a question for every safe method');
+
+  const { id } = (await admin('/training/templates/sfbb-cleaning', { method: 'POST' })).data;
+  const design = (await admin(`/training/courses/${id}/design`)).data;
+  // Publish it (unchanged), open to everyone.
+  assert.equal((await admin(`/training/courses/${id}/design`, { method: 'PUT', body: { ...design.course, steps: design.steps, published: true, open_to_all: true } })).status, 200);
+  const course = (await staff(`/learn/${id}`)).data;
+  const questions = design.steps.filter((s) => s.kind === 'question');
+  assert.equal(questions.length, 4);
+
+  // A fail records nothing; a pass records the section's four safe methods.
+  const wrong = Object.fromEntries(questions.map((q) => [q.id, (q.answer + 1) % q.options.length]));
+  assert.equal((await staff(`/learn/${id}/submit`, { method: 'POST', body: { answers: wrong } })).data.passed, false);
+  const mine = async () => (await admin(`/sfbb/training?location_id=${site}`)).data.records.filter((r) => r.user_id === staff.me.id).map((r) => r.topic);
+  assert.ok(!(await mine()).includes('clear-and-clean'));
+  const right = Object.fromEntries(questions.map((q) => [q.id, q.answer]));
+  assert.equal((await staff(`/learn/${id}/submit`, { method: 'POST', body: { answers: right } })).data.passed, true);
+  const got = await mine();
+  for (const k of ['handwashing', 'cleaning-effectively', 'clear-and-clean', 'cleaning-schedule']) assert.ok(got.includes(k), k);
+  assert.equal(course.steps.length, design.steps.length);
+});

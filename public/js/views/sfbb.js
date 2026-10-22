@@ -359,6 +359,7 @@ export async function renderTraining(ctx) {
     ${head(state, 'Staff training record', manage ? '<button class="btn btn-primary" id="record">Record training</button>' : '')}
     ${sfbbTabs(state, 'safety/training')}
     <p class="muted">Train each person on the safe methods for the work they do: show them, question them, then ask them to show you. Record it here every time.</p>
+    <p class="muted">Staff can also learn the safe methods online: the five Safer Food, Better Business courses${state.can('people.training') ? ' are ready-made in <a href="#/people/training/elearning">E-Learning</a>' : ' in E-Learning'}. Passing one fills in its safe methods here automatically.</p>
     <section class="card">
       <div class="table-wrap"><table>
         <thead><tr><th>Name</th><th>First day</th><th>Safe methods</th><th>Level 2</th><th>Allergen awareness</th><th>Last trained</th><th></th></tr></thead>
@@ -416,7 +417,7 @@ export async function renderTraining(ctx) {
     for (const r of recs) if (!latest.has(r.topic)) latest.set(r.topic, r);
     const row = ([k, l]) => {
       const r = latest.get(k);
-      return `<li><span>${esc(l)}</span>${r ? `<span>${fmtWhen(r.date)}${manage ? ` <button type="button" class="btn btn-small btn-ghost" data-del="${r.id}" aria-label="Remove">✕</button>` : ''}</span>` : '<span class="muted">Not yet</span>'}</li>`;
+      return `<li><span>${esc(l)}</span>${r ? `<span>${fmtWhen(r.date)}${r.recorded_by_name ? '' : ' <small class="muted">online course</small>'}${manage ? ` <button type="button" class="btn btn-small btn-ghost" data-del="${r.id}" aria-label="Remove">✕</button>` : ''}</span>` : '<span class="muted">Not yet</span>'}</li>`;
     };
     openModal({
       title: `${p.name} · training`,

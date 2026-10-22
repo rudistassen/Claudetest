@@ -127,6 +127,14 @@ export function registerCourseRoutes(router, db) {
     });
   });
 
+  // A course made from Safer Food, Better Business: completing it puts its safe methods on the person's SFBB staff
+  // training record, dated today (recorded_by is whoever signed it off, or nobody for an online pass).
+  const recordSfbb = (courseId, userId, recordedBy) => {
+    const topics = JSON.parse(db.prepare('SELECT sfbb_topics FROM training_courses WHERE id = ?').get(courseId)?.sfbb_topics || '[]');
+    const add = db.prepare('INSERT OR IGNORE INTO sfbb_training (user_id, topic, date, recorded_by) VALUES (?, ?, ?, ?)');
+    for (const t of topics) add.run(userId, t, today(), recordedBy);
+  };
+
   // Ready-made courses (e.g. a health & safety induction) to start from.
   router.get('/training/templates', perm, (req, res) => {
     const have = new Set(db.prepare('SELECT name FROM training_courses WHERE active = 1').all().map((c) => c.name));
@@ -138,8 +146,8 @@ export function registerCourseRoutes(router, db) {
     const t = COURSE_TEMPLATES.find((x) => x.key === req.params.key);
     if (!t) throw notFound('Ready-made course');
     const courseId = tx(db, () => {
-      const cid = Number(db.prepare(`INSERT INTO training_courses (name, description, renew_months, pass_mark, needs_signoff, published, open_to_all)
-        VALUES (?, ?, ?, ?, ?, 0, 0)`).run(t.name, t.description, t.renew_months, t.pass_mark, t.needs_signoff ? 1 : 0).lastInsertRowid);
+      const cid = Number(db.prepare(`INSERT INTO training_courses (name, description, renew_months, pass_mark, needs_signoff, published, open_to_all, sfbb_topics)
+        VALUES (?, ?, ?, ?, ?, 0, 0, ?)`).run(t.name, t.description, t.renew_months, t.pass_mark, t.needs_signoff ? 1 : 0, t.sfbb ? JSON.stringify(t.sfbb) : null).lastInsertRowid);
       const add = db.prepare('INSERT INTO training_steps (course_id, position, kind, title, body, options, answer) VALUES (?, ?, ?, ?, ?, ?, ?)');
       t.steps.forEach((s, i) => add.run(cid, i, s.kind, s.title, s.body || null, s.options ? JSON.stringify(s.options) : null, s.answer ?? null));
       return cid;
@@ -304,6 +312,7 @@ export function registerCourseRoutes(router, db) {
       if (approve) {
         recordId = Number(db.prepare('INSERT INTO training_records (course_id, user_id, completed_on, notes, recorded_by) VALUES (?, ?, ?, ?, ?)')
           .run(a.course_id, a.user_id, today(), [`Online course passed (${a.score}%) and signed off`, note].filter(Boolean).join(' – '), req.user.id).lastInsertRowid);
+        recordSfbb(a.course_id, a.user_id, req.user.id);
       }
       db.prepare(`UPDATE training_attempts SET status = ?, record_id = ?, decided_by = ?, decided_at = datetime('now') WHERE id = ?`)
         .run(approve ? 'signed_off' : 'sent_back', recordId, req.user.id, a.id);
@@ -363,6 +372,7 @@ export function registerCourseRoutes(router, db) {
       if (status === 'passed') {
         recordId = Number(db.prepare('INSERT INTO training_records (course_id, user_id, completed_on, notes, recorded_by) VALUES (?, ?, ?, ?, ?)')
           .run(c.id, req.user.id, today(), questions.length ? `Online course passed (${score}%)` : 'Online course completed', null).lastInsertRowid);
+        recordSfbb(c.id, req.user.id, null);
       }
       db.prepare('INSERT INTO training_attempts (course_id, user_id, score, status, answers, record_id) VALUES (?, ?, ?, ?, ?, ?)')
         .run(c.id, req.user.id, score, status, JSON.stringify(answers), recordId);
