@@ -2412,6 +2412,9 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; opacity: 1; }
 .pd-head .seg { background: none; border: 0; gap: 0.45rem; padding: 0 4px 5px 0; overflow: visible; }
 .pd-head .seg button { border: 1.5px solid var(--mb-ink); border-radius: 999px; background: #fffaf2; color: #2b2118; font-weight: 700; padding: 0.3rem 0.85rem; box-shadow: 2px 2px 0 var(--mb-ink); }
 .pd-head .seg button.is-on { background: #e8b24a; color: #2b2118; }
+.pd-mine { display: inline-flex; align-items: center; gap: 0.3rem; margin: 0 4px 5px 0; border: 1.5px solid var(--mb-ink); border-radius: 999px; background: #fffaf2; color: #2b2118;
+  font-weight: 700; padding: 0.3rem 0.85rem; box-shadow: 2px 2px 0 var(--mb-ink); text-decoration: none; white-space: nowrap; }
+.pd-mine:hover { background: #e8b24a; }
 
 /* The slide-out menu, in the same cream sticker style. */
 .sidebar { background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.018) 0 1px, transparent 1px 3px), var(--mb-paper); border-right: 1.5px solid var(--mb-ink); gap: 4px; padding: 0.8rem 0.75rem 1rem 0.65rem; }

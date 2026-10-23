@@ -505,6 +505,7 @@ export async function render(ctx) {
       <div class="pd-head">
         ${siteSelect}
         ${viewToggle}
+        <a class="pd-mine" href="#/rota${qs({ view: 'mine', week: weekStart(day) })}">📅 My shifts</a>
       </div>
       <div class="pd-datebar">
         <button class="pd-step" data-day="-1" aria-label="Previous day">‹</button>
