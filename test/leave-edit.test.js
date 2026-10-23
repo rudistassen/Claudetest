@@ -90,3 +90,26 @@ test('adding holiday reaches anyone working at your sites – people added to on
   assert.ok(people.find((p) => p.you));
   assert.equal((await a('/leave/add', { method: 'POST', body: { user_id: user('admin@cafe.local').id, start_date: addDays(today(), 70) } })).status, 201);
 });
+
+test('who else is off: others with holiday booked or asked for during a request, their own site first', async () => {
+  const m = await login('manager1@cafe.local');
+  const site = db.prepare(`SELECT location_id FROM users WHERE email = 'staff1@cafe.local'`).get().location_id;
+  const [asker, mate] = db.prepare(`SELECT id, name FROM users WHERE location_id = ? AND role != 'admin' AND email LIKE 'staff%' ORDER BY id LIMIT 2`).all(site);
+  const away = db.prepare(`SELECT id FROM users WHERE location_id != ? AND role != 'admin' ORDER BY id LIMIT 1`).get(site);
+  const from = addDays(today(), 60);
+  const add = (u, a, b, status) => Number(db.prepare('INSERT INTO leave_requests (user_id, start_date, end_date, status) VALUES (?, ?, ?, ?)').run(u, a, b, status).lastInsertRowid);
+  const req = add(asker.id, from, addDays(from, 4), 'pending');
+  add(mate.id, addDays(from, 3), addDays(from, 8), 'approved'); // overlaps
+  add(mate.id, addDays(from, 20), addDays(from, 21), 'pending'); // doesn't
+  add(away.id, addDays(from, -2), from, 'pending'); // overlaps, other site
+  add(away.id, from, from, 'declined'); // declined – not counted
+  const r = await m(`/leave/${req}/others`);
+  assert.equal(r.status, 200);
+  assert.equal(r.data.request.user_name, asker.name);
+  assert.deepEqual(r.data.same_site.filter((o) => o.user_id === mate.id).map((o) => o.status), ['approved'], 'only the overlapping one');
+  const admin = await login('admin@cafe.local');
+  const all = (await admin(`/leave/${req}/others`)).data;
+  assert.ok(all.other_sites.some((o) => o.user_id === away.id), 'other sites, for someone who looks after them');
+  assert.ok(!all.other_sites.some((o) => o.status === 'declined'));
+  assert.equal((await (await login('staff1@cafe.local'))(`/leave/${req}/others`)).status, 403);
+});

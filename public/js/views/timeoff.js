@@ -1,4 +1,5 @@
 import { api, confirmDialog, esc, field, fmtDate, input, openModal, qs, showError, textarea, toast, todayISO } from '../lib.js';
+import { showWhoElseOff } from './leave-overlap.js';
 
 // Time off: your holiday requests; for managers, approving them, and adding, changing or taking off people's holiday.
 
@@ -105,6 +106,7 @@ async function renderRequests(ctx) {
           ${r.shifts.length ? `<small class="tone-warn">On the rota for ${r.shifts.length} shift${r.shifts.length === 1 ? '' : 's'} then: ${r.shifts.slice(0, 3).map((s) => `${fmtDate(s.date)} ${s.start_time}–${s.end_time} (${esc(s.location_name)})`).join(', ')}${r.shifts.length > 3 ? '…' : ''}</small>` : ''}
           ${r.decision_note ? `<small>${esc(r.decided_by_name ?? '')}: ${esc(r.decision_note)}</small>` : ''}</div>
         <span class="leave-actions">
+          ${r.status === 'pending' ? `<button class="btn btn-small btn-ghost" data-who-off="${r.id}">Who else is off?</button>` : ''}
           ${r.status === 'pending' && canDecide ? `<button class="btn btn-small" data-decide="${r.id}" data-status="declined">Decline</button>
             <button class="btn btn-small btn-primary" data-decide="${r.id}" data-status="approved">Approve</button>` : badge(r.status)}
           ${r.status === 'approved' && canEdit ? `<button class="btn btn-small" data-edit-leave="${r.id}">Change dates</button>
@@ -169,6 +171,7 @@ async function renderRequests(ctx) {
     });
   }));
 
+  el.querySelectorAll('[data-who-off]').forEach((b) => b.addEventListener('click', () => showWhoElseOff(Number(b.dataset.whoOff))));
   el.querySelectorAll('[data-decide]').forEach((b) => b.addEventListener('click', () => {
     const r = rows.find((x) => x.id === Number(b.dataset.decide));
     const approve = b.dataset.status === 'approved';

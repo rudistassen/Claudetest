@@ -85,9 +85,11 @@ export async function render(ctx) {
   const availOn = (userId, d) => data.availability?.[userId]?.days?.[d] ?? [];
   const range = (a) => (a.all_day ? 'all day' : `${a.from_time}–${a.to_time}`);
   const cellNotes = (userId, d) => {
-    if (holidayOn(userId, d, 'approved')) return '<span class="cell-note cell-holiday">Holiday</span>';
+    const booked = holidayOn(userId, d, 'approved');
+    if (booked) return `<span class="cell-note cell-holiday" data-leave="${booked.id}" title="See the holiday">Holiday</span>`;
     const notes = [];
-    if (holidayOn(userId, d, 'pending')) notes.push('<span class="cell-note cell-pending">Holiday requested</span>');
+    const asked = holidayOn(userId, d, 'pending');
+    if (asked) notes.push(`<span class="cell-note cell-pending" data-leave="${asked.id}" title="See the request">Holiday requested</span>`);
     for (const a of availOn(userId, d)) {
       notes.push(a.kind === 'unavailable'
         ? `<span class="cell-note cell-unavail" title="Not available ${range(a)}${a.source === 'pattern' ? ' (repeating)' : ''}">✕ ${a.all_day ? 'Not available' : `Not ${range(a)}`}</span>`
@@ -567,7 +569,7 @@ export async function render(ctx) {
     const tip = away ? `Covering at ${x.location_name} ${label}` : [label, shiftTitle(x), x.sick ? 'Off sick' : '', all ? `at ${x.location_name}` : ''].filter(Boolean).join(' · ');
     const tag = away ? 'span' : 'button';
     return `<${tag} class="gt-bar ${cls}" style="left:${tlPct(a)}%;width:${Math.max(tlPct(b) - tlPct(a), 2)}%;--site:${siteColour(siteName(x.location_id ?? site), x.location_id ?? site)}"
-      ${away ? '' : `data-shift="${x.id}" ${canEdit ? '' : 'disabled'}`} title="${esc(tip)}"><span>${label}</span></${tag}>`;
+      ${away ? `data-away="${x.id}"` : `data-shift="${x.id}" ${canEdit ? '' : 'disabled'}`} title="${esc(tip)}"><span>${label}</span></${tag}>`;
   };
   // How many people are on at each hour of a day, as a little bar chart under the timeline.
   const tlCover = (d) => {
@@ -656,7 +658,7 @@ export async function render(ctx) {
                 const covering = away.length > 0 && !shifts.length;
                 return `<td class="${d === today ? 'is-today' : ''} ${canEdit ? 'editable' : ''} ${off ? 'is-holiday' : ''} ${covering ? 'is-covering' : ''}" ${canEdit ? 'data-drop' : ''} data-user="${u.id}" data-date="${d}" data-site="${site}">
                   ${cellNotes(u.id, d)}
-                  ${timeline ? '' : away.map((x) => { const where = x.location_name ?? siteName(x.location_id); const verb = site === u.location_id ? 'Covering at' : 'At'; return `<span class="cover-away" title="${verb} ${esc(where)} ${x.start_time}–${x.end_time}">${verb} ${esc(where)}<small>${x.start_time}–${x.end_time}</small></span>`; }).join('')}
+                  ${timeline ? '' : away.map((x) => { const where = x.location_name ?? siteName(x.location_id); const verb = site === u.location_id ? 'Covering at' : 'At'; return `<span class="cover-away" data-away="${x.id}" title="${verb} ${esc(where)} ${x.start_time}–${x.end_time} – click for details">${verb} ${esc(where)}<small>${x.start_time}–${x.end_time}</small></span>`; }).join('')}
                   ${timeline ? `<div class="gt-track">${tlGrid}${away.map((x) => tlBar(x, site, { away: true })).join('')}${shifts.map((x) => tlBar(x, site)).join('')}</div>`
                     : shifts.map((s) => `<button class="shift ${s.state && s.state !== 'published' ? `shift-${s.state}` : ''} ${s.sick ? 'shift-sick' : ''}" data-shift="${s.id}" ${canEdit ? '' : 'disabled'} title="${esc(shiftTitle(s))}">${shiftLabel(s, u, site)}</button>`).join('')}
                   ${canEdit && !shifts.length && !off && !covering ? '<span class="add-hint">+</span>' : ''}
@@ -1069,10 +1071,60 @@ export async function render(ctx) {
     }
     shiftModal(shift);
   }));
-  // Shifts at another site are edited from that site's rota (or All sites).
-  el.querySelectorAll('.cover-away').forEach((a) => a.addEventListener('click', (e) => {
+  // A shift at another site (greyed out here): its details, and a way to that site's rota to change it.
+  const nameOf = (userId) => data.staff.find((u) => u.id === userId)?.name ?? '';
+  const awayModal = (x) => {
+    const where = x.location_name ?? siteName(x.location_id);
+    const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const length = (mins(x.end_time) <= mins(x.start_time) ? mins(x.end_time) + 1440 : mins(x.end_time)) - mins(x.start_time) - (x.break_minutes ?? 0);
+    const hours = Math.round((x.hours ?? length / 60) * 100) / 100;
+    openModal({
+      title: `${nameOf(x.user_id) || x.user_name || 'Shift'} · at ${where}`,
+      body: `<dl class="detail-list">
+          <dt>Day</dt><dd>${fmtDate(x.date, { weekday: 'long', day: 'numeric', month: 'long' })}</dd>
+          <dt>Site</dt><dd><span class="site-dot" style="--site: ${siteColour(where, x.location_id)}"></span>${esc(where)}</dd>
+          <dt>Time</dt><dd>${x.start_time}–${x.end_time}${x.break_minutes ? ` · ${x.break_minutes} min break` : ''} · ${hours} h</dd>
+          ${x.position ? `<dt>Role</dt><dd>${esc(x.position)}</dd>` : ''}
+          ${x.notes ? `<dt>Notes</dt><dd>${esc(x.notes)}</dd>` : ''}
+          ${x.sick ? '<dt>Sickness</dt><dd>Off sick</dd>' : ''}
+          ${x.state && x.state !== 'published' ? `<dt>Status</dt><dd>${esc(shiftTitle(x))}</dd>` : ''}
+        </dl>
+        <p class="muted small">This shift is on ${esc(where)}’s rota, so it’s greyed out here. Change it from there.</p>`,
+      submitLabel: `Open ${where}’s rota`,
+      onSubmit: () => ctx.navigate(`rota${qs({ view: mode === 'day' ? 'day' : mode, week: weekStart(x.date), day: mode === 'day' ? x.date : undefined, site: x.location_id })}`),
+    });
+  };
+  const awayShift = (id) => [...data.away_shifts, ...data.shifts].find((x) => x.id === Number(id));
+  el.querySelectorAll('[data-away]').forEach((a) => a.addEventListener('click', (e) => {
     e.stopPropagation();
-    toast(`${a.title}. Edit it from that site’s rota${state.multiSite ? ' or All sites' : ''}.`);
+    const x = awayShift(a.dataset.away);
+    if (x) awayModal(x);
+  }));
+  // Holiday on the rota: its dates, whether it's approved, and who approved it.
+  const holidayModal = (l) => {
+    const name = nameOf(l.user_id);
+    const nDays = Math.round((Date.parse(l.end_date) - Date.parse(l.start_date)) / 86400000) + 1;
+    const when = l.start_date === l.end_date ? fmtDate(l.start_date, { weekday: 'long', day: 'numeric', month: 'long' })
+      : `${fmtDate(l.start_date, { weekday: 'short', day: 'numeric', month: 'short' })} – ${fmtDate(l.end_date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}`;
+    const approved = l.status === 'approved';
+    openModal({
+      title: `${name ? `${name}’s holiday` : 'Holiday'}`,
+      body: `<dl class="detail-list">
+          <dt>Dates</dt><dd>${when} · ${nDays} day${nDays === 1 ? '' : 's'}</dd>
+          <dt>Status</dt><dd>${approved ? '✓ Approved' : 'Waiting for approval'}</dd>
+          ${l.created_at ? `<dt>Asked for</dt><dd>${fmtDate(l.created_at.slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}</dd>` : ''}
+          ${approved && (l.decided_by_name || l.decided_at) ? `<dt>Approved</dt><dd>${l.decided_by_name ? `by ${esc(l.decided_by_name)}` : ''}${l.decided_at ? ` on ${fmtDate(l.decided_at.slice(0, 10), { day: 'numeric', month: 'short' })}` : ''}</dd>` : ''}
+          ${l.note ? `<dt>Their note</dt><dd>“${esc(l.note)}”</dd>` : ''}
+          ${l.decision_note ? `<dt>Manager’s note</dt><dd>${esc(l.decision_note)}</dd>` : ''}
+        </dl>
+        ${approved ? `<p class="muted small">${esc(name || 'They')} can’t be put on the rota on these days.</p>` : ''}`,
+      ...(state.can('leave.manage', 'leave.edit') ? { submitLabel: approved ? 'Open in Time off' : 'Go to requests', onSubmit: () => ctx.navigate(approved ? 'timeoff?tab=requests&status=upcoming' : 'rota/requests') } : {}),
+    });
+  };
+  el.querySelectorAll('[data-leave]').forEach((a) => a.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const l = (data.leave ?? []).find((x) => x.id === Number(a.dataset.leave));
+    if (l) holidayModal(l);
   }));
   // A person can have more than one shift in a day (e.g. a split shift): a day that already has one suggests the
   // next starting when their last one ends.
@@ -1080,6 +1132,13 @@ export async function render(ctx) {
   el.querySelectorAll('td.editable').forEach((td) => td.addEventListener('click', () => {
     if (copiedShift) { pasteInto(td); return; }
     const userId = Number(td.dataset.user);
+    // On holiday that day: show the holiday. Working at another site that day: show that shift.
+    const off = holidayOn(userId, td.dataset.date, 'approved');
+    if (off) { holidayModal(off); return; }
+    if (td.classList.contains('is-covering')) {
+      const x = elsewhere(userId, td.dataset.date, Number(td.dataset.site))[0];
+      if (x) { awayModal(x); return; }
+    }
     const already = data.shifts.filter((x) => x.user_id === userId && x.date === td.dataset.date && x.state !== 'removed' && x.end_time > x.start_time);
     const lastEnd = already.map((x) => x.end_time).sort().pop();
     const next = lastEnd && lastEnd < '23:00' ? { start_time: lastEnd, end_time: addTime(lastEnd, 4), break_minutes: 0 } : {};

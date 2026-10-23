@@ -11,9 +11,10 @@ const daysBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from))
 /** Approved and pending holiday for the given people overlapping [from, to]. */
 export function leaveFor(db, userIds, from, to) {
   if (!userIds.length) return [];
-  return db.prepare(`SELECT id, user_id, start_date, end_date, status, note FROM leave_requests
-    WHERE status IN ('pending', 'approved') AND user_id IN (${userIds.map(() => '?').join(', ')}) AND start_date <= ? AND end_date >= ?
-    ORDER BY start_date`).all(...userIds, to, from);
+  return db.prepare(`SELECT r.id, r.user_id, r.start_date, r.end_date, r.status, r.note, r.created_at, r.decided_at, r.decision_note,
+      d.name AS decided_by_name FROM leave_requests r LEFT JOIN users d ON d.id = r.decided_by
+    WHERE r.status IN ('pending', 'approved') AND r.user_id IN (${userIds.map(() => '?').join(', ')}) AND r.start_date <= ? AND r.end_date >= ?
+    ORDER BY r.start_date`).all(...userIds, to, from);
 }
 
 /** The approved holiday someone is on for a date, if any (shifts can't be added then). */
@@ -37,7 +38,7 @@ export function registerLeaveRoutes(router, db) {
   };
   // Who can be given holiday by this person: those, and admins themselves too.
   const addable = (req) => (req.user.role === 'admin' ? [{ id: req.user.id, name: req.user.name, location_name: null, you: true }, ...manageable(req)] : manageable(req));
-  const withNames = `SELECT r.*, u.name AS user_name, l.name AS location_name, d.name AS decided_by_name FROM leave_requests r
+  const withNames = `SELECT r.*, u.name AS user_name, u.location_id, l.name AS location_name, d.name AS decided_by_name FROM leave_requests r
     JOIN users u ON u.id = r.user_id LEFT JOIN locations l ON l.id = u.location_id LEFT JOIN users d ON d.id = r.decided_by`;
   const withDays = (r) => ({ ...r, days: daysBetween(r.start_date, r.end_date) });
 
@@ -98,6 +99,24 @@ export function registerLeaveRoutes(router, db) {
     const shifts = db.prepare(`SELECT s.date, s.start_time, s.end_time, l.name AS location_name FROM draft_shifts s JOIN locations l ON l.id = s.location_id
       WHERE s.user_id = ? AND s.date BETWEEN ? AND ? ORDER BY s.date`);
     res.json(rows.map((r) => ({ ...withDays(r), shifts: r.status === 'declined' || r.status === 'cancelled' ? [] : shifts.all(r.user_id, r.start_date, r.end_date) })));
+  });
+
+  // Who else has holiday booked or asked for during a request (people this person looks after), their own site's
+  // people first – to help decide whether to approve it.
+  router.get('/leave/:id/others', requirePerm('leave.manage', 'leave.edit'), (req, res) => {
+    const people = manageable(req);
+    const r = db.prepare(`${withNames} WHERE r.id = ?`).get(Number(req.params.id));
+    if (!r || !people.some((u) => u.id === r.user_id)) throw notFound('Holiday request');
+    const home = db.prepare('SELECT location_id FROM users WHERE id = ?').get(r.user_id)?.location_id ?? null;
+    const ids = people.map((u) => u.id).filter((uid) => uid !== r.user_id);
+    const others = !ids.length ? [] : db.prepare(`${withNames} WHERE r.user_id IN (${ids.map(() => '?').join(', ')})
+      AND r.status IN ('pending', 'approved') AND r.start_date <= ? AND r.end_date >= ? ORDER BY r.start_date, u.name`)
+      .all(...ids, r.end_date, r.start_date).map(withDays);
+    res.json({
+      request: withDays(r),
+      same_site: others.filter((o) => o.location_id === home),
+      other_sites: others.filter((o) => o.location_id !== home),
+    });
   });
 
   router.post('/leave/:id/decide', requirePerm('leave.manage'), (req, res) => {

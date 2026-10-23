@@ -2,6 +2,7 @@ import { api, esc, field, fmtDate, openModal, showError, siteColour, textarea, t
 import { dropsPanel, wireDrops } from './shiftdrops.js';
 import { swapsPanel, wireSwaps } from './swaps.js';
 import { teamAvailabilityCard } from './availability.js';
+import { showWhoElseOff } from './leave-overlap.js';
 
 // Rota → Requests: everything waiting for a manager in one place – holiday requests, shift drop, pick-up and swap requests – and
 // the team's availability for the next two weeks.
@@ -31,7 +32,8 @@ export async function render(ctx) {
         <div><strong>${esc(r.user_name)}</strong> · ${esc(span(r))} <span class="muted">(${r.days} day${r.days === 1 ? '' : 's'})</span>
           <small>${r.location_name ? `<span class="site-dot" style="--site: ${siteColour(r.location_name, r.location_id)}"></span>${esc(r.location_name)}` : ''}${r.note ? ` · “${esc(r.note)}”` : ''}</small>
           ${r.shifts?.length ? `<small class="tone-bad">⚠ On the rota ${r.shifts.length} time${r.shifts.length === 1 ? '' : 's'} then: ${r.shifts.slice(0, 3).map((s) => `${day(s.date)} ${s.start_time}–${s.end_time}`).join(', ')}${r.shifts.length > 3 ? '…' : ''}</small>` : ''}</div>
-        <div class="drops-actions"><button class="btn btn-small btn-primary" data-leave-approve="${r.id}">Approve</button>
+        <div class="drops-actions"><button class="btn btn-small" data-who-off="${r.id}">Who else is off?</button>
+          <button class="btn btn-small btn-primary" data-leave-approve="${r.id}">Approve</button>
           <button class="btn btn-small" data-leave-decline="${r.id}">Decline</button></div></li>`).join('')}</ul>`
         : '<p class="muted small">No holiday requests waiting.</p>'}
       <p class="small"><a href="#/timeoff?tab=requests">All holiday requests →</a></p>
@@ -45,6 +47,7 @@ export async function render(ctx) {
 
   wireDrops(el, drops, () => { window.dispatchEvent(new Event('requests:changed')); rerender(); });
   wireSwaps(el, swaps, () => { window.dispatchEvent(new Event('requests:changed')); rerender(); });
+  el.querySelectorAll('[data-who-off]').forEach((b) => b.addEventListener('click', () => showWhoElseOff(Number(b.dataset.whoOff))));
   el.querySelectorAll('[data-leave-approve]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true;
     try {
