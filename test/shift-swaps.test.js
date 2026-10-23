@@ -107,6 +107,44 @@ test('shift swap: a cover (nothing back), said no to, called off, declined, and 
   assert.match(r.data.error, /changed/);
 });
 
+test('shift swap: same day, overlapping times (6am ↔ 9am) goes through; a cover is only asked of someone free then', async () => {
+  const a = user('staff1@cafe.local');
+  const b = user('staff1-2@cafe.local');
+  const c = user('staff1-3@cafe.local');
+  const late = shiftFor(a, 12, '09:00', '17:00');
+  const open = shiftFor(b, 12, '06:00', '14:00');
+  db.prepare('DELETE FROM shifts WHERE user_id = ? AND date = ?').run(c.id, addDays(today(), 12));
+  const asA = await login('staff1@cafe.local');
+  const asB = await login('staff1-2@cafe.local');
+  const manager = await login('manager1@cafe.local');
+
+  const them = (await asA(`/swaps/options?shift_id=${late}`)).data.people.find((p) => p.id === b.id);
+  assert.equal(them.busy, true);
+  assert.equal(them.clash, open, 'their shift that day is the one to swap with');
+  // Asking B to just cover it would double-book them – that's turned away up front.
+  const cover = await asA('/swaps', { method: 'POST', body: { shift_id: late, to_user_id: b.id } });
+  assert.equal(cover.status, 400);
+  assert.match(cover.data.error, /already working 06:00–14:00/);
+  // Swapping them is fine.
+  const w = (await asA('/swaps', { method: 'POST', body: { shift_id: late, to_user_id: b.id, to_shift_id: open } })).data;
+  assert.equal((await asB(`/swaps/${w.id}/accept`, { method: 'POST' })).status, 200);
+  assert.equal((await manager(`/swaps/${w.id}/approve`, { method: 'POST' })).status, 200);
+  const who = (id) => db.prepare('SELECT user_id FROM shifts WHERE id = ?').get(id).user_id;
+  assert.equal(who(open), a.id, 'A does the open');
+  assert.equal(who(late), b.id, 'B comes in at 9');
+
+  // Cover: someone free that day, then a manager approves.
+  const spare = shiftFor(a, 13, '10:00', '16:00');
+  db.prepare('DELETE FROM shifts WHERE user_id = ? AND date = ?').run(c.id, addDays(today(), 13));
+  const asked = await asA('/swaps', { method: 'POST', body: { shift_id: spare, to_user_id: c.id, note: 'Wedding' } });
+  assert.equal(asked.status, 201);
+  assert.equal(asked.data.take, null);
+  const asC = await login('staff1-3@cafe.local');
+  assert.equal((await asC(`/swaps/${asked.data.id}/accept`, { method: 'POST' })).status, 200);
+  assert.equal((await manager(`/swaps/${asked.data.id}/approve`, { method: 'POST' })).status, 200);
+  assert.equal(who(spare), c.id);
+});
+
 test('shift swap: a manager can’t approve a swap they’re part of', async () => {
   const a = user('staff1@cafe.local');
   const m = user('manager1@cafe.local');

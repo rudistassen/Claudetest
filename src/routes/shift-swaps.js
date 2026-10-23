@@ -83,8 +83,10 @@ export function registerShiftSwapRoutes(router, db, { findClash, clearUndo = () 
         id: u.id,
         name: u.name,
         location_name: db.prepare('SELECT name FROM locations WHERE id = ?').get(u.location_id)?.name ?? null,
-        // Already working then (they'd be double-booked unless they give that shift back).
+        // Already working then (they'd be double-booked unless they give that shift back) – and that shift, which is
+        // the one to swap with (e.g. they open at 6am and you start at 9am: you do the open, they come in at 9).
         busy: !!findClash({ user_id: u.id, date: s.date, start_time: s.start_time, end_time: s.end_time }),
+        clash: findClash({ user_id: u.id, date: s.date, start_time: s.start_time, end_time: s.end_time })?.id ?? null,
         shifts: theirShifts.all(u.id, today(), addDays(today(), WEEKS_AHEAD * 7)).filter((x) => notStarted(x) && mine.includes(x.location_id)).map((x) => ({ ...x, hours: hours(x) })),
       })),
     });
@@ -114,6 +116,12 @@ export function registerShiftSwapRoutes(router, db, { findClash, clearUndo = () 
     if (b.to_shift_id && (!take || take.user_id !== other.id)) throw notFound('Their shift');
     if (take && !notStarted(take)) throw badRequest('Their shift has already started');
     if (take && !canWorkAt(req.user, take.location_id)) throw badRequest(`You don’t work at ${take.location_name}`);
+    // Covering: they can't already be working then.
+    if (!take) {
+      if (onHoliday(db, other.id, give.date)) throw badRequest(`${other.name} is on holiday then`);
+      const busy = findClash({ user_id: other.id, date: give.date, start_time: give.start_time, end_time: give.end_time });
+      if (busy) throw badRequest(`${other.name} is already working ${busy.start_time}–${busy.end_time} that day – ask them to swap instead`);
+    }
     const open = db.prepare(`SELECT 1 FROM shift_swaps WHERE status IN ('asked', 'pending') AND (from_shift_id IN (?, ?) OR to_shift_id IN (?, ?))`)
       .get(give.id, take?.id ?? -1, give.id, take?.id ?? -1);
     if (open) throw badRequest('One of these shifts is already part of a swap that hasn’t been decided yet');

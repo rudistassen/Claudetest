@@ -22,40 +22,73 @@ const what = (w, me) => (w.take
       : `${esc(w.to_name)} to cover ${esc(w.from_name)}’s <strong>${esc(when(w.give))}</strong>`));
 const where = (w) => `${site(w.give)}${w.take && w.take.location_id !== w.give.location_id ? ` · ${site(w.take)}` : ''}`;
 
-/** Ask a colleague to swap one of your shifts (s: a shift from /my-shifts). */
+const personLabel = (p) => `${esc(p.name)}${p.location_name ? ` – ${esc(p.location_name)}` : ''}`;
+const searchable = (form) => form.querySelector('.swap-search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  [...form.querySelector('.swap-people').options].forEach((o) => { o.hidden = !!q && !o.textContent.toLowerCase().includes(q); });
+});
+
+/** Ask a colleague to swap one of your shifts for one of theirs (s: a shift from /my-shifts). */
 export async function askToSwap(s, done) {
   let opts;
   try { opts = await api(`/swaps/options?shift_id=${s.id}`); } catch (err) { showError(err); return; }
-  if (!opts.people.length) { toast('There’s nobody free to swap with that day', 'error'); return; }
+  const people = opts.people.filter((p) => p.shifts.length);
+  if (!people.length) { toast('Nobody has a shift you could swap for – try “Ask someone to cover”', 'error'); return; }
   const { form } = openModal({
     title: 'Swap this shift',
     submitLabel: 'Ask them',
     body: `<p><strong>${esc(when(s))}</strong> at ${esc(s.location_name)}</p>
       <label class="field"><span>Who with</span>
         <input type="search" class="swap-search" placeholder="Search names" aria-label="Search names" autocomplete="off">
-        <select name="to_user_id" required size="6" class="swap-people">${opts.people.map((p) => `<option value="${p.id}">${esc(p.name)}${p.location_name ? ` – ${esc(p.location_name)}` : ''}${p.busy ? ' (working then)' : ''}</option>`).join('')}</select></label>
-      <label class="field"><span>Their shift in return</span><select name="to_shift_id"><option value="">Choose who first</option></select></label>
-      ${field('Note (optional)', textarea('note', '', 'rows="2" maxlength="500" placeholder="e.g. I’ve got a dentist appointment"'))}
-      <p class="muted small">They’ll be asked to agree, then a manager approves it. Until then your shifts stay as they are.</p>`,
+        <select name="to_user_id" required size="6" class="swap-people">${people.map((p) => `<option value="${p.id}">${personLabel(p)}${p.busy ? ' · also on that day' : ''}</option>`).join('')}</select></label>
+      <label class="field"><span>Their shift you’ll do instead</span><select name="to_shift_id" required><option value="">Choose who first</option></select></label>
+      ${field('Note (optional)', textarea('note', '', 'rows="2" maxlength="500" placeholder="e.g. I’ll do the open if you come in at 9"'))}
+      <p class="muted small">Swapping with someone on the same day is fine – e.g. they start at 6am and you at 9am: you do the open, they come in at 9. They’ll be asked to agree, then a manager approves it. Until then your shifts stay as they are.</p>`,
     onSubmit: async (v) => {
       if (!v.to_user_id) throw new Error('Choose who to swap with');
-      await api('/swaps', { method: 'POST', body: { shift_id: s.id, to_user_id: Number(v.to_user_id), to_shift_id: v.to_shift_id ? Number(v.to_shift_id) : null, note: v.note } });
+      if (!v.to_shift_id) throw new Error('Choose which of their shifts you’ll do');
+      await api('/swaps', { method: 'POST', body: { shift_id: s.id, to_user_id: Number(v.to_user_id), to_shift_id: Number(v.to_shift_id), note: v.note } });
       toast('Asked – they’ll need to agree, then a manager approves it');
       done();
     },
   });
-  const people = form.querySelector('.swap-people');
+  const list = form.querySelector('.swap-people');
   const theirs = form.querySelector('[name=to_shift_id]');
-  const fill = () => {
-    const p = opts.people.find((x) => x.id === Number(people.value));
+  list.addEventListener('change', () => {
+    const p = people.find((x) => x.id === Number(list.value));
+    // Their shift that day comes first and is picked for you – the usual same-day swap.
+    const sorted = p ? [...p.shifts].sort((x, y) => (y.id === p.clash) - (x.id === p.clash)) : [];
     theirs.innerHTML = !p ? '<option value="">Choose who first</option>'
-      : `<option value="">Nothing – ${esc(p.name)} just covers it</option>${p.shifts.map((x) => `<option value="${x.id}">${esc(when(x))} – ${esc(x.location_name)}</option>`).join('')}`;
-  };
-  people.addEventListener('change', fill);
-  form.querySelector('.swap-search').addEventListener('input', (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    [...people.options].forEach((o) => { o.hidden = !!q && !o.textContent.toLowerCase().includes(q); });
+      : `<option value="">Choose their shift</option>${sorted.map((x) => `<option value="${x.id}" ${x.id === p.clash ? 'selected' : ''}>${esc(when(x))} – ${esc(x.location_name)}${x.date === s.date ? ' (same day)' : ''}</option>`).join('')}`;
   });
+  searchable(form);
+}
+
+/** Ask a colleague to cover one of your shifts – they take it, you don't take one of theirs. */
+export async function askToCover(s, done) {
+  let opts;
+  try { opts = await api(`/swaps/options?shift_id=${s.id}`); } catch (err) { showError(err); return; }
+  if (!opts.people.length) { toast('There’s nobody who could cover that day', 'error'); return; }
+  const free = opts.people.filter((p) => !p.busy);
+  const busy = opts.people.filter((p) => p.busy);
+  const { form } = openModal({
+    title: 'Ask someone to cover',
+    submitLabel: 'Ask them',
+    body: `<p><strong>${esc(when(s))}</strong> at ${esc(s.location_name)}</p>
+      <label class="field"><span>Who could cover it</span>
+        <input type="search" class="swap-search" placeholder="Search names" aria-label="Search names" autocomplete="off">
+        <select name="to_user_id" required size="7" class="swap-people">${free.map((p) => `<option value="${p.id}">${personLabel(p)}</option>`).join('')}
+          ${busy.length ? `<optgroup label="Working then – swap instead">${busy.map((p) => `<option value="${p.id}" disabled>${personLabel(p)}</option>`).join('')}</optgroup>` : ''}</select></label>
+      ${field('Note (optional)', textarea('note', '', 'rows="2" maxlength="500" placeholder="e.g. I’ve got a dentist appointment"'))}
+      <p class="muted small">They’ll be asked to agree, then a manager approves it. Until then it’s still your shift.</p>`,
+    onSubmit: async (v) => {
+      if (!v.to_user_id) throw new Error('Choose who to ask');
+      await api('/swaps', { method: 'POST', body: { shift_id: s.id, to_user_id: Number(v.to_user_id), to_shift_id: null, note: v.note } });
+      toast('Asked – they’ll need to agree, then a manager approves it');
+      done();
+    },
+  });
+  searchable(form);
 }
 
 /**
