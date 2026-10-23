@@ -1274,23 +1274,49 @@ async function renderMine(ctx, week) {
       ${days.map((d) => {
         const mine = shifts.filter((s) => s.date === d);
         return `<div class="my-day ${d === today ? 'is-today' : ''} ${mine.length ? '' : 'is-off'}">
-          <div class="my-date"><strong>${fmtDate(d, { weekday: 'long' })}</strong><span>${fmtDate(d, { day: 'numeric', month: 'short' })}${d === today ? ' · today' : ''}</span></div>
+          <div class="my-date"><strong>${fmtDate(d, { weekday: 'short' })} ${fmtDate(d, { day: 'numeric', month: 'short' })}</strong>${d === today ? '<span class="my-today">Today</span>' : ''}</div>
           <div class="my-list">${mine.length ? mine.map((s) => `
             <div class="my-shift">
-              <div class="my-time">${s.start_time}–${s.end_time}${s.sick ? ' <span class="badge badge-cancelled">Off sick</span>' : ''}${!s.ack_at && s.date >= today ? ' <span class="badge badge-in_progress">New or changed</span>' : ''}</div>
-              <div class="my-where">${esc(s.location_name)}<small>${hrs(s.hours)}${s.break_minutes ? ` · ${s.break_minutes} min break` : ''}${s.notes ? ` · ${esc(s.notes)}` : ''}</small></div>
-              ${s.drop_requested ? '<div class="my-drop"><span class="badge badge-sent">Drop asked – waiting for a manager</span></div>'
-                : swapping.has(s.id) ? '<div class="my-drop"><span class="badge badge-in_progress">Swap in progress</span></div>'
-                  : s.can_drop ? `<div class="my-drop"><button class="btn btn-small btn-ghost" data-swap-shift="${s.id}">⇄ Swap</button><button class="btn btn-small btn-ghost" data-cover-shift="${s.id}">Find cover</button><button class="btn btn-small btn-ghost" data-drop-shift="${s.id}">Drop</button></div>` : ''}
-              ${s.colleagues ? `<div class="my-with small muted">${s.colleagues.length ? `With ${s.colleagues.map((c) => `${esc(c.name)} <span class="nowrap">${c.start_time}–${c.end_time}</span>`).join(', ')}` : 'Nobody else on'}</div>` : ''}
+              <div class="my-top">
+                <span class="my-time">${s.start_time}–${s.end_time}</span>
+                <span class="my-len">${hrs(s.hours)}${s.break_minutes ? ` · ${s.break_minutes}m break` : ''}</span>
+                ${s.sick ? '<span class="badge badge-cancelled">Off sick</span>' : ''}${!s.ack_at && s.date >= today ? '<span class="badge badge-in_progress">New</span>' : ''}
+              </div>
+              <div class="my-where"><span class="site-dot" style="--site: ${siteColour(s.location_name, s.location_id)}"></span>${esc(s.location_name)}${s.notes ? ` <span class="muted">· ${esc(s.notes)}</span>` : ''}</div>
+              <div class="my-foot">
+                ${s.colleagues ? (s.colleagues.length ? `<details class="my-with"><summary>With ${s.colleagues.length} other${s.colleagues.length === 1 ? '' : 's'}</summary>
+                  <ul>${s.colleagues.map((c) => `<li>${esc(c.name)} <span class="nowrap muted">${c.start_time}–${c.end_time}</span></li>`).join('')}</ul></details>` : '<span class="my-with muted">Nobody else on</span>') : '<span></span>'}
+                ${s.drop_requested ? '<span class="badge badge-sent">Drop asked – waiting for a manager</span>'
+                  : swapping.has(s.id) ? '<span class="badge badge-in_progress">Swap in progress</span>'
+                    : s.can_drop ? `<button class="btn btn-small my-cant" data-cant="${s.id}">Can’t make it?</button>` : ''}
+              </div>
             </div>`).join('') : '<span class="muted">Day off</span>'}</div>
         </div>`;
       }).join('')}
     </section>
-    <p class="muted small">These are your published shifts. Can’t make one? Tap “⇄ Swap” to swap it for one of a colleague’s shifts, “Find cover” to choose who takes it (they agree, then a manager approves either), or “Drop” – once a manager approves, it’s offered to everyone. If something looks wrong, speak to your manager.</p>`;
-  el.querySelectorAll('[data-drop-shift]').forEach((b) => b.addEventListener('click', () => askToDrop(shifts.find((s) => s.id === Number(b.dataset.dropShift)), () => ctx.rerender())));
-  el.querySelectorAll('[data-swap-shift]').forEach((b) => b.addEventListener('click', () => askToSwap(shifts.find((s) => s.id === Number(b.dataset.swapShift)), () => ctx.rerender())));
-  el.querySelectorAll('[data-cover-shift]').forEach((b) => b.addEventListener('click', () => askToCover(shifts.find((s) => s.id === Number(b.dataset.coverShift)), () => ctx.rerender())));
+    <p class="muted small">These are your published shifts. Can’t make one? Tap “Can’t make it?” to swap it, ask someone to cover it, or drop it. If something looks wrong, speak to your manager.</p>`;
+  // "Can't make it?": the three ways out of a shift, each explained.
+  el.querySelectorAll('[data-cant]').forEach((b) => b.addEventListener('click', () => {
+    const s = shifts.find((x) => x.id === Number(b.dataset.cant));
+    const again = () => ctx.rerender();
+    const { close, form } = openModal({
+      title: 'Can’t make this shift?',
+      body: `<p><strong>${fmtDate(s.date, { weekday: 'long', day: 'numeric', month: 'short' })} · ${s.start_time}–${s.end_time}</strong> at ${esc(s.location_name)}</p>
+        <div class="cant-options">
+          <button type="button" class="cant-option" data-do="swap"><span class="cant-icon" aria-hidden="true">⇄</span>
+            <span><strong>Swap with someone</strong><small>You take one of their shifts and they take this one – e.g. you do the open, they come in later.</small></span></button>
+          <button type="button" class="cant-option" data-do="cover"><span class="cant-icon" aria-hidden="true">🙋</span>
+            <span><strong>Ask someone to cover</strong><small>Choose who takes it. You don’t take a shift back.</small></span></button>
+          <button type="button" class="cant-option" data-do="drop"><span class="cant-icon" aria-hidden="true">↩</span>
+            <span><strong>Drop it</strong><small>Give it up – once a manager agrees, it’s offered to everyone to pick up.</small></span></button>
+        </div>
+        <p class="muted small">Swaps and covers need the other person to agree, then a manager approves. Until then it’s still your shift.</p>`,
+    });
+    form.querySelectorAll('[data-do]').forEach((o) => o.addEventListener('click', () => {
+      close();
+      ({ swap: askToSwap, cover: askToCover, drop: askToDrop })[o.dataset.do](s, again);
+    }));
+  }));
   wireSwaps(el, swaps, () => { window.dispatchEvent(new Event('requests:changed')); ctx.rerender(); });
   el.querySelector('#confirm-shifts')?.addEventListener('click', async (e) => {
     e.target.disabled = true;

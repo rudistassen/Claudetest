@@ -610,22 +610,39 @@ table.hm th.hm-total-col { border-left: 6px solid var(--surface); }
 .site-picks .check-row span { font-size: 0.95rem; font-weight: 400; }
 .site-picks small { grid-column: 1 / -1; }
 
-/* Rota: My shifts */
+/* Rota: My shifts – a compact card per day; the ways out of a shift sit behind "Can't make it?" */
 .my-shifts { padding: 0; overflow: hidden; }
-.my-day { display: grid; grid-template-columns: 150px 1fr; gap: 1rem; padding: 0.8rem 1.1rem; border-bottom: 1px solid var(--border); }
+.my-day { display: grid; grid-template-columns: 7.5rem 1fr; gap: 0.25rem 1rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); }
 .my-day:last-child { border-bottom: 0; }
 .my-day.is-today { background: var(--brand-soft); }
+.my-day.is-off { padding-top: 0.5rem; padding-bottom: 0.5rem; }
 .my-day.is-off .my-date { opacity: 0.6; }
-.my-date span { display: block; color: var(--muted); font-size: 0.85rem; }
-.my-list { display: flex; flex-direction: column; gap: 0.6rem; justify-content: center; }
-.my-shift { display: grid; grid-template-columns: auto 1fr; gap: 0.1rem 1rem; align-items: baseline; }
-.my-time { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; border-left: 3px solid var(--brand); padding-left: 0.5rem; }
-.my-where { font-weight: 600; }
-.my-with { grid-column: 1 / -1; padding-left: calc(0.5rem + 3px); }
+.my-date { display: flex; align-items: baseline; gap: 0.5rem; }
+.my-today { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--brand); }
+.my-list { display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+.my-shift { display: grid; gap: 0.15rem; border-left: 3px solid var(--brand); padding-left: 0.6rem; }
+.my-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.25rem 0.6rem; }
+.my-time { font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.my-len { font-size: 0.85rem; color: var(--muted); }
+.my-top .badge { font-size: 0.7rem; }
+.my-where { font-size: 0.92rem; font-weight: 600; overflow-wrap: anywhere; }
+.my-where .site-dot { margin-right: 0.35rem; }
+.my-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.15rem; }
+.my-with { font-size: 0.82rem; color: var(--muted); }
+.my-with summary { cursor: pointer; }
+.my-with ul { margin: 0.25rem 0 0; padding-left: 1rem; }
+.my-cant { margin-left: auto; }
 .nowrap { white-space: nowrap; }
 @media (max-width: 600px) {
-  .my-day { grid-template-columns: 1fr; gap: 0.4rem; }
+  .my-day { grid-template-columns: 1fr; }
 }
+.cant-options { display: grid; gap: 0.5rem; margin: 0.75rem 0; }
+.cant-option { display: flex; align-items: flex-start; gap: 0.75rem; width: 100%; text-align: left; padding: 0.75rem 0.85rem; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.cant-option:hover, .cant-option:focus-visible { border-color: var(--brand); background: var(--brand-soft); }
+.cant-option strong { display: block; }
+.cant-option small { display: block; color: var(--muted); margin-top: 0.1rem; }
+.cant-icon { flex: 0 0 2rem; height: 2rem; display: grid; place-items: center; border-radius: 50%; background: var(--surface-2); font-size: 1rem; }
 
 /* Time off: holiday and availability */
 .leave-list li { justify-content: space-between; align-items: flex-start; flex-wrap: nowrap; padding: 0.7rem 0; }
