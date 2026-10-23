@@ -1,4 +1,4 @@
-import { addDays, api, esc, fmtDate, fmtDateTime, money, qs, qty, showError, toast, todayISO } from '../lib.js';
+import { addDays, api, esc, fmtDate, fmtDateTime, money, qs, qty, showError, toast, todayISO, siteScope, siteFilter } from '../lib.js';
 
 // Labour cost as % of net sales: at or under target is good, up to the warning line is amber.
 export const LABOUR_TARGET = 30;
@@ -15,7 +15,7 @@ export async function render(ctx) {
   const { el, state, query, stale } = ctx;
   const to = query.to || todayISO();
   const from = query.from || addDays(to, -6);
-  const scope = state.isAdmin ? (query.scope ?? 'all') : 'site';
+  const scope = siteScope(state, query.scope);
   const [data, status] = await Promise.all([
     api(`/sales${qs({ from, to, location_id: scope === 'all' ? undefined : state.locationId })}`),
     api('/square/status'),
@@ -29,13 +29,13 @@ export async function render(ctx) {
       <h1>Sales</h1>
       <div class="actions">
         <span class="muted small">${data.last_sync ? `Square synced ${fmtDateTime(data.last_sync)}` : 'Not synced yet'}</span>
-        ${status.configured ? '<button class="btn" id="sync">Sync now</button>' : ''}
+        ${status.configured && state.can('sales.sync') ? '<button class="btn" id="sync">Sync now</button>' : ''}
       </div>
     </div>
     ${!status.configured ? `<p class="notice">Square isn’t connected yet. ${state.isAdmin ? 'See <a href="#/admin/square">Setup → Square</a>.' : 'Ask an admin to connect it.'}</p>` : ''}
     ${status.configured && data.unlinked.length ? `<p class="notice">Not linked to Square, so no sales shown: ${esc(data.unlinked.join(', '))}. ${state.isAdmin ? '<a href="#/admin/square">Link sites</a>' : ''}</p>` : ''}
     <form class="filters" id="range">
-      ${state.isAdmin ? `<select name="scope"><option value="all" ${scope === 'all' ? 'selected' : ''}>All sites</option><option value="site" ${scope === 'site' ? 'selected' : ''}>${esc(state.location?.name ?? 'This site')}</option></select>` : ''}
+      ${siteFilter(state, scope)}
       <input type="date" name="from" value="${from}"> <span>to</span> <input type="date" name="to" value="${to}" max="${todayISO()}">
       <button class="btn" type="submit">Update</button>
     </form>

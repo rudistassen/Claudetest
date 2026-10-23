@@ -3,3 +3,5 @@ data/*.db
 data/*.db-*
 .env
 dist/
+square-token.txt
+undefined/

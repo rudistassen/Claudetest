@@ -1,0 +1,177 @@
+// Permission sets: named groups of permissions that staff are assigned to (Setup → Permissions). Admins can do
+// everything at every site and aren't restricted by a set; everyone else works at their home site with the
+// permissions of their set. Users without a set get the built-in set for their role (Manager or Staff).
+
+export const PERMISSION_AREAS = [
+  ['My Atlas', [
+    ['mybrew.view', 'See My Atlas – their home page with their shifts, tasks, training and news'],
+    ['training.take', 'Training – take online courses and see their own training records on My Atlas (off for everyone until training is rolled out)'],
+  ]],
+  ['Chat', [
+    ['chat.use', 'Chat – read and reply in the group chats they’re in'],
+    ['chat.direct', 'Direct messages – private one-to-one chats with people at their own sites (admins can read them)'],
+    ['chat.manage', 'Start group chats and choose who’s in them'],
+  ]],
+  ['Dashboards', [
+    ['dashboard.view', 'See the HQ Dashboard – every site they can access side by side, with its sales and labour figures (the Sales, Trading and Rota costs pages still need “See sales”)'],
+    ['dashboard.manager', 'See the Manager Dashboard (their site’s day and everything waiting on them; opens on their home site)'],
+    ['dashboard.sales', 'See sales and labour figures on the Manager Dashboard (their own site only – without the Sales and Trading pages)'],
+  ]],
+  ['Compliance', [
+    ['safety.complete', 'Complete compliance checks'],
+    ['safety.manage', 'Set up their site’s checks and clear completed ones'],
+    ['safety.report', 'See the compliance report'],
+    ['risk.view', 'Risk Management – read the risk assessments for their sites'],
+    ['risk.manage', 'Write, change and review risk assessments'],
+    ['incidents.report', 'Report an incident (accident, near miss, complaint…) and follow the ones they reported'],
+    ['incidents.manage', 'See and deal with every incident at their sites, and close them'],
+    ['compliance.documents', 'Compliance documents – certificates, inspections, insurance and licences, with expiry dates'],
+  ]],
+  ['Checklists & tasks', [
+    ['checklists.complete', 'Tick off their site’s checklists (opening, closing, cleaning…)'],
+    ['checklists.manage', 'Set up checklists for their sites'],
+    ['tasks.manage', 'Give tasks to people, roles or sites, and see everyone’s tasks at their sites'],
+    ['todo.use', 'Keep a private to-do list'],
+  ]],
+  ['Rota', [
+    ['rota.view', 'See the rota'],
+    ['leave.request', 'Time off – ask for holiday and see their own'],
+    ['availability.own', 'My availability – say when they can and can’t work'],
+    ['rota.edit', 'Add, change and copy shifts, and mark people as sick'],
+    ['rota.skills', 'See each person’s skills (the areas they’re trained in) under their name on the rota'],
+    ['rota.costs', 'See forecast sales, labour cost and labour % on the rota while planning it (worked out from pay rates)'],
+    ['rota.publish', 'Publish the rota so staff can see it, and open shifts up for anyone to pick up'],
+    ['rota.approve', 'Approve or decline shift drops and pick-ups'],
+    ['rota.budget', 'Set the sales budget each site’s rota is planned against'],
+    ['rota.ai', 'Use Claude on the rota: read a rota from a photo or PDF, and analyse the week against forecast sales'],
+  ]],
+  ['Holiday & availability', [
+    ['leave.manage', 'Approve or decline holiday requests'],
+    ['leave.edit', 'Add, change and take off other people’s holiday'],
+    ['availability.view', 'See everyone’s availability (and change it for them)'],
+  ]],
+  ['Wastage', [
+    ['wastage.record', 'Record wastage'],
+    ['wastage.reports', 'See wastage reports and export them'],
+    ['wastage.manage', 'Delete anyone’s wastage entries'],
+  ]],
+  ['Stock takes', [
+    ['stock.count', 'Start stock takes and count stock'],
+    ['stock.complete', 'Complete or discard stock takes'],
+  ]],
+  ['Orders & invoices', [
+    ['orders.manage', 'Create, send and receive supplier orders, prep orders and product par levels'],
+    ['invoices.manage', 'Upload and check supplier invoices, use the invoice inbox and send invoices to Xero'],
+  ]],
+  ['Recipes', [
+    ['recipes.view', 'See recipes and allergens'],
+    ['recipes.costs', 'See recipe costs, GP and menu performance'],
+    ['recipes.edit', 'Create and edit recipes'],
+  ]],
+  ['Reporting', [
+    ['reports.trading', 'Trading report – sales, labour and the trading heatmap for their sites'],
+    ['reports.site_overview', 'Site overview report – everything about one site: sales, labour, staff, categories and checks (and the dashboard’s “Open site” button)'],
+    ['reports.sales', 'Sales report – sales by day and item from Square'],
+    ['reports.open_orders', 'Open orders report – Square orders not yet paid'],
+    ['reports.rota_costs', 'Rota costs report – rota cost against the labour budget'],
+    ['reports.par_levels', 'Par levels report – suggested pars from sales'],
+    ['reports.breaks', 'Breaks report – missed and short breaks'],
+    ['reports.timecards', 'Timecards report – every clock-in, one row each, with hours (and pay, for people who can see it)'],
+    ['reports.sickness', 'Sickness report – who was off sick and when'],
+    ['reports.reviews', 'Reviews report – Google reviews for each site'],
+  ]],
+  ['Bank', [
+    ['bank.view', 'See the business’s bank accounts from Xero: balances and money in and out (read only)'],
+  ]],
+  ['Sales & trading', [
+    ['sales.view', 'See sales, labour costs and the Sales, Trading and Rota costs pages'],
+    ['sales.sync', 'Sync sales from Square (up to a week at a time)'],
+    ['reviews.view', 'See Google reviews'],
+    ['payments.send', 'Create and send Square payment links to customers (e.g. deposits)'],
+  ]],
+  ['Staff', [
+    ['staff.view', 'See basic staff details at their site (name, email, site, role) – no pay, and can’t change anything'],
+    ['staff.manage', 'Add and edit staff at their site'],
+    ['staff.pay', 'See and change pay rates'],
+    ['timecards.move', 'Move a clock-in to another site they manage (changes the timecard in Square too)'],
+    ['timecards.breaks', 'Add, change and remove breaks on clock-ins (changes the timecard in Square too, so it affects pay)'],
+    ['staff.log', 'See the Staff log: sign-ins and every change people make'],
+  ]],
+  ['People', [
+    ['people.recruitment', 'Recruitment: jobs, candidates and the careers inbox'],
+    ['people.training', 'Learning & development: training records, online courses, giving courses to people and signing them off'],
+    ['people.performance', 'Performance: one-to-ones, probation reviews and appraisals'],
+    ['people.areas', 'Skills areas: who is trained in each skill (shown under their name on the rota)'],
+  ]],
+  ['Events', [
+    ['events.manage', 'See and answer event enquiries from the events inbox'],
+    ['events.calendar', 'See the events calendar'],
+  ]],
+  ['My Atlas news & documents', [
+    ['news.manage', 'Post staff news and policy updates, and see who has read them'],
+    ['documents.manage', 'Share company documents'],
+  ]],
+  ['Suppliers & products', [
+    ['setup.products', 'Add and edit suppliers and products'],
+  ]],
+];
+
+/**
+ * What each permission was split from (or added alongside), so a set that had the old one gets the new ones too and
+ * nobody loses access when permissions are made finer. Applied once, when the database is upgraded (see db.js).
+ */
+export const PERMISSION_SPLITS = {
+  'rota.publish': ['rota.approve'],
+  'sales.view': ['rota.budget', 'reviews.view'],
+  'leave.manage': ['leave.edit', 'availability.view'],
+  'orders.manage': ['invoices.manage'],
+  'staff.manage': ['staff.pay'],
+  'events.manage': ['events.calendar'],
+  'news.manage': ['documents.manage'],
+  'people.manage': ['people.recruitment', 'people.training', 'people.performance', 'people.areas'],
+};
+
+export const ALL_PERMISSIONS = PERMISSION_AREAS.flatMap(([, perms]) => perms.map(([key]) => key));
+
+// What the Manager and Staff roles could do before permission sets existed.
+export const DEFAULT_SETS = [
+  {
+    built_in: 'manager',
+    name: 'Manager',
+    description: 'Runs a site: rota, orders, stock, staff and sales for their own site.',
+    permissions: ALL_PERMISSIONS.filter((p) => !['recipes.edit', 'setup.products', 'payments.send', 'rota.ai', 'staff.log', 'bank.view', 'training.take'].includes(p)),
+  },
+  {
+    built_in: 'staff',
+    name: 'Staff',
+    description: 'Works in a site: food-safety checks, wastage, stock counts, the rota and recipes.',
+    permissions: ['mybrew.view', 'chat.use', 'chat.direct', 'risk.view', 'incidents.report', 'leave.request', 'availability.own', 'safety.complete', 'checklists.complete', 'rota.view', 'wastage.record', 'wastage.reports', 'stock.count', 'recipes.view'],
+  },
+];
+
+/** Creates the built-in Manager and Staff sets if they don't exist yet. */
+export function ensureDefaultSets(db) {
+  const insert = db.prepare('INSERT INTO permission_sets (name, description, permissions, built_in) VALUES (?, ?, ?, ?)');
+  for (const s of DEFAULT_SETS) {
+    if (db.prepare('SELECT 1 FROM permission_sets WHERE built_in = ?').get(s.built_in)) continue;
+    let name = s.name;
+    for (let n = 2; db.prepare('SELECT 1 FROM permission_sets WHERE name = ?').get(name); n++) name = `${s.name} ${n}`;
+    insert.run(name, s.description, JSON.stringify(s.permissions), s.built_in);
+  }
+}
+
+/** Keeps only known permissions, in catalogue order. */
+export function cleanPermissions(list) {
+  const wanted = new Set(Array.isArray(list) ? list : []);
+  return ALL_PERMISSIONS.filter((p) => wanted.has(p));
+}
+
+export const parsePermissions = (json) => {
+  try { return cleanPermissions(JSON.parse(json ?? '[]')); } catch { return []; }
+};
+
+/**
+ * The role stored alongside a set, used for sorting (managers first on the rota) and as the fallback set.
+ * Anyone who can manage staff or edit the rota counts as a manager.
+ */
+export const roleForPermissions = (perms) => (perms.includes('staff.manage') || perms.includes('rota.edit') ? 'manager' : 'staff');
